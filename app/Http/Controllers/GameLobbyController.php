@@ -199,12 +199,20 @@ class GameLobbyController extends Controller
 
         $characters = Character::all();
 
+        // Determine whose turn it is to pick (first player without a character)
+        $pickingPlayer = $players->first(fn ($p) => !$p->character_id);
+        $allJoined = $players->count() >= $game->num_players;
+        $allSelected = $allJoined && $players->every(fn ($p) => $p->character_id);
+
         return response()->json([
             'players' => $players,
             'invites' => $invites,
             'characters' => $characters,
             'num_players' => $game->num_players,
             'host_id' => $game->user_id,
+            'all_joined' => $allJoined,
+            'all_selected' => $allSelected,
+            'picking_player_number' => $pickingPlayer?->player_number,
         ]);
     }
 

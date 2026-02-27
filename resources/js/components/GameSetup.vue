@@ -1079,7 +1079,10 @@ export default {
 
 /* Summary panel */
 .summary-panel {
-  padding: 30px 20px;
+    padding: 30px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .summary-picks {

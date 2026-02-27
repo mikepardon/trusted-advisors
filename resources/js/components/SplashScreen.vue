@@ -96,12 +96,12 @@ export default {
 .splash-content {
   text-align: center;
   padding: 20px;
-  max-width: 360px;
+  max-width: 400px;
   width: 100%;
 }
 
 .splash-logo {
-  max-width: 280px;
+  max-width: 400px;
   width: 100%;
   height: auto;
   margin-bottom: 40px;

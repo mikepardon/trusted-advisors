@@ -4,6 +4,7 @@
     <!-- ONLINE LOBBY (setup phase) -->
     <template v-if="isOnline && gameData.game.status === 'setup'">
       <OnlineLobby
+        ref="lobby"
         :gameId="id"
         :hostId="gameData.game.user_id"
         @start-game="startOnlineGame"
@@ -204,7 +205,7 @@ export default {
   },
   async mounted() {
     await this.fetchGame();
-    if (this.isOnline && this.gameData?.game?.status === 'active') {
+    if (this.isOnline && !this.echoChannel) {
       this.setupOnlinePlayer();
       this.subscribeToGameChannel();
     }
@@ -231,9 +232,6 @@ export default {
         if (this.gameData.round_phase === 'selecting') {
           if (this.isOnline) {
             this.setupOnlinePlayer();
-            if (!this.echoChannel) {
-              this.subscribeToGameChannel();
-            }
             // Check if I already assigned
             const myStatus = this.gameData.player_status?.find(
               p => p.player_number === this.myPlayerNumber
@@ -404,6 +402,20 @@ export default {
     subscribeToGameChannel() {
       if (!window.Echo) return;
       this.echoChannel = window.Echo.private(`game.${this.id}`)
+        .listen('PlayerJoinedGame', () => {
+          if (this.$refs.lobby) {
+            this.$refs.lobby.fetchLobby();
+          }
+        })
+        .listen('PlayerSelectedCharacter', (data) => {
+          if (this.$refs.lobby) {
+            this.$refs.lobby.fetchLobby().then(() => {
+              if (data.all_selected && this.$refs.lobby) {
+                this.$refs.lobby.autoStartGame();
+              }
+            });
+          }
+        })
         .listen('PlayerAssignedCards', (data) => {
           // Update player status
           if (this.gameData?.player_status) {

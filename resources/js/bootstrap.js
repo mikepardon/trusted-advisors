@@ -9,6 +9,8 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 window.Pusher = Pusher;
 
+const useTLS = (import.meta.env.VITE_PUSHER_SCHEME ?? 'https') === 'https';
+
 window.Echo = new Echo({
     broadcaster: 'pusher',
     key: import.meta.env.VITE_PUSHER_APP_KEY,
@@ -16,7 +18,7 @@ window.Echo = new Echo({
     wsHost: import.meta.env.VITE_PUSHER_HOST,
     wsPort: import.meta.env.VITE_PUSHER_PORT ?? 80,
     wssPort: import.meta.env.VITE_PUSHER_PORT ?? 443,
-    forceTLS: (import.meta.env.VITE_PUSHER_SCHEME ?? 'https') === 'https',
+    forceTLS: useTLS,
     enabledTransports: ['ws', 'wss'],
     disableStats: true,
 });
