@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(where:*)",
+      "Bash(\"C:/Users/Michael/.config/herd/bin/php.bat\" -v)",
+      "Bash(\"C:/Users/Michael/.config/herd/bin/composer.bat\" --version)",
+      "Bash(npm run build:*)"
+    ]
+  }
+}

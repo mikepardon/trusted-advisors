@@ -1,0 +1,309 @@
+<template>
+  <div>
+    <div class="page-header">
+      <h2 class="page-title">Events</h2>
+      <button class="btn-primary" @click="openCreate">+ New Event</button>
+    </div>
+
+    <div v-if="loading" class="loading">Loading...</div>
+
+    <div v-else class="cards-list">
+      <div v-for="ev in events" :key="ev.id" class="item-card">
+        <div class="item-header">
+          <h4>{{ ev.title }}</h4>
+          <div class="item-actions">
+            <button @click="openEdit(ev)">Edit</button>
+            <button class="btn-danger" @click="confirmDelete(ev)">Delete</button>
+          </div>
+        </div>
+        <p class="item-desc">{{ ev.effect }}</p>
+        <div class="item-meta" v-if="ev.stat_modifiers">
+          <strong>Stat Modifiers:</strong>
+          <span v-for="(val, stat) in ev.stat_modifiers" :key="stat" class="mod-badge" :class="val > 0 ? 'mod-pos' : 'mod-neg'">
+            {{ statIcon(stat) }} {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal -->
+    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+      <div class="modal-content">
+        <h3>{{ editing ? 'Edit Event' : 'New Event' }}</h3>
+        <form @submit.prevent="save">
+          <div class="form-group">
+            <label>Title</label>
+            <input v-model="form.title" required />
+          </div>
+          <div class="form-group">
+            <label>Effect Description</label>
+            <textarea v-model="form.effect" rows="4" required></textarea>
+          </div>
+
+          <div class="form-group">
+            <label>Stat Modifiers</label>
+            <div class="stat-grid">
+              <div v-for="stat in stats" :key="stat.key" class="stat-cell">
+                <span class="stat-icon-label" :title="stat.label">{{ stat.icon }}</span>
+                <input
+                  type="number"
+                  :value="form.modifiers[stat.key] || ''"
+                  @input="setModifier(stat.key, $event.target.value)"
+                  class="stat-input"
+                  :placeholder="0"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div v-if="formError" class="form-error">{{ formError }}</div>
+
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary" :disabled="saving">
+              {{ saving ? 'Saving...' : 'Save' }}
+            </button>
+            <button type="button" @click="showModal = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import axios from 'axios';
+
+export default {
+  name: 'AdminEvents',
+  data() {
+    return {
+      events: [],
+      loading: true,
+      showModal: false,
+      editing: null,
+      saving: false,
+      formError: '',
+      stats: [
+        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
+        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
+        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
+        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
+        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
+        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
+      ],
+      form: { title: '', effect: '', modifiers: {} },
+    };
+  },
+  async mounted() {
+    await this.fetch();
+  },
+  methods: {
+    async fetch() {
+      this.loading = true;
+      const res = await axios.get('/api/admin/events');
+      this.events = res.data;
+      this.loading = false;
+    },
+    statIcon(stat) {
+      const s = this.stats.find(s => s.key === stat);
+      return s ? s.icon : '';
+    },
+    setModifier(key, value) {
+      const num = value === '' ? null : parseInt(value);
+      if (num === null || num === 0 || isNaN(num)) {
+        delete this.form.modifiers[key];
+      } else {
+        this.form.modifiers[key] = num;
+      }
+    },
+    openCreate() {
+      this.editing = null;
+      this.form = { title: '', effect: '', modifiers: {} };
+      this.formError = '';
+      this.showModal = true;
+    },
+    openEdit(ev) {
+      this.editing = ev;
+      this.form = {
+        title: ev.title,
+        effect: ev.effect,
+        modifiers: { ...(ev.stat_modifiers || {}) },
+      };
+      this.formError = '';
+      this.showModal = true;
+    },
+    async save() {
+      this.formError = '';
+
+      const stat_modifiers = Object.keys(this.form.modifiers).length > 0
+        ? { ...this.form.modifiers }
+        : null;
+
+      const payload = {
+        title: this.form.title,
+        effect: this.form.effect,
+        stat_modifiers,
+      };
+
+      this.saving = true;
+      try {
+        if (this.editing) {
+          await axios.put(`/api/admin/events/${this.editing.id}`, payload);
+        } else {
+          await axios.post('/api/admin/events', payload);
+        }
+        this.showModal = false;
+        await this.fetch();
+      } catch (e) {
+        this.formError = e.response?.data?.message || 'Save failed';
+      }
+      this.saving = false;
+    },
+    async confirmDelete(ev) {
+      if (!confirm(`Delete event "${ev.title}"?`)) return;
+      try {
+        await axios.delete(`/api/admin/events/${ev.id}`);
+        await this.fetch();
+      } catch (e) {
+        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+      }
+    },
+  },
+};
+</script>
+
+<style scoped>
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.5rem;
+}
+
+.loading { text-align: center; color: var(--text-secondary); padding: 40px; }
+
+.cards-list { display: flex; flex-direction: column; gap: 12px; }
+
+.item-card {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(184, 148, 46, 0.2);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-header h4 {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+}
+
+.item-actions { display: flex; gap: 6px; }
+.item-actions button { padding: 5px 12px; font-size: 0.8rem; }
+
+.item-desc { color: var(--text-secondary); font-size: 0.9rem; line-height: 1.5; margin-bottom: 8px; }
+
+.item-meta { font-size: 0.85rem; color: var(--text-secondary); }
+.item-meta strong { color: var(--text-primary); }
+
+.mod-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-size: 0.8rem;
+  text-transform: capitalize;
+}
+
+.mod-pos { background: rgba(39, 174, 96, 0.2); color: #27ae60; }
+.mod-neg { background: rgba(192, 57, 43, 0.2); color: #c0392b; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-gold);
+  border-radius: 10px;
+  padding: 28px;
+  width: 90%; max-width: 550px;
+  max-height: 85vh; overflow-y: auto;
+}
+
+.modal-content h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  margin-bottom: 18px; font-size: 1.3rem;
+}
+
+.form-group { margin-bottom: 14px; }
+.form-group label { display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 5px; }
+.form-group input:not([type="checkbox"]):not([type="number"]), .form-group textarea, .form-group select {
+  width: 100%; background: var(--bg-primary);
+  border: 1px solid rgba(184, 148, 46, 0.3);
+  color: var(--text-bright); padding: 8px 12px;
+  border-radius: 4px; font-family: inherit; font-size: 0.95rem;
+}
+.form-group textarea { resize: vertical; }
+.form-group input:focus, .form-group textarea:focus { outline: none; border-color: var(--accent-gold); }
+
+/* Stat grid */
+.stat-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.stat-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(138, 106, 46, 0.15);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.stat-icon-label {
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: help;
+}
+
+.stat-input {
+  width: 52px;
+  background: var(--bg-primary);
+  border: 1px solid rgba(184, 148, 46, 0.3);
+  color: var(--text-bright);
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.stat-input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.form-error { color: var(--accent-red); font-size: 0.9rem; margin-bottom: 10px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+</style>

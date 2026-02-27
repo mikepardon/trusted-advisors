@@ -1,0 +1,27 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up(): void
+    {
+        Schema::create('card_options', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('card_id')->constrained()->cascadeOnDelete();
+            $table->string('text');
+            $table->string('difficulty');
+            $table->json('requirements');
+            $table->json('success_effects');
+            $table->json('failure_effects');
+            $table->timestamps();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('card_options');
+    }
+};

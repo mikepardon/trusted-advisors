@@ -1,0 +1,577 @@
+<template>
+  <div>
+    <div class="page-header">
+      <h2 class="page-title">Decision Cards</h2>
+      <button class="btn-primary" @click="openCreate">+ New Card</button>
+    </div>
+
+    <div v-if="loading" class="loading">Loading...</div>
+
+    <div v-else class="table-wrap">
+      <table class="admin-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Title</th>
+            <th>Difficulty</th>
+            <th>Category</th>
+            <th>Description</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="card in cards" :key="card.id">
+            <td>{{ card.sort_order }}</td>
+            <td class="name-col">{{ card.title }}</td>
+            <td>
+              <span class="diff-badge" :class="diffClass(card.difficulty)">{{ card.difficulty }}</span>
+            </td>
+            <td>{{ card.category || '-' }}</td>
+            <td class="desc-col">{{ truncate(card.description, 60) }}</td>
+            <td class="actions-col">
+              <button @click="openEdit(card)">Edit</button>
+              <button class="btn-danger" @click="confirmDelete(card)">Delete</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Card Create/Edit Modal -->
+    <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
+      <div class="modal-content modal-wide">
+        <h3>{{ editing ? 'Edit Card' : 'New Card' }}</h3>
+        <form @submit.prevent="save">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Title</label>
+              <input v-model="form.title" required />
+            </div>
+            <div class="form-group form-small">
+              <label>Sort Order</label>
+              <input v-model.number="form.sort_order" type="number" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label>Description</label>
+            <textarea v-model="form.description" rows="3" required></textarea>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label>Difficulty (integer, 3-12)</label>
+              <input v-model.number="form.difficulty" type="number" min="1" max="20" required />
+            </div>
+            <div class="form-group">
+              <label>Category</label>
+              <select v-model="form.category">
+                <option value="">None</option>
+                <option value="military">Military</option>
+                <option value="political">Political</option>
+                <option value="economic">Economic</option>
+                <option value="religious">Religious</option>
+                <option value="social">Social</option>
+                <option value="crisis">Crisis</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Positive Effects -->
+          <div class="effects-section effects-positive">
+            <h4 class="effects-title">Positive Outcome (Success)</h4>
+            <div class="form-group">
+              <label>Outcome Text</label>
+              <textarea v-model="form.positive_flavor" rows="2" placeholder="What happens when the advisors succeed..."></textarea>
+            </div>
+            <div class="stat-grid">
+              <div v-for="stat in stats" :key="'pos-' + stat.key" class="stat-cell">
+                <span class="stat-icon" :title="stat.label">{{ stat.icon }}</span>
+                <input
+                  type="number"
+                  :value="form.positive[stat.key] || ''"
+                  @input="setEffect('positive', stat.key, $event.target.value)"
+                  class="stat-input"
+                  :placeholder="0"
+                />
+              </div>
+            </div>
+            <div class="variant-rules">
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.positiveRecoverDie" />
+                <span class="variant-label">Recover a lost die</span>
+              </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.positiveDrawItem" />
+                <span class="variant-label">Draw an item</span>
+              </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.positiveRemoveCurse" />
+                <span class="variant-label">Remove a curse</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Negative Effects -->
+          <div class="effects-section effects-negative">
+            <h4 class="effects-title">Negative Outcome (Failure)</h4>
+            <div class="form-group">
+              <label>Outcome Text</label>
+              <textarea v-model="form.negative_flavor" rows="2" placeholder="What happens when the advisors fail..."></textarea>
+            </div>
+            <div class="stat-grid">
+              <div v-for="stat in stats" :key="'neg-' + stat.key" class="stat-cell">
+                <span class="stat-icon" :title="stat.label">{{ stat.icon }}</span>
+                <input
+                  type="number"
+                  :value="form.negative[stat.key] || ''"
+                  @input="setEffect('negative', stat.key, $event.target.value)"
+                  class="stat-input"
+                  :placeholder="0"
+                />
+              </div>
+            </div>
+            <div class="variant-rules">
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.negativeLoseDie" />
+                <span class="variant-label">Lose a die</span>
+              </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.negativeDiscardItem" />
+                <span class="variant-label">Discard an item</span>
+              </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.negativeDrawItem" />
+                <span class="variant-label">Draw cursed item</span>
+              </label>
+            </div>
+          </div>
+
+          <div v-if="formError" class="form-error">{{ formError }}</div>
+
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary" :disabled="saving">
+              {{ saving ? 'Saving...' : 'Save' }}
+            </button>
+            <button type="button" @click="showModal = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import axios from 'axios';
+
+export default {
+  name: 'AdminCards',
+  data() {
+    return {
+      cards: [],
+      loading: true,
+      showModal: false,
+      editing: null,
+      saving: false,
+      formError: '',
+      stats: [
+        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
+        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
+        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
+        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
+        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
+        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
+      ],
+      form: {
+        title: '',
+        description: '',
+        sort_order: 1,
+        difficulty: 6,
+        category: '',
+        positive: {},
+        negative: {},
+        positive_flavor: '',
+        negative_flavor: '',
+        positiveRecoverDie: false,
+        positiveDrawItem: false,
+        positiveRemoveCurse: false,
+        negativeLoseDie: false,
+        negativeDiscardItem: false,
+        negativeDrawItem: false,
+      },
+    };
+  },
+  async mounted() {
+    await this.fetch();
+  },
+  methods: {
+    async fetch() {
+      this.loading = true;
+      const res = await axios.get('/api/admin/cards');
+      this.cards = res.data;
+      this.loading = false;
+    },
+    truncate(str, len) {
+      return str && str.length > len ? str.substring(0, len) + '...' : str || '';
+    },
+    diffClass(difficulty) {
+      if (difficulty <= 5) return 'diff-easy';
+      if (difficulty <= 8) return 'diff-medium';
+      return 'diff-hard';
+    },
+    setEffect(side, key, value) {
+      const num = value === '' ? null : parseInt(value);
+      if (num === null || num === 0 || isNaN(num)) {
+        delete this.form[side][key];
+      } else {
+        this.form[side][key] = num;
+      }
+    },
+    effectsToObj(effects, form, side) {
+      const obj = {};
+      for (const [key, val] of Object.entries(effects)) {
+        if (val && val !== 0) obj[key] = val;
+      }
+      if (side === 'positive') {
+        if (form.positiveRecoverDie) obj['recover_die'] = 1;
+        if (form.positiveDrawItem) obj['draw_item'] = 1;
+        if (form.positiveRemoveCurse) obj['remove_curse'] = 1;
+      }
+      if (side === 'negative') {
+        if (form.negativeLoseDie) obj['lose_die'] = 1;
+        if (form.negativeDiscardItem) obj['discard_item'] = 1;
+        if (form.negativeDrawItem) obj['draw_item'] = 1;
+      }
+      return obj;
+    },
+    objToForm(effects) {
+      const obj = {};
+      let recoverDie = false;
+      let loseDie = false;
+      let drawItem = false;
+      let discardItem = false;
+      let removeCurse = false;
+      for (const [key, val] of Object.entries(effects || {})) {
+        if (key === 'recover_die') recoverDie = true;
+        else if (key === 'lose_die') loseDie = true;
+        else if (key === 'draw_item') drawItem = true;
+        else if (key === 'discard_item') discardItem = true;
+        else if (key === 'remove_curse') removeCurse = true;
+        else obj[key] = val;
+      }
+      return { stats: obj, recoverDie, loseDie, drawItem, discardItem, removeCurse };
+    },
+
+    openCreate() {
+      this.editing = null;
+      const maxSort = this.cards.reduce((m, c) => Math.max(m, c.sort_order), 0);
+      this.form = {
+        title: '',
+        description: '',
+        sort_order: maxSort + 1,
+        difficulty: 6,
+        category: '',
+        positive: {},
+        negative: {},
+        positive_flavor: '',
+        negative_flavor: '',
+        positiveRecoverDie: false,
+        positiveDrawItem: false,
+        positiveRemoveCurse: false,
+        negativeLoseDie: false,
+        negativeDiscardItem: false,
+        negativeDrawItem: false,
+      };
+      this.formError = '';
+      this.showModal = true;
+    },
+    openEdit(card) {
+      this.editing = card;
+      const pos = this.objToForm(card.positive_effects);
+      const neg = this.objToForm(card.negative_effects);
+      this.form = {
+        title: card.title,
+        description: card.description,
+        sort_order: card.sort_order,
+        difficulty: card.difficulty,
+        category: card.category || '',
+        positive: { ...pos.stats },
+        negative: { ...neg.stats },
+        positive_flavor: card.positive_flavor || '',
+        negative_flavor: card.negative_flavor || '',
+        positiveRecoverDie: pos.recoverDie,
+        positiveDrawItem: pos.drawItem,
+        positiveRemoveCurse: pos.removeCurse,
+        negativeLoseDie: neg.loseDie,
+        negativeDiscardItem: neg.discardItem,
+        negativeDrawItem: neg.drawItem,
+      };
+      this.formError = '';
+      this.showModal = true;
+    },
+    async save() {
+      this.formError = '';
+
+      const positive_effects = this.effectsToObj(this.form.positive, this.form, 'positive');
+      const negative_effects = this.effectsToObj(this.form.negative, this.form, 'negative');
+
+      const payload = {
+        title: this.form.title,
+        description: this.form.description,
+        sort_order: this.form.sort_order,
+        difficulty: this.form.difficulty,
+        category: this.form.category || null,
+        positive_effects,
+        negative_effects,
+        positive_flavor: this.form.positive_flavor || null,
+        negative_flavor: this.form.negative_flavor || null,
+      };
+
+      this.saving = true;
+      try {
+        if (this.editing) {
+          await axios.put(`/api/admin/cards/${this.editing.id}`, payload);
+        } else {
+          await axios.post('/api/admin/cards', payload);
+        }
+        this.showModal = false;
+        await this.fetch();
+      } catch (e) {
+        this.formError = e.response?.data?.message || 'Save failed';
+      }
+      this.saving = false;
+    },
+    async confirmDelete(card) {
+      if (!confirm(`Delete card "${card.title}"?`)) return;
+      try {
+        await axios.delete(`/api/admin/cards/${card.id}`);
+        await this.fetch();
+      } catch (e) {
+        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+      }
+    },
+  },
+};
+</script>
+
+<style scoped>
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.page-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.5rem;
+}
+
+.loading { text-align: center; color: var(--text-secondary); padding: 40px; }
+
+.table-wrap { overflow-x: auto; }
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.admin-table th, .admin-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid rgba(184, 148, 46, 0.2);
+}
+
+.admin-table th {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.admin-table tbody tr:hover { background: rgba(212, 168, 67, 0.05); }
+
+.name-col { color: var(--text-bright); font-weight: 600; white-space: nowrap; }
+.desc-col { color: var(--text-secondary); max-width: 250px; }
+
+.diff-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  padding: 2px 10px;
+  border-radius: 4px;
+}
+
+.diff-easy { background: rgba(39, 174, 96, 0.2); color: #27ae60; }
+.diff-medium { background: rgba(212, 168, 67, 0.2); color: #d4a843; }
+.diff-hard { background: rgba(192, 57, 43, 0.2); color: #c0392b; }
+
+.actions-col {
+  white-space: nowrap;
+  display: flex;
+  gap: 6px;
+}
+
+.actions-col button { padding: 5px 12px; font-size: 0.8rem; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.modal-content {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-gold);
+  border-radius: 10px;
+  padding: 28px;
+  width: 90%;
+  max-width: 550px;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.modal-wide { max-width: 700px; }
+
+.modal-content h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  margin-bottom: 18px;
+  font-size: 1.3rem;
+}
+
+.form-group { margin-bottom: 14px; flex: 1; }
+.form-small { max-width: 120px; }
+
+.form-row {
+  display: flex;
+  gap: 14px;
+}
+
+.form-group label {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 5px;
+}
+
+.form-group input:not([type="checkbox"]),
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  background: var(--bg-primary);
+  border: 1px solid rgba(184, 148, 46, 0.3);
+  color: var(--text-bright);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.form-group textarea { resize: vertical; }
+.form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--accent-gold); }
+
+/* Effects sections */
+.effects-section {
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.effects-positive {
+  border-color: rgba(74, 138, 58, 0.4);
+  background: rgba(74, 138, 58, 0.04);
+}
+
+.effects-negative {
+  border-color: rgba(160, 48, 32, 0.4);
+  background: rgba(160, 48, 32, 0.04);
+}
+
+.effects-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.effects-positive .effects-title { color: #6abf50; }
+.effects-negative .effects-title { color: #d05040; }
+
+.stat-grid {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.stat-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(138, 106, 46, 0.15);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.stat-icon {
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: help;
+}
+
+.stat-input {
+  width: 52px;
+  background: var(--bg-primary);
+  border: 1px solid rgba(184, 148, 46, 0.3);
+  color: var(--text-bright);
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.stat-input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+/* Variant rules */
+.variant-rules {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.variant-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.variant-check input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-gold);
+  cursor: pointer;
+}
+
+.variant-label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.form-error { color: var(--accent-red); font-size: 0.9rem; margin-bottom: 10px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+</style>
