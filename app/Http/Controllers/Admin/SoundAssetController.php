@@ -53,12 +53,21 @@ class SoundAssetController extends Controller
             }
         }
 
-        $path = $request->file('file')->store('sounds', 's3');
-        $sound->update(['path' => $path]);
+        try {
+            $path = $request->file('file')->store('sounds', 's3');
 
-        return response()->json([
-            'path' => $path,
-            'url' => '/api/storage/' . $path,
-        ]);
+            if (!$path) {
+                return response()->json(['error' => 'Upload failed — check S3/Minio configuration'], 500);
+            }
+
+            $sound->update(['path' => $path]);
+
+            return response()->json([
+                'path' => $path,
+                'url' => '/api/storage/' . $path,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Upload failed: ' . $e->getMessage()], 500);
+        }
     }
 }

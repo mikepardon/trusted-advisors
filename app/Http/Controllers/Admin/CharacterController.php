@@ -68,10 +68,19 @@ class CharacterController extends Controller
             }
         }
 
-        $path = $request->file('image')->store('characters', 's3');
-        $character->update(['image_path' => $path]);
+        try {
+            $path = $request->file('image')->store('characters', 's3');
 
-        return response()->json($character->fresh());
+            if (!$path) {
+                return response()->json(['error' => 'Upload failed — check S3/Minio configuration'], 500);
+            }
+
+            $character->update(['image_path' => $path]);
+
+            return response()->json($character->fresh());
+        } catch (\Exception $e) {
+            return response()->json(['error' => 'Upload failed: ' . $e->getMessage()], 500);
+        }
     }
 
     public function destroy(Character $character): JsonResponse
