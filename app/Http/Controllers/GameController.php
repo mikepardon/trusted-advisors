@@ -21,8 +21,15 @@ use App\Models\GamePlayerItem;
 use App\Models\GamePlayerKingdom;
 use App\Models\GameRoundResult;
 use App\Models\GameRule;
+use App\Models\Achievement;
+use App\Models\DailyChallenge;
+use App\Models\DailyChallengeEntry;
 use App\Models\Item;
+use App\Models\Season;
+use App\Models\UserAchievement;
+use App\Services\GameCompletionService;
 use App\Services\OneSignalService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -63,6 +70,13 @@ class GameController extends Controller
             }
         }
 
+        // Assign active season if applicable
+        $seasonId = null;
+        $activeSeason = Season::active()->first();
+        if ($activeSeason && now()->between($activeSeason->starts_at, $activeSeason->ends_at)) {
+            $seasonId = $activeSeason->id;
+        }
+
         $game = Game::create([
             'status' => 'setup',
             'game_mode' => $validated['game_mode'],
@@ -70,6 +84,7 @@ class GameController extends Controller
             'num_players' => $validated['num_players'],
             'total_rounds' => $validated['total_rounds'] ?? 24,
             'user_id' => $request->user()?->id,
+            'season_id' => $seasonId,
         ]);
 
         // Online mode: auto-add host as player 1
@@ -308,6 +323,16 @@ class GameController extends Controller
             ->with('item')
             ->get();
 
+        // Calculate active dice count
+        $tempDiceReduction = 0;
+        if ($event && $event->mechanic === 'reduce_dice') {
+            $tempDiceReduction = $event->mechanic_data['amount'] ?? 0;
+        }
+        $diceRules = GameRule::getValue('dice_per_player_count', []);
+        $playerCount = $game->players()->count();
+        $baseDice = $diceRules[(string) $playerCount] ?? 3;
+        $diceCount = max(1, $baseDice - $player->lost_dice - $tempDiceReduction);
+
         return response()->json([
             'player_number' => $playerNumber,
             'round' => $game->current_round,
@@ -319,6 +344,7 @@ class GameController extends Controller
             'has_assigned' => $hands->whereNotNull('role')->count() >= $cardsPerPlayer,
             'cards_per_player' => $cardsPerPlayer,
             'items' => $items,
+            'dice_count' => $diceCount,
         ]);
     }
 
@@ -471,9 +497,9 @@ class GameController extends Controller
         // Sum all positive cards' difficulty
         $totalDifficulty = $positiveHands->sum(fn ($h) => $h->card->difficulty);
 
-        // Apply item difficulty modifiers
+        // Apply item difficulty modifiers (only active/non-used items)
         foreach ($players as $player) {
-            foreach ($player->items as $playerItem) {
+            foreach ($player->items->where('is_used', false) as $playerItem) {
                 $effect = $playerItem->item->effect;
                 $bonusType = $effect['bonus_type'] ?? '';
                 if ($bonusType === 'difficulty_reduction') {
@@ -532,8 +558,8 @@ class GameController extends Controller
                 }
             }
 
-            // Apply item roll bonuses and penalties
-            foreach ($player->items as $playerItem) {
+            // Apply item roll bonuses and penalties (only active/non-used items)
+            foreach ($player->items->where('is_used', false) as $playerItem) {
                 $effect = $playerItem->item->effect;
                 $bonusType = $effect['bonus_type'] ?? '';
                 if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
@@ -574,21 +600,35 @@ class GameController extends Controller
                         // Draw the next item from the deck
                         $drawnItem = $this->drawItemFromDeck($game);
                         if ($drawnItem) {
+                            $isConsumed = $drawnItem->is_consumable;
+                            $immediateDesc = null;
+                            $playerObj = $players->firstWhere('id', $hand->game_player_id);
+                            if ($isConsumed && $playerObj) {
+                                $immediateDesc = $this->applyImmediateItemEffect($game, $playerObj, $drawnItem);
+                            }
                             GamePlayerItem::create([
                                 'game_player_id' => $hand->game_player_id,
                                 'item_id' => $drawnItem->id,
                                 'acquired_round' => $game->current_round,
                                 'is_cursed' => false,
+                                'is_used' => $isConsumed,
                             ]);
                             $playerChar = $hand->player->character->name;
-                            $specialEffects[] = [
+                            $effect = [
                                 'type' => 'draw_item',
                                 'phase' => 'positive',
                                 'player' => $playerChar,
                                 'item' => $drawnItem->name,
                                 'is_negative' => $drawnItem->is_negative,
                                 'description' => "{$playerChar} found {$drawnItem->name}!",
+                                'is_consumable' => $isConsumed,
                             ];
+                            if ($isConsumed && $immediateDesc) {
+                                $effect['type'] = 'immediate_item';
+                                $effect['immediate_description'] = $immediateDesc;
+                                $effect['description'] .= " ({$immediateDesc})";
+                            }
+                            $specialEffects[] = $effect;
                         }
                         continue;
                     }
@@ -673,21 +713,34 @@ class GameController extends Controller
                     if ($drawnItem) {
                         // Pick a random player to receive the cursed item
                         $target = $players->random();
+                        $isConsumed = $drawnItem->is_consumable;
+                        $immediateDesc = null;
+                        if ($isConsumed) {
+                            $immediateDesc = $this->applyImmediateItemEffect($game, $target, $drawnItem);
+                        }
                         GamePlayerItem::create([
                             'game_player_id' => $target->id,
                             'item_id' => $drawnItem->id,
                             'acquired_round' => $game->current_round,
                             'is_cursed' => true,
+                            'is_used' => $isConsumed,
                         ]);
                         $charName = $target->character->name;
-                        $specialEffects[] = [
+                        $effect = [
                             'type' => 'draw_item',
                             'phase' => 'negative',
                             'player' => $charName,
                             'item' => $drawnItem->name,
                             'is_cursed' => true,
                             'description' => "{$charName} received a cursed {$drawnItem->name}!",
+                            'is_consumable' => $isConsumed,
                         ];
+                        if ($isConsumed && $immediateDesc) {
+                            $effect['type'] = 'immediate_item';
+                            $effect['immediate_description'] = $immediateDesc;
+                            $effect['description'] .= " ({$immediateDesc})";
+                        }
+                        $specialEffects[] = $effect;
                     }
                     continue;
                 }
@@ -820,6 +873,9 @@ class GameController extends Controller
             'game_over' => $gameOverReason !== null,
             'game_over_reason' => $gameOverReason,
             'game' => $game->fresh(),
+            'player_items' => $game->players()->with('items.item')->get()->mapWithKeys(fn ($p) => [
+                $p->player_number => $p->items,
+            ]),
         ]);
     }
 
@@ -852,11 +908,14 @@ class GameController extends Controller
                 'win' => false,
             ]);
 
+            $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
             return response()->json([
                 'game_over' => true,
                 'win' => false,
                 'reason' => $gameOverReason,
                 'game' => $game->fresh(),
+                'completion' => $completionSummary,
             ]);
         }
 
@@ -868,11 +927,14 @@ class GameController extends Controller
                 'win' => true,
             ]);
 
+            $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
             return response()->json([
                 'game_over' => true,
                 'win' => true,
                 'reason' => 'You survived all ' . $game->total_rounds . ' rounds!',
                 'game' => $game->fresh(),
+                'completion' => $completionSummary,
             ]);
         }
 
@@ -888,11 +950,16 @@ class GameController extends Controller
             foreach ($players as $player) {
                 $drawnItem = $this->drawItemFromDeck($game);
                 if ($drawnItem) {
+                    $isConsumed = $drawnItem->is_consumable;
+                    if ($isConsumed) {
+                        $this->applyImmediateItemEffect($game, $player, $drawnItem);
+                    }
                     GamePlayerItem::create([
                         'game_player_id' => $player->id,
                         'item_id' => $drawnItem->id,
                         'acquired_round' => $game->current_round,
                         'is_cursed' => false,
+                        'is_used' => $isConsumed,
                     ]);
                 }
             }
@@ -925,12 +992,14 @@ class GameController extends Controller
                     'round_phase' => 'complete',
                     'winner_player_number' => $kingdom->player->player_number,
                 ]);
+                $completionSummary = app(GameCompletionService::class)->processCompletion($game);
                 return response()->json([
                     'game_over' => true,
                     'winner_player_number' => $kingdom->player->player_number,
                     'reason' => 'Player ' . $kingdom->player->player_number . ' achieved 3 stats at maximum!',
                     'game' => $game->fresh(),
                     'player_kingdoms' => $kingdoms,
+                    'completion' => $completionSummary,
                 ]);
             }
             if ($result === 'loss') {
@@ -940,12 +1009,14 @@ class GameController extends Controller
                     'round_phase' => 'complete',
                     'winner_player_number' => $winnerNumber,
                 ]);
+                $completionSummary = app(GameCompletionService::class)->processCompletion($game);
                 return response()->json([
                     'game_over' => true,
                     'winner_player_number' => $winnerNumber,
                     'reason' => 'Player ' . $kingdom->player->player_number . '\'s kingdom collapsed!',
                     'game' => $game->fresh(),
                     'player_kingdoms' => $kingdoms,
+                    'completion' => $completionSummary,
                 ]);
             }
         }
@@ -964,12 +1035,15 @@ class GameController extends Controller
                 'winner_player_number' => $winnerNumber,
             ]);
 
+            $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
             return response()->json([
                 'game_over' => true,
                 'winner_player_number' => $winnerNumber,
                 'reason' => "Campaign complete! Player {$winnerNumber} wins with the stronger kingdom.",
                 'game' => $game->fresh(),
                 'player_kingdoms' => $kingdoms,
+                'completion' => $completionSummary,
             ]);
         }
 
@@ -1072,6 +1146,9 @@ class GameController extends Controller
             ->with('item')
             ->get();
 
+        // Calculate active dice count for duel (base 3, no event reduction)
+        $diceCount = max(1, 3 - $player->lost_dice);
+
         return response()->json([
             'player_number' => $playerNumber,
             'round' => $game->current_round,
@@ -1079,6 +1156,7 @@ class GameController extends Controller
             'is_offerer' => $isOfferer,
             'cards' => $cards,
             'items' => $items,
+            'dice_count' => $diceCount,
         ]);
     }
 
@@ -1254,8 +1332,8 @@ class GameController extends Controller
         $card = $hand->card;
         $difficulty = $card->difficulty;
 
-        // Apply item difficulty modifiers
-        foreach ($rollingPlayer->items as $playerItem) {
+        // Apply item difficulty modifiers (only active/non-used items)
+        foreach ($rollingPlayer->items->where('is_used', false) as $playerItem) {
             $effect = $playerItem->item->effect;
             $bonusType = $effect['bonus_type'] ?? '';
             if ($bonusType === 'difficulty_reduction') {
@@ -1300,8 +1378,8 @@ class GameController extends Controller
             }
         }
 
-        // Apply item roll bonuses and penalties
-        foreach ($rollingPlayer->items as $playerItem) {
+        // Apply item roll bonuses and penalties (only active/non-used items)
+        foreach ($rollingPlayer->items->where('is_used', false) as $playerItem) {
             $effect = $playerItem->item->effect;
             $bonusType = $effect['bonus_type'] ?? '';
             if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
@@ -1470,7 +1548,7 @@ class GameController extends Controller
 
     private function getCurrentEvent(Game $game): ?Event
     {
-        $eventIndex = (int) floor(($game->current_round - 1) / 7);
+        $eventIndex = (int) floor(($game->current_round - 1) / 3);
         $eventOrder = $game->event_order;
 
         // Use shuffled event order if available, otherwise fall back to ID order
@@ -1556,6 +1634,47 @@ class GameController extends Controller
         $deckEntry->update(['is_drawn' => true]);
 
         return Item::find($deckEntry->item_id);
+    }
+
+    /**
+     * Apply immediate effects for consumable items. Returns a description string or null.
+     */
+    private function applyImmediateItemEffect(Game $game, GamePlayer $player, Item $item): ?string
+    {
+        $effect = $item->effect;
+        $bonusType = $effect['bonus_type'] ?? '';
+        $bonusValue = (int) ($effect['bonus_value'] ?? 0);
+
+        if ($bonusType === 'stat_boost') {
+            $stat = $effect['stat'] ?? null;
+            $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+            if ($stat && in_array($stat, $stats)) {
+                if ($game->isDuel()) {
+                    $kingdom = GamePlayerKingdom::where('game_id', $game->id)
+                        ->where('game_player_id', $player->id)
+                        ->first();
+                    if ($kingdom) {
+                        $kingdom->{$stat} = max(0, min(20, $kingdom->{$stat} + $bonusValue));
+                        $kingdom->save();
+                    }
+                } else {
+                    $game->{$stat} = max(0, min(20, $game->{$stat} + $bonusValue));
+                    $game->save();
+                }
+                $sign = $bonusValue > 0 ? '+' : '';
+                return "{$sign}{$bonusValue} {$stat}";
+            }
+        }
+
+        if ($bonusType === 'heal_die') {
+            if ($player->lost_dice > 0) {
+                $player->decrement('lost_dice');
+                return "Recovered a lost die!";
+            }
+            return "No lost dice to recover.";
+        }
+
+        return null;
     }
 
     /**
@@ -1702,18 +1821,22 @@ class GameController extends Controller
             return;
         }
 
-        $onesignal = app(OneSignalService::class);
-        $players = $game->players()->with('user')->get();
+        try {
+            $onesignal = app(OneSignalService::class);
+            $players = $game->players()->with('user')->get();
 
-        foreach ($players as $player) {
-            if ($player->user) {
-                $onesignal->sendToUser(
-                    $player->user,
-                    'Trusted Advisors',
-                    $message,
-                    ['type' => 'your_turn', 'game_id' => $game->id]
-                );
+            foreach ($players as $player) {
+                if ($player->user) {
+                    $onesignal->sendToUser(
+                        $player->user,
+                        'Trusted Advisors',
+                        $message,
+                        ['type' => 'your_turn', 'game_id' => $game->id]
+                    );
+                }
             }
+        } catch (\Throwable $e) {
+            // Notification failure should never break game flow
         }
     }
 
@@ -1726,14 +1849,80 @@ class GameController extends Controller
             return;
         }
 
-        $player = $game->players()->where('player_number', $playerNumber)->with('user')->first();
-        if ($player?->user) {
-            app(OneSignalService::class)->sendToUser(
-                $player->user,
-                'Trusted Advisors',
-                $message,
-                ['type' => 'your_turn', 'game_id' => $game->id]
-            );
+        try {
+            $player = $game->players()->where('player_number', $playerNumber)->with('user')->first();
+            if ($player?->user) {
+                app(OneSignalService::class)->sendToUser(
+                    $player->user,
+                    'Trusted Advisors',
+                    $message,
+                    ['type' => 'your_turn', 'game_id' => $game->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            // Notification failure should never break game flow
         }
+    }
+
+    // =============================
+    // PLAYER-FACING ENDPOINTS
+    // =============================
+
+    public function achievements(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $allAchievements = Achievement::orderBy('category')->orderBy('name')->get();
+        $earned = UserAchievement::where('user_id', $user->id)->pluck('achievement_id')->toArray();
+        $completionService = app(GameCompletionService::class);
+
+        $result = $allAchievements->map(function ($a) use ($earned, $user, $completionService) {
+            $isEarned = in_array($a->id, $earned);
+            $data = [
+                'id' => $a->id,
+                'key' => $a->key,
+                'name' => $a->name,
+                'description' => $a->description,
+                'icon' => $a->icon,
+                'category' => $a->category,
+                'earned' => $isEarned,
+                'progress' => null,
+            ];
+
+            if (!$isEarned) {
+                $data['progress'] = $completionService->getProgress($user, $a->criteria);
+            }
+
+            return $data;
+        });
+
+        return response()->json($result);
+    }
+
+    public function dailyChallenge(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = Carbon::today();
+        $challenge = DailyChallenge::where('date', $today)->first();
+
+        if (!$challenge) {
+            return response()->json(null);
+        }
+
+        $entry = DailyChallengeEntry::where('user_id', $user->id)
+            ->where('daily_challenge_id', $challenge->id)
+            ->first();
+
+        return response()->json([
+            'id' => $challenge->id,
+            'title' => $challenge->title,
+            'description' => $challenge->description,
+            'reward_xp' => $challenge->reward_xp,
+            'completed' => $entry && $entry->completed_at !== null,
+        ]);
+    }
+
+    public function seasons(): JsonResponse
+    {
+        return response()->json(Season::orderByDesc('starts_at')->get());
     }
 }

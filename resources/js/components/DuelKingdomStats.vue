@@ -23,7 +23,7 @@
             class="stat-value"
             :class="[getValueClass(kingdom[stat.key]), flashClass[kingdom.id + '-' + stat.key]]"
           >
-            {{ kingdom[stat.key] }}
+            {{ tweenedValues[kingdom.id + '-' + stat.key] ?? kingdom[stat.key] }}
           </span>
         </div>
       </div>
@@ -52,9 +52,11 @@ export default {
         { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
       ],
       prevValues: {},
+      tweenedValues: {},
       flashClass: {},
       barFlashClass: {},
       flashTimers: {},
+      tweenTimers: {},
     };
   },
   computed: {
@@ -80,7 +82,9 @@ export default {
             const key = id + '-' + stat.key;
             const oldVal = this.prevValues[key];
             const newVal = k[stat.key];
-            if (oldVal !== undefined && newVal !== oldVal) {
+            if (oldVal === undefined) {
+              this.tweenedValues[key] = newVal;
+            } else if (newVal !== oldVal) {
               if (this.flashTimers[key]) clearTimeout(this.flashTimers[key]);
               const direction = newVal > oldVal ? 'up' : 'down';
               this.flashClass[key] = 'flash-' + direction;
@@ -89,6 +93,7 @@ export default {
                 this.flashClass[key] = '';
                 this.barFlashClass[key] = '';
               }, 1200);
+              this.animateValue(key, oldVal, newVal);
             }
             this.prevValues[key] = newVal;
           }
@@ -98,7 +103,24 @@ export default {
       immediate: true,
     },
   },
+  beforeUnmount() {
+    Object.values(this.tweenTimers).forEach(id => cancelAnimationFrame(id));
+  },
   methods: {
+    animateValue(key, from, to) {
+      if (this.tweenTimers[key]) cancelAnimationFrame(this.tweenTimers[key]);
+      const duration = 800;
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - t, 3);
+        this.tweenedValues[key] = Math.round(from + (to - from) * ease);
+        if (t < 1) {
+          this.tweenTimers[key] = requestAnimationFrame(step);
+        }
+      };
+      this.tweenTimers[key] = requestAnimationFrame(step);
+    },
     kingdomTotal(k) {
       return (k.wealth || 0) + (k.influence || 0) + (k.security || 0)
         + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);

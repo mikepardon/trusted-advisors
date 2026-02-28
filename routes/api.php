@@ -4,13 +4,21 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\FriendshipController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\GameLobbyController;
+use App\Http\Controllers\LeaderboardController;
+use App\Http\Controllers\ReplayController;
+use App\Http\Controllers\Admin\AchievementController;
+use App\Http\Controllers\UserProfileController;
 use App\Http\Controllers\Admin\CharacterController;
 use App\Http\Controllers\Admin\CardController;
+use App\Http\Controllers\Admin\DailyChallengeController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\ItemController;
 use App\Http\Controllers\Admin\GameRuleController;
 use App\Http\Controllers\Admin\BotGameController;
+use App\Http\Controllers\Admin\SeasonController;
 use App\Http\Controllers\Admin\SoundAssetController;
+use App\Http\Controllers\Admin\UnlockableController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -30,6 +38,8 @@ Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/login', [AuthController::class, 'login']);
+Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail']);
+Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification']);
 
 // Auth required
 Route::middleware('auth:web')->group(function () {
@@ -53,6 +63,20 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/duel-roll', [GameController::class, 'duelRoll']);
     Route::get('/games/{game}/duel-hand/{playerNumber}', [GameController::class, 'duelHand']);
 
+    // Game replay
+    Route::get('/games/{game}/replay', [ReplayController::class, 'show']);
+
+    // Leaderboards
+    Route::get('/leaderboards/global', [LeaderboardController::class, 'global']);
+    Route::get('/leaderboards/friends', [LeaderboardController::class, 'friends']);
+
+    // Achievements & daily challenge for current user
+    Route::get('/achievements', [GameController::class, 'achievements']);
+    Route::get('/daily-challenge', [GameController::class, 'dailyChallenge']);
+    Route::get('/seasons', [GameController::class, 'seasons']);
+
+    Route::get('/users/{user}/profile', [UserProfileController::class, 'show']);
+
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);
     Route::post('/friends/{friendship}/accept', [FriendshipController::class, 'accept']);
@@ -69,10 +93,15 @@ Route::middleware('auth:web')->group(function () {
 
 // Admin CRUD routes
 Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
+    Route::get('dashboard-stats', [DashboardController::class, 'stats']);
     Route::apiResource('characters', CharacterController::class);
     Route::apiResource('cards', CardController::class);
     Route::apiResource('events', EventController::class);
     Route::apiResource('items', ItemController::class);
+    Route::apiResource('seasons', SeasonController::class);
+    Route::apiResource('achievements', AchievementController::class);
+    Route::apiResource('unlockables', UnlockableController::class);
+    Route::apiResource('daily-challenges', DailyChallengeController::class);
     Route::get('rules', [GameRuleController::class, 'index']);
     Route::put('rules/{key}', [GameRuleController::class, 'update']);
     Route::post('characters/{character}/image', [CharacterController::class, 'uploadImage']);

@@ -34,7 +34,7 @@
     <div v-if="friends.length" class="friend-section">
       <h3 class="section-subtitle">Your Allies</h3>
       <div v-for="f in friends" :key="f.id" class="friend-item">
-        <span class="friend-name">{{ f.user.name }}</span>
+        <span class="friend-name clickable-name" @click="showProfileUserId = f.user.id">{{ f.user.name }}</span>
         <button class="btn-danger action-btn" @click="removeFriendship(f.id)">Remove</button>
       </div>
     </div>
@@ -51,17 +51,22 @@
     <p v-if="!friends.length && !pendingReceived.length && !pendingSent.length" class="friends-empty">
       No allies yet. Send a friend request above!
     </p>
+
+    <PlayerProfile v-if="showProfileUserId" :userId="showProfileUserId" @close="showProfileUserId = null" />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import PlayerProfile from './PlayerProfile.vue';
 
 export default {
   name: 'FriendsList',
+  components: { PlayerProfile },
   data() {
     return {
       username: '',
+      showProfileUserId: null,
       friends: [],
       pendingSent: [],
       pendingReceived: [],
@@ -197,6 +202,15 @@ export default {
 .friend-name {
   color: var(--text-primary);
   font-size: 1rem;
+}
+
+.clickable-name {
+  cursor: pointer;
+}
+
+.clickable-name:hover {
+  color: var(--accent-gold);
+  text-decoration: underline;
 }
 
 .friend-actions {

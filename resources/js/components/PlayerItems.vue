@@ -1,6 +1,6 @@
 <template>
-  <!-- Inventory icon button (only visible when player has items) -->
-  <div v-if="items && items.length" class="items-icon-wrapper">
+  <!-- Inventory icon button (only visible when player has items and showButton is true) -->
+  <div v-if="showButton && items && items.length" class="items-icon-wrapper">
     <button class="items-icon-btn" @click="open = true" title="View Inventory">
       <svg class="items-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
@@ -21,10 +21,13 @@
           <p class="items-heading">Inventory</p>
 
           <!-- Card display -->
-          <div class="item-card" :class="{ cursed: currentItem.is_cursed || currentItem.item?.is_negative }">
+          <div class="item-card" :class="{ cursed: currentItem.is_cursed || currentItem.item?.is_negative, used: currentItem.is_used }">
             <div class="card-ornament">&#9876;</div>
             <h3 class="card-title">{{ currentItem.item?.name || 'Unknown Item' }}</h3>
             <span v-if="currentItem.is_cursed" class="cursed-tag">Cursed</span>
+            <span v-if="currentItem.item?.is_consumable" class="type-tag immediate-tag">Immediate</span>
+            <span v-else-if="currentItem.item?.effect_type" class="type-tag ongoing-tag">Ongoing</span>
+            <span v-if="currentItem.is_used" class="type-tag used-tag">Used</span>
             <div class="card-divider"></div>
             <p class="card-desc">{{ currentItem.item?.description || '' }}</p>
             <div class="card-divider"></div>
@@ -53,6 +56,7 @@ export default {
   name: 'PlayerItems',
   props: {
     items: { type: Array, default: () => [] },
+    showButton: { type: Boolean, default: true },
   },
   data() {
     return {
@@ -74,6 +78,11 @@ export default {
     },
   },
   methods: {
+    openOverlay() {
+      if (this.items && this.items.length) {
+        this.open = true;
+      }
+    },
     prev() {
       this.currentIndex = this.currentIndex <= 0 ? this.items.length - 1 : this.currentIndex - 1;
     },
@@ -261,6 +270,34 @@ export default {
   border-radius: 3px;
   padding: 1px 8px;
   margin-bottom: 4px;
+}
+
+.item-card.used {
+  opacity: 0.5;
+}
+
+.type-tag {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-radius: 3px;
+  padding: 1px 8px;
+  margin-bottom: 4px;
+}
+
+.ongoing-tag {
+  color: var(--accent-gold, #c9a84c);
+  border: 1px solid var(--accent-gold, #c9a84c);
+}
+
+.immediate-tag {
+  color: #f0c040;
+  border: 1px solid #f0c040;
+}
+
+.used-tag {
+  color: var(--text-secondary, #a09080);
+  border: 1px solid var(--text-secondary, #a09080);
 }
 
 .card-divider {

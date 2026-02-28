@@ -81,6 +81,7 @@
                 <span class="detail-label">Players</span>
                 <span class="detail-value">{{ playerNames(game) }}</span>
               </div>
+              <button class="replay-btn" @click.stop="$router.push('/game/' + game.id + '/replay')">Replay</button>
             </div>
           </div>
         </div>
@@ -389,6 +390,24 @@ export default {
   background: rgba(160, 48, 32, 0.2);
   color: #d05040;
   border: 1px solid rgba(160, 48, 32, 0.4);
+}
+
+.replay-btn {
+  background: rgba(100, 100, 160, 0.15);
+  border: 1px solid rgba(100, 100, 160, 0.3);
+  color: #a0a0d0;
+  padding: 2px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.replay-btn:hover {
+  background: rgba(100, 100, 160, 0.25);
+  color: #c0c0e0;
 }
 
 /* === Mobile === */

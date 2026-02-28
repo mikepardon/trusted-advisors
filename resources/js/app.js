@@ -7,8 +7,11 @@ import GameSetup from './components/GameSetup.vue';
 import GameBoard from './components/GameBoard.vue';
 import GameOver from './components/GameOver.vue';
 import GameHistory from './components/GameHistory.vue';
+import GameReplay from './components/GameReplay.vue';
 import FriendsList from './components/FriendsList.vue';
 import ProfilePage from './components/ProfilePage.vue';
+import LeaderboardPage from './components/LeaderboardPage.vue';
+import AchievementsList from './components/AchievementsList.vue';
 import AdminLayout from './components/admin/AdminLayout.vue';
 import AdminDashboard from './components/admin/AdminDashboard.vue';
 import AdminCharacters from './components/admin/AdminCharacters.vue';
@@ -17,6 +20,10 @@ import AdminEvents from './components/admin/AdminEvents.vue';
 import AdminItems from './components/admin/AdminItems.vue';
 import AdminSounds from './components/admin/AdminSounds.vue';
 import AdminBotGames from './components/admin/AdminBotGames.vue';
+import AdminSeasons from './components/admin/AdminSeasons.vue';
+import AdminAchievements from './components/admin/AdminAchievements.vue';
+import AdminUnlockables from './components/admin/AdminUnlockables.vue';
+import AdminChallenges from './components/admin/AdminChallenges.vue';
 import SettingsPage from './components/SettingsPage.vue';
 import { fetchSoundUrls } from './sounds';
 
@@ -25,9 +32,12 @@ const routes = [
     { path: '/campaigns', component: GameHistory, meta: { auth: true } },
     { path: '/friends', component: FriendsList, meta: { auth: true } },
     { path: '/profile', component: ProfilePage, meta: { auth: true } },
+    { path: '/leaderboard', component: LeaderboardPage, meta: { auth: true } },
+    { path: '/achievements', component: AchievementsList, meta: { auth: true } },
     { path: '/settings', component: SettingsPage },
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
     { path: '/game/:id/over', component: GameOver, props: true, meta: { auth: true } },
+    { path: '/game/:id/replay', component: GameReplay, props: true, meta: { auth: true } },
     {
         path: '/admin',
         component: AdminLayout,
@@ -40,6 +50,10 @@ const routes = [
             { path: 'items', component: AdminItems },
             { path: 'sounds', component: AdminSounds },
             { path: 'bot-games', component: AdminBotGames },
+            { path: 'seasons', component: AdminSeasons },
+            { path: 'achievements', component: AdminAchievements },
+            { path: 'unlockables', component: AdminUnlockables },
+            { path: 'challenges', component: AdminChallenges },
         ],
     },
 ];

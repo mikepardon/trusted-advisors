@@ -10,10 +10,15 @@
 
     <!-- Logged in -->
     <template v-else>
+
+    <!-- Daily Challenge Banner -->
+    <DailyChallengeBanner />
+
     <!-- STEP 0: Mode selection -->
     <Transition name="fade" mode="out-in">
     <div v-if="step === 'mode'" key="mode">
       <div class="card-panel">
+        <p class="user-greeting">Hail, {{ auth.state.user.name }}</p>
         <h2 class="section-title">New Game</h2>
         <p class="flavor-text">
           The kingdom stands at a crossroads. The realm needs leaders.
@@ -304,6 +309,7 @@
 import axios from 'axios';
 import { useAuth } from '../stores/auth';
 import { playSound } from '../sounds';
+import DailyChallengeBanner from './DailyChallengeBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import StoryIntro from './StoryIntro.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
@@ -313,7 +319,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { LoginRegister, StoryIntro, Swiper, SwiperSlide },
+  components: { DailyChallengeBanner, LoginRegister, StoryIntro, Swiper, SwiperSlide },
   setup() {
     const auth = useAuth();
     return { auth, playSound };
@@ -630,6 +636,15 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 1.1rem;
+}
+
+.user-greeting {
+  text-align: center;
+  color: var(--accent-gold);
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+  margin-bottom: 4px;
 }
 
 .section-title {

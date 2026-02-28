@@ -6,7 +6,7 @@
         <div class="stat-header">
           <span class="stat-icon">{{ stat.icon }}</span>
           <span class="stat-name">{{ stat.label }}</span>
-          <span class="stat-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ game[stat.key] }}</span>
+          <span class="stat-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
         </div>
         <!-- Desktop: horizontal bar -->
         <div class="stat-bar-bg">
@@ -29,7 +29,7 @@
               :style="{ strokeDashoffset: radialOffset(game[stat.key]) }"
             />
           </svg>
-          <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ game[stat.key] }}</span>
+          <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
         </div>
       </div>
     </div>
@@ -53,9 +53,11 @@ export default {
         { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
       ],
       prevValues: {},
+      tweenedValues: {},
       flashClass: {},
       barFlashClass: {},
       flashTimers: {},
+      tweenTimers: {},
     };
   },
   watch: {
@@ -65,7 +67,9 @@ export default {
         for (const stat of this.stats) {
           const oldVal = this.prevValues[stat.key];
           const newVal = newGame[stat.key];
-          if (oldVal !== undefined && newVal !== oldVal) {
+          if (oldVal === undefined) {
+            this.tweenedValues[stat.key] = newVal;
+          } else if (newVal !== oldVal) {
             if (this.flashTimers[stat.key]) clearTimeout(this.flashTimers[stat.key]);
             const direction = newVal > oldVal ? 'up' : 'down';
             this.flashClass[stat.key] = 'flash-' + direction;
@@ -74,6 +78,7 @@ export default {
               this.flashClass[stat.key] = '';
               this.barFlashClass[stat.key] = '';
             }, 1200);
+            this.animateValue(stat.key, oldVal, newVal);
           }
           this.prevValues[stat.key] = newVal;
         }
@@ -82,7 +87,24 @@ export default {
       immediate: true,
     },
   },
+  beforeUnmount() {
+    Object.values(this.tweenTimers).forEach(id => cancelAnimationFrame(id));
+  },
   methods: {
+    animateValue(key, from, to) {
+      if (this.tweenTimers[key]) cancelAnimationFrame(this.tweenTimers[key]);
+      const duration = 800;
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
+        this.tweenedValues[key] = Math.round(from + (to - from) * ease);
+        if (t < 1) {
+          this.tweenTimers[key] = requestAnimationFrame(step);
+        }
+      };
+      this.tweenTimers[key] = requestAnimationFrame(step);
+    },
     getBarClass(value) {
       if (value <= 2) return 'bar-critical';
       if (value <= 5) return 'bar-danger-low';

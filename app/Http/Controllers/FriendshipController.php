@@ -73,13 +73,17 @@ class FriendshipController extends Controller
             'receiver_id' => $receiver->id,
         ]);
 
-        // Send push notification to the receiver
-        app(OneSignalService::class)->sendToUser(
-            $receiver,
-            'Friend Request',
-            $request->user()->name . ' sent you a friend request!',
-            ['type' => 'friend_request']
-        );
+        // Send push notification to the receiver (non-blocking — friendship still works without it)
+        try {
+            app(OneSignalService::class)->sendToUser(
+                $receiver,
+                'Friend Request',
+                $request->user()->name . ' sent you a friend request!',
+                ['type' => 'friend_request']
+            );
+        } catch (\Throwable $e) {
+            // Notification failure should never prevent friend request from succeeding
+        }
 
         return response()->json($friendship->load('receiver:id,name'), 201);
     }

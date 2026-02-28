@@ -17,7 +17,10 @@
             :class="{ 'kingdom-winner': kingdom.player?.player_number === gameData.game.winner_player_number }"
           >
             <h3 class="kingdom-header">
-              {{ kingdom.player?.character?.name || 'Player' }}
+              <span
+                :class="{ 'clickable-name': kingdom.player?.user_id }"
+                @click="kingdom.player?.user_id && (showProfileUserId = kingdom.player.user_id)"
+              >{{ kingdom.player?.character?.name || 'Player' }}</span>
               <span v-if="kingdom.player?.player_number === gameData.game.winner_player_number" class="winner-badge">WINNER</span>
             </h3>
             <div class="stats-grid">
@@ -41,13 +44,31 @@
           </p>
         </div>
 
-        <button class="btn-primary play-again" @click="$router.push('/')">
-          Play Again
-        </button>
+        <!-- Completion rewards -->
+        <div v-if="completion" class="completion-rewards">
+          <div v-if="myXp" class="reward-item reward-xp">+{{ myXp }} XP</div>
+          <div v-if="myLevelUp" class="reward-item reward-level">Level Up! Lv.{{ myLevelUp }}</div>
+          <div v-if="myEloChange" class="reward-item" :class="myEloChange > 0 ? 'reward-elo-up' : 'reward-elo-down'">
+            ELO {{ myEloChange > 0 ? '+' : '' }}{{ myEloChange }}
+          </div>
+          <div v-for="ach in myAchievements" :key="ach.id" class="reward-item reward-achievement">
+            {{ ach.name }}
+          </div>
+          <div v-if="completion.challenge_completed" class="reward-item reward-challenge">
+            Challenge Complete: {{ completion.challenge_completed.title }} (+{{ completion.challenge_completed.reward_xp }} XP)
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button class="btn-primary play-again" @click="rematch" :disabled="rematchLoading">
+            {{ rematchLoading ? 'Creating...' : 'Rematch' }}
+          </button>
+          <button class="play-again" @click="$router.push('/')">New Game</button>
+        </div>
       </div>
     </template>
 
-    <!-- COOPERATIVE END SCREEN -->
+    <!-- COOPERATIVE END SCREEN (single / pass_and_play / online) -->
     <template v-else>
     <div class="card-panel result-panel">
       <h2 class="game-over-title" :class="isWin ? 'title-win' : 'title-loss'">
@@ -83,7 +104,10 @@
       <div class="advisors-section">
         <h3>Your Advisors</h3>
         <div v-for="player in gameData.game.players" :key="player.id" class="advisor">
-          <strong>{{ player.character.name }}</strong>
+          <strong
+            :class="{ 'clickable-name': player.user_id }"
+            @click="player.user_id && (showProfileUserId = player.user_id)"
+          >{{ player.character.name }}</strong>
           <div v-if="player.items && player.items.length" class="advisor-items">
             <span
               v-for="pi in player.items"
@@ -110,27 +134,62 @@
         </p>
       </div>
 
-      <button class="btn-primary play-again" @click="$router.push('/')">
-        Play Again
-      </button>
+      <!-- Completion rewards -->
+      <div v-if="completion" class="completion-rewards">
+        <div v-if="myXp" class="reward-item reward-xp">+{{ myXp }} XP</div>
+        <div v-if="myLevelUp" class="reward-item reward-level">Level Up! Lv.{{ myLevelUp }}</div>
+        <div v-for="ach in myAchievements" :key="ach.id" class="reward-item reward-achievement">
+          {{ ach.name }}
+        </div>
+        <div v-if="completion.challenge_completed" class="reward-item reward-challenge">
+          Challenge Complete: {{ completion.challenge_completed.title }} (+{{ completion.challenge_completed.reward_xp }} XP)
+        </div>
+      </div>
+
+      <div class="button-row">
+        <template v-if="isSinglePlayer">
+          <button class="play-again" @click="$router.push('/')">Home</button>
+          <button class="btn-primary play-again" @click="rematch" :disabled="rematchLoading">
+            {{ rematchLoading ? 'Creating...' : 'New Game' }}
+          </button>
+        </template>
+        <template v-else>
+          <button class="btn-primary play-again" @click="rematch" :disabled="rematchLoading">
+            {{ rematchLoading ? 'Creating...' : 'Rematch' }}
+          </button>
+          <button class="play-again" @click="$router.push('/')">New Game</button>
+        </template>
+      </div>
     </div>
     </template>
+
+    <PlayerProfile v-if="showProfileUserId" :userId="showProfileUserId" @close="showProfileUserId = null" />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
 import { playSound } from '../sounds';
+import { useAuth } from '../stores/auth';
+import PlayerProfile from './PlayerProfile.vue';
 
 export default {
   name: 'GameOver',
+  components: { PlayerProfile },
   props: {
     id: { type: [String, Number], required: true },
+  },
+  setup() {
+    const auth = useAuth();
+    return { auth };
   },
   data() {
     return {
       gameData: null,
+      completion: null,
       loading: true,
+      rematchLoading: false,
+      showProfileUserId: null,
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -142,6 +201,9 @@ export default {
     };
   },
   computed: {
+    isSinglePlayer() {
+      return this.gameData?.game?.game_mode === 'single';
+    },
     isDuel() {
       return this.gameData?.game?.game_type === 'duel' || this.gameData?.game_type === 'duel';
     },
@@ -217,11 +279,39 @@ export default {
 
       return 'Your advisors have guided the kingdom through two years of crisis. The realm celebrates, and your deeds are judged.';
     },
+    myXp() {
+      if (!this.completion?.xp_awards) return null;
+      const vals = Object.values(this.completion.xp_awards);
+      return vals.length > 0 ? vals[0] : null;
+    },
+    myLevelUp() {
+      if (!this.completion?.level_ups) return null;
+      const vals = Object.values(this.completion.level_ups);
+      return vals.length > 0 ? vals[0] : null;
+    },
+    myEloChange() {
+      if (!this.completion?.elo_changes) return null;
+      const vals = Object.values(this.completion.elo_changes);
+      return vals.length > 0 ? vals[0]?.change : null;
+    },
+    myAchievements() {
+      if (!this.completion?.achievements_unlocked) return [];
+      const vals = Object.values(this.completion.achievements_unlocked);
+      return vals.length > 0 ? vals[0] : [];
+    },
   },
   async mounted() {
     try {
       const res = await axios.get(`/api/games/${this.id}`);
       this.gameData = res.data;
+
+      // Load completion data from sessionStorage (set by GameBoard/DuelBoard)
+      const stored = sessionStorage.getItem(`game_completion_${this.id}`);
+      if (stored) {
+        this.completion = JSON.parse(stored);
+        sessionStorage.removeItem(`game_completion_${this.id}`);
+      }
+
       this.$nextTick(() => {
         if (this.isDuel) {
           playSound('win'); // Both players hear the fanfare
@@ -247,6 +337,37 @@ export default {
     kingdomTotal(k) {
       return (k.wealth || 0) + (k.influence || 0) + (k.security || 0)
         + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);
+    },
+    async rematch() {
+      this.rematchLoading = true;
+      try {
+        const game = this.gameData.game;
+        const res = await axios.post('/api/games', {
+          game_mode: game.game_mode,
+          game_type: game.game_type || 'cooperative',
+          num_players: game.num_players || game.players?.length || 1,
+          total_rounds: game.total_rounds,
+        });
+        const newGameId = res.data.id;
+
+        // For online games, invite the other players
+        if (game.game_mode === 'online' && game.players) {
+          const currentUserId = this.auth.state.user?.id;
+          const opponents = game.players.filter(p => p.user_id && p.user_id !== currentUserId);
+          for (const opp of opponents) {
+            try {
+              await axios.post(`/api/games/${newGameId}/invite`, { user_id: opp.user_id });
+            } catch {
+              // Invite may fail if user blocked, etc. - continue
+            }
+          }
+        }
+
+        this.$router.push(`/game/${newGameId}`);
+      } catch {
+        alert('Failed to create rematch.');
+      }
+      this.rematchLoading = false;
     },
   },
 };
@@ -369,6 +490,14 @@ export default {
   color: var(--accent-gold);
 }
 
+.clickable-name {
+  cursor: pointer;
+}
+
+.clickable-name:hover {
+  text-decoration: underline;
+}
+
 .advisor-items {
   display: flex;
   gap: 6px;
@@ -399,9 +528,74 @@ export default {
   line-height: 1.5;
 }
 
+.button-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 .play-again {
-  font-size: 1.3rem;
-  padding: 14px 50px;
+  font-size: 1.1rem;
+  padding: 12px 36px;
+}
+
+/* Completion rewards */
+.completion-rewards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+
+.reward-item {
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  animation: rewardPop 0.4s ease;
+}
+
+.reward-xp {
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 168, 67, 0.4);
+}
+
+.reward-level {
+  background: rgba(74, 138, 58, 0.2);
+  color: #6abf50;
+  border: 1px solid rgba(74, 138, 58, 0.4);
+}
+
+.reward-elo-up {
+  background: rgba(67, 160, 212, 0.15);
+  color: #60b8e0;
+  border: 1px solid rgba(67, 160, 212, 0.3);
+}
+
+.reward-elo-down {
+  background: rgba(160, 48, 32, 0.15);
+  color: #d05040;
+  border: 1px solid rgba(160, 48, 32, 0.3);
+}
+
+.reward-achievement {
+  background: rgba(180, 130, 255, 0.15);
+  color: #b482ff;
+  border: 1px solid rgba(180, 130, 255, 0.3);
+}
+
+.reward-challenge {
+  background: rgba(74, 138, 58, 0.15);
+  color: #6abf50;
+  border: 1px solid rgba(74, 138, 58, 0.3);
+}
+
+@keyframes rewardPop {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 /* Duel end screen */
@@ -488,11 +682,6 @@ export default {
 
   .result-panel {
     padding: 16px 12px;
-  }
-
-  .play-again {
-    font-size: 1.1rem;
-    padding: 12px 36px;
   }
 
   .final-stats h3,

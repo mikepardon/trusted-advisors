@@ -11,7 +11,9 @@ use App\Models\Friendship;
 use App\Models\Game;
 use App\Models\GameInvite;
 use App\Models\GamePlayer;
+use App\Models\Unlockable;
 use App\Models\User;
+use App\Models\UserUnlockable;
 use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -78,15 +80,19 @@ class GameLobbyController extends Controller
             $request->user()->name,
         ));
 
-        // Send push notification
-        $receiver = User::find($receiverId);
-        if ($receiver) {
-            app(OneSignalService::class)->sendToUser(
-                $receiver,
-                'Game Invite',
-                $request->user()->name . ' invited you to a game!',
-                ['type' => 'game_invite', 'game_id' => $game->id]
-            );
+        // Send push notification (non-blocking — invite still works without it)
+        try {
+            $receiver = User::find($receiverId);
+            if ($receiver) {
+                app(OneSignalService::class)->sendToUser(
+                    $receiver,
+                    'Game Invite',
+                    $request->user()->name . ' invited you to a game!',
+                    ['type' => 'game_invite', 'game_id' => $game->id]
+                );
+            }
+        } catch (\Throwable $e) {
+            // Notification failure should never prevent invite from succeeding
         }
 
         return response()->json($invite->load(['sender', 'receiver']), 201);
@@ -179,6 +185,22 @@ class GameLobbyController extends Controller
             return response()->json(['error' => 'Character already taken'], 422);
         }
 
+        // Check if character is locked
+        $character = Character::find($validated['character_id']);
+        if ($character && $character->is_locked) {
+            $unlockable = Unlockable::where('type', 'character')
+                ->where('entity_id', $character->id)
+                ->first();
+            if ($unlockable) {
+                $hasUnlocked = UserUnlockable::where('user_id', $request->user()->id)
+                    ->where('unlockable_id', $unlockable->id)
+                    ->exists();
+                if (!$hasUnlocked) {
+                    return response()->json(['error' => 'This character is locked. Reach the required level or achievement to unlock it.'], 422);
+                }
+            }
+        }
+
         $player->update(['character_id' => $validated['character_id']]);
 
         // Check if all players have selected
@@ -199,7 +221,7 @@ class GameLobbyController extends Controller
         ]);
     }
 
-    public function lobbyStatus(Game $game): JsonResponse
+    public function lobbyStatus(Game $game, Request $request): JsonResponse
     {
         $players = GamePlayer::where('game_id', $game->id)
             ->with(['character', 'user'])
@@ -211,6 +233,26 @@ class GameLobbyController extends Controller
             ->get();
 
         $characters = Character::all();
+
+        // Add lock info for each character
+        $userId = $request->user()?->id;
+        if ($userId) {
+            $userUnlockableIds = UserUnlockable::where('user_id', $userId)->pluck('unlockable_id')->toArray();
+            $characters = $characters->map(function ($c) use ($userUnlockableIds) {
+                $charData = $c->toArray();
+                $charData['is_locked_for_user'] = false;
+                if ($c->is_locked) {
+                    $unlockable = Unlockable::where('type', 'character')->where('entity_id', $c->id)->first();
+                    $charData['is_locked_for_user'] = $unlockable && !in_array($unlockable->id, $userUnlockableIds);
+                    if ($charData['is_locked_for_user'] && $unlockable) {
+                        $charData['unlock_requirement'] = $unlockable->unlock_method === 'level'
+                            ? "Reach level {$unlockable->unlock_value}"
+                            : "Earn required achievement";
+                    }
+                }
+                return $charData;
+            });
+        }
 
         // Determine whose turn it is to pick (first player without a character)
         $pickingPlayer = $players->first(fn ($p) => !$p->character_id);

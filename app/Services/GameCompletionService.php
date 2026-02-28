@@ -1,0 +1,556 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\Achievement;
+use App\Models\DailyChallenge;
+use App\Models\DailyChallengeEntry;
+use App\Models\Game;
+use App\Models\GamePlayer;
+use App\Models\Unlockable;
+use App\Models\User;
+use App\Models\UserAchievement;
+use App\Models\UserEloHistory;
+use App\Models\UserUnlockable;
+use Carbon\Carbon;
+
+class GameCompletionService
+{
+    /**
+     * Process all completion rewards for a finished game.
+     * Returns a summary array for broadcasting.
+     */
+    public function processCompletion(Game $game): array
+    {
+        $summary = [
+            'xp_awards' => [],
+            'level_ups' => [],
+            'elo_changes' => [],
+            'achievements_unlocked' => [],
+            'challenge_completed' => null,
+        ];
+
+        // Gather all users who participated
+        $players = $game->players()->with('user')->get();
+        $users = $players->pluck('user')->filter();
+
+        foreach ($users as $user) {
+            if (!$user) continue;
+
+            // XP
+            $xpResult = $this->awardXp($user, $game, $players);
+            $summary['xp_awards'][$user->id] = $xpResult['xp'];
+            if ($xpResult['leveled_up']) {
+                $summary['level_ups'][$user->id] = $xpResult['new_level'];
+            }
+
+            // Achievements
+            $newAchievements = $this->checkAchievements($user, $game);
+            if (!empty($newAchievements)) {
+                $summary['achievements_unlocked'][$user->id] = $newAchievements;
+            }
+
+            // Daily challenge
+            $challengeResult = $this->checkDailyChallenge($user, $game);
+            if ($challengeResult) {
+                $summary['challenge_completed'] = $challengeResult;
+            }
+        }
+
+        // ELO (online duel only)
+        if ($game->isOnline() && $game->isDuel()) {
+            $summary['elo_changes'] = $this->updateElo($game, $players);
+        }
+
+        return $summary;
+    }
+
+    /**
+     * Get progress toward an achievement for display purposes.
+     * Returns [current, target] or null if not trackable.
+     */
+    public function getProgress(User $user, array $criteria): ?array
+    {
+        $type = $criteria['type'] ?? null;
+
+        switch ($type) {
+            case 'total_wins':
+                $target = $criteria['count'] ?? 10;
+                return ['current' => $this->getUserWins($user), 'target' => $target];
+
+            case 'games_played':
+                $target = $criteria['count'] ?? 50;
+                return ['current' => $this->getUserGamesPlayed($user), 'target' => $target];
+
+            case 'duel_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserDuelWins($user), 'target' => $target];
+
+            case 'elo_reached':
+                $target = $criteria['value'] ?? 1200;
+                return ['current' => $user->elo_rating, 'target' => $target];
+
+            case 'level_reached':
+                $target = $criteria['value'] ?? 10;
+                return ['current' => $user->level, 'target' => $target];
+
+            case 'unique_characters':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUniqueCharactersUsed($user), 'target' => $target];
+
+            case 'win_streak':
+                $target = $criteria['count'] ?? 3;
+                return ['current' => $this->getCurrentWinStreak($user), 'target' => $target];
+
+            default:
+                return null;
+        }
+    }
+
+    private function getCurrentWinStreak(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        $recentGames = Game::where('status', 'completed')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->orderByDesc('updated_at')
+            ->limit(50)
+            ->get();
+
+        $streak = 0;
+        foreach ($recentGames as $game) {
+            $won = false;
+            if ($game->isDuel()) {
+                $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                $won = $player && $player->player_number === $game->winner_player_number;
+            } else {
+                $won = (bool) $game->win;
+            }
+
+            if ($won) {
+                $streak++;
+            } else {
+                break;
+            }
+        }
+
+        return $streak;
+    }
+
+    private function awardXp(User $user, Game $game, $players): array
+    {
+        $base = 50;
+        $bonus = 0;
+
+        // Determine if this user won
+        $isWinner = $this->isWinner($user, $game, $players);
+
+        if ($isWinner) {
+            $bonus = $game->isDuel() ? 150 : 100;
+        }
+
+        $total = $base + $bonus;
+
+        // Online multiplier
+        if ($game->isOnline()) {
+            $total = (int) ($total * 1.5);
+        }
+
+        $oldLevel = $user->level;
+        $user->xp += $total;
+        $user->level = User::calculateLevel($user->xp);
+        $user->save();
+
+        $leveledUp = $user->level > $oldLevel;
+
+        // Check level-based unlockables on level up
+        if ($leveledUp) {
+            $this->checkLevelUnlockables($user);
+        }
+
+        return [
+            'xp' => $total,
+            'leveled_up' => $leveledUp,
+            'new_level' => $user->level,
+        ];
+    }
+
+    private function isWinner(User $user, Game $game, $players): bool
+    {
+        if ($game->isDuel()) {
+            $player = $players->firstWhere('user_id', $user->id);
+            return $player && $player->player_number === $game->winner_player_number;
+        }
+        return $game->win === true;
+    }
+
+    private function updateElo(Game $game, $players): array
+    {
+        $changes = [];
+        $k = 32;
+
+        $player1 = $players->firstWhere('player_number', 1);
+        $player2 = $players->firstWhere('player_number', 2);
+
+        if (!$player1?->user || !$player2?->user) {
+            return $changes;
+        }
+
+        $user1 = $player1->user;
+        $user2 = $player2->user;
+
+        $r1 = $user1->elo_rating;
+        $r2 = $user2->elo_rating;
+
+        $e1 = 1 / (1 + pow(10, ($r2 - $r1) / 400));
+        $e2 = 1 / (1 + pow(10, ($r1 - $r2) / 400));
+
+        // Determine scores
+        if ($game->winner_player_number === 1) {
+            $s1 = 1;
+            $s2 = 0;
+        } elseif ($game->winner_player_number === 2) {
+            $s1 = 0;
+            $s2 = 1;
+        } else {
+            $s1 = 0.5;
+            $s2 = 0.5;
+        }
+
+        $newR1 = (int) round($r1 + $k * ($s1 - $e1));
+        $newR2 = (int) round($r2 + $k * ($s2 - $e2));
+
+        // Ensure minimum of 0
+        $newR1 = max(0, $newR1);
+        $newR2 = max(0, $newR2);
+
+        UserEloHistory::create([
+            'user_id' => $user1->id,
+            'game_id' => $game->id,
+            'old_elo' => $r1,
+            'new_elo' => $newR1,
+        ]);
+
+        UserEloHistory::create([
+            'user_id' => $user2->id,
+            'game_id' => $game->id,
+            'old_elo' => $r2,
+            'new_elo' => $newR2,
+        ]);
+
+        $user1->update(['elo_rating' => $newR1]);
+        $user2->update(['elo_rating' => $newR2]);
+
+        $changes[$user1->id] = ['old' => $r1, 'new' => $newR1, 'change' => $newR1 - $r1];
+        $changes[$user2->id] = ['old' => $r2, 'new' => $newR2, 'change' => $newR2 - $r2];
+
+        return $changes;
+    }
+
+    private function checkAchievements(User $user, Game $game): array
+    {
+        $unlocked = [];
+        $earnedIds = UserAchievement::where('user_id', $user->id)->pluck('achievement_id')->toArray();
+        $achievements = Achievement::whereNotIn('id', $earnedIds)->get();
+
+        foreach ($achievements as $achievement) {
+            if ($this->evaluateCriteria($user, $game, $achievement->criteria)) {
+                UserAchievement::create([
+                    'user_id' => $user->id,
+                    'achievement_id' => $achievement->id,
+                    'unlocked_at' => now(),
+                ]);
+
+                $unlocked[] = [
+                    'id' => $achievement->id,
+                    'name' => $achievement->name,
+                    'description' => $achievement->description,
+                    'icon' => $achievement->icon,
+                ];
+
+                // Grant unlockable reward if configured
+                if ($achievement->reward_type === 'unlockable' && $achievement->reward_id) {
+                    $this->grantUnlockable($user, $achievement->reward_id);
+                }
+            }
+        }
+
+        return $unlocked;
+    }
+
+    private function evaluateCriteria(User $user, Game $game, array $criteria): bool
+    {
+        $type = $criteria['type'] ?? null;
+
+        switch ($type) {
+            case 'win_streak':
+                return $this->checkWinStreak($user, $criteria['count'] ?? 3);
+
+            case 'total_wins':
+                return $this->getUserWins($user) >= ($criteria['count'] ?? 10);
+
+            case 'perfect_stats':
+                return $this->checkPerfectStats($game, $criteria['count'] ?? 3);
+
+            case 'games_played':
+                return $this->getUserGamesPlayed($user) >= ($criteria['count'] ?? 50);
+
+            case 'duel_wins':
+                return $this->getUserDuelWins($user) >= ($criteria['count'] ?? 5);
+
+            case 'elo_reached':
+                return $user->elo_rating >= ($criteria['value'] ?? 1200);
+
+            case 'level_reached':
+                return $user->level >= ($criteria['value'] ?? 10);
+
+            case 'unique_characters':
+                return $this->getUniqueCharactersUsed($user) >= ($criteria['count'] ?? 5);
+
+            default:
+                return false;
+        }
+    }
+
+    private function checkWinStreak(User $user, int $count): bool
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        $recentGames = Game::where('status', 'completed')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->orderByDesc('updated_at')
+            ->limit($count)
+            ->get();
+
+        if ($recentGames->count() < $count) return false;
+
+        foreach ($recentGames as $game) {
+            if ($game->isDuel()) {
+                $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                if (!$player || $player->player_number !== $game->winner_player_number) return false;
+            } else {
+                if (!$game->win) return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function getUserWins(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        // Coop wins
+        $coopWins = Game::where('status', 'completed')
+            ->where('game_type', '!=', 'duel')
+            ->where('win', true)
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+
+        // Duel wins
+        $duelWins = $this->getUserDuelWins($user);
+
+        return $coopWins + $duelWins;
+    }
+
+    private function getUserDuelWins(User $user): int
+    {
+        $duelGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_type', 'duel')
+            ->whereIn('id', $duelGameIds)
+            ->where(function ($q) use ($user) {
+                $q->whereHas('players', function ($pq) use ($user) {
+                    $pq->where('user_id', $user->id)
+                        ->whereColumn('player_number', 'games.winner_player_number');
+                });
+            })
+            ->count();
+    }
+
+    private function getUserGamesPlayed(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+    }
+
+    private function checkPerfectStats(Game $game, int $count): bool
+    {
+        if ($game->isDuel()) {
+            // Check each kingdom
+            foreach ($game->playerKingdoms as $kingdom) {
+                $atMax = 0;
+                foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
+                    if ($kingdom->{$stat} >= 20) $atMax++;
+                }
+                if ($atMax >= $count) return true;
+            }
+            return false;
+        }
+
+        $atMax = 0;
+        foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
+            if ($game->{$stat} >= 20) $atMax++;
+        }
+        return $atMax >= $count;
+    }
+
+    private function getUniqueCharactersUsed(User $user): int
+    {
+        return GamePlayer::where('user_id', $user->id)
+            ->whereNotNull('character_id')
+            ->distinct('character_id')
+            ->count('character_id');
+    }
+
+    private function grantUnlockable(User $user, int $unlockableId): void
+    {
+        $exists = UserUnlockable::where('user_id', $user->id)
+            ->where('unlockable_id', $unlockableId)
+            ->exists();
+
+        if (!$exists) {
+            UserUnlockable::create([
+                'user_id' => $user->id,
+                'unlockable_id' => $unlockableId,
+                'unlocked_at' => now(),
+            ]);
+        }
+    }
+
+    private function checkLevelUnlockables(User $user): void
+    {
+        $levelUnlockables = Unlockable::where('unlock_method', 'level')
+            ->where('unlock_value', '<=', $user->level)
+            ->get();
+
+        $alreadyUnlocked = UserUnlockable::where('user_id', $user->id)
+            ->pluck('unlockable_id')
+            ->toArray();
+
+        foreach ($levelUnlockables as $unlockable) {
+            if (!in_array($unlockable->id, $alreadyUnlocked)) {
+                UserUnlockable::create([
+                    'user_id' => $user->id,
+                    'unlockable_id' => $unlockable->id,
+                    'unlocked_at' => now(),
+                ]);
+            }
+        }
+    }
+
+    private function checkDailyChallenge(User $user, Game $game): ?array
+    {
+        $today = Carbon::today();
+        $challenge = DailyChallenge::where('date', $today)->first();
+        if (!$challenge) return null;
+
+        // Already completed?
+        $entry = DailyChallengeEntry::where('user_id', $user->id)
+            ->where('daily_challenge_id', $challenge->id)
+            ->first();
+
+        if ($entry && $entry->completed_at) return null;
+
+        // Check criteria
+        if (!$this->evaluateChallengeCriteria($user, $game, $challenge->criteria)) {
+            return null;
+        }
+
+        // Mark completed
+        if ($entry) {
+            $entry->update([
+                'game_id' => $game->id,
+                'completed_at' => now(),
+            ]);
+        } else {
+            DailyChallengeEntry::create([
+                'user_id' => $user->id,
+                'daily_challenge_id' => $challenge->id,
+                'game_id' => $game->id,
+                'completed_at' => now(),
+            ]);
+        }
+
+        // Award bonus XP
+        $user->xp += $challenge->reward_xp;
+        $user->level = User::calculateLevel($user->xp);
+        $user->save();
+
+        return [
+            'challenge_id' => $challenge->id,
+            'title' => $challenge->title,
+            'reward_xp' => $challenge->reward_xp,
+        ];
+    }
+
+    private function evaluateChallengeCriteria(User $user, Game $game, array $criteria): bool
+    {
+        $type = $criteria['type'] ?? null;
+
+        switch ($type) {
+            case 'play_game':
+                $mode = $criteria['mode'] ?? 'any';
+                return $mode === 'any' || $game->game_mode === $mode;
+
+            case 'win_game':
+                $mode = $criteria['mode'] ?? 'any';
+                $modeMatch = $mode === 'any' || $game->game_mode === $mode;
+                $isWin = $game->isDuel()
+                    ? GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->where('player_number', $game->winner_player_number)->exists()
+                    : $game->win;
+                return $modeMatch && $isWin;
+
+            case 'stat_threshold':
+                $stat = $criteria['stat'] ?? 'wealth';
+                $value = $criteria['value'] ?? 15;
+                if ($game->isDuel()) {
+                    $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                    if (!$player) return false;
+                    $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+                    return $kingdom && $kingdom->{$stat} >= $value;
+                }
+                return $game->{$stat} >= $value;
+
+            case 'use_character':
+                $characterId = $criteria['character_id'] ?? null;
+                return GamePlayer::where('game_id', $game->id)
+                    ->where('user_id', $user->id)
+                    ->where('character_id', $characterId)
+                    ->exists();
+
+            case 'no_stat_below':
+                $value = $criteria['value'] ?? 8;
+                $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+                if ($game->isDuel()) {
+                    $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                    if (!$player) return false;
+                    $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+                    if (!$kingdom) return false;
+                    foreach ($stats as $s) {
+                        if ($kingdom->{$s} < $value) return false;
+                    }
+                    return true;
+                }
+                foreach ($stats as $s) {
+                    if ($game->{$s} < $value) return false;
+                }
+                return true;
+
+            default:
+                return false;
+        }
+    }
+}

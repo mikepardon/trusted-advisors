@@ -2,31 +2,14 @@
   <div id="game-app" :class="{ 'is-admin': isAdmin }">
     <SplashScreen v-if="showSplash" @done="showSplash = false" />
 
-    <!-- Compact in-game toolbar -->
-    <header v-if="isInGame" class="game-toolbar">
-      <img
-        src="/images/logo.png"
-        alt="Trusted Advisors"
-        class="toolbar-logo"
-        @click="$router.push('/')"
-      />
-      <div class="toolbar-actions">
-        <button class="toolbar-btn" @click="showHowToPlay = true" title="How to Play">?</button>
-      </div>
-    </header>
-
     <!-- Full header for non-game, non-admin pages -->
-    <header v-else-if="!isAdmin" class="game-header">
+    <header v-if="!isAdmin && !isGamePage" class="game-header">
       <img
         src="/images/logo.png"
         alt="Trusted Advisors"
         class="header-logo"
         @click="$router.push('/')"
       />
-      <p class="subtitle">England, 1280 AD</p>
-      <div v-if="auth.state.user" class="header-user">
-        <span class="user-greeting">Hail, {{ auth.state.user.name }}</span>
-      </div>
     </header>
 
     <main>
@@ -43,9 +26,9 @@
         <span class="nav-icon">&#9876;</span>
         <span class="nav-label">Campaigns</span>
       </router-link>
-      <router-link v-if="auth.state.user" to="/friends" class="nav-item" :class="{ active: $route.path === '/friends' }" @click="navSound">
-        <span class="nav-icon">&#129309;</span>
-        <span class="nav-label">Friends</span>
+      <router-link v-if="auth.state.user" to="/leaderboard" class="nav-item" :class="{ active: $route.path === '/leaderboard' }" @click="navSound">
+        <span class="nav-icon">&#127942;</span>
+        <span class="nav-label">Ranks</span>
       </router-link>
       <button v-if="auth.state.user" class="nav-item" @click="navSound(); showNotifications = true">
         <span class="nav-icon notif-icon-wrap">
@@ -61,7 +44,10 @@
         </button>
         <div v-if="showMenuPopup" class="menu-popup">
           <button class="menu-popup-item" @click="menuSound(); showHowToPlay = true; showMenuPopup = false">Rules</button>
+          <button class="menu-popup-item" @click="menuSound(); showTutorial = true; showMenuPopup = false">Tutorial</button>
           <router-link v-if="auth.state.user" to="/profile" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Profile</router-link>
+          <router-link v-if="auth.state.user" to="/friends" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Friends</router-link>
+          <router-link v-if="auth.state.user" to="/achievements" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Achievements</router-link>
           <router-link to="/settings" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Settings</router-link>
           <router-link v-if="auth.state.user?.is_admin" to="/admin" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Admin</router-link>
           <template v-if="auth.state.user">
@@ -79,6 +65,16 @@
       @close="showNotifications = false"
       @update:count="notifCount = $event"
     />
+
+    <!-- Streak toast -->
+    <transition name="toast-fade">
+      <div v-if="streakToast" class="streak-toast">
+        <span class="streak-fire">&#128293;</span>
+        <span class="streak-text">{{ streakToast.streak }}-day streak! +{{ streakToast.xp }} XP</span>
+      </div>
+    </transition>
+
+    <Tutorial v-if="showTutorial" @close="showTutorial = false" />
   </div>
 </template>
 
@@ -87,13 +83,14 @@ import axios from 'axios';
 import HowToPlay from './components/HowToPlay.vue';
 import NotificationsDrawer from './components/NotificationsDrawer.vue';
 import SplashScreen from './components/SplashScreen.vue';
+import Tutorial from './components/Tutorial.vue';
 import { useAuth } from './stores/auth';
 import { playSound } from './sounds';
 import { initOneSignal, promptPushPermission } from './onesignal';
 
 export default {
   name: 'App',
-  components: { HowToPlay, NotificationsDrawer, SplashScreen },
+  components: { HowToPlay, NotificationsDrawer, SplashScreen, Tutorial },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -106,11 +103,25 @@ export default {
       showMenuPopup: false,
       confirmingLogout: false,
       notifCount: 0,
+      streakToast: null,
+      showTutorial: false,
     };
+  },
+  watch: {
+    'auth.state.streakNotification'(val) {
+      if (val) {
+        this.streakToast = val;
+        this.auth.state.streakNotification = null;
+        setTimeout(() => { this.streakToast = null; }, 4000);
+      }
+    },
   },
   computed: {
     isAdmin() {
       return this.$route.path.startsWith('/admin');
+    },
+    isGamePage() {
+      return /^\/game\/\d+(\/.*)?$/.test(this.$route.path);
     },
     isInGame() {
       return /^\/game\/\d+$/.test(this.$route.path);
@@ -120,6 +131,11 @@ export default {
     },
   },
   mounted() {
+    // Auto-show tutorial for first-time visitors
+    if (!localStorage.getItem('has_seen_tutorial')) {
+      this.showTutorial = true;
+      localStorage.setItem('has_seen_tutorial', '1');
+    }
     // fetchUser() is already called in app.js router guard; just wait for it
     const check = () => {
       if (!this.auth.state.loading && this.auth.state.user) {
@@ -593,5 +609,52 @@ button:disabled {
   .header-actions {
     margin-top: 6px;
   }
+}
+
+/* ---- Streak toast ---- */
+.streak-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(180deg, #2a1f14, #1a1209);
+  border: 2px solid var(--accent-gold);
+  border-radius: 10px;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 9999;
+  box-shadow: 0 4px 20px rgba(212, 168, 67, 0.4);
+}
+
+.streak-fire {
+  font-size: 1.5rem;
+}
+
+.streak-text {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.toast-fade-enter-active {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.toast-fade-leave-active {
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+
+.toast-fade-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+.toast-fade-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px);
 }
 </style>

@@ -82,7 +82,7 @@ class BotGameController extends Controller
 
         for ($round = 1; $round <= $totalRounds; $round++) {
             // Get event for this round (from shuffled per-game events)
-            $eventIndex = (int) floor(($round - 1) / 7);
+            $eventIndex = (int) floor(($round - 1) / 3);
             $event = $shuffledEvents[$eventIndex] ?? null;
 
             // Cards per player

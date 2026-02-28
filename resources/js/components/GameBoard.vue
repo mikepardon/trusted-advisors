@@ -20,12 +20,14 @@
         <span class="round-label">{{ monthLabel }}</span>
         <span class="phase-label">{{ duelPhaseLabel }}</span>
       </div>
-      <div class="progress-info">
-        <div class="progress-bar-bg">
-          <div
-            class="progress-bar"
-            :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
-          ></div>
+      <div class="time-bar-right">
+        <div class="progress-info">
+          <div class="progress-bar-bg">
+            <div
+              class="progress-bar"
+              :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
+            ></div>
+          </div>
         </div>
       </div>
     </div>
@@ -46,12 +48,39 @@
         <span class="round-label">{{ monthLabel }}</span>
         <span class="phase-label">{{ phaseLabel }}</span>
       </div>
-      <div class="progress-info">
-        <div class="progress-bar-bg">
-          <div
-            class="progress-bar"
-            :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
-          ></div>
+      <div class="time-bar-right">
+        <div class="time-bar-icons">
+          <button
+            v-if="currentPlayerItems.length"
+            class="bar-icon-btn"
+            title="View Inventory"
+            @click="$refs.playerItems?.openOverlay()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+              <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
+              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+            </svg>
+            <span class="bar-icon-badge">{{ currentPlayerItems.length }}</span>
+          </button>
+          <span class="bar-dice-count" title="Active Dice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
+              <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
+              <circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
+              <circle cx="12" cy="12" r="1" fill="currentColor"/>
+              <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
+              <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
+            </svg>
+            <span class="dice-num">{{ diceCount }}</span>
+          </span>
+        </div>
+        <div class="progress-info">
+          <div class="progress-bar-bg">
+            <div
+              class="progress-bar"
+              :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
+            ></div>
+          </div>
         </div>
       </div>
     </div>
@@ -60,7 +89,7 @@
     <KingdomStats :game="displayGame" />
 
     <!-- Player Items -->
-    <PlayerItems :items="currentPlayerItems" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
 
     <!-- Event Banner -->
     <EventBanner :event="gameData.current_event" />
@@ -70,6 +99,13 @@
       v-if="showEventReveal && gameData.current_event"
       :event="gameData.current_event"
       @dismiss="showEventReveal = false"
+    />
+
+    <!-- Item Reveal Overlay -->
+    <ItemReveal
+      v-if="showItemReveal && itemRevealQueue.length"
+      :item="itemRevealQueue[0]"
+      @dismiss="onItemRevealDismiss"
     />
 
     <!-- TURN HANDOFF OVERLAY (pass and play) -->
@@ -138,11 +174,12 @@ import WaitingOverlay from './WaitingOverlay.vue';
 import DuelBoard from './DuelBoard.vue';
 import PlayerItems from './PlayerItems.vue';
 import EventReveal from './EventReveal.vue';
+import ItemReveal from './ItemReveal.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -170,11 +207,15 @@ export default {
       currentStatPhase: null, // null, 'positive', or 'negative'
       showTurnHandoff: false,
       turnHandoffPlayerNumber: null,
-      // Items
+      // Items & Dice
       currentPlayerItems: [],
+      diceCount: 3,
       // Event reveal
       showEventReveal: false,
       lastRevealedEventId: null,
+      // Item reveal
+      itemRevealQueue: [],
+      showItemReveal: false,
       // Online mode
       myPlayerNumber: null,
       waitingForOthers: false,
@@ -348,6 +389,7 @@ export default {
         const res = await axios.get(`/api/games/${this.id}/hand/${playerNumber}`);
         this.currentHand = res.data.cards;
         this.currentPlayerItems = res.data.items || [];
+        this.diceCount = res.data.dice_count ?? 3;
       } catch (e) {
         this.currentHand = [];
         this.currentPlayerItems = [];
@@ -463,6 +505,12 @@ export default {
         this.currentStatPhase = null; // stats stay at pre-resolve until accepted
         this.gameData.game = res.data.game;
         this.gameData.round_phase = 'resolving';
+        // Refresh items after resolution (new items may have been granted)
+        if (res.data.player_items && res.data.player_items[this.activePlayerNumber]) {
+          this.currentPlayerItems = res.data.player_items[this.activePlayerNumber];
+        }
+        // Queue item reveals for any draw_item special effects
+        this.queueItemReveals(this.specialEffects);
       } catch (e) {
         alert('Failed to resolve: ' + (e.response?.data?.error || e.message));
       }
@@ -516,6 +564,11 @@ export default {
           this.currentStatPhase = null;
           this.gameData.game = data.game;
           this.gameData.round_phase = 'resolving';
+          // Refresh items after resolution
+          if (data.player_items && data.player_items[this.activePlayerNumber]) {
+            this.currentPlayerItems = data.player_items[this.activePlayerNumber];
+          }
+          this.queueItemReveals(data.special_effects || []);
           this.waitingForOthers = false;
           this.resolving = false;
         })
@@ -581,10 +634,23 @@ export default {
         alert('Failed to start: ' + (e.response?.data?.error || e.message));
       }
     },
+    queueItemReveals(specialEffects) {
+      const itemEffects = (specialEffects || []).filter(e => e.type === 'draw_item' && e.item);
+      if (itemEffects.length) {
+        this.itemRevealQueue = [...itemEffects];
+        this.showItemReveal = true;
+      }
+    },
+    onItemRevealDismiss() {
+      this.itemRevealQueue.shift();
+      if (this.itemRevealQueue.length === 0) {
+        this.showItemReveal = false;
+      }
+    },
     checkEventReveal() {
       const round = this.gameData?.current_round || 0;
       const event = this.gameData?.current_event;
-      if (event && (round - 1) % 7 === 0) {
+      if (event && (round - 1) % 3 === 0) {
         // Only show if we haven't already revealed this event
         const eventId = event.id;
         if (this.lastRevealedEventId !== eventId) {
@@ -605,6 +671,9 @@ export default {
         const res = await axios.post(`/api/games/${this.id}/next-round`);
 
         if (res.data.game_over) {
+          if (res.data.completion) {
+            sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(res.data.completion));
+          }
           this.$router.replace(`/game/${this.id}/over`);
           return;
         }
@@ -615,6 +684,8 @@ export default {
         this.combinedEffects = {};
         this.eventEffects = {};
         this.specialEffects = [];
+        this.itemRevealQueue = [];
+        this.showItemReveal = false;
         this.isGameOver = false;
         this.gameAfterPositive = null;
         this.gameAfterNegative = null;
@@ -653,36 +724,93 @@ export default {
   background: var(--bg-secondary);
   border: 1px solid var(--border-gold);
   border-radius: 8px;
-  padding: 12px 20px;
-  margin-bottom: 20px;
+  padding: 6px 14px;
+  margin-bottom: 14px;
 }
 
 .round-label {
   font-family: 'Cinzel', serif;
-  font-size: 1.3rem;
+  font-size: 1rem;
   color: var(--accent-gold);
 }
 
 .phase-label {
-  margin-left: 15px;
+  margin-left: 10px;
   color: var(--text-secondary);
   font-style: italic;
+  font-size: 0.85rem;
+}
+
+.time-bar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.time-bar-icons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bar-icon-btn {
+  position: relative;
+  background: none;
+  border: 1px solid var(--border-gold, #6b5b3a);
+  border-radius: 6px;
+  color: var(--accent-gold, #c9a84c);
+  cursor: pointer;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.bar-icon-btn:hover {
+  border-color: var(--accent-gold, #c9a84c);
+  background: rgba(212, 168, 67, 0.1);
+}
+
+.bar-icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
+.bar-icon-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-gold, #c9a84c);
+  margin-left: 3px;
+}
+
+.bar-dice-count {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-secondary, #a09080);
+  font-size: 0.85rem;
+}
+
+.dice-num {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  color: var(--text-bright, #f0e6d2);
 }
 
 .progress-info {
-  min-width: 120px;
+  min-width: 100px;
 }
 
 .progress-bar-bg {
   background: rgba(0, 0, 0, 0.4);
-  height: 8px;
-  border-radius: 4px;
+  height: 5px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .progress-bar {
   height: 100%;
-  border-radius: 4px;
+  border-radius: 3px;
   background: var(--accent-gold);
   transition: width 0.5s ease;
 }
@@ -707,9 +835,14 @@ export default {
 @media (max-width: 768px) {
   .time-bar {
     flex-direction: column;
-    gap: 6px;
-    padding: 8px 12px;
-    margin-bottom: 10px;
+    gap: 4px;
+    padding: 5px 10px;
+    margin-bottom: 8px;
+  }
+
+  .time-bar-right {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .round-label {
@@ -717,8 +850,17 @@ export default {
   }
 
   .phase-label {
-    margin-left: 8px;
-    font-size: 0.85rem;
+    margin-left: 6px;
+    font-size: 0.75rem;
+  }
+
+  .bar-icon-svg {
+    width: 15px;
+    height: 15px;
+  }
+
+  .progress-info {
+    min-width: 80px;
   }
 
   .progress-info {

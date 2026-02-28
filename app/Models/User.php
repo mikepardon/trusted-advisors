@@ -24,6 +24,13 @@ class User extends Authenticatable
         'password',
         'is_admin',
         'onesignal_player_id',
+        'onesignal_email_token',
+        'xp',
+        'level',
+        'elo_rating',
+        'login_streak',
+        'max_login_streak',
+        'last_login_at',
     ];
 
     /**
@@ -47,7 +54,28 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_admin' => 'boolean',
+            'xp' => 'integer',
+            'level' => 'integer',
+            'elo_rating' => 'integer',
+            'login_streak' => 'integer',
+            'max_login_streak' => 'integer',
+            'last_login_at' => 'datetime',
         ];
+    }
+
+    public static function calculateLevel(int $xp): int
+    {
+        $level = 1;
+        while ($xp >= self::xpForLevel($level + 1)) {
+            $level++;
+        }
+        return $level;
+    }
+
+    public static function xpForLevel(int $level): int
+    {
+        // Total XP needed to reach this level: 100 * N * (N + 1) / 2
+        return (int) (100 * $level * ($level + 1) / 2);
     }
 
     public function games(): HasMany
@@ -63,5 +91,20 @@ class User extends Authenticatable
     public function receivedFriendRequests(): HasMany
     {
         return $this->hasMany(Friendship::class, 'receiver_id');
+    }
+
+    public function achievements(): HasMany
+    {
+        return $this->hasMany(UserAchievement::class);
+    }
+
+    public function unlockables(): HasMany
+    {
+        return $this->hasMany(UserUnlockable::class);
+    }
+
+    public function eloHistory(): HasMany
+    {
+        return $this->hasMany(UserEloHistory::class);
     }
 }

@@ -46,6 +46,7 @@
             <select v-model="form.effect_type" required>
               <option value="passive">Passive</option>
               <option value="active">Active</option>
+              <option value="immediate">Immediate</option>
             </select>
           </div>
           <div class="form-group">
@@ -56,6 +57,19 @@
               <option value="difficulty_reduction">Difficulty Reduction (-)</option>
               <option value="difficulty_increase">Difficulty Increase (+)</option>
               <option value="reroll">Reroll</option>
+              <option value="stat_boost">Stat Boost (Immediate)</option>
+              <option value="heal_die">Heal Die (Immediate)</option>
+            </select>
+          </div>
+          <div v-if="form.bonus_type === 'stat_boost'" class="form-group">
+            <label>Target Stat</label>
+            <select v-model="form.stat" required>
+              <option value="wealth">Wealth</option>
+              <option value="influence">Influence</option>
+              <option value="security">Security</option>
+              <option value="religion">Religion</option>
+              <option value="food">Food</option>
+              <option value="happiness">Happiness</option>
             </select>
           </div>
           <div class="form-group">
@@ -108,6 +122,7 @@ export default {
         effect_type: 'passive',
         bonus_type: 'roll_bonus',
         bonus_value: 1,
+        stat: 'food',
         is_negative: false,
         is_consumable: false,
       },
@@ -131,6 +146,7 @@ export default {
         effect_type: 'passive',
         bonus_type: 'roll_bonus',
         bonus_value: 1,
+        stat: 'food',
         is_negative: false,
         is_consumable: false,
       };
@@ -145,6 +161,7 @@ export default {
         effect_type: item.effect_type || 'passive',
         bonus_type: item.effect?.bonus_type || 'roll_bonus',
         bonus_value: item.effect?.bonus_value || 1,
+        stat: item.effect?.stat || 'food',
         is_negative: item.is_negative || false,
         is_consumable: item.is_consumable || false,
       };
@@ -162,6 +179,7 @@ export default {
         effect: {
           bonus_type: this.form.bonus_type,
           bonus_value: this.form.bonus_value,
+          ...(this.form.bonus_type === 'stat_boost' ? { stat: this.form.stat } : {}),
         },
       };
 

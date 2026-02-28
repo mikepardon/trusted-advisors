@@ -7,7 +7,35 @@
         <div class="profile-avatar">&#9876;</div>
         <div class="profile-details">
           <h3 class="profile-name">{{ auth.state.user?.name }}</h3>
-          <p class="profile-joined">Member of the realm</p>
+          <p class="profile-joined">Level {{ gameStats.level || 1 }} Advisor</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- XP & Level -->
+    <div v-if="!statsLoading" class="card-panel">
+      <h2 class="section-title">Progression</h2>
+      <div class="xp-section">
+        <div class="xp-header">
+          <span class="xp-level-badge">Lv. {{ gameStats.level || 1 }}</span>
+          <span class="xp-text">{{ gameStats.xp || 0 }} / {{ gameStats.xp_for_next_level || 300 }} XP</span>
+        </div>
+        <div class="xp-bar-track">
+          <div class="xp-bar-fill" :style="{ width: xpPercent + '%' }"></div>
+        </div>
+        <div class="xp-elo-row">
+          <div class="elo-display">
+            <span class="elo-label">ELO Rating</span>
+            <span class="elo-value">{{ gameStats.elo_rating || 1000 }}</span>
+          </div>
+          <div class="elo-display">
+            <span class="elo-label">Login Streak</span>
+            <span class="elo-value streak-value">&#128293; {{ gameStats.login_streak || 0 }}</span>
+          </div>
+          <div class="elo-display">
+            <span class="elo-label">Best Streak</span>
+            <span class="elo-value">{{ gameStats.max_login_streak || 0 }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -90,6 +118,20 @@ export default {
       pwSaving: false,
     };
   },
+  computed: {
+    xpPercent() {
+      const xp = this.gameStats.xp || 0;
+      const next = this.gameStats.xp_for_next_level || 300;
+      // Calculate XP for current level to get progress within level
+      const level = this.gameStats.level || 1;
+      const currentLevelXp = (100 * level * (level + 1)) / 2;
+      const prevLevelXp = (100 * (level - 1) * level) / 2;
+      const progressInLevel = xp - prevLevelXp;
+      const levelRange = currentLevelXp - prevLevelXp;
+      if (levelRange <= 0) return 0;
+      return Math.min(100, Math.round((progressInLevel / levelRange) * 100));
+    },
+  },
   async mounted() {
     try {
       const res = await axios.get('/api/auth/stats');
@@ -170,6 +212,77 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 0.9rem;
+}
+
+/* XP Section */
+.xp-section {
+  text-align: center;
+}
+
+.xp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.xp-level-badge {
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.xp-text {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.xp-bar-track {
+  width: 100%;
+  height: 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a6a2e, #d4a843);
+  border-radius: 6px;
+  transition: width 0.5s ease;
+}
+
+.xp-elo-row {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+}
+
+.streak-value {
+  font-size: 1.4rem;
+}
+
+.elo-display {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.elo-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.elo-value {
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  color: var(--accent-gold);
+  font-weight: 700;
 }
 
 /* Stats grid */

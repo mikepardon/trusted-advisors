@@ -7,7 +7,34 @@
     />
 
     <!-- Player Items -->
-    <PlayerItems :items="currentPlayerItems" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
+
+    <!-- Compact item/dice icons -->
+    <div class="duel-bar-icons">
+      <button
+        v-if="currentPlayerItems.length"
+        class="bar-icon-btn"
+        title="View Inventory"
+        @click="$refs.playerItems?.openOverlay()"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+          <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
+          <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+        </svg>
+        <span class="bar-icon-badge">{{ currentPlayerItems.length }}</span>
+      </button>
+      <span class="bar-dice-count" title="Active Dice">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
+          <circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
+          <circle cx="12" cy="12" r="1" fill="currentColor"/>
+          <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
+          <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
+        </svg>
+        <span class="dice-num">{{ diceCount }}</span>
+      </span>
+    </div>
 
     <!-- Event Reveal Overlay -->
     <EventReveal
@@ -140,8 +167,9 @@ export default {
       handoffPlayerNumber: null,
       // Active player tracking (for pass-and-play)
       activePlayerNumber: 1,
-      // Items
+      // Items & Dice
       currentPlayerItems: [],
+      diceCount: 3,
       // Event reveal
       showEventReveal: false,
       lastRevealedEventId: null,
@@ -213,7 +241,7 @@ export default {
     checkEventReveal() {
       const round = this.gameData?.current_round || this.gameData?.game?.current_round || 0;
       const event = this.currentEvent;
-      if (event && (round - 1) % 7 === 0) {
+      if (event && (round - 1) % 3 === 0) {
         const eventId = event.id;
         if (this.lastRevealedEventId !== eventId) {
           this.lastRevealedEventId = eventId;
@@ -280,6 +308,7 @@ export default {
         const res = await axios.get(`/api/games/${this.gameId}/duel-hand/${this.activePlayerNumber}`);
         this.currentCards = res.data.cards || [];
         this.currentPlayerItems = res.data.items || [];
+        this.diceCount = res.data.dice_count ?? 3;
       } catch {
         this.currentCards = [];
         this.currentPlayerItems = [];
@@ -404,6 +433,9 @@ export default {
         const res = await axios.post(`/api/games/${this.gameId}/next-round`);
 
         if (res.data.game_over) {
+          if (res.data.completion) {
+            sessionStorage.setItem(`game_completion_${this.gameId}`, JSON.stringify(res.data.completion));
+          }
           this.$emit('game-over');
           return;
         }
@@ -551,5 +583,56 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 1.1rem;
+}
+
+.duel-bar-icons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.bar-icon-btn {
+  position: relative;
+  background: none;
+  border: 1px solid var(--border-gold, #6b5b3a);
+  border-radius: 6px;
+  color: var(--accent-gold, #c9a84c);
+  cursor: pointer;
+  padding: 3px 6px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
+}
+
+.bar-icon-btn:hover {
+  border-color: var(--accent-gold, #c9a84c);
+  background: rgba(212, 168, 67, 0.1);
+}
+
+.bar-icon-svg {
+  width: 18px;
+  height: 18px;
+}
+
+.bar-icon-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--accent-gold, #c9a84c);
+  margin-left: 3px;
+}
+
+.bar-dice-count {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-secondary, #a09080);
+  font-size: 0.85rem;
+}
+
+.dice-num {
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  color: var(--text-bright, #f0e6d2);
 }
 </style>

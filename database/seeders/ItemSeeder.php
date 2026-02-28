@@ -167,6 +167,32 @@ class ItemSeeder extends Seeder
                 'is_negative' => true,
                 'is_consumable' => false,
             ],
+
+            // === CONSUMABLE / IMMEDIATE ITEMS ===
+            [
+                'name' => 'Healing Draught',
+                'description' => 'A warm herbal brew that restores vitality to the realm\'s food stores.',
+                'effect' => ['bonus_type' => 'stat_boost', 'bonus_value' => 2, 'stat' => 'food'],
+                'effect_type' => 'immediate',
+                'is_negative' => false,
+                'is_consumable' => true,
+            ],
+            [
+                'name' => 'War Horn',
+                'description' => 'A mighty horn that rallies weary soldiers, restoring a lost die to an advisor.',
+                'effect' => ['bonus_type' => 'heal_die', 'bonus_value' => 1],
+                'effect_type' => 'immediate',
+                'is_negative' => false,
+                'is_consumable' => true,
+            ],
+            [
+                'name' => 'Merchant\'s Windfall',
+                'description' => 'A caravan of unexpected riches arrives at the gates, bolstering the treasury.',
+                'effect' => ['bonus_type' => 'stat_boost', 'bonus_value' => 2, 'stat' => 'wealth'],
+                'effect_type' => 'immediate',
+                'is_negative' => false,
+                'is_consumable' => true,
+            ],
         ];
 
         foreach ($items as $item) {
