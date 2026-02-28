@@ -80,6 +80,17 @@ class AuthController extends Controller
         return response()->json(['message' => 'Password updated']);
     }
 
+    public function registerPushId(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'player_id' => 'required|string',
+        ]);
+
+        $request->user()->update(['onesignal_player_id' => $validated['player_id']]);
+
+        return response()->json(['message' => 'Push subscription registered']);
+    }
+
     public function stats(Request $request): JsonResponse
     {
         $userId = $request->user()->id;

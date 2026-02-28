@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import axios from 'axios';
+import { initOneSignal, promptPushPermission } from '../onesignal';
 
 const state = reactive({
     user: null,
@@ -20,12 +21,16 @@ async function fetchUser() {
 async function login(name, password) {
     const res = await axios.post('/api/auth/login', { name, password });
     state.user = res.data;
+    // Register push subscription for newly logged-in user
+    initOneSignal().then(() => promptPushPermission());
     return res.data;
 }
 
 async function register(name, password, password_confirmation) {
     const res = await axios.post('/api/auth/register', { name, password, password_confirmation });
     state.user = res.data;
+    // Register push subscription for newly registered user
+    initOneSignal().then(() => promptPushPermission());
     return res.data;
 }
 

@@ -11,6 +11,8 @@ use App\Models\Friendship;
 use App\Models\Game;
 use App\Models\GameInvite;
 use App\Models\GamePlayer;
+use App\Models\User;
+use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -75,6 +77,17 @@ class GameLobbyController extends Controller
             $game->id,
             $request->user()->name,
         ));
+
+        // Send push notification
+        $receiver = User::find($receiverId);
+        if ($receiver) {
+            app(OneSignalService::class)->sendToUser(
+                $receiver,
+                'Game Invite',
+                $request->user()->name . ' invited you to a game!',
+                ['type' => 'game_invite', 'game_id' => $game->id]
+            );
+        }
 
         return response()->json($invite->load(['sender', 'receiver']), 201);
     }

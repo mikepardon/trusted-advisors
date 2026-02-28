@@ -4,7 +4,11 @@
       "Bash(where:*)",
       "Bash(\"C:/Users/Michael/.config/herd/bin/php.bat\" -v)",
       "Bash(\"C:/Users/Michael/.config/herd/bin/composer.bat\" --version)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(npx vite build:*)",
+      "Bash(\"/c/Users/Michael/.config/herd/bin/php.bat\" artisan reverb:start --debug)",
+      "Bash(curl:*)",
+      "Bash(ls:*)"
     ]
   }
 }

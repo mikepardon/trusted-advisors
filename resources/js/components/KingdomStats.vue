@@ -15,7 +15,7 @@
           <div
             class="stat-bar"
             :style="{ width: (game[stat.key] / 20 * 100) + '%' }"
-            :class="getBarClass(game[stat.key])"
+            :class="[getBarClass(game[stat.key]), barFlashClass[stat.key]]"
           ></div>
         </div>
         <!-- Mobile: radial progress with number centered inside -->
@@ -24,7 +24,7 @@
             <circle class="radial-bg" cx="24" cy="24" r="20" />
             <circle
               class="radial-fill"
-              :class="getBarClass(game[stat.key])"
+              :class="[getBarClass(game[stat.key]), barFlashClass[stat.key]]"
               cx="24" cy="24" r="20"
               :style="{ strokeDashoffset: radialOffset(game[stat.key]) }"
             />
@@ -54,6 +54,7 @@ export default {
       ],
       prevValues: {},
       flashClass: {},
+      barFlashClass: {},
       flashTimers: {},
     };
   },
@@ -66,9 +67,12 @@ export default {
           const newVal = newGame[stat.key];
           if (oldVal !== undefined && newVal !== oldVal) {
             if (this.flashTimers[stat.key]) clearTimeout(this.flashTimers[stat.key]);
-            this.flashClass[stat.key] = newVal > oldVal ? 'flash-up' : 'flash-down';
+            const direction = newVal > oldVal ? 'up' : 'down';
+            this.flashClass[stat.key] = 'flash-' + direction;
+            this.barFlashClass[stat.key] = 'bar-flash-' + direction;
             this.flashTimers[stat.key] = setTimeout(() => {
               this.flashClass[stat.key] = '';
+              this.barFlashClass[stat.key] = '';
             }, 1200);
           }
           this.prevValues[stat.key] = newVal;
@@ -214,6 +218,18 @@ export default {
 .bar-caution-low { background: #d4a843; }
 .bar-safe { background: #27ae60; }
 
+.bar-flash-up {
+  background: #4caf50 !important;
+  box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
+.bar-flash-down {
+  background: #e74c3c !important;
+  box-shadow: 0 0 8px rgba(231, 76, 60, 0.6);
+  transition: background 0.3s ease, box-shadow 0.3s ease;
+}
+
 /* Radial progress — hidden on desktop */
 .radial-wrap {
   display: none;
@@ -256,6 +272,9 @@ export default {
 .radial-fill.bar-danger-low { stroke: #e67e22; }
 .radial-fill.bar-caution-low { stroke: #d4a843; }
 .radial-fill.bar-safe { stroke: #27ae60; }
+
+.radial-fill.bar-flash-up { stroke: #4caf50 !important; }
+.radial-fill.bar-flash-down { stroke: #e74c3c !important; }
 
 /* ---- Mobile compact mode ---- */
 @media (max-width: 768px) {

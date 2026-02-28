@@ -16,20 +16,22 @@ import AdminCards from './components/admin/AdminCards.vue';
 import AdminEvents from './components/admin/AdminEvents.vue';
 import AdminItems from './components/admin/AdminItems.vue';
 import AdminSounds from './components/admin/AdminSounds.vue';
+import AdminBotGames from './components/admin/AdminBotGames.vue';
 import SettingsPage from './components/SettingsPage.vue';
 import { fetchSoundUrls } from './sounds';
 
 const routes = [
     { path: '/', component: GameSetup },
-    { path: '/campaigns', component: GameHistory },
-    { path: '/friends', component: FriendsList },
-    { path: '/profile', component: ProfilePage },
+    { path: '/campaigns', component: GameHistory, meta: { auth: true } },
+    { path: '/friends', component: FriendsList, meta: { auth: true } },
+    { path: '/profile', component: ProfilePage, meta: { auth: true } },
     { path: '/settings', component: SettingsPage },
-    { path: '/game/:id', component: GameBoard, props: true },
-    { path: '/game/:id/over', component: GameOver, props: true },
+    { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
+    { path: '/game/:id/over', component: GameOver, props: true, meta: { auth: true } },
     {
         path: '/admin',
         component: AdminLayout,
+        meta: { auth: true, admin: true },
         children: [
             { path: '', component: AdminDashboard },
             { path: 'characters', component: AdminCharacters },
@@ -37,6 +39,7 @@ const routes = [
             { path: 'events', component: AdminEvents },
             { path: 'items', component: AdminItems },
             { path: 'sounds', component: AdminSounds },
+            { path: 'bot-games', component: AdminBotGames },
         ],
     },
 ];
@@ -47,9 +50,20 @@ const router = createRouter({
 });
 
 const auth = useAuth();
+const authReady = auth.fetchUser();
 
-router.beforeEach((to, from, next) => {
-    if (to.path.startsWith('/game/') && !auth.state.user) {
+router.beforeEach(async (to, from, next) => {
+    // Wait for initial auth check to complete before guarding
+    if (auth.state.loading) {
+        await authReady;
+    }
+
+    const requiresAuth = to.matched.some(r => r.meta.auth);
+    const requiresAdmin = to.matched.some(r => r.meta.admin);
+
+    if (requiresAuth && !auth.state.user) {
+        next('/');
+    } else if (requiresAdmin && !auth.state.user?.is_admin) {
         next('/');
     } else {
         next();

@@ -9,11 +9,23 @@ use App\Http\Controllers\Admin\CardController;
 use App\Http\Controllers\Admin\EventController;
 use App\Http\Controllers\Admin\ItemController;
 use App\Http\Controllers\Admin\GameRuleController;
+use App\Http\Controllers\Admin\BotGameController;
 use App\Http\Controllers\Admin\SoundAssetController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
 
 // Public
 Route::get('/characters', [GameController::class, 'characters']);
+
+// Serve S3/Minio files through the app (works behind ngrok)
+Route::get('/storage/{path}', function (string $path) {
+    if (!Storage::disk('s3')->exists($path)) {
+        abort(404);
+    }
+    return response(Storage::disk('s3')->get($path))
+        ->header('Content-Type', Storage::disk('s3')->mimeType($path))
+        ->header('Cache-Control', 'public, max-age=86400');
+})->where('path', '.*');
 Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::post('/auth/register', [AuthController::class, 'register']);
@@ -23,6 +35,7 @@ Route::post('/auth/login', [AuthController::class, 'login']);
 Route::middleware('auth:web')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
+    Route::post('/auth/push-subscribe', [AuthController::class, 'registerPushId']);
     Route::get('/auth/stats', [AuthController::class, 'stats']);
 
     Route::get('/games/history', [GameController::class, 'history']);
@@ -55,7 +68,7 @@ Route::middleware('auth:web')->group(function () {
 });
 
 // Admin CRUD routes
-Route::prefix('admin')->group(function () {
+Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::apiResource('characters', CharacterController::class);
     Route::apiResource('cards', CardController::class);
     Route::apiResource('events', EventController::class);
@@ -65,4 +78,5 @@ Route::prefix('admin')->group(function () {
     Route::post('characters/{character}/image', [CharacterController::class, 'uploadImage']);
     Route::get('sound-assets', [SoundAssetController::class, 'index']);
     Route::post('sound-assets/{key}/upload', [SoundAssetController::class, 'upload']);
+    Route::post('bot-simulate', [BotGameController::class, 'simulate']);
 });

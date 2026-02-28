@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Friendship;
 use App\Models\User;
+use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -71,6 +72,14 @@ class FriendshipController extends Controller
             'sender_id' => $request->user()->id,
             'receiver_id' => $receiver->id,
         ]);
+
+        // Send push notification to the receiver
+        app(OneSignalService::class)->sendToUser(
+            $receiver,
+            'Friend Request',
+            $request->user()->name . ' sent you a friend request!',
+            ['type' => 'friend_request']
+        );
 
         return response()->json($friendship->load('receiver:id,name'), 201);
     }

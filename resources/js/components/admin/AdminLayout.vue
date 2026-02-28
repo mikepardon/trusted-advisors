@@ -8,6 +8,7 @@
         <router-link to="/admin/events">Events</router-link>
         <router-link to="/admin/items">Items</router-link>
         <router-link to="/admin/sounds">Sounds</router-link>
+        <router-link to="/admin/bot-games">Bot Games</router-link>
       </div>
       <router-link to="/" class="nav-back">Back to Game</router-link>
     </nav>

@@ -13,12 +13,14 @@ class Game extends Model
         'wealth', 'influence', 'security', 'religion', 'food', 'happiness',
         'user_id',
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number',
+        'event_order',
     ];
 
     protected $casts = [
         'win' => 'boolean',
         'offerer_player_number' => 'integer',
         'winner_player_number' => 'integer',
+        'event_order' => 'array',
     ];
 
     public function user(): BelongsTo

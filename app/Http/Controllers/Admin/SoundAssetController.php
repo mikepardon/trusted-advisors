@@ -58,7 +58,7 @@ class SoundAssetController extends Controller
 
         return response()->json([
             'path' => $path,
-            'url' => Storage::disk('s3')->url($path),
+            'url' => '/api/storage/' . $path,
         ]);
     }
 }

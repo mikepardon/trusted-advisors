@@ -253,6 +253,7 @@ export default {
 <style scoped>
 .hand-container {
   margin-bottom: 20px;
+  overflow: hidden;
 }
 
 .loading {

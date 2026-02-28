@@ -2,27 +2,127 @@
   <div class="duel-choose">
     <h4 class="phase-title">Choose Your Card</h4>
     <p class="phase-note">
-      Pick the revealed card or take a chance on the hidden one.
+      Tap the revealed card or take a chance on the hidden one.
       Your opponent gets whichever you don't choose.
     </p>
 
-    <div class="choose-cards">
-      <div
-        v-for="card in cards"
-        :key="card.hand_id"
-        class="choose-card-wrap"
-        :class="{ 'card-selected': selectedId === card.hand_id }"
-        @click="selectCard(card.hand_id)"
-      >
+    <!-- MOBILE: Swiper carousel -->
+    <template v-if="isMobile">
+      <div class="swiper-hand">
+        <Swiper
+          :modules="swiperModules"
+          :effect="'cards'"
+          :grab-cursor="true"
+          :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
+          :style="{ overflow: 'visible' }"
+          @swiper="onSwiper"
+          @slideChange="onSlideChange"
+        >
+          <SwiperSlide v-for="item in cards" :key="item.hand_id">
+            <!-- REVEALED CARD -->
+            <div
+              v-if="item.revealed && item.card"
+              class="parchment-card"
+              :class="{
+                'card-acting': selectedId === item.hand_id,
+                'card-unattended': selectedId !== null && selectedId !== item.hand_id,
+              }"
+              @click="selectAndConfirm(item.hand_id)"
+            >
+              <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
+                Taking this
+              </div>
+              <div v-else-if="selectedId !== null" class="card-ribbon unattended">
+                Leaving this
+              </div>
+
+              <h3 class="parchment-title">{{ item.card.title }}</h3>
+              <p class="parchment-desc">{{ item.card.description }}</p>
+              <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
+
+              <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
+
+              <div class="outcome-section">
+                <p class="outcome-label">On Success:</p>
+                <div class="outcome-chips">
+                  <span
+                    v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
+                    :key="'p-' + stat"
+                    class="stat-chip chip-positive"
+                  >
+                    {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+                  </span>
+                </div>
+              </div>
+
+              <div class="outcome-section">
+                <p class="outcome-label">Always:</p>
+                <div class="outcome-chips">
+                  <span
+                    v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
+                    :key="'n-' + stat"
+                    class="stat-chip chip-negative"
+                  >
+                    {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- HIDDEN CARD (mystery) -->
+            <div
+              v-else
+              class="mystery-card"
+              :class="{
+                'card-acting': selectedId === item.hand_id,
+                'card-unattended': selectedId !== null && selectedId !== item.hand_id,
+              }"
+              @click="selectAndConfirm(item.hand_id)"
+            >
+              <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
+                Taking this
+              </div>
+              <div v-else-if="selectedId !== null" class="card-ribbon unattended">
+                Leaving this
+              </div>
+
+              <div class="mystery-content">
+                <div class="mystery-icon">?</div>
+                <h3 class="mystery-title">Hidden Card</h3>
+                <p class="mystery-desc">
+                  This card's contents are unknown.
+                  Do you dare take the risk?
+                </p>
+              </div>
+            </div>
+          </SwiperSlide>
+        </Swiper>
+      </div>
+    </template>
+
+    <!-- DESKTOP: Side-by-side -->
+    <div v-else class="choose-cards">
+      <template v-for="item in cards" :key="item.hand_id">
         <!-- REVEALED CARD -->
-        <div v-if="card.revealed && card.card" class="parchment-card">
-          <div v-if="selectedId === card.hand_id" class="card-ribbon acting">
+        <div
+          v-if="item.revealed && item.card"
+          class="parchment-card"
+          :class="{
+            'card-acting': selectedId === item.hand_id,
+            'card-unattended': selectedId !== null && selectedId !== item.hand_id,
+          }"
+          @click="selectAndConfirm(item.hand_id)"
+        >
+          <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
             Taking this
           </div>
+          <div v-else-if="selectedId !== null" class="card-ribbon unattended">
+            Leaving this
+          </div>
 
-          <h3 class="parchment-title">{{ card.card.title }}</h3>
-          <p class="parchment-desc">{{ card.card.description }}</p>
-          <span class="parchment-difficulty">Difficulty {{ card.card.difficulty }}</span>
+          <h3 class="parchment-title">{{ item.card.title }}</h3>
+          <p class="parchment-desc">{{ item.card.description }}</p>
+          <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
 
           <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
 
@@ -30,7 +130,7 @@
             <p class="outcome-label">On Success:</p>
             <div class="outcome-chips">
               <span
-                v-for="(val, stat) in filterStatEffects(card.card.positive_effects)"
+                v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
                 :key="'p-' + stat"
                 class="stat-chip chip-positive"
               >
@@ -43,7 +143,7 @@
             <p class="outcome-label">Always:</p>
             <div class="outcome-chips">
               <span
-                v-for="(val, stat) in filterStatEffects(card.card.negative_effects)"
+                v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
                 :key="'n-' + stat"
                 class="stat-chip chip-negative"
               >
@@ -54,9 +154,20 @@
         </div>
 
         <!-- HIDDEN CARD (mystery) -->
-        <div v-else class="mystery-card">
-          <div v-if="selectedId === card.hand_id" class="card-ribbon acting">
+        <div
+          v-else
+          class="mystery-card"
+          :class="{
+            'card-acting': selectedId === item.hand_id,
+            'card-unattended': selectedId !== null && selectedId !== item.hand_id,
+          }"
+          @click="selectAndConfirm(item.hand_id)"
+        >
+          <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
             Taking this
+          </div>
+          <div v-else-if="selectedId !== null" class="card-ribbon unattended">
+            Leaving this
           </div>
 
           <div class="mystery-content">
@@ -68,25 +179,21 @@
             </p>
           </div>
         </div>
-      </div>
+      </template>
     </div>
-
-    <button
-      v-if="selectedId"
-      class="btn-primary confirm-btn"
-      :disabled="submitting"
-      @click="confirm"
-    >
-      {{ submitting ? 'Choosing...' : 'Take This Card' }}
-    </button>
   </div>
 </template>
 
 <script>
+import { Swiper, SwiperSlide } from 'swiper/vue';
+import { EffectCards } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/effect-cards';
 import { playSound } from '../sounds';
 
 export default {
   name: 'DuelChoosePhase',
+  components: { Swiper, SwiperSlide },
   props: {
     cards: { type: Array, default: () => [] },
   },
@@ -94,19 +201,39 @@ export default {
   data() {
     return {
       selectedId: null,
-      submitting: false,
+      isMobile: false,
+      swiperInstance: null,
+      mediaQuery: null,
     };
   },
-  methods: {
-    selectCard(handId) {
-      if (this.submitting) return;
-      playSound('clickCard');
-      this.selectedId = this.selectedId === handId ? null : handId;
+  computed: {
+    swiperModules() {
+      return [EffectCards];
     },
-    confirm() {
-      if (!this.selectedId || this.submitting) return;
-      this.submitting = true;
-      this.$emit('choose', this.selectedId);
+  },
+  mounted() {
+    this.mediaQuery = window.matchMedia('(max-width: 768px)');
+    this.isMobile = this.mediaQuery.matches;
+    this.mediaQuery.addEventListener('change', this.onMediaChange);
+  },
+  beforeUnmount() {
+    if (this.mediaQuery) {
+      this.mediaQuery.removeEventListener('change', this.onMediaChange);
+    }
+  },
+  methods: {
+    onMediaChange(e) {
+      this.isMobile = e.matches;
+    },
+    onSwiper(swiper) {
+      this.swiperInstance = swiper;
+    },
+    onSlideChange() {},
+    selectAndConfirm(handId) {
+      if (this.selectedId !== null) return;
+      playSound('clickCard');
+      this.selectedId = handId;
+      this.$emit('choose', handId);
     },
     filterStatEffects(effects) {
       if (!effects) return {};
@@ -123,7 +250,11 @@ export default {
   watch: {
     cards() {
       this.selectedId = null;
-      this.submitting = false;
+      if (this.swiperInstance) {
+        this.$nextTick(() => {
+          this.swiperInstance.slideTo(0, 0);
+        });
+      }
     },
   },
 };
@@ -150,6 +281,7 @@ export default {
   margin-bottom: 20px;
 }
 
+/* Desktop side-by-side */
 .choose-cards {
   display: flex;
   gap: 20px;
@@ -157,45 +289,92 @@ export default {
   flex-wrap: wrap;
 }
 
-.choose-card-wrap {
-  cursor: pointer;
-  transition: transform 0.2s;
+/* Mobile swiper */
+.swiper-hand {
+  max-width: 340px;
+  margin: 0 auto;
+  padding: 10px 0;
 }
 
-.choose-card-wrap:hover {
-  transform: translateY(-4px);
+.swiper-hand :deep(.swiper-slide) {
+  padding: 40px 20px 10px;
 }
 
-.choose-card-wrap.card-selected .parchment-card,
-.choose-card-wrap.card-selected .mystery-card {
-  border-color: var(--accent-gold);
-  box-shadow: 0 0 30px rgba(212, 168, 67, 0.35), 0 0 60px rgba(212, 168, 67, 0.1);
-}
-
+/* Parchment card */
 .parchment-card {
   background: linear-gradient(180deg, #3a2a1a, #2a1f14, #1a1209);
   border: 2px solid var(--border-gold);
   border-radius: 12px;
   padding: 24px 20px;
   width: 300px;
+  cursor: pointer;
+  transition: all 0.3s ease;
   position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(212, 168, 67, 0.08);
   display: flex;
   flex-direction: column;
 }
 
+.parchment-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: var(--accent-gold);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(212, 168, 67, 0.15);
+}
+
+.parchment-card.card-acting {
+  border-color: var(--accent-gold);
+  box-shadow:
+    0 0 30px rgba(212, 168, 67, 0.35),
+    0 0 60px rgba(212, 168, 67, 0.1),
+    inset 0 1px 0 rgba(212, 168, 67, 0.15);
+}
+
+.parchment-card.card-unattended {
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transform: scale(0.97);
+}
+
+/* Mystery card */
 .mystery-card {
   background: linear-gradient(180deg, #1a1a2e, #16213e, #0f3460);
   border: 2px solid rgba(100, 120, 180, 0.5);
   border-radius: 12px;
   padding: 24px 20px;
   width: 300px;
-  min-height: 300px;
+  min-height: 280px;
+  cursor: pointer;
+  transition: all 0.3s ease;
   position: relative;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.mystery-card:hover {
+  transform: translateY(-4px) scale(1.01);
+  border-color: rgba(130, 150, 210, 0.7);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(100, 120, 180, 0.2);
+}
+
+.mystery-card.card-acting {
+  border-color: var(--accent-gold);
+  box-shadow:
+    0 0 30px rgba(212, 168, 67, 0.35),
+    0 0 60px rgba(212, 168, 67, 0.1);
+}
+
+.mystery-card.card-unattended {
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transform: scale(0.97);
 }
 
 .mystery-content {
@@ -225,6 +404,7 @@ export default {
   line-height: 1.5;
 }
 
+/* Ribbon */
 .card-ribbon {
   position: absolute;
   top: -1px;
@@ -238,11 +418,17 @@ export default {
   letter-spacing: 1.5px;
   border-radius: 0 0 6px 6px;
   text-align: center;
+  z-index: 1;
 }
 
 .card-ribbon.acting {
   background: linear-gradient(180deg, #b8942e, #8a6a14);
   color: #1a1209;
+}
+
+.card-ribbon.unattended {
+  background: rgba(100, 80, 60, 0.6);
+  color: var(--text-secondary);
 }
 
 .parchment-title {
@@ -323,23 +509,21 @@ export default {
 .chip-positive { background: rgba(39, 174, 96, 0.15); color: #4caf50; }
 .chip-negative { background: rgba(192, 57, 43, 0.15); color: #e57373; }
 
-.confirm-btn {
-  display: block;
-  margin: 20px auto 0;
-  font-size: 1.1rem;
-  padding: 12px 40px;
-}
-
 @media (max-width: 768px) {
-  .choose-cards {
-    flex-direction: column;
-    align-items: center;
-  }
-
   .parchment-card,
   .mystery-card {
     width: 100%;
     max-width: 320px;
+    min-height: auto;
+    padding: 18px 16px;
+  }
+
+  .parchment-title {
+    font-size: 1.05rem;
+  }
+
+  .mystery-card {
+    min-height: 240px;
   }
 }
 </style>

@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class SoundAsset extends Model
 {
@@ -15,10 +14,6 @@ class SoundAsset extends Model
             return null;
         }
 
-        try {
-            return Storage::disk('s3')->url($this->path);
-        } catch (\Exception $e) {
-            return null;
-        }
+        return '/api/storage/' . $this->path;
     }
 }

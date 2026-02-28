@@ -22,6 +22,7 @@ use App\Models\GamePlayerKingdom;
 use App\Models\GameRoundResult;
 use App\Models\GameRule;
 use App\Models\Item;
+use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -228,6 +229,9 @@ class GameController extends Controller
             }
         }
 
+        // Shuffle event order per game so every game is unique
+        $eventOrder = Event::pluck('id')->shuffle()->values()->toArray();
+
         if ($game->isDuel()) {
             $game->update([
                 'status' => 'active',
@@ -235,6 +239,7 @@ class GameController extends Controller
                 'round_phase' => 'selecting',
                 'offerer_player_number' => 1,
                 'duel_phase' => 'offering',
+                'event_order' => $eventOrder,
             ]);
 
             // Refresh players relationship (just created/updated above)
@@ -255,6 +260,7 @@ class GameController extends Controller
                 'status' => 'active',
                 'current_round' => 1,
                 'round_phase' => 'selecting',
+                'event_order' => $eventOrder,
             ]);
 
             // Deal first round
@@ -741,23 +747,13 @@ class GameController extends Controller
             }
         }
 
-        // Apply current event stat modifier
+        // Apply current event stat modifier (always applies each round)
         $eventEffects = [];
-        if ($event && $event->mechanic === 'stat_modifier' && $event->stat_modifiers) {
-            if (!$positiveSuccess) {
-                foreach ($event->stat_modifiers as $stat => $change) {
-                    if ($change < 0) {
-                        $eventEffects[$stat] = $change;
-                        $game->{$stat} = max(0, min(20, $game->{$stat} + $change));
-                    }
-                }
-            }
-            if ($positiveSuccess) {
-                foreach ($event->stat_modifiers as $stat => $change) {
-                    if ($change > 0) {
-                        $eventEffects[$stat] = $change;
-                        $game->{$stat} = max(0, min(20, $game->{$stat} + $change));
-                    }
+        if ($event && $event->stat_modifiers) {
+            foreach ($event->stat_modifiers as $stat => $change) {
+                if (in_array($stat, $stats) && is_numeric($change)) {
+                    $eventEffects[$stat] = $change;
+                    $game->{$stat} = max(0, min(20, $game->{$stat} + $change));
                 }
             }
         }
@@ -905,6 +901,7 @@ class GameController extends Controller
         if ($game->isOnline()) {
             $showData = json_decode($showResponse->getContent(), true);
             broadcast(new NextRoundStarted($game->id, $showData));
+            $this->notifyTurn($game, 'Round ' . $game->current_round . ' has started — pick your cards!');
         }
 
         return $showResponse;
@@ -986,6 +983,7 @@ class GameController extends Controller
         if ($game->isOnline()) {
             $showData = json_decode($showResponse->getContent(), true);
             broadcast(new NextRoundStarted($game->id, $showData));
+            $this->notifyPlayer($game, $game->offerer_player_number, 'Round ' . $game->current_round . ' — you\'re offering cards!');
         }
 
         return $showResponse;
@@ -1124,6 +1122,8 @@ class GameController extends Controller
                 $revealedHand->id,
                 'choosing',
             ));
+            $chooserNumber = $game->offerer_player_number === 1 ? 2 : 1;
+            $this->notifyPlayer($game, $chooserNumber, 'Your rival has revealed a card — choose wisely!');
         }
 
         return response()->json([
@@ -1192,6 +1192,7 @@ class GameController extends Controller
                 $offererCard ? ['hand_id' => $offererCard->id, 'card' => $offererCard->card] : null,
                 'rolling_offerer',
             ));
+            $this->notifyPlayer($game, $game->offerer_player_number, 'Cards chosen — time to roll your dice!');
         }
 
         return response()->json([
@@ -1361,12 +1362,18 @@ class GameController extends Controller
         ];
 
         if ($game->isOnline()) {
+            $freshGame = $game->fresh();
             broadcast(new DuelRollComplete(
                 $game->id,
                 $rollingPlayer->player_number,
                 $rollData,
-                $game->fresh()->duel_phase,
+                $freshGame->duel_phase,
             ));
+            // If moving to rolling_chooser, notify the chooser
+            if ($freshGame->duel_phase === 'rolling_chooser') {
+                $chooserNumber = $freshGame->offerer_player_number === 1 ? 2 : 1;
+                $this->notifyPlayer($game, $chooserNumber, 'Your rival has rolled — now it\'s your turn!');
+            }
         }
 
         return response()->json($rollData);
@@ -1379,7 +1386,8 @@ class GameController extends Controller
         // Include games where user is host OR a participant
         $participantGameIds = GamePlayer::where('user_id', $userId)->pluck('game_id');
 
-        $activeGames = Game::where(function ($q) use ($userId, $participantGameIds) {
+        $activeGames = Game::with('players.character')
+            ->where(function ($q) use ($userId, $participantGameIds) {
                 $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
             })
             ->whereIn('status', ['setup', 'active'])
@@ -1393,9 +1401,13 @@ class GameController extends Controller
                 'current_round' => $game->current_round,
                 'total_rounds' => $game->total_rounds,
                 'num_players' => $game->num_players,
+                'players' => $game->players->map(fn ($p) => [
+                    'character_name' => $p->character?->name,
+                ])->values(),
             ]);
 
-        $completedGames = Game::where(function ($q) use ($userId, $participantGameIds) {
+        $completedGames = Game::with('players.character')
+            ->where(function ($q) use ($userId, $participantGameIds) {
                 $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
             })
             ->where('status', 'completed')
@@ -1412,6 +1424,9 @@ class GameController extends Controller
                 'rounds_survived' => $game->current_round,
                 'total_rounds' => $game->total_rounds,
                 'played_at' => $game->updated_at->toDateTimeString(),
+                'players' => $game->players->map(fn ($p) => [
+                    'character_name' => $p->character?->name,
+                ])->values(),
             ]);
 
         return response()->json([
@@ -1425,6 +1440,13 @@ class GameController extends Controller
     private function getCurrentEvent(Game $game): ?Event
     {
         $eventIndex = (int) floor(($game->current_round - 1) / 7);
+        $eventOrder = $game->event_order;
+
+        // Use shuffled event order if available, otherwise fall back to ID order
+        if (!empty($eventOrder) && isset($eventOrder[$eventIndex])) {
+            return Event::find($eventOrder[$eventIndex]);
+        }
+
         return Event::skip($eventIndex)->first();
     }
 
@@ -1638,5 +1660,49 @@ class GameController extends Controller
             'adjusted_total' => $adjustedTotal,
             'descriptions' => $descriptions,
         ];
+    }
+
+    /**
+     * Send push notification to online game players that it's their turn.
+     */
+    private function notifyTurn(Game $game, string $message = "It's your turn!"): void
+    {
+        if (!$game->isOnline()) {
+            return;
+        }
+
+        $onesignal = app(OneSignalService::class);
+        $players = $game->players()->with('user')->get();
+
+        foreach ($players as $player) {
+            if ($player->user) {
+                $onesignal->sendToUser(
+                    $player->user,
+                    'Trusted Advisors',
+                    $message,
+                    ['type' => 'your_turn', 'game_id' => $game->id]
+                );
+            }
+        }
+    }
+
+    /**
+     * Send push notification to a specific player in an online game.
+     */
+    private function notifyPlayer(Game $game, int $playerNumber, string $message): void
+    {
+        if (!$game->isOnline()) {
+            return;
+        }
+
+        $player = $game->players()->where('player_number', $playerNumber)->with('user')->first();
+        if ($player?->user) {
+            app(OneSignalService::class)->sendToUser(
+                $player->user,
+                'Trusted Advisors',
+                $message,
+                ['type' => 'your_turn', 'game_id' => $game->id]
+            );
+        }
     }
 }

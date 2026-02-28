@@ -39,11 +39,11 @@
         <span class="nav-icon">&#127968;</span>
         <span class="nav-label">Home</span>
       </button>
-      <router-link to="/campaigns" class="nav-item" :class="{ active: $route.path === '/campaigns' }" @click="navSound">
+      <router-link v-if="auth.state.user" to="/campaigns" class="nav-item" :class="{ active: $route.path === '/campaigns' }" @click="navSound">
         <span class="nav-icon">&#9876;</span>
         <span class="nav-label">Campaigns</span>
       </router-link>
-      <router-link to="/friends" class="nav-item" :class="{ active: $route.path === '/friends' }" @click="navSound">
+      <router-link v-if="auth.state.user" to="/friends" class="nav-item" :class="{ active: $route.path === '/friends' }" @click="navSound">
         <span class="nav-icon">&#129309;</span>
         <span class="nav-label">Friends</span>
       </router-link>
@@ -63,7 +63,7 @@
           <button class="menu-popup-item" @click="menuSound(); showHowToPlay = true; showMenuPopup = false">Rules</button>
           <router-link v-if="auth.state.user" to="/profile" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Profile</router-link>
           <router-link to="/settings" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Settings</router-link>
-          <router-link to="/admin" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Admin</router-link>
+          <router-link v-if="auth.state.user?.is_admin" to="/admin" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Admin</router-link>
           <template v-if="auth.state.user">
             <div class="menu-popup-divider"></div>
             <button v-if="!confirmingLogout" class="menu-popup-item menu-popup-logout" @click.stop="confirmingLogout = true">Logout</button>
@@ -89,6 +89,7 @@ import NotificationsDrawer from './components/NotificationsDrawer.vue';
 import SplashScreen from './components/SplashScreen.vue';
 import { useAuth } from './stores/auth';
 import { playSound } from './sounds';
+import { initOneSignal, promptPushPermission } from './onesignal';
 
 export default {
   name: 'App',
@@ -99,7 +100,7 @@ export default {
   },
   data() {
     return {
-      showSplash: true,
+      showSplash: !window.location.pathname.startsWith('/admin'),
       showHowToPlay: false,
       showNotifications: false,
       showMenuPopup: false,
@@ -119,9 +120,16 @@ export default {
     },
   },
   mounted() {
-    this.auth.fetchUser().then(() => {
-      if (this.auth.state.user) this.pollNotifCount();
-    });
+    // fetchUser() is already called in app.js router guard; just wait for it
+    const check = () => {
+      if (!this.auth.state.loading && this.auth.state.user) {
+        this.pollNotifCount();
+        initOneSignal().then(() => promptPushPermission());
+      } else if (this.auth.state.loading) {
+        setTimeout(check, 50);
+      }
+    };
+    check();
     this._closeMenuOnClick = () => { this.showMenuPopup = false; this.confirmingLogout = false; };
     document.addEventListener('click', this._closeMenuOnClick);
   },

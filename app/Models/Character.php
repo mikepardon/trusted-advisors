@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Support\Facades\Storage;
 
 class Character extends Model
 {
@@ -23,11 +22,7 @@ class Character extends Model
             return null;
         }
 
-        try {
-            return Storage::disk('s3')->url($this->image_path);
-        } catch (\Exception $e) {
-            return null;
-        }
+        return '/api/storage/' . $this->image_path;
     }
 
     public function gamePlayers(): HasMany
