@@ -61,11 +61,42 @@
 
     </div>
 
+    <!-- STEP: Game type selection (cooperative vs duel) -->
+    <div v-else-if="step === 'gameType'" key="gameType">
+      <div class="card-panel">
+        <h2 class="section-title">Choose Your Challenge</h2>
+        <p class="flavor-text">
+          Will you work together to save the realm, or compete to build the greater kingdom?
+        </p>
+
+        <div class="mode-cards">
+          <div
+            class="mode-card"
+            @click="playSound('clickCard'); gameType = 'cooperative'; step = 'settings'"
+          >
+            <h3 class="mode-title">Cooperative</h3>
+            <p class="mode-desc">Work together to guide the kingdom through crisis</p>
+          </div>
+          <div
+            class="mode-card"
+            @click="playSound('clickCard'); gameType = 'duel'; numPlayers = 2; step = 'settings'"
+          >
+            <h3 class="mode-title">Duel</h3>
+            <p class="mode-desc">Compete head-to-head: draft cards, build rival kingdoms (2 players)</p>
+          </div>
+        </div>
+
+        <div class="step-nav">
+          <button class="back-btn" @click="playSound('clickNav'); step = 'mode'">&#8592; Back</button>
+        </div>
+      </div>
+    </div>
+
     <!-- STEP 1: Game settings (players/friends + game length) -->
     <div v-else-if="step === 'settings'" key="settings">
       <div class="card-panel">
-        <!-- Pass and Play: player count -->
-        <template v-if="gameMode === 'pass_and_play'">
+        <!-- Pass and Play: player count (hidden for duel, locked to 2) -->
+        <template v-if="gameMode === 'pass_and_play' && gameType !== 'duel'">
           <h2 class="section-title">How Many Advisors?</h2>
           <p class="flavor-text">
             The realm needs leaders. How many advisors will answer the call?
@@ -84,6 +115,15 @@
               </button>
             </div>
           </div>
+        </template>
+
+        <!-- Duel mode info -->
+        <template v-if="gameType === 'duel'">
+          <h2 class="section-title">Duel Mode</h2>
+          <p class="flavor-text">
+            Two advisors compete to build rival kingdoms.
+            Draft cards through bluff and choice. 2 players locked.
+          </p>
         </template>
 
         <!-- Online: friends picker -->
@@ -282,6 +322,7 @@ export default {
     return {
       step: 'mode',
       gameMode: 'single',
+      gameType: 'cooperative',
       numPlayers: 2,
       totalRounds: 24,
       gameId: null,
@@ -377,13 +418,17 @@ export default {
     selectMode() {
       if (this.gameMode === 'single') {
         this.numPlayers = 1;
+        this.gameType = 'cooperative';
+        this.step = 'settings';
       } else {
         this.numPlayers = 2;
+        this.gameType = 'cooperative';
+        if (this.gameMode === 'online') {
+          this.fetchFriendsForPicker();
+        }
+        // Show game type selection (cooperative vs duel) before settings
+        this.step = 'gameType';
       }
-      if (this.gameMode === 'online') {
-        this.fetchFriendsForPicker();
-      }
-      this.step = 'settings';
     },
     async fetchFriendsForPicker() {
       this.friendsLoading = true;
@@ -436,6 +481,7 @@ export default {
           this.numPlayers = this.selectedFriendIds.length + 1;
           const gameRes = await axios.post('/api/games', {
             game_mode: this.gameMode,
+            game_type: this.gameType,
             num_players: this.numPlayers,
             total_rounds: this.totalRounds,
           });
@@ -454,6 +500,7 @@ export default {
         const [gameRes, charsRes] = await Promise.all([
           axios.post('/api/games', {
             game_mode: this.gameMode,
+            game_type: this.gameType,
             num_players: this.numPlayers,
             total_rounds: this.totalRounds,
           }),
@@ -498,8 +545,14 @@ export default {
       return char?.image_url || '/images/character.png';
     },
     goBack() {
-      if (this.step === 'settings') {
+      if (this.step === 'gameType') {
         this.step = 'mode';
+      } else if (this.step === 'settings') {
+        if (this.gameMode === 'single') {
+          this.step = 'mode';
+        } else {
+          this.step = 'gameType';
+        }
       } else if (this.step === 'story') {
         this.step = 'settings';
       } else if (this.step === 'characters') {

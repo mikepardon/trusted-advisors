@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\DuelChoiceMade;
+use App\Events\DuelOfferMade;
+use App\Events\DuelRollComplete;
 use App\Events\GameStarted;
 use App\Events\NextRoundStarted;
 use App\Events\PlayerAssignedCards;
@@ -15,6 +18,7 @@ use App\Models\GameItemDeck;
 use App\Models\GamePlayer;
 use App\Models\GamePlayerHand;
 use App\Models\GamePlayerItem;
+use App\Models\GamePlayerKingdom;
 use App\Models\GameRoundResult;
 use App\Models\GameRule;
 use App\Models\Item;
@@ -35,7 +39,10 @@ class GameController extends Controller
             'game_mode' => 'required|string|in:single,pass_and_play,online',
             'num_players' => 'required|integer|min:1|max:6',
             'total_rounds' => 'sometimes|integer|in:12,24,36,48,60',
+            'game_type' => 'sometimes|string|in:cooperative,duel',
         ]);
+
+        $gameType = $validated['game_type'] ?? 'cooperative';
 
         // Single player forces 1 player, pass_and_play/online require 2+
         if ($validated['game_mode'] === 'single' && $validated['num_players'] !== 1) {
@@ -45,9 +52,20 @@ class GameController extends Controller
             return response()->json(['error' => 'Multiplayer modes require at least 2 players'], 422);
         }
 
+        // Duel mode requires exactly 2 players and not single mode
+        if ($gameType === 'duel') {
+            if ($validated['game_mode'] === 'single') {
+                return response()->json(['error' => 'Duel mode cannot be played solo'], 422);
+            }
+            if ($validated['num_players'] !== 2) {
+                return response()->json(['error' => 'Duel mode requires exactly 2 players'], 422);
+            }
+        }
+
         $game = Game::create([
             'status' => 'setup',
             'game_mode' => $validated['game_mode'],
+            'game_type' => $gameType,
             'num_players' => $validated['num_players'],
             'total_rounds' => $validated['total_rounds'] ?? 24,
             'user_id' => $request->user()?->id,
@@ -72,10 +90,18 @@ class GameController extends Controller
         $data = [
             'game' => $game,
             'game_mode' => $game->game_mode,
+            'game_type' => $game->game_type ?? 'cooperative',
             'round_phase' => $game->round_phase,
             'current_round' => $game->current_round,
             'total_rounds' => $game->total_rounds,
         ];
+
+        // Duel-specific data
+        if ($game->isDuel()) {
+            $data['offerer_player_number'] = $game->offerer_player_number;
+            $data['duel_phase'] = $game->duel_phase;
+            $data['player_kingdoms'] = $game->playerKingdoms()->with('player.character')->get();
+        }
 
         // For online games in setup, include lobby data
         if ($game->isOnline() && $game->status === 'setup') {
@@ -138,9 +164,14 @@ class GameController extends Controller
             return response()->json(['error' => 'Must select exactly ' . $game->num_players . ' characters'], 422);
         }
 
-        // Use worst-case cards per round (3 per player for altered_deal events)
-        $maxCardsPerRound = $game->num_players * 3;
-        $totalCardsNeeded = $maxCardsPerRound * $game->total_rounds;
+        // Duel mode: size deck as 2 cards per round (no events)
+        if ($game->isDuel()) {
+            $totalCardsNeeded = 2 * $game->total_rounds;
+        } else {
+            // Use worst-case cards per round (3 per player for altered_deal events)
+            $maxCardsPerRound = $game->num_players * 3;
+            $totalCardsNeeded = $maxCardsPerRound * $game->total_rounds;
+        }
 
         // For online mode, players already exist from lobby — just update character assignments
         if ($game->isOnline()) {
@@ -177,31 +208,58 @@ class GameController extends Controller
             ]);
         }
 
-        // Create shuffled item deck (recycle items if needed)
-        $allItems = Item::inRandomOrder()->get();
-        $itemsNeeded = $game->total_rounds * 2; // generous estimate
-        $itemPool = collect();
-        while ($itemPool->count() < $itemsNeeded) {
-            $itemPool = $itemPool->concat($allItems->shuffle());
+        // Duel mode: skip item deck
+        if (!$game->isDuel()) {
+            // Create shuffled item deck (recycle items if needed)
+            $allItems = Item::inRandomOrder()->get();
+            $itemsNeeded = $game->total_rounds * 2; // generous estimate
+            $itemPool = collect();
+            while ($itemPool->count() < $itemsNeeded) {
+                $itemPool = $itemPool->concat($allItems->shuffle());
+            }
+            $itemPool = $itemPool->take($itemsNeeded);
+            foreach ($itemPool as $i => $item) {
+                GameItemDeck::create([
+                    'game_id' => $game->id,
+                    'item_id' => $item->id,
+                    'position' => $i,
+                    'is_drawn' => false,
+                ]);
+            }
         }
-        $itemPool = $itemPool->take($itemsNeeded);
-        foreach ($itemPool as $i => $item) {
-            GameItemDeck::create([
-                'game_id' => $game->id,
-                'item_id' => $item->id,
-                'position' => $i,
-                'is_drawn' => false,
+
+        if ($game->isDuel()) {
+            $game->update([
+                'status' => 'active',
+                'current_round' => 1,
+                'round_phase' => 'selecting',
+                'offerer_player_number' => 1,
+                'duel_phase' => 'offering',
             ]);
+
+            // Refresh players relationship (just created/updated above)
+            $game->load('players');
+
+            // Create per-player kingdoms
+            foreach ($game->players as $player) {
+                GamePlayerKingdom::create([
+                    'game_id' => $game->id,
+                    'game_player_id' => $player->id,
+                ]);
+            }
+
+            // Deal duel cards for first round
+            $this->dealDuelCardsForRound($game);
+        } else {
+            $game->update([
+                'status' => 'active',
+                'current_round' => 1,
+                'round_phase' => 'selecting',
+            ]);
+
+            // Deal first round
+            $this->dealCardsForRound($game);
         }
-
-        $game->update([
-            'status' => 'active',
-            'current_round' => 1,
-            'round_phase' => 'selecting',
-        ]);
-
-        // Deal first round
-        $this->dealCardsForRound($game);
 
         if ($game->isOnline()) {
             broadcast(new GameStarted($game->id));
@@ -778,6 +836,12 @@ class GameController extends Controller
             return response()->json(['error' => 'Only the host can advance the round'], 403);
         }
 
+        // === DUEL MODE ===
+        if ($game->isDuel()) {
+            return $this->nextRoundDuel($game);
+        }
+
+        // === COOPERATIVE MODE ===
         // Check game over conditions
         $gameOverReason = $game->checkStatBounds();
         if ($gameOverReason) {
@@ -846,6 +910,468 @@ class GameController extends Controller
         return $showResponse;
     }
 
+    private function nextRoundDuel(Game $game): JsonResponse
+    {
+        $kingdoms = $game->playerKingdoms()->with('player')->get();
+
+        // Check both kingdoms for win/loss
+        foreach ($kingdoms as $kingdom) {
+            $result = $game->checkDuelStatBounds($kingdom);
+            if ($result === 'win') {
+                $game->update([
+                    'status' => 'completed',
+                    'round_phase' => 'complete',
+                    'winner_player_number' => $kingdom->player->player_number,
+                ]);
+                return response()->json([
+                    'game_over' => true,
+                    'winner_player_number' => $kingdom->player->player_number,
+                    'reason' => 'Player ' . $kingdom->player->player_number . ' achieved 3 stats at maximum!',
+                    'game' => $game->fresh(),
+                    'player_kingdoms' => $kingdoms,
+                ]);
+            }
+            if ($result === 'loss') {
+                $winnerNumber = $kingdom->player->player_number === 1 ? 2 : 1;
+                $game->update([
+                    'status' => 'completed',
+                    'round_phase' => 'complete',
+                    'winner_player_number' => $winnerNumber,
+                ]);
+                return response()->json([
+                    'game_over' => true,
+                    'winner_player_number' => $winnerNumber,
+                    'reason' => 'Player ' . $kingdom->player->player_number . '\'s kingdom collapsed!',
+                    'game' => $game->fresh(),
+                    'player_kingdoms' => $kingdoms,
+                ]);
+            }
+        }
+
+        // Check if all rounds completed — tiebreaker by total score
+        if ($game->current_round >= $game->total_rounds) {
+            $k1 = $kingdoms->firstWhere('game_player_id', $game->players->firstWhere('player_number', 1)->id);
+            $k2 = $kingdoms->firstWhere('game_player_id', $game->players->firstWhere('player_number', 2)->id);
+            $score1 = $k1->totalScore();
+            $score2 = $k2->totalScore();
+            $winnerNumber = $score1 >= $score2 ? 1 : 2;
+
+            $game->update([
+                'status' => 'completed',
+                'round_phase' => 'complete',
+                'winner_player_number' => $winnerNumber,
+            ]);
+
+            return response()->json([
+                'game_over' => true,
+                'winner_player_number' => $winnerNumber,
+                'reason' => "Campaign complete! Player {$winnerNumber} wins with the stronger kingdom.",
+                'game' => $game->fresh(),
+                'player_kingdoms' => $kingdoms,
+            ]);
+        }
+
+        // Advance to next round, swap offerer
+        $game->current_round++;
+        $game->round_phase = 'selecting';
+        $game->duel_phase = 'offering';
+        $game->offerer_player_number = $game->offerer_player_number === 1 ? 2 : 1;
+        $game->save();
+
+        // Deal duel cards
+        $this->dealDuelCardsForRound($game);
+
+        $showResponse = $this->show($game->fresh());
+
+        if ($game->isOnline()) {
+            $showData = json_decode($showResponse->getContent(), true);
+            broadcast(new NextRoundStarted($game->id, $showData));
+        }
+
+        return $showResponse;
+    }
+
+    // =============================
+    // DUEL MODE ENDPOINTS
+    // =============================
+
+    /**
+     * Get player-appropriate card view for duel mode.
+     */
+    public function duelHand(Game $game, int $playerNumber, Request $request): JsonResponse
+    {
+        if (!$game->isDuel() || $game->status !== 'active') {
+            return response()->json(['error' => 'Not an active duel game'], 422);
+        }
+
+        $player = $game->players()->where('player_number', $playerNumber)->first();
+        if (!$player) {
+            return response()->json(['error' => 'Invalid player number'], 422);
+        }
+
+        // Online mode: verify authenticated user owns this player slot
+        if ($game->isOnline()) {
+            if (!$request->user() || $request->user()->id !== $player->user_id) {
+                return response()->json(['error' => 'You cannot view another player\'s hand'], 403);
+            }
+        }
+
+        $hands = $game->playerHands()
+            ->where('round_number', $game->current_round)
+            ->with('card')
+            ->get();
+
+        $offererNumber = $game->offerer_player_number;
+        $chooserNumber = $offererNumber === 1 ? 2 : 1;
+        $isOfferer = $playerNumber === $offererNumber;
+
+        $cards = [];
+
+        if ($game->duel_phase === 'offering' && $isOfferer) {
+            // Offerer sees both cards, full details
+            foreach ($hands as $h) {
+                $cards[] = [
+                    'hand_id' => $h->id,
+                    'card' => $h->card,
+                    'revealed' => $h->revealed,
+                ];
+            }
+        } elseif ($game->duel_phase === 'choosing' && $playerNumber === $chooserNumber) {
+            // Chooser sees 1 revealed card full, 1 hidden (hand_id only)
+            foreach ($hands as $h) {
+                if ($h->revealed) {
+                    $cards[] = [
+                        'hand_id' => $h->id,
+                        'card' => $h->card,
+                        'revealed' => true,
+                    ];
+                } else {
+                    $cards[] = [
+                        'hand_id' => $h->id,
+                        'card' => null,
+                        'revealed' => false,
+                    ];
+                }
+            }
+        } elseif (in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'resolving'])) {
+            // Each player sees their own card
+            $myHand = $hands->firstWhere('game_player_id', $player->id);
+            if ($myHand) {
+                $cards[] = [
+                    'hand_id' => $myHand->id,
+                    'card' => $myHand->card,
+                    'revealed' => true,
+                ];
+            }
+        }
+
+        return response()->json([
+            'player_number' => $playerNumber,
+            'round' => $game->current_round,
+            'duel_phase' => $game->duel_phase,
+            'is_offerer' => $isOfferer,
+            'cards' => $cards,
+        ]);
+    }
+
+    /**
+     * Offerer reveals one card and offers the pair.
+     */
+    public function duelOffer(Game $game, Request $request): JsonResponse
+    {
+        if (!$game->isDuel() || $game->duel_phase !== 'offering') {
+            return response()->json(['error' => 'Not in offering phase'], 422);
+        }
+
+        $validated = $request->validate([
+            'revealed_hand_id' => 'required|integer|exists:game_player_hands,id',
+        ]);
+
+        $offerer = $game->getOfferer();
+        $chooser = $game->getChooser();
+
+        // Online mode: verify authenticated user is the offerer
+        if ($game->isOnline()) {
+            if (!$request->user() || $request->user()->id !== $offerer->user_id) {
+                return response()->json(['error' => 'Only the offerer can make an offer'], 403);
+            }
+        }
+
+        $hands = $game->playerHands()
+            ->where('round_number', $game->current_round)
+            ->where('game_player_id', $offerer->id)
+            ->get();
+
+        $revealedHand = $hands->firstWhere('id', $validated['revealed_hand_id']);
+        if (!$revealedHand) {
+            return response()->json(['error' => 'Invalid hand selection'], 422);
+        }
+
+        // Mark the revealed card and set offered_to_player_id on both
+        foreach ($hands as $hand) {
+            $hand->update([
+                'revealed' => $hand->id === $revealedHand->id,
+                'offered_to_player_id' => $chooser->id,
+            ]);
+        }
+
+        $game->update(['duel_phase' => 'choosing']);
+
+        if ($game->isOnline()) {
+            broadcast(new DuelOfferMade(
+                $game->id,
+                $game->offerer_player_number,
+                $revealedHand->id,
+                'choosing',
+            ));
+        }
+
+        return response()->json([
+            'success' => true,
+            'duel_phase' => 'choosing',
+        ]);
+    }
+
+    /**
+     * Chooser picks one of the two cards.
+     */
+    public function duelChoose(Game $game, Request $request): JsonResponse
+    {
+        if (!$game->isDuel() || $game->duel_phase !== 'choosing') {
+            return response()->json(['error' => 'Not in choosing phase'], 422);
+        }
+
+        $validated = $request->validate([
+            'chosen_hand_id' => 'required|integer|exists:game_player_hands,id',
+        ]);
+
+        $offerer = $game->getOfferer();
+        $chooser = $game->getChooser();
+
+        // Online mode: verify authenticated user is the chooser
+        if ($game->isOnline()) {
+            if (!$request->user() || $request->user()->id !== $chooser->user_id) {
+                return response()->json(['error' => 'Only the chooser can choose'], 403);
+            }
+        }
+
+        $hands = $game->playerHands()
+            ->where('round_number', $game->current_round)
+            ->get();
+
+        $chosenHand = $hands->firstWhere('id', $validated['chosen_hand_id']);
+        if (!$chosenHand) {
+            return response()->json(['error' => 'Invalid hand selection'], 422);
+        }
+
+        // Reassign: chooser gets the chosen card, offerer gets the other
+        foreach ($hands as $hand) {
+            if ($hand->id === $chosenHand->id) {
+                $hand->update(['game_player_id' => $chooser->id]);
+            } else {
+                $hand->update(['game_player_id' => $offerer->id]);
+            }
+        }
+
+        $game->update(['duel_phase' => 'rolling_offerer']);
+
+        // Reload hands with updated assignments
+        $updatedHands = $game->playerHands()
+            ->where('round_number', $game->current_round)
+            ->with('card')
+            ->get();
+
+        $chooserCard = $updatedHands->firstWhere('game_player_id', $chooser->id);
+        $offererCard = $updatedHands->firstWhere('game_player_id', $offerer->id);
+
+        if ($game->isOnline()) {
+            broadcast(new DuelChoiceMade(
+                $game->id,
+                $chooser->player_number,
+                $chooserCard ? ['hand_id' => $chooserCard->id, 'card' => $chooserCard->card] : null,
+                $offererCard ? ['hand_id' => $offererCard->id, 'card' => $offererCard->card] : null,
+                'rolling_offerer',
+            ));
+        }
+
+        return response()->json([
+            'success' => true,
+            'duel_phase' => 'rolling_offerer',
+            'chooser_card' => $chooserCard ? ['hand_id' => $chooserCard->id, 'card' => $chooserCard->card] : null,
+            'offerer_card' => $offererCard ? ['hand_id' => $offererCard->id, 'card' => $offererCard->card] : null,
+        ]);
+    }
+
+    /**
+     * A duel player rolls their character's dice against their card's difficulty.
+     */
+    public function duelRoll(Game $game, Request $request): JsonResponse
+    {
+        if (!$game->isDuel()) {
+            return response()->json(['error' => 'Not a duel game'], 422);
+        }
+
+        if (!in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser'])) {
+            return response()->json(['error' => 'Not in a rolling phase'], 422);
+        }
+
+        // Determine who's rolling
+        $offerer = $game->getOfferer();
+        $chooser = $game->getChooser();
+        $rollingPlayer = $game->duel_phase === 'rolling_offerer' ? $offerer : $chooser;
+
+        // Online mode: verify authenticated user matches the rolling player
+        if ($game->isOnline()) {
+            if (!$request->user() || $request->user()->id !== $rollingPlayer->user_id) {
+                return response()->json(['error' => 'It is not your turn to roll'], 403);
+            }
+        }
+
+        $rollingPlayer->load(['character', 'items.item']);
+
+        // Get the player's card for this round
+        $hand = $game->playerHands()
+            ->where('round_number', $game->current_round)
+            ->where('game_player_id', $rollingPlayer->id)
+            ->with('card')
+            ->first();
+
+        if (!$hand) {
+            return response()->json(['error' => 'No card assigned to rolling player'], 422);
+        }
+
+        $card = $hand->card;
+        $difficulty = $card->difficulty;
+
+        // Roll dice
+        $character = $rollingPlayer->character;
+        $dice = $character->dice;
+        $activeDice = 3 - $rollingPlayer->lost_dice;
+        $activeDice = max(1, $activeDice);
+
+        $totalRoll = 0;
+        $playerRolls = [];
+        $wildTriggers = [];
+
+        foreach (array_slice($dice, 0, $activeDice) as $dieIndex => $die) {
+            $faceIndex = random_int(0, 5);
+            $face = $die[$faceIndex];
+            $playerRolls[] = [
+                'die' => $dieIndex + 1,
+                'face' => $face,
+                'face_index' => $faceIndex,
+                'value' => $face === 'WILD' ? $character->wild_value : (int) $face,
+            ];
+
+            if ($face === 'WILD') {
+                $totalRoll += $character->wild_value;
+                $wildTriggers[] = [
+                    'player_number' => $rollingPlayer->player_number,
+                    'character_name' => $character->name,
+                    'wild_value' => $character->wild_value,
+                    'ability' => $character->wild_ability,
+                    'ability_description' => $character->wild_ability_description,
+                ];
+            } else {
+                $totalRoll += (int) $face;
+            }
+        }
+
+        // Process wild abilities (duel version: inspire gives +1 instead of +player_count)
+        $abilityEffects = $this->processDuelWildAbilities($wildTriggers, $totalRoll);
+        $totalRoll = $abilityEffects['adjusted_total'];
+
+        $success = $totalRoll >= $difficulty;
+
+        // Determine effects
+        $statEffects = [];
+        // Negative effects ALWAYS apply
+        $negativeEffects = $card->negative_effects ?? [];
+        foreach ($negativeEffects as $stat => $change) {
+            if (in_array($stat, ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'])) {
+                $statEffects[$stat] = ($statEffects[$stat] ?? 0) + $change;
+            }
+        }
+
+        // Positive effects apply on success
+        if ($success) {
+            $positiveEffects = $card->positive_effects ?? [];
+            foreach ($positiveEffects as $stat => $change) {
+                if (in_array($stat, ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'])) {
+                    $statEffects[$stat] = ($statEffects[$stat] ?? 0) + $change;
+                }
+            }
+        }
+
+        // Apply effects to the player's kingdom
+        $kingdom = GamePlayerKingdom::where('game_id', $game->id)
+            ->where('game_player_id', $rollingPlayer->id)
+            ->first();
+
+        if ($kingdom && !empty($statEffects)) {
+            $kingdom->applyEffects($statEffects);
+        }
+
+        // Save round result
+        GameRoundResult::create([
+            'game_id' => $game->id,
+            'round_number' => $game->current_round,
+            'card_id' => $card->id,
+            'game_player_id' => $rollingPlayer->id,
+            'success' => $success,
+            'result_type' => 'duel',
+            'dice_results' => [[
+                'player_number' => $rollingPlayer->player_number,
+                'character_name' => $character->name,
+                'rolls' => $playerRolls,
+                'active_dice' => $activeDice,
+                'lost_dice' => $rollingPlayer->lost_dice,
+            ]],
+            'stat_totals' => ['total_roll' => $totalRoll, 'total_difficulty' => $difficulty],
+            'effects_applied' => $statEffects,
+            'wild_triggers' => $wildTriggers,
+        ]);
+
+        // Check instant win/loss after roll
+        $kingdom->refresh();
+        $duelResult = $game->checkDuelStatBounds($kingdom);
+
+        // Advance duel_phase
+        if ($game->duel_phase === 'rolling_offerer') {
+            $game->update(['duel_phase' => 'rolling_chooser']);
+        } else {
+            $game->update([
+                'duel_phase' => 'resolving',
+                'round_phase' => 'resolving',
+            ]);
+        }
+
+        $rollData = [
+            'player_number' => $rollingPlayer->player_number,
+            'character_name' => $character->name,
+            'card' => $card,
+            'difficulty' => $difficulty,
+            'rolls' => $playerRolls,
+            'total_roll' => $totalRoll,
+            'success' => $success,
+            'effects' => $statEffects,
+            'ability_effects' => $abilityEffects['descriptions'],
+            'kingdom' => $kingdom->fresh(),
+            'duel_result' => $duelResult,
+        ];
+
+        if ($game->isOnline()) {
+            broadcast(new DuelRollComplete(
+                $game->id,
+                $rollingPlayer->player_number,
+                $rollData,
+                $game->fresh()->duel_phase,
+            ));
+        }
+
+        return response()->json($rollData);
+    }
+
     public function history(Request $request): JsonResponse
     {
         $userId = $request->user()->id;
@@ -863,6 +1389,7 @@ class GameController extends Controller
                 'id' => $game->id,
                 'status' => $game->status,
                 'game_mode' => $game->game_mode,
+                'game_type' => $game->game_type ?? 'cooperative',
                 'current_round' => $game->current_round,
                 'total_rounds' => $game->total_rounds,
                 'num_players' => $game->num_players,
@@ -878,7 +1405,9 @@ class GameController extends Controller
                 'id' => $game->id,
                 'win' => $game->win,
                 'game_mode' => $game->game_mode,
+                'game_type' => $game->game_type ?? 'cooperative',
                 'score' => $game->wealth + $game->influence + $game->security + $game->religion + $game->food + $game->happiness,
+                'winner_player_number' => $game->winner_player_number,
                 'num_players' => $game->num_players,
                 'rounds_survived' => $game->current_round,
                 'total_rounds' => $game->total_rounds,
@@ -974,6 +1503,81 @@ class GameController extends Controller
         $deckEntry->update(['is_drawn' => true]);
 
         return Item::find($deckEntry->item_id);
+    }
+
+    /**
+     * Deal 2 cards to the offerer for a duel round.
+     */
+    private function dealDuelCardsForRound(Game $game): void
+    {
+        $offerer = $game->getOfferer();
+
+        $deckCards = $game->cardDeck()
+            ->where('is_drawn', false)
+            ->orderBy('position')
+            ->limit(2)
+            ->get();
+
+        foreach ($deckCards as $dc) {
+            $dc->update(['is_drawn' => true]);
+
+            GamePlayerHand::create([
+                'game_id' => $game->id,
+                'game_player_id' => $offerer->id,
+                'card_id' => $dc->card_id,
+                'round_number' => $game->current_round,
+                'revealed' => false,
+            ]);
+        }
+    }
+
+    /**
+     * Process wild abilities for duel mode (single-player context).
+     * Inspire gives +1 instead of +player_count.
+     */
+    private function processDuelWildAbilities(array $wildTriggers, int $totalRoll): array
+    {
+        $adjustedTotal = $totalRoll;
+        $descriptions = [];
+
+        foreach ($wildTriggers as $trigger) {
+            $ability = $trigger['ability'] ?? '';
+            $playerName = $trigger['character_name'];
+
+            switch ($ability) {
+                case 'inspire':
+                    $adjustedTotal += 1;
+                    $descriptions[] = "{$playerName}'s Inspire: +1";
+                    break;
+                case 'rally':
+                    $adjustedTotal += 2;
+                    $descriptions[] = "{$playerName}'s Rally: rerolled lowest die (+2)";
+                    break;
+                case 'divine':
+                    $bonus = $trigger['wild_value'];
+                    $adjustedTotal += $bonus;
+                    $descriptions[] = "{$playerName}'s Divine: WILD counts double (+{$bonus})";
+                    break;
+                case 'gamble':
+                    $bonus = random_int(-3, 5);
+                    $adjustedTotal += $bonus;
+                    $sign = $bonus >= 0 ? '+' : '';
+                    $descriptions[] = "{$playerName}'s Gamble: rerolled all dice ({$sign}{$bonus})";
+                    break;
+                case 'shadow':
+                    $descriptions[] = "{$playerName}'s Shadow: glimpsed the future (no roll effect)";
+                    break;
+                case 'wisdom':
+                    $adjustedTotal += 2;
+                    $descriptions[] = "{$playerName}'s Wisdom: +2 to total";
+                    break;
+            }
+        }
+
+        return [
+            'adjusted_total' => $adjustedTotal,
+            'descriptions' => $descriptions,
+        ];
     }
 
     /**

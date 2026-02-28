@@ -12,10 +12,13 @@ class Game extends Model
         'status', 'game_mode', 'num_players', 'current_round', 'total_rounds', 'round_phase', 'win',
         'wealth', 'influence', 'security', 'religion', 'food', 'happiness',
         'user_id',
+        'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number',
     ];
 
     protected $casts = [
         'win' => 'boolean',
+        'offerer_player_number' => 'integer',
+        'winner_player_number' => 'integer',
     ];
 
     public function user(): BelongsTo
@@ -51,6 +54,57 @@ class Game extends Model
     public function invites(): HasMany
     {
         return $this->hasMany(GameInvite::class);
+    }
+
+    public function playerKingdoms(): HasMany
+    {
+        return $this->hasMany(GamePlayerKingdom::class);
+    }
+
+    public function isDuel(): bool
+    {
+        return $this->game_type === 'duel';
+    }
+
+    public function isCooperative(): bool
+    {
+        return $this->game_type !== 'duel';
+    }
+
+    public function getOfferer(): ?GamePlayer
+    {
+        return $this->players()->where('player_number', $this->offerer_player_number)->first();
+    }
+
+    public function getChooser(): ?GamePlayer
+    {
+        $chooserNumber = $this->offerer_player_number === 1 ? 2 : 1;
+        return $this->players()->where('player_number', $chooserNumber)->first();
+    }
+
+    /**
+     * Check if any stat in a duel kingdom has hit bounds.
+     * Returns null if safe, or a string describing the condition.
+     */
+    public function checkDuelStatBounds(GamePlayerKingdom $kingdom): ?string
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        $atMax = 0;
+
+        foreach ($stats as $stat) {
+            if ($kingdom->{$stat} <= 0) {
+                return 'loss';
+            }
+            if ($kingdom->{$stat} >= 20) {
+                $atMax++;
+            }
+        }
+
+        if ($atMax >= 3) {
+            return 'win';
+        }
+
+        return null;
     }
 
     public function isOnline(): bool

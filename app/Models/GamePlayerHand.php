@@ -9,6 +9,11 @@ class GamePlayerHand extends Model
 {
     protected $fillable = [
         'game_id', 'game_player_id', 'card_id', 'round_number', 'role',
+        'revealed', 'offered_to_player_id',
+    ];
+
+    protected $casts = [
+        'revealed' => 'boolean',
     ];
 
     public function game(): BelongsTo

@@ -1,6 +1,54 @@
 <template>
   <div v-if="loading" class="loading">Loading final results...</div>
   <div v-else-if="gameData" class="game-over">
+    <!-- DUEL END SCREEN -->
+    <template v-if="isDuel">
+      <div class="card-panel result-panel">
+        <h2 class="game-over-title" :class="isDuelWinner ? 'title-win' : 'title-loss'">
+          {{ duelEndTitle }}
+        </h2>
+        <p class="end-flavor">{{ duelEndFlavor }}</p>
+
+        <div class="duel-kingdoms-final">
+          <div
+            v-for="kingdom in duelKingdoms"
+            :key="kingdom.id"
+            class="duel-kingdom-panel"
+            :class="{ 'kingdom-winner': kingdom.player?.player_number === gameData.game.winner_player_number }"
+          >
+            <h3 class="kingdom-header">
+              {{ kingdom.player?.character?.name || 'Player' }}
+              <span v-if="kingdom.player?.player_number === gameData.game.winner_player_number" class="winner-badge">WINNER</span>
+            </h3>
+            <div class="stats-grid">
+              <div v-for="stat in stats" :key="stat.key" class="final-stat">
+                <span class="stat-icon">{{ stat.icon }}</span>
+                <span class="stat-label">{{ stat.label }}</span>
+                <span class="stat-val" :class="getValClass(kingdom[stat.key])">
+                  {{ kingdom[stat.key] }}
+                </span>
+              </div>
+            </div>
+            <div class="kingdom-score">
+              Score: <strong>{{ kingdomTotal(kingdom) }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="round-summary">
+          <p class="rounds-survived">
+            Months Played: <strong>{{ gameData.game.current_round }}</strong> / {{ gameData.game.total_rounds }}
+          </p>
+        </div>
+
+        <button class="btn-primary play-again" @click="$router.push('/')">
+          Play Again
+        </button>
+      </div>
+    </template>
+
+    <!-- COOPERATIVE END SCREEN -->
+    <template v-else>
     <div class="card-panel result-panel">
       <h2 class="game-over-title" :class="isWin ? 'title-win' : 'title-loss'">
         {{ endTitle }}
@@ -66,6 +114,7 @@
         Play Again
       </button>
     </div>
+    </template>
   </div>
 </template>
 
@@ -93,6 +142,43 @@ export default {
     };
   },
   computed: {
+    isDuel() {
+      return this.gameData?.game?.game_type === 'duel' || this.gameData?.game_type === 'duel';
+    },
+    duelKingdoms() {
+      return this.gameData?.player_kingdoms || [];
+    },
+    isDuelWinner() {
+      if (!this.isDuel) return false;
+      // In pass-and-play, "you" is player 1 by convention; in online, check auth
+      return true; // Both players see the results
+    },
+    duelEndTitle() {
+      const winner = this.gameData?.game?.winner_player_number;
+      if (!winner) return 'The Duel is Over';
+      const player = this.gameData?.game?.players?.find(p => p.player_number === winner);
+      return `${player?.character?.name || 'Player ' + winner} Wins!`;
+    },
+    duelEndFlavor() {
+      const winner = this.gameData?.game?.winner_player_number;
+      if (!winner) return 'The campaign has ended.';
+      const loser = winner === 1 ? 2 : 1;
+      const winKingdom = this.duelKingdoms.find(k => k.player?.player_number === winner);
+      const loseKingdom = this.duelKingdoms.find(k => k.player?.player_number === loser);
+
+      if (loseKingdom) {
+        const stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        const collapsed = stats.find(s => loseKingdom[s] <= 0);
+        if (collapsed) {
+          return `The rival kingdom collapsed when ${collapsed} reached zero.`;
+        }
+        const atMax = stats.filter(s => winKingdom && winKingdom[s] >= 20).length;
+        if (atMax >= 3) {
+          return 'Three pillars of the kingdom reached their zenith. A decisive victory!';
+        }
+      }
+      return 'After a long campaign, the stronger kingdom prevails.';
+    },
     isWin() {
       return this.gameData?.game?.win === true;
     },
@@ -137,7 +223,9 @@ export default {
       const res = await axios.get(`/api/games/${this.id}`);
       this.gameData = res.data;
       this.$nextTick(() => {
-        if (this.isWin) {
+        if (this.isDuel) {
+          playSound('win'); // Both players hear the fanfare
+        } else if (this.isWin) {
           playSound('win');
         } else {
           playSound('totalLoss');
@@ -155,6 +243,10 @@ export default {
       if (val <= 12) return 'val-low';
       if (val >= 18) return 'val-high';
       return 'val-normal';
+    },
+    kingdomTotal(k) {
+      return (k.wealth || 0) + (k.influence || 0) + (k.security || 0)
+        + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);
     },
   },
 };
@@ -312,6 +404,57 @@ export default {
   padding: 14px 50px;
 }
 
+/* Duel end screen */
+.duel-kingdoms-final {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 25px;
+}
+
+.duel-kingdom-panel {
+  background: rgba(26, 18, 9, 0.5);
+  border: 2px solid var(--border-gold);
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+}
+
+.duel-kingdom-panel.kingdom-winner {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 20px rgba(212, 168, 67, 0.25);
+}
+
+.kingdom-header {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+.winner-badge {
+  display: inline-block;
+  background: linear-gradient(180deg, #b8942e, #8a6a14);
+  color: #1a1209;
+  font-size: 0.6rem;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-left: 8px;
+  vertical-align: middle;
+  letter-spacing: 1px;
+}
+
+.kingdom-score {
+  margin-top: 12px;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.kingdom-score strong {
+  color: var(--accent-gold);
+  font-size: 1.3rem;
+}
+
 /* ---- Mobile compact ---- */
 @media (max-width: 768px) {
   .game-over-title {
@@ -360,6 +503,11 @@ export default {
 
   .rounds-survived {
     font-size: 0.95rem;
+  }
+
+  .duel-kingdoms-final {
+    grid-template-columns: 1fr;
+    gap: 10px;
   }
 }
 </style>

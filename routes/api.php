@@ -34,6 +34,12 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/resolve-round', [GameController::class, 'resolveRound']);
     Route::post('/games/{game}/next-round', [GameController::class, 'nextRound']);
 
+    // Duel mode routes
+    Route::post('/games/{game}/duel-offer', [GameController::class, 'duelOffer']);
+    Route::post('/games/{game}/duel-choose', [GameController::class, 'duelChoose']);
+    Route::post('/games/{game}/duel-roll', [GameController::class, 'duelRoll']);
+    Route::get('/games/{game}/duel-hand/{playerNumber}', [GameController::class, 'duelHand']);
+
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);
     Route::post('/friends/{friendship}/accept', [FriendshipController::class, 'accept']);

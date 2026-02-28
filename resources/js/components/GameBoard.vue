@@ -13,6 +13,33 @@
     </template>
 
     <template v-else>
+    <!-- DUEL MODE -->
+    <template v-if="isDuel">
+    <div class="time-bar">
+      <div class="time-info">
+        <span class="round-label">{{ monthLabel }}</span>
+        <span class="phase-label">{{ duelPhaseLabel }}</span>
+      </div>
+      <div class="progress-info">
+        <div class="progress-bar-bg">
+          <div
+            class="progress-bar"
+            :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
+          ></div>
+        </div>
+      </div>
+    </div>
+    <DuelBoard
+      ref="duelBoard"
+      :gameData="gameData"
+      :gameId="id"
+      @refresh="fetchGame"
+      @game-over="$router.replace(`/game/${id}/over`)"
+    />
+    </template>
+
+    <!-- COOPERATIVE MODE -->
+    <template v-else>
     <!-- Round display -->
     <div class="time-bar">
       <div class="time-info">
@@ -85,6 +112,7 @@
       />
     </template>
     </template>
+    </template>
   </div>
 </template>
 
@@ -97,11 +125,12 @@ import RoundResults from './RoundResults.vue';
 import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
 import OnlineLobby from './OnlineLobby.vue';
 import WaitingOverlay from './WaitingOverlay.vue';
+import DuelBoard from './DuelBoard.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -179,6 +208,20 @@ export default {
     isSinglePlayer() {
       return this.gameData?.game_mode === 'single' || !this.gameData?.game_mode;
     },
+    isDuel() {
+      return (this.gameData?.game_type || this.gameData?.game?.game_type) === 'duel';
+    },
+    duelPhaseLabel() {
+      const phases = {
+        offering: 'Offering Cards',
+        choosing: 'Choosing Card',
+        rolling_offerer: 'Offerer Rolling',
+        rolling_chooser: 'Chooser Rolling',
+        resolving: 'Month Resolution',
+      };
+      const dp = this.gameData?.duel_phase || this.gameData?.game?.duel_phase;
+      return phases[dp] || 'Duel';
+    },
     isHost() {
       return this.gameData?.game?.user_id === this.auth.state.user?.id;
     },
@@ -225,6 +268,19 @@ export default {
 
         if (this.gameData.game.status === 'completed') {
           this.$router.replace(`/game/${this.id}/over`);
+          return;
+        }
+
+        // Duel mode: DuelBoard handles its own state — skip cooperative hand loading
+        if (this.isDuel) {
+          // Just ensure online setup
+          if (this.isOnline) {
+            this.setupOnlinePlayer();
+            if (!this.echoChannel) {
+              this.subscribeToGameChannel();
+            }
+          }
+          this.loading = false;
           return;
         }
 
@@ -442,6 +498,11 @@ export default {
           this.resolving = false;
         })
         .listen('NextRoundStarted', (data) => {
+          if (this.isDuel && this.$refs.duelBoard) {
+            this.gameData = data;
+            this.$refs.duelBoard.handleNextRoundStarted(data);
+            return;
+          }
           // Non-host auto-transitions to next round
           this.positivePhase = {};
           this.negativePhase = {};
@@ -462,6 +523,22 @@ export default {
         })
         .listen('GameStarted', () => {
           this.fetchGame();
+        })
+        // Duel events
+        .listen('DuelOfferMade', (data) => {
+          if (this.$refs.duelBoard) {
+            this.$refs.duelBoard.handleDuelOfferMade(data);
+          }
+        })
+        .listen('DuelChoiceMade', (data) => {
+          if (this.$refs.duelBoard) {
+            this.$refs.duelBoard.handleDuelChoiceMade(data);
+          }
+        })
+        .listen('DuelRollComplete', (data) => {
+          if (this.$refs.duelBoard) {
+            this.$refs.duelBoard.handleDuelRollComplete(data);
+          }
         });
     },
     async startOnlineGame() {
