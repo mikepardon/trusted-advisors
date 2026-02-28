@@ -6,6 +6,16 @@
       :myPlayerNumber="activePlayerNumber"
     />
 
+    <!-- Player Items -->
+    <PlayerItems :items="currentPlayerItems" />
+
+    <!-- Event Reveal Overlay -->
+    <EventReveal
+      v-if="showEventReveal && currentEvent"
+      :event="currentEvent"
+      @dismiss="showEventReveal = false"
+    />
+
     <!-- TURN HANDOFF OVERLAY (pass and play) -->
     <TurnHandoffOverlay
       v-if="showHandoff"
@@ -99,11 +109,13 @@ import DuelChoosePhase from './DuelChoosePhase.vue';
 import DuelRollPhase from './DuelRollPhase.vue';
 import DuelResolvePhase from './DuelResolvePhase.vue';
 import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
+import PlayerItems from './PlayerItems.vue';
+import EventReveal from './EventReveal.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'DuelBoard',
-  components: { DuelKingdomStats, DuelOfferPhase, DuelChoosePhase, DuelRollPhase, DuelResolvePhase, TurnHandoffOverlay },
+  components: { DuelKingdomStats, DuelOfferPhase, DuelChoosePhase, DuelRollPhase, DuelResolvePhase, TurnHandoffOverlay, PlayerItems, EventReveal },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -128,6 +140,11 @@ export default {
       handoffPlayerNumber: null,
       // Active player tracking (for pass-and-play)
       activePlayerNumber: 1,
+      // Items
+      currentPlayerItems: [],
+      // Event reveal
+      showEventReveal: false,
+      lastRevealedEventId: null,
       // Online waiting
       showWaiting: false,
       waitingMessage: '',
@@ -178,6 +195,9 @@ export default {
       const player = this.gameData.game.players.find(p => p.player_number === this.handoffPlayerNumber);
       return player?.character?.name || `Player ${this.handoffPlayerNumber}`;
     },
+    currentEvent() {
+      return this.gameData?.current_event || null;
+    },
   },
   watch: {
     gameData: {
@@ -190,6 +210,18 @@ export default {
     },
   },
   methods: {
+    checkEventReveal() {
+      const round = this.gameData?.current_round || this.gameData?.game?.current_round || 0;
+      const event = this.currentEvent;
+      if (event && (round - 1) % 7 === 0) {
+        const eventId = event.id;
+        if (this.lastRevealedEventId !== eventId) {
+          this.lastRevealedEventId = eventId;
+          this.showEventReveal = true;
+        }
+      }
+    },
+
     syncFromGameData(data) {
       this.duelPhase = data.duel_phase || data.game?.duel_phase;
       this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
@@ -211,6 +243,8 @@ export default {
           this.loadDuelHand();
         }
       }
+
+      this.checkEventReveal();
     },
 
     updateOnlineWaiting() {
@@ -245,8 +279,10 @@ export default {
       try {
         const res = await axios.get(`/api/games/${this.gameId}/duel-hand/${this.activePlayerNumber}`);
         this.currentCards = res.data.cards || [];
+        this.currentPlayerItems = res.data.items || [];
       } catch {
         this.currentCards = [];
+        this.currentPlayerItems = [];
       }
     },
 

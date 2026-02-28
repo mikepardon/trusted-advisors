@@ -304,6 +304,10 @@ class GameController extends Controller
         $event = $this->getCurrentEvent($game);
         $cardsPerPlayer = $this->getCardsPerPlayer($event);
 
+        $items = GamePlayerItem::where('game_player_id', $player->id)
+            ->with('item')
+            ->get();
+
         return response()->json([
             'player_number' => $playerNumber,
             'round' => $game->current_round,
@@ -314,6 +318,7 @@ class GameController extends Controller
             ]),
             'has_assigned' => $hands->whereNotNull('role')->count() >= $cardsPerPlayer,
             'cards_per_player' => $cardsPerPlayer,
+            'items' => $items,
         ]);
     }
 
@@ -1063,12 +1068,17 @@ class GameController extends Controller
             }
         }
 
+        $items = GamePlayerItem::where('game_player_id', $player->id)
+            ->with('item')
+            ->get();
+
         return response()->json([
             'player_number' => $playerNumber,
             'round' => $game->current_round,
             'duel_phase' => $game->duel_phase,
             'is_offerer' => $isOfferer,
             'cards' => $cards,
+            'items' => $items,
         ]);
     }
 
@@ -1244,6 +1254,18 @@ class GameController extends Controller
         $card = $hand->card;
         $difficulty = $card->difficulty;
 
+        // Apply item difficulty modifiers
+        foreach ($rollingPlayer->items as $playerItem) {
+            $effect = $playerItem->item->effect;
+            $bonusType = $effect['bonus_type'] ?? '';
+            if ($bonusType === 'difficulty_reduction') {
+                $difficulty -= abs((int) ($effect['bonus_value'] ?? 0));
+            } elseif ($bonusType === 'difficulty_increase') {
+                $difficulty += abs((int) ($effect['bonus_value'] ?? 0));
+            }
+        }
+        $difficulty = max(1, $difficulty);
+
         // Roll dice
         $character = $rollingPlayer->character;
         $dice = $character->dice;
@@ -1275,6 +1297,15 @@ class GameController extends Controller
                 ];
             } else {
                 $totalRoll += (int) $face;
+            }
+        }
+
+        // Apply item roll bonuses and penalties
+        foreach ($rollingPlayer->items as $playerItem) {
+            $effect = $playerItem->item->effect;
+            $bonusType = $effect['bonus_type'] ?? '';
+            if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
+                $totalRoll += (int) ($effect['bonus_value'] ?? 0);
             }
         }
 

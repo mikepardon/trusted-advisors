@@ -59,8 +59,18 @@
     <!-- Kingdom Stats -->
     <KingdomStats :game="displayGame" />
 
+    <!-- Player Items -->
+    <PlayerItems :items="currentPlayerItems" />
+
     <!-- Event Banner -->
     <EventBanner :event="gameData.current_event" />
+
+    <!-- Event Reveal Overlay -->
+    <EventReveal
+      v-if="showEventReveal && gameData.current_event"
+      :event="gameData.current_event"
+      @dismiss="showEventReveal = false"
+    />
 
     <!-- TURN HANDOFF OVERLAY (pass and play) -->
     <TurnHandoffOverlay
@@ -126,11 +136,13 @@ import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
 import OnlineLobby from './OnlineLobby.vue';
 import WaitingOverlay from './WaitingOverlay.vue';
 import DuelBoard from './DuelBoard.vue';
+import PlayerItems from './PlayerItems.vue';
+import EventReveal from './EventReveal.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -158,6 +170,11 @@ export default {
       currentStatPhase: null, // null, 'positive', or 'negative'
       showTurnHandoff: false,
       turnHandoffPlayerNumber: null,
+      // Items
+      currentPlayerItems: [],
+      // Event reveal
+      showEventReveal: false,
+      lastRevealedEventId: null,
       // Online mode
       myPlayerNumber: null,
       waitingForOthers: false,
@@ -271,6 +288,9 @@ export default {
           return;
         }
 
+        // Check for event reveal (round 1, 8, 15, 22, ...)
+        this.checkEventReveal();
+
         // Duel mode: DuelBoard handles its own state — skip cooperative hand loading
         if (this.isDuel) {
           // Just ensure online setup
@@ -327,8 +347,10 @@ export default {
       try {
         const res = await axios.get(`/api/games/${this.id}/hand/${playerNumber}`);
         this.currentHand = res.data.cards;
+        this.currentPlayerItems = res.data.items || [];
       } catch (e) {
         this.currentHand = [];
+        this.currentPlayerItems = [];
       }
       this.handLoading = false;
     },
@@ -516,6 +538,7 @@ export default {
           this.currentStatPhase = null;
           this.waitingForOthers = false;
           this.gameData = data;
+          this.checkEventReveal();
           if (this.myPlayerNumber) {
             this.activePlayerNumber = this.myPlayerNumber;
             this.loadHand(this.myPlayerNumber);
@@ -558,6 +581,18 @@ export default {
         alert('Failed to start: ' + (e.response?.data?.error || e.message));
       }
     },
+    checkEventReveal() {
+      const round = this.gameData?.current_round || 0;
+      const event = this.gameData?.current_event;
+      if (event && (round - 1) % 7 === 0) {
+        // Only show if we haven't already revealed this event
+        const eventId = event.id;
+        if (this.lastRevealedEventId !== eventId) {
+          this.lastRevealedEventId = eventId;
+          this.showEventReveal = true;
+        }
+      }
+    },
     async onHandoffReady() {
       this.showTurnHandoff = false;
       await this.loadHand(this.activePlayerNumber);
@@ -587,6 +622,7 @@ export default {
         this.currentStatPhase = null;
         this.gameData = res.data;
         this.activePlayerNumber = 1;
+        this.checkEventReveal();
         if (this.isPassAndPlay) {
           this.turnHandoffPlayerNumber = 1;
           this.showTurnHandoff = true;
