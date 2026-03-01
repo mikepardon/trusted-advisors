@@ -34,7 +34,7 @@ class MatchmakingController extends Controller
             'user_id' => $user->id,
             'elo_rating' => $user->elo_rating ?? 1200,
             'total_rounds' => $request->total_rounds,
-            'bot_timeout' => rand(53, 83),
+            'bot_timeout' => rand(41, 58),
         ]);
 
         // Immediately attempt to find a match
