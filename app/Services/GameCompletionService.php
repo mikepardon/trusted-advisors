@@ -9,6 +9,7 @@ use App\Models\Friendship;
 use App\Models\Game;
 use App\Models\GamePlayer;
 use App\Models\Unlockable;
+use App\Models\GameRule;
 use App\Models\User;
 use App\Models\UserAchievement;
 use App\Models\UserEloHistory;
@@ -240,21 +241,30 @@ class GameCompletionService
 
     private function awardXp(User $user, Game $game, $players): array
     {
-        $base = 50;
+        $xpConfig = GameRule::getValue('xp_config', [
+            'base_xp' => 50,
+            'coop_win_bonus' => 100,
+            'duel_win_bonus' => 150,
+            'online_multiplier' => 1.5,
+        ]);
+
+        $base = $xpConfig['base_xp'] ?? 50;
         $bonus = 0;
 
         // Determine if this user won
         $isWinner = $this->isWinner($user, $game, $players);
 
         if ($isWinner) {
-            $bonus = $game->isDuel() ? 150 : 100;
+            $bonus = $game->isDuel()
+                ? ($xpConfig['duel_win_bonus'] ?? 150)
+                : ($xpConfig['coop_win_bonus'] ?? 100);
         }
 
         $total = $base + $bonus;
 
         // Online multiplier
         if ($game->isOnline()) {
-            $total = (int) ($total * 1.5);
+            $total = (int) ($total * ($xpConfig['online_multiplier'] ?? 1.5));
         }
 
         $oldLevel = $user->level;
@@ -284,19 +294,28 @@ class GameCompletionService
 
     private function awardCoins(User $user, Game $game, $players): array
     {
-        $base = 10;
+        $coinConfig = GameRule::getValue('coin_config', [
+            'base_coins' => 10,
+            'coop_win_bonus' => 15,
+            'duel_win_bonus' => 25,
+            'online_multiplier' => 1.5,
+        ]);
+
+        $base = $coinConfig['base_coins'] ?? 10;
         $bonus = 0;
 
         $isWinner = $this->isWinner($user, $game, $players);
 
         if ($isWinner) {
-            $bonus = $game->isDuel() ? 25 : 15;
+            $bonus = $game->isDuel()
+                ? ($coinConfig['duel_win_bonus'] ?? 25)
+                : ($coinConfig['coop_win_bonus'] ?? 15);
         }
 
         $total = $base + $bonus;
 
         if ($game->isOnline()) {
-            $total = (int) ($total * 1.5);
+            $total = (int) ($total * ($coinConfig['online_multiplier'] ?? 1.5));
         }
 
         $oldCoins = $user->coins;

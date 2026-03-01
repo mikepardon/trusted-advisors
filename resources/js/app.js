@@ -27,6 +27,7 @@ import AdminUnlockables from './components/admin/AdminUnlockables.vue';
 import AdminChallenges from './components/admin/AdminChallenges.vue';
 import AdminGames from './components/admin/AdminGames.vue';
 import AdminXp from './components/admin/AdminXp.vue';
+import AdminCoins from './components/admin/AdminCoins.vue';
 import AdminAddons from './components/admin/AdminAddons.vue';
 import AdminUsers from './components/admin/AdminUsers.vue';
 import ShopPage from './components/ShopPage.vue';
@@ -62,6 +63,7 @@ const routes = [
             { path: 'bot-games', component: AdminBotGames },
             { path: 'games', component: AdminGames },
             { path: 'xp', component: AdminXp },
+            { path: 'coins', component: AdminCoins },
             { path: 'addons', component: AdminAddons },
             { path: 'seasons', component: AdminSeasons },
             { path: 'achievements', component: AdminAchievements },

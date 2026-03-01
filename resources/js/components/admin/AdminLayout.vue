@@ -48,6 +48,9 @@
         <router-link to="/admin/xp" class="nav-item" active-class="active">
           <span class="nav-icon">&#11088;</span> XP &amp; Levels
         </router-link>
+        <router-link to="/admin/coins" class="nav-item" active-class="active">
+          <span class="nav-icon">&#129689;</span> Coin Rewards
+        </router-link>
         <router-link to="/admin/achievements" class="nav-item" active-class="active">
           <span class="nav-icon">&#127942;</span> Achievements
         </router-link>
