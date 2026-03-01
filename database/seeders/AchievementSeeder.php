@@ -281,6 +281,102 @@ class AchievementSeeder extends Seeder
                 'reward_xp' => 200,
             ],
 
+            // === solo tier_group ===
+            [
+                'key' => 'lone_advisor',
+                'name' => 'Lone Advisor',
+                'description' => 'Complete 5 solo games.',
+                'icon' => 'person',
+                'category' => 'milestone',
+                'criteria' => ['type' => 'solo_plays', 'count' => 5],
+                'tier' => 1,
+                'tier_group' => 'solo',
+                'reward_xp' => 25,
+            ],
+            [
+                'key' => 'solo_master',
+                'name' => 'Solo Master',
+                'description' => 'Win 10 solo games.',
+                'icon' => 'person',
+                'category' => 'milestone',
+                'criteria' => ['type' => 'solo_wins', 'count' => 10],
+                'tier' => 2,
+                'tier_group' => 'solo',
+                'reward_xp' => 75,
+            ],
+
+            // === local (pass & play) tier_group ===
+            [
+                'key' => 'game_night',
+                'name' => 'Game Night',
+                'description' => 'Complete 5 local pass-and-play games.',
+                'icon' => 'people',
+                'category' => 'social',
+                'criteria' => ['type' => 'local_plays', 'count' => 5],
+                'tier' => 1,
+                'tier_group' => 'local',
+                'reward_xp' => 25,
+            ],
+            [
+                'key' => 'tabletop_regular',
+                'name' => 'Tabletop Regular',
+                'description' => 'Complete 25 local pass-and-play games.',
+                'icon' => 'people',
+                'category' => 'social',
+                'criteria' => ['type' => 'local_plays', 'count' => 25],
+                'tier' => 2,
+                'tier_group' => 'local',
+                'reward_xp' => 100,
+            ],
+
+            // === coop tier_group ===
+            [
+                'key' => 'team_player',
+                'name' => 'Team Player',
+                'description' => 'Complete 10 cooperative games.',
+                'icon' => 'handshake',
+                'category' => 'milestone',
+                'criteria' => ['type' => 'coop_plays', 'count' => 10],
+                'tier' => 1,
+                'tier_group' => 'coop',
+                'reward_xp' => 25,
+            ],
+            [
+                'key' => 'united_front',
+                'name' => 'United Front',
+                'description' => 'Win 10 cooperative games.',
+                'icon' => 'handshake',
+                'category' => 'milestone',
+                'criteria' => ['type' => 'coop_wins', 'count' => 10],
+                'tier' => 2,
+                'tier_group' => 'coop',
+                'reward_xp' => 75,
+            ],
+
+            // === online_wins tier_group ===
+            [
+                'key' => 'online_victor',
+                'name' => 'Online Victor',
+                'description' => 'Win 5 online games.',
+                'icon' => 'globe',
+                'category' => 'online',
+                'criteria' => ['type' => 'online_wins', 'count' => 5],
+                'tier' => 1,
+                'tier_group' => 'online_wins',
+                'reward_xp' => 50,
+            ],
+            [
+                'key' => 'online_champion',
+                'name' => 'Online Champion',
+                'description' => 'Win 25 online games.',
+                'icon' => 'globe',
+                'category' => 'online',
+                'criteria' => ['type' => 'online_wins', 'count' => 25],
+                'tier' => 2,
+                'tier_group' => 'online_wins',
+                'reward_xp' => 200,
+            ],
+
             // === Standalone (no tier_group) ===
             [
                 'key' => 'seasoned_player',
