@@ -79,6 +79,9 @@
             {{ rematchLoading ? 'Creating...' : 'Rematch' }}
           </button>
           <button class="play-again" @click="$router.push('/')">New Game</button>
+          <button class="play-again share-btn" @click="shareReplay">
+            {{ shareCopied ? 'Copied!' : 'Share Replay' }}
+          </button>
         </div>
       </div>
     </template>
@@ -189,6 +192,9 @@
           </button>
           <button class="play-again" @click="$router.push('/')">New Game</button>
         </template>
+        <button class="play-again share-btn" @click="shareReplay">
+          {{ shareCopied ? 'Copied!' : 'Share Replay' }}
+        </button>
       </div>
     </div>
     </template>
@@ -219,6 +225,7 @@ export default {
       completion: null,
       loading: true,
       rematchLoading: false,
+      shareCopied: false,
       showProfileUserId: null,
       xpBarPercent: 0,
       xpBarLevel: 0,
@@ -438,6 +445,16 @@ export default {
         }
       }, 600);
     },
+    async shareReplay() {
+      try {
+        const res = await axios.post(`/api/games/${this.id}/share`);
+        await navigator.clipboard.writeText(res.data.share_url);
+        this.shareCopied = true;
+        setTimeout(() => { this.shareCopied = false; }, 2000);
+      } catch {
+        alert('Failed to generate share link');
+      }
+    },
     async rematch() {
       this.rematchLoading = true;
       try {
@@ -638,6 +655,17 @@ export default {
 .play-again {
   font-size: 1.1rem;
   padding: 12px 36px;
+}
+
+.share-btn {
+  background: rgba(67, 160, 212, 0.15);
+  color: #60b8e0;
+  border: 1px solid rgba(67, 160, 212, 0.3);
+}
+
+.share-btn:hover {
+  background: rgba(67, 160, 212, 0.25);
+  border-color: rgba(67, 160, 212, 0.5);
 }
 
 /* Completion rewards */

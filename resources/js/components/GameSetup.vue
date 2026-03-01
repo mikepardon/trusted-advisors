@@ -145,8 +145,8 @@
           </div>
         </template>
 
-        <!-- Online: friends picker -->
-        <template v-if="gameMode === 'online'">
+        <!-- Online: friends picker (cooperative only) -->
+        <template v-if="gameMode === 'online' && gameType !== 'duel'">
           <h2 class="section-title">Invite Your Allies</h2>
           <p class="flavor-text">
             Select the friends who will join your council.
@@ -229,12 +229,21 @@
           <button
             class="btn-primary start-btn"
             @click="playSound('clickButton'); gatherAdvisors()"
-            :disabled="loading || (gameMode === 'online' && selectedFriendIds.length === 0)"
+            :disabled="loading || (gameMode === 'online' && gameType !== 'duel' && selectedFriendIds.length === 0)"
           >
-            {{ loading ? 'Creating...' : 'Gather Advisors' }}
+            {{ loading ? 'Creating...' : (gameMode === 'online' && gameType === 'duel' ? 'Find Opponent' : 'Gather Advisors') }}
           </button>
         </div>
       </div>
+    </div>
+
+    <!-- STEP: Matchmaking queue (online duel) -->
+    <div v-else-if="step === 'matchmaking'" key="matchmaking">
+      <MatchmakingQueue
+        :totalRounds="totalRounds"
+        @matched="onMatchFound"
+        @cancelled="step = 'settings'"
+      />
     </div>
 
     <!-- STEP 2: Story intro -->
@@ -338,6 +347,7 @@ import { useAuth } from '../stores/auth';
 import { playSound } from '../sounds';
 import DailyChallengeBanner from './DailyChallengeBanner.vue';
 import LoginRegister from './LoginRegister.vue';
+import MatchmakingQueue from './MatchmakingQueue.vue';
 import StoryIntro from './StoryIntro.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
@@ -346,7 +356,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { DailyChallengeBanner, LoginRegister, StoryIntro, Swiper, SwiperSlide },
+  components: { DailyChallengeBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
   setup() {
     const auth = useAuth();
     return { auth, playSound };
@@ -436,6 +446,11 @@ export default {
       window.Echo.private(`user.${this.auth.state.user.id}`)
         .listen('GameInviteReceived', () => {
           this.fetchPendingInvites();
+        })
+        .listen('MatchFound', (data) => {
+          if (this.step !== 'matchmaking') {
+            this.$router.push(`/game/${data.game_id}`);
+          }
         });
     },
     async acceptInvite(invite) {
@@ -511,11 +526,20 @@ export default {
         this.addFriendError = e.response?.data?.message || 'Failed to send request';
       }
     },
+    onMatchFound(gameId) {
+      this.$router.push(`/game/${gameId}`);
+    },
     async gatherAdvisors() {
       this.loading = true;
       try {
+        if (this.gameMode === 'online' && this.gameType === 'duel') {
+          // Online duel: use matchmaking
+          this.loading = false;
+          this.step = 'matchmaking';
+          return;
+        }
         if (this.gameMode === 'online') {
-          // Online mode: numPlayers = selected friends + yourself
+          // Online cooperative: numPlayers = selected friends + yourself
           this.numPlayers = this.selectedFriendIds.length + 1;
           const gameRes = await axios.post('/api/games', {
             game_mode: this.gameMode,
@@ -596,6 +620,8 @@ export default {
         } else {
           this.step = 'gameType';
         }
+      } else if (this.step === 'matchmaking') {
+        this.step = 'settings';
       } else if (this.step === 'story') {
         this.step = 'settings';
       } else if (this.step === 'characters') {

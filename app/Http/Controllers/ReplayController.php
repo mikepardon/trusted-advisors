@@ -13,6 +13,42 @@ class ReplayController extends Controller
             return response()->json(['error' => 'Game is not completed'], 422);
         }
 
+        return $this->formatReplayResponse($game);
+    }
+
+    public function showPublic(string $token): JsonResponse
+    {
+        $game = Game::where('share_token', $token)->first();
+
+        if (!$game) {
+            return response()->json(['error' => 'Replay not found'], 404);
+        }
+
+        if ($game->status !== 'completed') {
+            return response()->json(['error' => 'Game is not completed'], 422);
+        }
+
+        return $this->formatReplayResponse($game);
+    }
+
+    public function generateShareToken(Game $game): JsonResponse
+    {
+        if ($game->status !== 'completed') {
+            return response()->json(['error' => 'Game is not completed'], 422);
+        }
+
+        if (!$game->share_token) {
+            $game->generateShareToken();
+        }
+
+        return response()->json([
+            'share_token' => $game->share_token,
+            'share_url' => url("/replay/{$game->share_token}"),
+        ]);
+    }
+
+    private function formatReplayResponse(Game $game): JsonResponse
+    {
         $game->load([
             'players.character',
             'players.items.item',

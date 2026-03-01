@@ -6,6 +6,7 @@ use App\Http\Controllers\FriendshipController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\GameLobbyController;
 use App\Http\Controllers\LeaderboardController;
+use App\Http\Controllers\MatchmakingController;
 use App\Http\Controllers\ReplayController;
 use App\Http\Controllers\Admin\AchievementController;
 use App\Http\Controllers\UserProfileController;
@@ -42,6 +43,9 @@ Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::post('/auth/callback', [AuthController::class, 'handleOAuthCallback']);
 
+// Public replay
+Route::get('/replays/{token}', [ReplayController::class, 'showPublic']);
+
 // Auth required
 Route::middleware('auth:web')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -77,6 +81,12 @@ Route::middleware('auth:web')->group(function () {
 
     // Game replay
     Route::get('/games/{game}/replay', [ReplayController::class, 'show']);
+    Route::post('/games/{game}/share', [ReplayController::class, 'generateShareToken']);
+
+    // Matchmaking
+    Route::post('/matchmaking/join', [MatchmakingController::class, 'join']);
+    Route::post('/matchmaking/leave', [MatchmakingController::class, 'leave']);
+    Route::get('/matchmaking/status', [MatchmakingController::class, 'status']);
 
     // Leaderboards
     Route::get('/leaderboards/global', [LeaderboardController::class, 'global']);

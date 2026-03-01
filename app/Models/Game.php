@@ -13,7 +13,7 @@ class Game extends Model
         'wealth', 'influence', 'security', 'religion', 'food', 'happiness',
         'user_id', 'season_id',
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number',
-        'event_order',
+        'event_order', 'share_token',
     ];
 
     protected $casts = [
@@ -112,6 +112,14 @@ class Game extends Model
         }
 
         return null;
+    }
+
+    public function generateShareToken(): string
+    {
+        $this->share_token = bin2hex(random_bytes(16));
+        $this->save();
+
+        return $this->share_token;
     }
 
     public function isOnline(): bool

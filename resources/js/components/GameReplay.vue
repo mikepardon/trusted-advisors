@@ -75,7 +75,13 @@
         </div>
       </div>
 
-      <button class="btn-primary back-btn" @click="$router.push('/campaigns')">Back to History</button>
+      <div class="replay-actions">
+        <button v-if="!shareToken" class="btn-primary back-btn" @click="$router.push('/campaigns')">Back to History</button>
+        <button v-else class="btn-primary back-btn" @click="$router.push('/')">Home</button>
+        <button v-if="!shareToken" class="share-btn" @click="shareReplay">
+          {{ shareCopied ? 'Copied!' : 'Share Replay' }}
+        </button>
+      </div>
     </template>
   </div>
 </template>
@@ -86,7 +92,8 @@ import axios from 'axios';
 export default {
   name: 'GameReplay',
   props: {
-    id: { type: [String, Number], required: true },
+    id: { type: [String, Number], default: null },
+    shareToken: { type: String, default: null },
   },
   data() {
     return {
@@ -96,6 +103,7 @@ export default {
       rounds: {},
       totalRoundsPlayed: 0,
       currentRound: 1,
+      shareCopied: false,
     };
   },
   computed: {
@@ -105,7 +113,10 @@ export default {
   },
   async mounted() {
     try {
-      const res = await axios.get(`/api/games/${this.id}/replay`);
+      const url = this.shareToken
+        ? `/api/replays/${this.shareToken}`
+        : `/api/games/${this.id}/replay`;
+      const res = await axios.get(url);
       this.game = res.data.game;
       this.rounds = res.data.rounds;
       this.totalRoundsPlayed = res.data.total_rounds_played;
@@ -113,6 +124,19 @@ export default {
       this.error = e.response?.data?.error || 'Failed to load replay';
     }
     this.loading = false;
+  },
+  methods: {
+    async shareReplay() {
+      try {
+        const res = await axios.post(`/api/games/${this.id}/share`);
+        await navigator.clipboard.writeText(res.data.share_url);
+        this.shareCopied = true;
+        setTimeout(() => { this.shareCopied = false; }, 2000);
+      } catch {
+        // Fallback: try to copy URL manually
+        alert('Failed to generate share link');
+      }
+    },
   },
 };
 </script>
@@ -324,11 +348,32 @@ export default {
   color: var(--text-primary);
 }
 
+.replay-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 .back-btn {
-  display: block;
-  margin: 0 auto;
   font-size: 1rem;
   padding: 10px 30px;
+}
+
+.share-btn {
+  font-size: 1rem;
+  padding: 10px 30px;
+  background: rgba(67, 160, 212, 0.15);
+  color: #60b8e0;
+  border: 1px solid rgba(67, 160, 212, 0.3);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.share-btn:hover {
+  background: rgba(67, 160, 212, 0.25);
+  border-color: rgba(67, 160, 212, 0.5);
 }
 
 @media (max-width: 768px) {

@@ -8,6 +8,7 @@ import GameBoard from './components/GameBoard.vue';
 import GameOver from './components/GameOver.vue';
 import GameHistory from './components/GameHistory.vue';
 import GameReplay from './components/GameReplay.vue';
+import PublicReplay from './components/PublicReplay.vue';
 import FriendsList from './components/FriendsList.vue';
 import ProfilePage from './components/ProfilePage.vue';
 import LeaderboardPage from './components/LeaderboardPage.vue';
@@ -46,6 +47,7 @@ const routes = [
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
     { path: '/game/:id/over', component: GameOver, props: true, meta: { auth: true } },
     { path: '/game/:id/replay', component: GameReplay, props: true, meta: { auth: true } },
+    { path: '/replay/:token', component: PublicReplay, props: true },
     {
         path: '/admin',
         component: AdminLayout,
