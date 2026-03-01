@@ -24,8 +24,14 @@ use App\Http\Controllers\Admin\UnlockableController;
 use App\Http\Controllers\Admin\AddonController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\GameManagementController;
+use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
+
+// Webhooks (signature-verified, no CSRF)
+Route::post('/webhooks/auth', [WebhookController::class, 'handleAuthWebhook'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])
+    ->middleware(\App\Http\Middleware\VerifyWebhookSignature::class);
 
 // Public
 Route::get('/characters', [GameController::class, 'characters']);

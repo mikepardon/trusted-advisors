@@ -46,4 +46,8 @@ return [
         'redirect_uri' => env('OAUTH_REDIRECT_URI'),
     ],
 
+    'auth_webhook' => [
+        'secret' => env('WEBHOOK_SECRET'),
+    ],
+
 ];
