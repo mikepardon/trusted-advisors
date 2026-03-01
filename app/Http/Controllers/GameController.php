@@ -1410,8 +1410,9 @@ class GameController extends Controller
             }
         }
 
-        // Online: both players roll simultaneously; others: sequential
-        $rollingPhase = $game->isOnline() ? 'rolling' : 'rolling_offerer';
+        // Online (real players): both roll simultaneously; bot games + local: sequential
+        $hasBotPlayer = $game->players()->where('is_bot', true)->exists();
+        $rollingPhase = ($game->isOnline() && !$hasBotPlayer) ? 'rolling' : 'rolling_offerer';
         $game->update(['duel_phase' => $rollingPhase]);
 
         // Reload hands with updated assignments
