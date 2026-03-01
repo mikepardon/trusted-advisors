@@ -20,7 +20,7 @@ async function fetchUser() {
     }
 }
 
-async function startLogin() {
+async function startLogin(provider = null) {
     const verifier = generateCodeVerifier();
     const challenge = await generateCodeChallenge(verifier);
     const oauthState = generateState();
@@ -41,6 +41,10 @@ async function startLogin() {
         code_challenge: challenge,
         code_challenge_method: 'S256',
     });
+
+    if (provider) {
+        params.set('provider', provider);
+    }
 
     window.location.href = `${authUrl}/oauth/authorize?${params.toString()}`;
 }
