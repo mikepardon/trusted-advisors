@@ -74,7 +74,7 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/duel-roll', [GameController::class, 'duelRoll']);
     Route::get('/games/{game}/duel-hand/{playerNumber}', [GameController::class, 'duelHand']);
 
-    // Bot turn (single-player duel)
+    // Bot turn (duel with bot player)
     Route::post('/games/{game}/bot-turn', [GameController::class, 'botTurn']);
 
     // Character ability
