@@ -196,7 +196,7 @@ export default {
       return this.players.filter(p => p.character_id).map(p => p.character_id);
     },
     availableCharacters() {
-      return this.characters.filter(c => !this.takenCharacterIds.includes(c.id));
+      return this.characters.filter(c => !this.takenCharacterIds.includes(c.id) && !c.is_locked_for_user);
     },
     swiperModules() {
       return [EffectCards];

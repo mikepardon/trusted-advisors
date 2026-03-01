@@ -8,10 +8,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class GamePlayer extends Model
 {
-    protected $fillable = ['game_id', 'user_id', 'character_id', 'player_number', 'lost_dice'];
+    protected $fillable = ['game_id', 'user_id', 'character_id', 'player_number', 'lost_dice', 'is_bot', 'bot_difficulty', 'ability_uses', 'ability_active_this_round'];
 
     protected $casts = [
         'lost_dice' => 'integer',
+        'is_bot' => 'boolean',
+        'ability_uses' => 'integer',
+        'ability_active_this_round' => 'boolean',
     ];
 
     public function game(): BelongsTo

@@ -58,10 +58,11 @@ async function logout() {
     state.user = null;
 }
 
-function updateUserStats({ xp, level }) {
+function updateUserStats({ xp, level, coins }) {
     if (state.user) {
         if (xp !== undefined) state.user.xp = xp;
         if (level !== undefined) state.user.level = level;
+        if (coins !== undefined) state.user.coins = coins;
     }
 }
 

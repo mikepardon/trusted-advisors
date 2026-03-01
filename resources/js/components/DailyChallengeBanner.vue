@@ -1,5 +1,5 @@
 <template>
-  <div v-if="challenge" class="daily-banner" :class="{ completed: challenge.completed }" @click="showDetail = !showDetail">
+  <div v-if="challenge && challenge.title" class="daily-banner" :class="{ completed: challenge.completed }" @click="showDetail = !showDetail">
     <div class="banner-row">
       <span class="banner-icon">{{ challenge.completed ? '\u2705' : '\u{1F4CB}' }}</span>
       <div class="banner-text">

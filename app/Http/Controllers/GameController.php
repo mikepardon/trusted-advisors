@@ -26,7 +26,10 @@ use App\Models\DailyChallenge;
 use App\Models\DailyChallengeEntry;
 use App\Models\Item;
 use App\Models\Season;
+use App\Models\Unlockable;
 use App\Models\UserAchievement;
+use App\Models\UserUnlockable;
+use App\Services\BotService;
 use App\Services\GameCompletionService;
 use App\Services\OneSignalService;
 use Carbon\Carbon;
@@ -36,9 +39,37 @@ use Illuminate\Support\Facades\DB;
 
 class GameController extends Controller
 {
-    public function characters(): JsonResponse
+    public function characters(Request $request): JsonResponse
     {
-        return response()->json(Character::all());
+        $characters = Character::all();
+        $userId = $request->user()?->id;
+
+        // Attach lock info: a character is locked if an unlockable exists for it
+        $charUnlockables = Unlockable::where('type', 'character')->get()->keyBy('entity_id');
+        $userUnlockableIds = $userId
+            ? UserUnlockable::where('user_id', $userId)->pluck('unlockable_id')->toArray()
+            : [];
+
+        $characters = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds) {
+            $data = $c->toArray();
+            $unlockable = $charUnlockables[$c->id] ?? null;
+            $data['is_locked_for_user'] = false;
+            $data['unlock_requirement'] = null;
+
+            if ($unlockable) {
+                $isUnlocked = in_array($unlockable->id, $userUnlockableIds);
+                $data['is_locked_for_user'] = !$isUnlocked;
+                if (!$isUnlocked) {
+                    $data['unlock_requirement'] = $unlockable->unlock_method === 'level'
+                        ? "Reach level {$unlockable->unlock_value}"
+                        : "Earn required achievement";
+                }
+            }
+
+            return $data;
+        });
+
+        return response()->json($characters);
     }
 
     public function store(Request $request): JsonResponse
@@ -48,22 +79,23 @@ class GameController extends Controller
             'num_players' => 'required|integer|min:1|max:6',
             'total_rounds' => 'sometimes|integer|in:12,24,36,48,60',
             'game_type' => 'sometimes|string|in:cooperative,duel',
+            'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
         ]);
 
         $gameType = $validated['game_type'] ?? 'cooperative';
 
-        // Single player forces 1 player, pass_and_play/online require 2+
-        if ($validated['game_mode'] === 'single' && $validated['num_players'] !== 1) {
+        // Single player forces 1 player (unless duel, which gets a bot), pass_and_play/online require 2+
+        if ($validated['game_mode'] === 'single' && $validated['num_players'] !== 1 && $gameType !== 'duel') {
             return response()->json(['error' => 'Single player mode requires exactly 1 player'], 422);
         }
         if (in_array($validated['game_mode'], ['pass_and_play', 'online']) && $validated['num_players'] < 2) {
             return response()->json(['error' => 'Multiplayer modes require at least 2 players'], 422);
         }
 
-        // Duel mode requires exactly 2 players and not single mode
+        // Duel mode requires exactly 2 players (single player will get a bot as player 2)
         if ($gameType === 'duel') {
             if ($validated['game_mode'] === 'single') {
-                return response()->json(['error' => 'Duel mode cannot be played solo'], 422);
+                $validated['num_players'] = 2; // Bot will be player 2
             }
             if ($validated['num_players'] !== 2) {
                 return response()->json(['error' => 'Duel mode requires exactly 2 players'], 422);
@@ -174,10 +206,33 @@ class GameController extends Controller
         $validated = $request->validate([
             'characters' => 'required|array|min:1|max:6',
             'characters.*' => 'required|integer|exists:characters,id',
+            'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
         ]);
 
-        if (count($validated['characters']) !== $game->num_players) {
-            return response()->json(['error' => 'Must select exactly ' . $game->num_players . ' characters'], 422);
+        // Single-player duel: only 1 character needed (bot gets assigned in player creation below)
+        $expectedChars = ($game->game_mode === 'single' && $game->isDuel()) ? 1 : $game->num_players;
+        if (count($validated['characters']) !== $expectedChars) {
+            return response()->json(['error' => 'Must select exactly ' . $expectedChars . ' character(s)'], 422);
+        }
+
+        // Enforce unlock restrictions for the logged-in user
+        $userId = $request->user()->id;
+        $lockedUnlockables = Unlockable::where('type', 'character')
+            ->whereIn('entity_id', $validated['characters'])
+            ->get();
+
+        if ($lockedUnlockables->isNotEmpty()) {
+            $userUnlockableIds = UserUnlockable::where('user_id', $userId)
+                ->pluck('unlockable_id')
+                ->toArray();
+
+            foreach ($lockedUnlockables as $unlockable) {
+                if (!in_array($unlockable->id, $userUnlockableIds)) {
+                    $character = Character::find($unlockable->entity_id);
+                    $name = $character?->name ?? "Character #{$unlockable->entity_id}";
+                    return response()->json(['error' => "{$name} is locked. Reach the required level or achievement to unlock it."], 422);
+                }
+            }
         }
 
         // Duel mode: size deck as 2 cards per round (no events)
@@ -204,6 +259,22 @@ class GameController extends Controller
                     'game_id' => $game->id,
                     'character_id' => $characterId,
                     'player_number' => $index + 1,
+                ]);
+            }
+
+            // Single-player duel: create bot as player 2
+            if ($game->game_mode === 'single' && $game->isDuel()) {
+                $botDifficulty = $request->input('bot_difficulty', 'medium');
+                // Pick a random character not chosen by the player
+                $usedCharacterIds = $validated['characters'];
+                $botCharacter = Character::whereNotIn('id', $usedCharacterIds)->inRandomOrder()->first()
+                    ?? Character::inRandomOrder()->first();
+                GamePlayer::create([
+                    'game_id' => $game->id,
+                    'character_id' => $botCharacter->id,
+                    'player_number' => 2,
+                    'is_bot' => true,
+                    'bot_difficulty' => $botDifficulty,
                 ]);
             }
         }
@@ -580,6 +651,17 @@ class GameController extends Controller
         $abilityEffects = $this->processWildAbilities($wildTriggers, $totalRoll, $diceResults, $players);
         $totalRoll = $abilityEffects['adjusted_total'];
 
+        // Apply manually activated abilities
+        foreach ($players as $p) {
+            if ($p->ability_active_this_round) {
+                $p->load('character');
+                $manualAbility = $this->applyManualAbility($p, $totalRoll);
+                $totalRoll = $manualAbility['adjusted_total'];
+                $abilityEffects['descriptions'] = array_merge($abilityEffects['descriptions'], $manualAbility['descriptions']);
+                $p->update(['ability_active_this_round' => false]);
+            }
+        }
+
         // Determine positive phase success
         $positiveSuccess = $totalRoll >= $totalDifficulty;
 
@@ -688,8 +770,11 @@ class GameController extends Controller
         }
 
         // === NEGATIVE PHASE ===
+        // On failed roll, ALL cards' negative effects apply (positive cards included)
+        $handsForNegativePhase = !$positiveSuccess ? $negativeHands->merge($positiveHands) : $negativeHands;
+
         $negativeEffects = [];
-        foreach ($negativeHands as $hand) {
+        foreach ($handsForNegativePhase as $hand) {
             $effects = $hand->card->negative_effects ?? [];
             foreach ($effects as $stat => $change) {
                 if ($stat === 'lose_die') {
@@ -833,7 +918,7 @@ class GameController extends Controller
             'effects_applied' => $combinedEffects,
             'cards_included' => [
                 'positive' => $positiveHands->pluck('card_id')->toArray(),
-                'negative' => $negativeHands->pluck('card_id')->toArray(),
+                'negative' => $handsForNegativePhase->pluck('card_id')->toArray(),
             ],
             'wild_triggers' => $wildTriggers,
         ]);
@@ -857,7 +942,7 @@ class GameController extends Controller
                 'effects' => $positiveSuccess ? $positiveEffects : [],
             ],
             'negative_phase' => [
-                'cards' => $negativeHands->map(fn ($h) => [
+                'cards' => $handsForNegativePhase->map(fn ($h) => [
                     'card' => $h->card,
                     'player_number' => $h->player->player_number,
                     'character_name' => $h->player->character->name,
@@ -876,6 +961,7 @@ class GameController extends Controller
             'player_items' => $game->players()->with('items.item')->get()->mapWithKeys(fn ($p) => [
                 $p->player_number => $p->items,
             ]),
+            'items_over_limit' => $this->getPlayersOverItemLimit($game),
         ]);
     }
 
@@ -942,6 +1028,9 @@ class GameController extends Controller
         $game->current_round++;
         $game->round_phase = 'selecting';
         $game->save();
+
+        // Reset ability flags for new round
+        $game->players()->update(['ability_active_this_round' => false]);
 
         // Check if the new round's event grants items
         $event = $this->getCurrentEvent($game);
@@ -1053,6 +1142,9 @@ class GameController extends Controller
         $game->duel_phase = 'offering';
         $game->offerer_player_number = $game->offerer_player_number === 1 ? 2 : 1;
         $game->save();
+
+        // Reset ability flags for new round
+        $game->players()->update(['ability_active_this_round' => false]);
 
         // Deal duel cards
         $this->dealDuelCardsForRound($game);
@@ -1391,6 +1483,15 @@ class GameController extends Controller
         $abilityEffects = $this->processDuelWildAbilities($wildTriggers, $totalRoll);
         $totalRoll = $abilityEffects['adjusted_total'];
 
+        // Apply manually activated ability (if player used their ability this round)
+        if ($rollingPlayer->ability_active_this_round) {
+            $manualAbility = $this->applyManualAbility($rollingPlayer, $totalRoll);
+            $totalRoll = $manualAbility['adjusted_total'];
+            $abilityEffects['descriptions'] = array_merge($abilityEffects['descriptions'], $manualAbility['descriptions']);
+            // Reset the flag
+            $rollingPlayer->update(['ability_active_this_round' => false]);
+        }
+
         $success = $totalRoll >= $difficulty;
 
         // Determine effects
@@ -1486,6 +1587,149 @@ class GameController extends Controller
         }
 
         return response()->json($rollData);
+    }
+
+    /**
+     * Activate character ability for the current rolling phase.
+     */
+    public function useAbility(Game $game, Request $request): JsonResponse
+    {
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active'], 422);
+        }
+
+        $validated = $request->validate([
+            'player_number' => 'required|integer',
+        ]);
+
+        $player = $game->players()->where('player_number', $validated['player_number'])->with('character')->first();
+        if (!$player) {
+            return response()->json(['error' => 'Invalid player'], 422);
+        }
+
+        if ($player->ability_uses <= 0) {
+            return response()->json(['error' => 'No ability uses remaining'], 422);
+        }
+
+        if ($player->ability_active_this_round) {
+            return response()->json(['error' => 'Ability already activated this round'], 422);
+        }
+
+        // Duel mode: must be in the player's rolling phase
+        if ($game->isDuel()) {
+            $offerer = $game->getOfferer();
+            $isOffererRolling = $game->duel_phase === 'rolling_offerer' && $player->id === $offerer->id;
+            $chooser = $game->getChooser();
+            $isChooserRolling = $game->duel_phase === 'rolling_chooser' && $player->id === $chooser->id;
+            if (!$isOffererRolling && !$isChooserRolling) {
+                return response()->json(['error' => 'Not your rolling phase'], 422);
+            }
+        } else {
+            // Cooperative: must be in selecting phase (before resolve)
+            if ($game->round_phase !== 'selecting') {
+                return response()->json(['error' => 'Cannot use ability in this phase'], 422);
+            }
+        }
+
+        $player->update([
+            'ability_active_this_round' => true,
+            'ability_uses' => $player->ability_uses - 1,
+        ]);
+
+        $ability = $player->character->wild_ability;
+        $response = [
+            'activated' => true,
+            'ability' => $ability,
+            'ability_name' => $player->character->wild_ability,
+            'ability_description' => $player->character->wild_ability_description,
+            'remaining_uses' => $player->ability_uses,
+        ];
+
+        // Shadow ability: peek at next round's cards
+        if ($ability === 'shadow') {
+            $nextRound = $game->current_round + 1;
+            $nextCards = $game->playerHands()
+                ->where('round_number', $nextRound)
+                ->with('card:id,title,difficulty')
+                ->get()
+                ->pluck('card')
+                ->filter();
+
+            if ($nextCards->isEmpty()) {
+                // Try to peek at next deck cards
+                $nextDeckCards = GameCardDeck::where('game_id', $game->id)
+                    ->where('is_drawn', false)
+                    ->orderBy('position')
+                    ->limit(2)
+                    ->with('card:id,title,difficulty')
+                    ->get()
+                    ->pluck('card');
+                $response['peeked_cards'] = $nextDeckCards->values();
+            } else {
+                $response['peeked_cards'] = $nextCards->values();
+            }
+        }
+
+        return response()->json($response);
+    }
+
+    /**
+     * Process the bot's turn in a single-player duel.
+     */
+    public function botTurn(Game $game, Request $request): JsonResponse
+    {
+        if (!$game->isDuel()) {
+            return response()->json(['error' => 'Not a duel game'], 422);
+        }
+
+        // Find the bot player
+        $bot = $game->players()->where('is_bot', true)->first();
+        if (!$bot) {
+            return response()->json(['error' => 'No bot player in this game'], 422);
+        }
+
+        $botService = app(BotService::class);
+        $phase = $game->duel_phase;
+
+        // Bot is the offerer and it's offering phase
+        if ($phase === 'offering' && $game->offerer_player_number === $bot->player_number) {
+            $handId = $botService->decideDuelOffer($game, $bot);
+
+            // Simulate the offer via internal call
+            $fakeRequest = Request::create('', 'POST', ['revealed_hand_id' => $handId]);
+            $fakeRequest->setUserResolver(fn () => $request->user());
+            return $this->duelOffer($game->fresh(), $fakeRequest);
+        }
+
+        // Bot is the chooser and it's choosing phase
+        if ($phase === 'choosing') {
+            $chooser = $game->getChooser();
+            if ($chooser && $chooser->is_bot) {
+                $handId = $botService->decideDuelChoice($game, $bot);
+
+                $fakeRequest = Request::create('', 'POST', ['chosen_hand_id' => $handId]);
+                $fakeRequest->setUserResolver(fn () => $request->user());
+                return $this->duelChoose($game->fresh(), $fakeRequest);
+            }
+        }
+
+        // Bot is rolling
+        if ($phase === 'rolling_offerer' && $game->offerer_player_number === $bot->player_number) {
+            $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
+            $fakeRequest->setUserResolver(fn () => $request->user());
+            return $this->duelRoll($game->fresh(), $fakeRequest);
+        }
+
+        if ($phase === 'rolling_chooser') {
+            $chooser = $game->getChooser();
+            if ($chooser && $chooser->is_bot) {
+                $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
+                $fakeRequest->setUserResolver(fn () => $request->user());
+                return $this->duelRoll($game->fresh(), $fakeRequest);
+            }
+        }
+
+        return response()->json(['error' => 'Not the bot\'s turn'], 422);
     }
 
     public function history(Request $request): JsonResponse
@@ -1753,6 +1997,52 @@ class GameController extends Controller
     }
 
     /**
+     * Apply manually activated character ability to a roll.
+     */
+    private function applyManualAbility(GamePlayer $player, int $totalRoll): array
+    {
+        $character = $player->character;
+        $ability = $character->wild_ability;
+        $name = $character->name;
+        $adjustedTotal = $totalRoll;
+        $descriptions = [];
+
+        switch ($ability) {
+            case 'inspire':
+                $adjustedTotal += 2;
+                $descriptions[] = "{$name} activates Inspire: +2 to roll!";
+                break;
+            case 'rally':
+                $adjustedTotal += 3;
+                $descriptions[] = "{$name} activates Rally: rerolled lowest die (+3)!";
+                break;
+            case 'divine':
+                $bonus = $character->wild_value;
+                $adjustedTotal += $bonus;
+                $descriptions[] = "{$name} activates Divine: +{$bonus} divine guidance!";
+                break;
+            case 'gamble':
+                $bonus = random_int(-2, 6);
+                $adjustedTotal += $bonus;
+                $sign = $bonus >= 0 ? '+' : '';
+                $descriptions[] = "{$name} activates Gamble: risky reroll ({$sign}{$bonus})!";
+                break;
+            case 'shadow':
+                $descriptions[] = "{$name} activates Shadow: peered into the future!";
+                break;
+            case 'wisdom':
+                $adjustedTotal += 3;
+                $descriptions[] = "{$name} activates Wisdom: +3 insight!";
+                break;
+        }
+
+        return [
+            'adjusted_total' => $adjustedTotal,
+            'descriptions' => $descriptions,
+        ];
+    }
+
+    /**
      * Process wild ability triggers and return adjusted roll total.
      */
     private function processWildAbilities(array $wildTriggers, int $totalRoll, array &$diceResults, $players): array
@@ -1885,18 +2175,19 @@ class GameController extends Controller
             $visible->push($a);
         }
 
-        // For tiered groups: show earned ones + the lowest unearned tier
+        // For tiered groups: show claimed tiers + the lowest unclaimed tier. Higher tiers hidden.
         foreach ($tierGroups as $group => $achievements) {
             $sorted = $achievements->sortBy('tier');
-            $foundUnearned = false;
+            $foundUnclaimed = false;
 
             foreach ($sorted as $a) {
-                $isEarned = $userAchievements->has($a->id);
-                if ($isEarned) {
+                $ua = $userAchievements->get($a->id);
+                $isClaimed = $ua && $ua->claimed_at !== null;
+                if ($isClaimed) {
                     $visible->push($a);
-                } elseif (!$foundUnearned) {
+                } elseif (!$foundUnclaimed) {
                     $visible->push($a);
-                    $foundUnearned = true;
+                    $foundUnclaimed = true;
                 }
             }
         }
@@ -1914,6 +2205,7 @@ class GameController extends Controller
                 'earned' => $isEarned,
                 'claimed' => $ua && $ua->claimed_at !== null,
                 'reward_xp' => $a->reward_xp,
+                'reward_coins' => $a->reward_coins ?? 0,
                 'tier' => $a->tier,
                 'tier_group' => $a->tier_group,
                 'progress' => null,
@@ -1952,6 +2244,11 @@ class GameController extends Controller
         $oldLevel = $user->level;
         $user->xp += $achievement->reward_xp;
         $user->level = \App\Models\User::calculateLevel($user->xp);
+
+        // Award coins
+        $coinsAwarded = $achievement->reward_coins ?? 0;
+        $user->coins += $coinsAwarded;
+
         $user->save();
 
         $leveledUp = $user->level > $oldLevel;
@@ -1975,6 +2272,7 @@ class GameController extends Controller
                     'description' => $next->description,
                     'icon' => $next->icon,
                     'reward_xp' => $next->reward_xp,
+                    'reward_coins' => $next->reward_coins ?? 0,
                     'tier' => $next->tier,
                     'earned' => $nextUa !== null,
                     'claimed' => $nextUa && $nextUa->claimed_at !== null,
@@ -1984,8 +2282,10 @@ class GameController extends Controller
 
         return response()->json([
             'xp_awarded' => $achievement->reward_xp,
+            'coins_awarded' => $coinsAwarded,
             'new_xp' => $user->xp,
             'new_level' => $user->level,
+            'new_coins' => $user->coins,
             'leveled_up' => $leveledUp,
             'next_tier' => $nextTier,
         ]);
@@ -2041,5 +2341,69 @@ class GameController extends Controller
         ]);
 
         return response()->json(['message' => 'Game cancelled.']);
+    }
+
+    /**
+     * Check which players have more than 2 active (non-used) items.
+     */
+    private function getPlayersOverItemLimit(Game $game): array
+    {
+        $players = $game->players()->with(['items' => fn ($q) => $q->where('is_used', false), 'items.item', 'character'])->get();
+        $overLimit = [];
+
+        foreach ($players as $player) {
+            $activeItems = $player->items->where('is_used', false);
+            if ($activeItems->count() > 2) {
+                $overLimit[] = [
+                    'player_number' => $player->player_number,
+                    'character_name' => $player->character->name ?? 'Player ' . $player->player_number,
+                    'items' => $activeItems->map(fn ($pi) => [
+                        'id' => $pi->id,
+                        'item_name' => $pi->item->name,
+                        'is_cursed' => $pi->is_cursed,
+                    ])->values(),
+                ];
+            }
+        }
+
+        return $overLimit;
+    }
+
+    /**
+     * Discard an item from a player's inventory.
+     */
+    public function discardItem(Game $game, Request $request): JsonResponse
+    {
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active'], 422);
+        }
+
+        $validated = $request->validate([
+            'game_player_item_id' => 'required|integer',
+        ]);
+
+        $playerItem = GamePlayerItem::where('id', $validated['game_player_item_id'])
+            ->whereHas('gamePlayer', fn ($q) => $q->where('game_id', $game->id))
+            ->with('item')
+            ->first();
+
+        if (!$playerItem) {
+            return response()->json(['error' => 'Item not found in this game'], 404);
+        }
+
+        if ($playerItem->is_cursed) {
+            return response()->json(['error' => 'Cursed items cannot be discarded'], 422);
+        }
+
+        if ($playerItem->is_used) {
+            return response()->json(['error' => 'Item is already used'], 422);
+        }
+
+        $playerItem->delete();
+
+        return response()->json([
+            'discarded' => true,
+            'items_over_limit' => $this->getPlayersOverItemLimit($game),
+        ]);
     }
 }

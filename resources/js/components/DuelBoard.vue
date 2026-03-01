@@ -4,6 +4,7 @@
     <DuelKingdomStats
       :playerKingdoms="playerKingdoms"
       :myPlayerNumber="activePlayerNumber"
+      :isSinglePlayerDuel="isSinglePlayerDuel"
     />
 
     <!-- Player Items -->
@@ -91,7 +92,13 @@
         :playerName="offererName"
         :canRoll="isOfferer"
         :rollData="offererRollData"
+        :ability="isOfferer ? myAbility : null"
+        :abilityUses="isOfferer ? myAbilityUses : 0"
+        :abilityActivated="abilityActivated"
+        :activatingAbility="activatingAbility"
+        :peekedCards="peekedCards"
         @roll="submitRoll"
+        @use-ability="activateAbility"
       />
     </template>
 
@@ -111,7 +118,13 @@
         :playerName="chooserName"
         :canRoll="isChooser"
         :rollData="chooserRollData"
+        :ability="isChooser ? myAbility : null"
+        :abilityUses="isChooser ? myAbilityUses : 0"
+        :abilityActivated="abilityActivated"
+        :activatingAbility="activatingAbility"
+        :peekedCards="peekedCards"
         @roll="submitRoll"
+        @use-ability="activateAbility"
       />
     </template>
 
@@ -151,7 +164,7 @@ export default {
     gameData: { type: Object, required: true },
     gameId: { type: [String, Number], required: true },
   },
-  emits: ['refresh', 'game-over'],
+  emits: ['refresh', 'game-over', 'game-data-updated', 'phase-updated'],
   data() {
     return {
       duelPhase: null,
@@ -176,6 +189,10 @@ export default {
       // Online waiting
       showWaiting: false,
       waitingMessage: '',
+      // Ability
+      abilityActivated: false,
+      activatingAbility: false,
+      peekedCards: null,
     };
   },
   computed: {
@@ -212,19 +229,51 @@ export default {
     },
     offererName() {
       const player = this.gameData?.game?.players?.find(p => p.player_number === this.offererNumber);
-      return player?.character?.name || `Player ${this.offererNumber}`;
+      const name = player?.character?.name || `Player ${this.offererNumber}`;
+      if (this.isSinglePlayerDuel && this.offererNumber === this.activePlayerNumber) return `${name} (YOU)`;
+      return name;
     },
     chooserName() {
       const player = this.gameData?.game?.players?.find(p => p.player_number === this.chooserNumber);
-      return player?.character?.name || `Player ${this.chooserNumber}`;
+      const name = player?.character?.name || `Player ${this.chooserNumber}`;
+      if (this.isSinglePlayerDuel && this.chooserNumber === this.activePlayerNumber) return `${name} (YOU)`;
+      return name;
     },
     handoffCharacterName() {
       if (!this.handoffPlayerNumber || !this.gameData?.game?.players) return '';
       const player = this.gameData.game.players.find(p => p.player_number === this.handoffPlayerNumber);
       return player?.character?.name || `Player ${this.handoffPlayerNumber}`;
     },
+    myAbility() {
+      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
+      if (!player?.character) return null;
+      return {
+        name: player.character.wild_ability,
+        description: player.character.wild_ability_description,
+      };
+    },
+    myAbilityUses() {
+      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
+      return player?.ability_uses ?? 0;
+    },
     currentEvent() {
       return this.gameData?.current_event || null;
+    },
+    isSinglePlayerDuel() {
+      return this.gameData?.game_mode === 'single' && !this.isOnline && !this.isPassAndPlay;
+    },
+    botPlayer() {
+      return this.gameData?.game?.players?.find(p => p.is_bot);
+    },
+    isCurrentTurnBot() {
+      if (!this.isSinglePlayerDuel || !this.botPlayer) return false;
+      const botNum = this.botPlayer.player_number;
+      const phase = this.duelPhase;
+      if (phase === 'offering' && this.offererNumber === botNum) return true;
+      if (phase === 'choosing' && this.chooserNumber === botNum) return true;
+      if (phase === 'rolling_offerer' && this.offererNumber === botNum) return true;
+      if (phase === 'rolling_chooser' && this.chooserNumber === botNum) return true;
+      return false;
     },
   },
   watch: {
@@ -235,6 +284,11 @@ export default {
         }
       },
       immediate: true,
+    },
+    isCurrentTurnBot(isBotTurn) {
+      if (isBotTurn) {
+        this.triggerBotTurn();
+      }
     },
   },
   methods: {
@@ -263,6 +317,11 @@ export default {
           this.activePlayerNumber = myPlayer.player_number;
         }
         this.updateOnlineWaiting();
+      }
+
+      // Single-player duel: always player 1
+      if (this.isSinglePlayerDuel) {
+        this.activePlayerNumber = 1;
       }
 
       // If entering offering or choosing phase, load cards
@@ -333,10 +392,12 @@ export default {
         });
 
         this.duelPhase = 'choosing';
+        this.$emit('phase-updated', 'choosing');
 
         if (this.isPassAndPlay) {
-          // Handoff to chooser
           this.initiatePassAndPlayHandoff(this.chooserNumber);
+        } else if (this.isSinglePlayerDuel) {
+          // Bot is chooser — trigger bot turn (watcher handles it)
         } else {
           this.updateOnlineWaiting();
         }
@@ -352,14 +413,16 @@ export default {
         });
 
         this.duelPhase = 'rolling_offerer';
+        this.$emit('phase-updated', 'rolling_offerer');
 
-        // Store the cards for the rolling phase
         if (this.isPassAndPlay) {
-          // Handoff to offerer to roll first
           this.myCard = res.data.offerer_card?.card || null;
           this.initiatePassAndPlayHandoff(this.offererNumber);
+        } else if (this.isSinglePlayerDuel) {
+          // Load my card for rolling
+          await this.loadMyRollCard();
+          // Bot may need to roll first if they're offerer — watcher handles it
         } else {
-          // Online: load my card
           await this.loadMyRollCard();
           this.updateOnlineWaiting();
         }
@@ -378,6 +441,28 @@ export default {
       }
     },
 
+    async activateAbility() {
+      if (this.activatingAbility || this.abilityActivated) return;
+      this.activatingAbility = true;
+      try {
+        const res = await axios.post(`/api/games/${this.gameId}/use-ability`, {
+          player_number: this.activePlayerNumber,
+        });
+        this.abilityActivated = true;
+        if (res.data.peeked_cards) {
+          this.peekedCards = res.data.peeked_cards;
+        }
+        // Update the player's ability_uses in local gameData
+        const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
+        if (player) {
+          player.ability_uses = res.data.remaining_uses;
+        }
+      } catch (e) {
+        alert('Failed to use ability: ' + (e.response?.data?.error || e.message));
+      }
+      this.activatingAbility = false;
+    },
+
     async submitRoll() {
       try {
         const res = await axios.post(`/api/games/${this.gameId}/duel-roll`);
@@ -387,20 +472,24 @@ export default {
         if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
           this.offererRollData = rollResult;
           this.duelPhase = 'rolling_chooser';
+          this.$emit('phase-updated', 'rolling_chooser');
 
           // Refresh kingdoms
           await this.refreshKingdoms();
 
           if (this.isPassAndPlay) {
-            // Load chooser's card and handoff
             this.myCard = null;
             this.initiatePassAndPlayHandoff(this.chooserNumber);
+          } else if (this.isSinglePlayerDuel) {
+            this.myCard = null;
+            // Bot needs to roll as chooser — watcher handles it
           } else {
             this.updateOnlineWaiting();
           }
         } else {
           this.chooserRollData = rollResult;
           this.duelPhase = 'resolving';
+          this.$emit('phase-updated', 'resolving');
 
           // Refresh kingdoms
           await this.refreshKingdoms();
@@ -446,13 +535,18 @@ export default {
         this.myCard = null;
         this.currentCards = [];
         this.isGameOver = false;
+        this.abilityActivated = false;
+        this.peekedCards = null;
 
         // Update from response
         this.syncFromGameData(res.data);
+        this.$emit('game-data-updated', res.data);
 
         if (this.isPassAndPlay) {
-          // Handoff to the new offerer
           this.initiatePassAndPlayHandoff(this.offererNumber);
+        } else if (this.isSinglePlayerDuel) {
+          // Load hand for human player; bot turn handled by watcher
+          await this.loadDuelHand();
         }
       } catch (e) {
         alert('Failed to advance: ' + (e.response?.data?.error || e.message));
@@ -499,25 +593,87 @@ export default {
       this.updateOnlineWaiting();
     },
 
+    async triggerBotTurn() {
+      if (this._botTurnPending) return;
+      this._botTurnPending = true;
+
+      // Delay 1-2s for natural feel
+      const delay = 1000 + Math.random() * 1000;
+      await new Promise(r => setTimeout(r, delay));
+
+      try {
+        const res = await axios.post(`/api/games/${this.gameId}/bot-turn`);
+        const data = res.data;
+
+        if (this.duelPhase === 'offering' && data.duel_phase === 'choosing') {
+          this.duelPhase = 'choosing';
+          this.$emit('phase-updated', data.duel_phase);
+          await this.loadDuelHand();
+        } else if (this.duelPhase === 'choosing' && data.duel_phase === 'rolling_offerer') {
+          this.duelPhase = 'rolling_offerer';
+          this.$emit('phase-updated', data.duel_phase);
+          await this.loadMyRollCard();
+        } else if (data.player_number !== undefined) {
+          // Bot rolled
+          if (data.player_number === this.offererNumber) {
+            this.offererRollData = data;
+          } else {
+            this.chooserRollData = data;
+          }
+          if (data.duel_result) {
+            this.isGameOver = true;
+          }
+          await this.refreshKingdoms();
+
+          // Advance phase
+          const game = await axios.get(`/api/games/${this.gameId}`);
+          this.duelPhase = game.data.duel_phase || game.data.game?.duel_phase;
+          this.$emit('game-data-updated', game.data);
+
+          // If now my turn to roll, load my card
+          if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
+            await this.loadMyRollCard();
+          } else if (this.duelPhase === 'rolling_offerer' && this.activePlayerNumber === this.offererNumber) {
+            await this.loadMyRollCard();
+          }
+        }
+      } catch (e) {
+        console.error('Bot turn failed:', e);
+      }
+
+      this._botTurnPending = false;
+    },
+
     handleNextRoundStarted(data) {
       this.offererRollData = null;
       this.chooserRollData = null;
       this.myCard = null;
       this.currentCards = [];
       this.isGameOver = false;
+      this.abilityActivated = false;
+      this.peekedCards = null;
       this.syncFromGameData(data);
+      this.$emit('game-data-updated', data);
     },
   },
 
   async mounted() {
+    // Ensure kingdoms are loaded
+    if (!this.playerKingdoms.length) {
+      await this.refreshKingdoms();
+    }
+
     // Initial card load
     if (this.duelPhase === 'offering' || this.duelPhase === 'choosing') {
       if (this.isPassAndPlay) {
-        // Show handoff for the active player
         const activeNum = this.duelPhase === 'offering' ? this.offererNumber : this.chooserNumber;
         this.initiatePassAndPlayHandoff(activeNum);
       } else {
         await this.loadDuelHand();
+        // Single-player duel: if it's bot's turn, trigger bot
+        if (this.isCurrentTurnBot) {
+          this.triggerBotTurn();
+        }
       }
     } else if (this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
       if (this.isPassAndPlay) {
@@ -526,6 +682,10 @@ export default {
       } else {
         await this.loadMyRollCard();
         this.updateOnlineWaiting();
+        // Single-player duel: if it's bot's turn, trigger bot
+        if (this.isCurrentTurnBot) {
+          this.triggerBotTurn();
+        }
       }
     }
   },

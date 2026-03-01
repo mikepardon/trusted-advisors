@@ -4,12 +4,27 @@
 
     <!-- Full header for non-game, non-admin pages -->
     <header v-if="!isAdmin && !isGamePage" class="game-header">
-      <img
-        src="/images/logo.png"
-        alt="Trusted Advisors"
-        class="header-logo"
-        @click="$router.push('/')"
-      />
+      <div class="header-top-bar">
+        <div v-if="auth.state.user" class="header-player" @click="$router.push('/profile')">
+          <div class="player-avatar">{{ auth.state.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+          <span class="player-level">Lv.{{ auth.state.user.level ?? 1 }}</span>
+        </div>
+        <img
+          src="/images/logo.png"
+          alt="Trusted Advisors"
+          class="header-logo"
+          @click="$router.push('/')"
+        />
+        <div v-if="auth.state.user" class="header-right-icons">
+          <span class="header-coins" @click="navSound(); $router.push('/shop')">&#129689; {{ auth.state.user.coins ?? 0 }}</span>
+          <button class="header-bell" @click="navSound(); showNotifications = true">
+            <span class="notif-icon-wrap">
+              &#128276;
+              <span v-if="notifCount > 0" class="notif-badge">{{ notifCount > 9 ? '9+' : notifCount }}</span>
+            </span>
+          </button>
+        </div>
+      </div>
     </header>
 
     <main>
@@ -30,13 +45,6 @@
         <span class="nav-icon">&#127942;</span>
         <span class="nav-label">Ranks</span>
       </router-link>
-      <button v-if="auth.state.user" class="nav-item" @click="navSound(); showNotifications = true">
-        <span class="nav-icon notif-icon-wrap">
-          &#128276;
-          <span v-if="notifCount > 0" class="notif-badge">{{ notifCount > 9 ? '9+' : notifCount }}</span>
-        </span>
-        <span class="nav-label">Alerts</span>
-      </button>
       <div class="nav-menu-wrap">
         <button class="nav-item" @click.stop="menuSound(); showMenuPopup = !showMenuPopup">
           <span class="nav-icon">&#9776;</span>
@@ -255,15 +263,58 @@ body {
 
 /* ---- Full header (non-game pages) ---- */
 .game-header {
-  text-align: center;
-  padding: 15px 0 20px;
+  padding: 10px 12px;
   border-bottom: 2px solid var(--border-gold);
   background: linear-gradient(180deg, rgba(42, 31, 20, 0.4) 0%, transparent 100%);
   flex-shrink: 0;
 }
 
+.header-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.header-player {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.player-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-gold), #8a6a14);
+  color: var(--wood-dark);
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-gold);
+  box-shadow: 0 2px 8px rgba(212, 168, 67, 0.3);
+  transition: transform 0.2s;
+}
+
+.header-player:hover .player-avatar {
+  transform: scale(1.08);
+}
+
+.player-level {
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  color: var(--accent-gold);
+  letter-spacing: 1px;
+}
+
 .header-logo {
-  max-width: 320px;
+  max-width: 200px;
   width: 100%;
   height: auto;
   cursor: pointer;
@@ -274,6 +325,59 @@ body {
 .header-logo:hover {
   transform: scale(1.03);
   filter: drop-shadow(0 4px 16px rgba(212, 168, 67, 0.5));
+}
+
+.header-right-icons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.header-coins {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.header-coins:hover {
+  background: rgba(212, 168, 67, 0.2);
+  border-color: var(--accent-gold);
+}
+
+.header-bell {
+  background: none;
+  border: 1px solid rgba(138, 106, 46, 0.4);
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  padding: 0;
+  transition: all 0.2s;
+  letter-spacing: 0;
+}
+
+.header-bell:hover {
+  color: var(--accent-gold);
+  border-color: var(--accent-gold);
+  background: rgba(212, 168, 67, 0.08);
+  transform: none;
+  box-shadow: none;
 }
 
 .subtitle {
@@ -534,6 +638,28 @@ button:disabled {
   padding: 0 4px;
 }
 
+/* ---- Coin display ---- */
+.nav-coins {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  cursor: pointer;
+  padding: 4px 10px;
+  border-radius: 12px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.nav-coins:hover {
+  background: rgba(212, 168, 67, 0.2);
+  border-color: var(--accent-gold);
+}
+
 /* ---- Menu popup ---- */
 .nav-menu-wrap {
   position: relative;
@@ -591,23 +717,31 @@ button:disabled {
   color: #d05040;
 }
 
-/* ---- Hide header/nav on mobile for game-header ---- */
+/* ---- Responsive header ---- */
 @media (max-width: 768px) {
   .game-header {
-    padding: 10px 0 12px;
+    padding: 8px 10px;
   }
 
   .header-logo {
-    max-width: 200px;
+    max-width: 160px;
   }
 
-  .subtitle {
-    font-size: 0.9rem;
-    margin-top: 4px;
+  .player-avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
   }
 
-  .header-actions {
-    margin-top: 6px;
+  .header-coins {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+  }
+
+  .header-bell {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
   }
 }
 

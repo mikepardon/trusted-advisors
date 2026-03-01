@@ -51,6 +51,16 @@
                 <option value="stat_threshold">Stat Threshold</option>
                 <option value="use_character">Use Character</option>
                 <option value="no_stat_below">No Stat Below</option>
+                <option value="no_stat_above">No Stat Above</option>
+                <option value="all_stats_below">All Stats Below</option>
+                <option value="all_stats_above">All Stats Above</option>
+                <option value="total_score_above">Total Score Above</option>
+                <option value="total_score_below">Total Score Below</option>
+                <option value="login_streak">Login Streak</option>
+                <option value="online_plays">Online Plays</option>
+                <option value="total_friends">Total Friends</option>
+                <option value="duel_plays">Duel Plays</option>
+                <option value="wins_with_characters">Wins With Characters</option>
               </select>
             </div>
             <div class="form-group" v-if="form.criteria_type === 'play_game' || form.criteria_type === 'win_game'">
@@ -73,9 +83,13 @@
                 <option value="happiness">Happiness</option>
               </select>
             </div>
-            <div class="form-group" v-if="['stat_threshold', 'no_stat_below'].includes(form.criteria_type)">
+            <div class="form-group" v-if="['stat_threshold', 'no_stat_below', 'no_stat_above', 'all_stats_below', 'all_stats_above', 'total_score_above', 'total_score_below'].includes(form.criteria_type)">
               <label>Value</label>
-              <input v-model.number="form.criteria_value" type="number" min="1" max="20" />
+              <input v-model.number="form.criteria_value" type="number" min="1" :max="['total_score_above', 'total_score_below'].includes(form.criteria_type) ? 120 : 20" />
+            </div>
+            <div class="form-group" v-if="['login_streak', 'online_plays', 'total_friends', 'duel_plays', 'wins_with_characters'].includes(form.criteria_type)">
+              <label>Count</label>
+              <input v-model.number="form.criteria_count" type="number" min="1" />
             </div>
             <div class="form-group" v-if="form.criteria_type === 'use_character'">
               <label>Character ID</label>
@@ -120,7 +134,8 @@ export default {
         date: '', title: '', description: '',
         criteria_type: 'play_game', criteria_mode: 'any',
         criteria_stat: 'wealth', criteria_value: 15,
-        criteria_character_id: 1, reward_xp: 100, addon_id: null,
+        criteria_character_id: 1, criteria_count: 5,
+        reward_xp: 100, addon_id: null,
       },
     };
   },
@@ -142,7 +157,12 @@ export default {
       if (t === 'win_game') return { type: t, mode: this.form.criteria_mode };
       if (t === 'stat_threshold') return { type: t, stat: this.form.criteria_stat, value: this.form.criteria_value };
       if (t === 'use_character') return { type: t, character_id: this.form.criteria_character_id };
-      if (t === 'no_stat_below') return { type: t, value: this.form.criteria_value };
+      if (['no_stat_below', 'no_stat_above', 'all_stats_below', 'all_stats_above', 'total_score_above', 'total_score_below'].includes(t)) {
+        return { type: t, value: this.form.criteria_value };
+      }
+      if (['login_streak', 'online_plays', 'total_friends', 'duel_plays', 'wins_with_characters'].includes(t)) {
+        return { type: t, count: this.form.criteria_count };
+      }
       return { type: t };
     },
     openCreate() {
@@ -151,7 +171,8 @@ export default {
         date: '', title: '', description: '',
         criteria_type: 'play_game', criteria_mode: 'any',
         criteria_stat: 'wealth', criteria_value: 15,
-        criteria_character_id: 1, reward_xp: 100, addon_id: null,
+        criteria_character_id: 1, criteria_count: 5,
+        reward_xp: 100, addon_id: null,
       };
       this.formError = '';
       this.showModal = true;
@@ -168,6 +189,7 @@ export default {
         criteria_stat: cr.stat || 'wealth',
         criteria_value: cr.value || 15,
         criteria_character_id: cr.character_id || 1,
+        criteria_count: cr.count || 5,
         reward_xp: c.reward_xp,
         addon_id: c.addon_id || null,
       };

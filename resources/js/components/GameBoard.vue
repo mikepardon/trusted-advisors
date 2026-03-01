@@ -36,6 +36,8 @@
       :gameData="gameData"
       :gameId="id"
       @refresh="fetchGame"
+      @game-data-updated="onGameDataUpdated"
+      @phase-updated="onPhaseUpdated"
       @game-over="$router.replace(`/game/${id}/over`)"
     />
     </template>
@@ -108,6 +110,14 @@
       @dismiss="onItemRevealDismiss"
     />
 
+    <!-- Item Discard Overlay (when over 2-item limit) -->
+    <ItemDiscard
+      v-if="itemsOverLimit.length > 0"
+      :gameId="id"
+      :playerData="itemsOverLimit[0]"
+      @discarded="onItemDiscarded"
+    />
+
     <!-- TURN HANDOFF OVERLAY (pass and play) -->
     <TurnHandoffOverlay
       v-if="showTurnHandoff"
@@ -175,11 +185,12 @@ import DuelBoard from './DuelBoard.vue';
 import PlayerItems from './PlayerItems.vue';
 import EventReveal from './EventReveal.vue';
 import ItemReveal from './ItemReveal.vue';
+import ItemDiscard from './ItemDiscard.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -216,6 +227,8 @@ export default {
       // Item reveal
       itemRevealQueue: [],
       showItemReveal: false,
+      // Item discard (when over 2-item limit)
+      itemsOverLimit: [],
       // Online mode
       myPlayerNumber: null,
       waitingForOthers: false,
@@ -318,6 +331,17 @@ export default {
     }
   },
   methods: {
+    onGameDataUpdated(data) {
+      this.gameData = data;
+    },
+    onPhaseUpdated(duelPhase) {
+      if (this.gameData) {
+        this.gameData.duel_phase = duelPhase;
+        if (this.gameData.game) {
+          this.gameData.game.duel_phase = duelPhase;
+        }
+      }
+    },
     async fetchGame() {
       this.loading = true;
       try {
@@ -509,6 +533,8 @@ export default {
         if (res.data.player_items && res.data.player_items[this.activePlayerNumber]) {
           this.currentPlayerItems = res.data.player_items[this.activePlayerNumber];
         }
+        // Check for players over item limit
+        this.itemsOverLimit = res.data.items_over_limit || [];
         // Queue item reveals for any draw_item special effects
         this.queueItemReveals(this.specialEffects);
       } catch (e) {
@@ -635,7 +661,7 @@ export default {
       }
     },
     queueItemReveals(specialEffects) {
-      const itemEffects = (specialEffects || []).filter(e => e.type === 'draw_item' && e.item);
+      const itemEffects = (specialEffects || []).filter(e => (e.type === 'draw_item' || e.type === 'immediate_item') && e.item);
       if (itemEffects.length) {
         this.itemRevealQueue = [...itemEffects];
         this.showItemReveal = true;
@@ -646,6 +672,9 @@ export default {
       if (this.itemRevealQueue.length === 0) {
         this.showItemReveal = false;
       }
+    },
+    onItemDiscarded(updatedOverLimit) {
+      this.itemsOverLimit = updatedOverLimit || [];
     },
     checkEventReveal() {
       const round = this.gameData?.current_round || 0;
@@ -686,6 +715,7 @@ export default {
         this.specialEffects = [];
         this.itemRevealQueue = [];
         this.showItemReveal = false;
+        this.itemsOverLimit = [];
         this.isGameOver = false;
         this.gameAfterPositive = null;
         this.gameAfterNegative = null;

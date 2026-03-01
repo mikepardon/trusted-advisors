@@ -185,19 +185,16 @@ class GameLobbyController extends Controller
             return response()->json(['error' => 'Character already taken'], 422);
         }
 
-        // Check if character is locked
-        $character = Character::find($validated['character_id']);
-        if ($character && $character->is_locked) {
-            $unlockable = Unlockable::where('type', 'character')
-                ->where('entity_id', $character->id)
-                ->first();
-            if ($unlockable) {
-                $hasUnlocked = UserUnlockable::where('user_id', $request->user()->id)
-                    ->where('unlockable_id', $unlockable->id)
-                    ->exists();
-                if (!$hasUnlocked) {
-                    return response()->json(['error' => 'This character is locked. Reach the required level or achievement to unlock it.'], 422);
-                }
+        // Check if character is locked (dynamically via unlockables table)
+        $unlockable = Unlockable::where('type', 'character')
+            ->where('entity_id', $validated['character_id'])
+            ->first();
+        if ($unlockable) {
+            $hasUnlocked = UserUnlockable::where('user_id', $request->user()->id)
+                ->where('unlockable_id', $unlockable->id)
+                ->exists();
+            if (!$hasUnlocked) {
+                return response()->json(['error' => 'This character is locked. Reach the required level or achievement to unlock it.'], 422);
             }
         }
 
@@ -234,25 +231,31 @@ class GameLobbyController extends Controller
 
         $characters = Character::all();
 
-        // Add lock info for each character
+        // Add lock info for each character (dynamically via unlockables table)
         $userId = $request->user()?->id;
-        if ($userId) {
-            $userUnlockableIds = UserUnlockable::where('user_id', $userId)->pluck('unlockable_id')->toArray();
-            $characters = $characters->map(function ($c) use ($userUnlockableIds) {
-                $charData = $c->toArray();
-                $charData['is_locked_for_user'] = false;
-                if ($c->is_locked) {
-                    $unlockable = Unlockable::where('type', 'character')->where('entity_id', $c->id)->first();
-                    $charData['is_locked_for_user'] = $unlockable && !in_array($unlockable->id, $userUnlockableIds);
-                    if ($charData['is_locked_for_user'] && $unlockable) {
-                        $charData['unlock_requirement'] = $unlockable->unlock_method === 'level'
-                            ? "Reach level {$unlockable->unlock_value}"
-                            : "Earn required achievement";
-                    }
+        $charUnlockables = Unlockable::where('type', 'character')->get()->keyBy('entity_id');
+        $userUnlockableIds = $userId
+            ? UserUnlockable::where('user_id', $userId)->pluck('unlockable_id')->toArray()
+            : [];
+
+        $characters = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds) {
+            $charData = $c->toArray();
+            $unlockable = $charUnlockables[$c->id] ?? null;
+            $charData['is_locked_for_user'] = false;
+            $charData['unlock_requirement'] = null;
+
+            if ($unlockable) {
+                $isUnlocked = in_array($unlockable->id, $userUnlockableIds);
+                $charData['is_locked_for_user'] = !$isUnlocked;
+                if (!$isUnlocked) {
+                    $charData['unlock_requirement'] = $unlockable->unlock_method === 'level'
+                        ? "Reach level {$unlockable->unlock_value}"
+                        : "Earn required achievement";
                 }
-                return $charData;
-            });
-        }
+            }
+
+            return $charData;
+        });
 
         // Determine whose turn it is to pick (first player without a character)
         $pickingPlayer = $players->first(fn ($p) => !$p->character_id);

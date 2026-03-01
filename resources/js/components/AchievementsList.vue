@@ -28,7 +28,10 @@
             >
               {{ claiming === ach.id ? '...' : 'Claim' }}
             </button>
-            <div v-else-if="ach.reward_xp" class="ach-xp-preview">+{{ ach.reward_xp }} XP</div>
+            <div v-else-if="ach.reward_xp || ach.reward_coins" class="ach-xp-preview">
+              <span v-if="ach.reward_xp">+{{ ach.reward_xp }} XP</span>
+              <span v-if="ach.reward_coins"> +{{ ach.reward_coins }} &#129689;</span>
+            </div>
           </div>
           <p class="ach-desc">{{ ach.description }}</p>
           <div v-if="ach.tier_group && ach.tier > 1" class="ach-tier-label">Tier {{ ach.tier }}</div>
@@ -82,6 +85,11 @@ export default {
         wizard: '\u{1F9D9}',
         castle: '\u{1F3F0}',
         people: '\u{1F465}',
+        calendar: '\u{1F4C5}',
+        handshake: '\u{1F91D}',
+        globe: '\u{1F30D}',
+        muscle: '\u{1F4AA}',
+        sparkles: '\u{2728}',
       },
     };
   },
@@ -109,7 +117,7 @@ export default {
 
         // Update auth store
         const { updateUserStats } = useAuth();
-        updateUserStats({ xp: result.new_xp, level: result.new_level });
+        updateUserStats({ xp: result.new_xp, level: result.new_level, coins: result.new_coins });
 
         // Show overlay
         this.claimOverlay = { achievement: ach, result };
@@ -121,8 +129,6 @@ export default {
     },
     onClaimDismiss() {
       this.claimOverlay = null;
-      // Refresh list to pick up next tier
-      this.fetchAchievements();
     },
   },
 };

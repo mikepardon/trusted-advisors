@@ -149,25 +149,23 @@ export default {
   background: rgba(0, 0, 0, 0.5);
   z-index: 1000;
   display: flex;
-  align-items: flex-end;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .notif-drawer {
-  width: 100%;
-  max-width: 1000px;
-  max-height: 70vh;
+  width: 320px;
+  max-width: 85vw;
+  height: 100%;
   background: var(--bg-secondary);
-  border-top: 2px solid var(--border-gold);
-  border-radius: 12px 12px 0 0;
+  border-left: 2px solid var(--border-gold);
   display: flex;
   flex-direction: column;
-  transform: translateY(100%);
+  transform: translateX(100%);
   transition: transform 0.3s ease;
 }
 
 .drawer-visible {
-  transform: translateY(0);
+  transform: translateX(0);
 }
 
 .drawer-header {

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Achievement;
 use App\Models\DailyChallenge;
 use App\Models\DailyChallengeEntry;
+use App\Models\Friendship;
 use App\Models\Game;
 use App\Models\GamePlayer;
 use App\Models\Unlockable;
@@ -24,6 +25,8 @@ class GameCompletionService
     {
         $summary = [
             'xp_awards' => [],
+            'xp_details' => [],
+            'coin_awards' => [],
             'level_ups' => [],
             'elo_changes' => [],
             'achievements_unlocked' => [],
@@ -40,9 +43,19 @@ class GameCompletionService
             // XP
             $xpResult = $this->awardXp($user, $game, $players);
             $summary['xp_awards'][$user->id] = $xpResult['xp'];
+            $summary['xp_details'][$user->id] = [
+                'old_xp' => $xpResult['old_xp'],
+                'new_xp' => $xpResult['new_xp'],
+                'old_level' => $xpResult['old_level'],
+                'new_level' => $xpResult['new_level'],
+            ];
             if ($xpResult['leveled_up']) {
                 $summary['level_ups'][$user->id] = $xpResult['new_level'];
             }
+
+            // Coins
+            $coinResult = $this->awardCoins($user, $game, $players);
+            $summary['coin_awards'][$user->id] = $coinResult;
 
             // Achievements
             $newAchievements = $this->checkAchievements($user, $game);
@@ -102,6 +115,26 @@ class GameCompletionService
                 $target = $criteria['count'] ?? 3;
                 return ['current' => $this->getCurrentWinStreak($user), 'target' => $target];
 
+            case 'login_streak':
+                $target = $criteria['count'] ?? 3;
+                return ['current' => $user->max_login_streak ?? 0, 'target' => $target];
+
+            case 'online_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserOnlinePlays($user), 'target' => $target];
+
+            case 'total_friends':
+                $target = $criteria['count'] ?? 1;
+                return ['current' => $this->getUserTotalFriends($user), 'target' => $target];
+
+            case 'duel_plays':
+                $target = $criteria['count'] ?? 10;
+                return ['current' => $this->getUserDuelPlays($user), 'target' => $target];
+
+            case 'wins_with_characters':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserCharacterWins($user), 'target' => $target];
+
             default:
                 return null;
         }
@@ -159,6 +192,7 @@ class GameCompletionService
         }
 
         $oldLevel = $user->level;
+        $oldXp = $user->xp;
         $user->xp += $total;
         $user->level = User::calculateLevel($user->xp);
         $user->save();
@@ -174,6 +208,37 @@ class GameCompletionService
             'xp' => $total,
             'leveled_up' => $leveledUp,
             'new_level' => $user->level,
+            'old_xp' => $oldXp,
+            'old_level' => $oldLevel,
+            'new_xp' => $user->xp,
+        ];
+    }
+
+    private function awardCoins(User $user, Game $game, $players): array
+    {
+        $base = 10;
+        $bonus = 0;
+
+        $isWinner = $this->isWinner($user, $game, $players);
+
+        if ($isWinner) {
+            $bonus = $game->isDuel() ? 25 : 15;
+        }
+
+        $total = $base + $bonus;
+
+        if ($game->isOnline()) {
+            $total = (int) ($total * 1.5);
+        }
+
+        $oldCoins = $user->coins;
+        $user->coins += $total;
+        $user->save();
+
+        return [
+            'coins' => $total,
+            'old_coins' => $oldCoins,
+            'new_coins' => $user->coins,
         ];
     }
 
@@ -308,6 +373,36 @@ class GameCompletionService
 
             case 'unique_characters':
                 return $this->getUniqueCharactersUsed($user) >= ($criteria['count'] ?? 5);
+
+            case 'login_streak':
+                return ($user->max_login_streak ?? 0) >= ($criteria['count'] ?? 3);
+
+            case 'online_plays':
+                return $this->getUserOnlinePlays($user) >= ($criteria['count'] ?? 5);
+
+            case 'total_friends':
+                return $this->getUserTotalFriends($user) >= ($criteria['count'] ?? 1);
+
+            case 'duel_plays':
+                return $this->getUserDuelPlays($user) >= ($criteria['count'] ?? 10);
+
+            case 'all_stats_below':
+                return $this->isWinner($user, $game, $game->players) && $this->checkAllStatsBelow($user, $game, $criteria['value'] ?? 5);
+
+            case 'all_stats_above':
+                return $this->isWinner($user, $game, $game->players) && $this->checkAllStatsAbove($user, $game, $criteria['value'] ?? 18);
+
+            case 'wins_with_characters':
+                return $this->getUserCharacterWins($user) >= ($criteria['count'] ?? 5);
+
+            case 'no_stat_above':
+                return $this->isWinner($user, $game, $game->players) && $this->checkNoStatAbove($user, $game, $criteria['value'] ?? 10);
+
+            case 'total_score_above':
+                return $this->checkTotalScoreAbove($user, $game, $criteria['value'] ?? 100);
+
+            case 'total_score_below':
+                return $this->isWinner($user, $game, $game->players) && $this->checkTotalScoreBelow($user, $game, $criteria['value'] ?? 40);
 
             default:
                 return false;
@@ -449,6 +544,154 @@ class GameCompletionService
                 ]);
             }
         }
+    }
+
+    private function getUserOnlinePlays(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_mode', 'online')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+    }
+
+    private function getUserTotalFriends(User $user): int
+    {
+        return Friendship::where('status', 'accepted')
+            ->where(function ($q) use ($user) {
+                $q->where('sender_id', $user->id)->orWhere('receiver_id', $user->id);
+            })
+            ->count();
+    }
+
+    private function getUserDuelPlays(User $user): int
+    {
+        $duelGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_type', 'duel')
+            ->whereIn('id', $duelGameIds)
+            ->count();
+    }
+
+    private function getUserCharacterWins(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        // Get all completed games this user won
+        $wonGameIds = Game::where('status', 'completed')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->get()
+            ->filter(function ($game) use ($user) {
+                if ($game->isDuel()) {
+                    $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                    return $player && $player->player_number === $game->winner_player_number;
+                }
+                return (bool) $game->win;
+            })
+            ->pluck('id');
+
+        return GamePlayer::where('user_id', $user->id)
+            ->whereIn('game_id', $wonGameIds)
+            ->whereNotNull('character_id')
+            ->distinct('character_id')
+            ->count('character_id');
+    }
+
+    private function checkAllStatsBelow(User $user, Game $game, int $value): bool
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        if ($game->isDuel()) {
+            $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+            if (!$player) return false;
+            $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+            if (!$kingdom) return false;
+            foreach ($stats as $s) {
+                if ($kingdom->{$s} >= $value) return false;
+            }
+            return true;
+        }
+        foreach ($stats as $s) {
+            if ($game->{$s} >= $value) return false;
+        }
+        return true;
+    }
+
+    private function checkAllStatsAbove(User $user, Game $game, int $value): bool
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        if ($game->isDuel()) {
+            $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+            if (!$player) return false;
+            $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+            if (!$kingdom) return false;
+            foreach ($stats as $s) {
+                if ($kingdom->{$s} <= $value) return false;
+            }
+            return true;
+        }
+        foreach ($stats as $s) {
+            if ($game->{$s} <= $value) return false;
+        }
+        return true;
+    }
+
+    private function checkNoStatAbove(User $user, Game $game, int $value): bool
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        if ($game->isDuel()) {
+            $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+            if (!$player) return false;
+            $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+            if (!$kingdom) return false;
+            foreach ($stats as $s) {
+                if ($kingdom->{$s} > $value) return false;
+            }
+            return true;
+        }
+        foreach ($stats as $s) {
+            if ($game->{$s} > $value) return false;
+        }
+        return true;
+    }
+
+    private function checkTotalScoreAbove(User $user, Game $game, int $value): bool
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        if ($game->isDuel()) {
+            $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+            if (!$player) return false;
+            $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+            if (!$kingdom) return false;
+            $total = 0;
+            foreach ($stats as $s) $total += $kingdom->{$s};
+            return $total > $value;
+        }
+        $total = 0;
+        foreach ($stats as $s) $total += $game->{$s};
+        return $total > $value;
+    }
+
+    private function checkTotalScoreBelow(User $user, Game $game, int $value): bool
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        if ($game->isDuel()) {
+            $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+            if (!$player) return false;
+            $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+            if (!$kingdom) return false;
+            $total = 0;
+            foreach ($stats as $s) $total += $kingdom->{$s};
+            return $total < $value;
+        }
+        $total = 0;
+        foreach ($stats as $s) $total += $game->{$s};
+        return $total < $value;
     }
 
     private function checkDailyChallenge(User $user, Game $game): ?array

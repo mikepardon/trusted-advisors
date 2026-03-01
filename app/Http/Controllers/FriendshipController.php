@@ -16,11 +16,45 @@ class FriendshipController extends Controller
 
         $friends = Friendship::where('status', 'accepted')
             ->where(fn ($q) => $q->where('sender_id', $userId)->orWhere('receiver_id', $userId))
-            ->with(['sender:id,name', 'receiver:id,name'])
+            ->with(['sender:id,name,level,elo_rating', 'receiver:id,name,level,elo_rating'])
             ->get()
             ->map(function ($f) use ($userId) {
                 $friend = $f->sender_id === $userId ? $f->receiver : $f->sender;
-                return ['id' => $f->id, 'user' => $friend];
+
+                // Count wins/losses/draws for this friend
+                $friendGames = \App\Models\GamePlayer::where('user_id', $friend->id)
+                    ->whereHas('game', fn ($q) => $q->where('status', 'completed'))
+                    ->with('game:id,winner_player_number,updated_at')
+                    ->get();
+
+                $wins = 0;
+                $losses = 0;
+                $draws = 0;
+                $lastPlayed = null;
+
+                foreach ($friendGames as $gp) {
+                    if ($gp->game->updated_at && (!$lastPlayed || $gp->game->updated_at->gt($lastPlayed))) {
+                        $lastPlayed = $gp->game->updated_at;
+                    }
+                    if ($gp->game->winner_player_number === null) {
+                        $draws++;
+                    } elseif ($gp->game->winner_player_number === $gp->player_number) {
+                        $wins++;
+                    } else {
+                        $losses++;
+                    }
+                }
+
+                return [
+                    'id' => $f->id,
+                    'user' => $friend,
+                    'stats' => [
+                        'wins' => $wins,
+                        'losses' => $losses,
+                        'draws' => $draws,
+                        'last_played' => $lastPlayed?->diffForHumans(),
+                    ],
+                ];
             });
 
         $pendingSent = Friendship::where('status', 'pending')

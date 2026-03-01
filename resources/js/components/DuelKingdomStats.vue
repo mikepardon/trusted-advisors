@@ -40,6 +40,7 @@ export default {
   props: {
     playerKingdoms: { type: Array, default: () => [] },
     myPlayerNumber: { type: Number, default: 1 },
+    isSinglePlayerDuel: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -61,11 +62,15 @@ export default {
   },
   computed: {
     kingdoms() {
-      return this.playerKingdoms.map(k => ({
-        ...k,
-        player_number: k.player?.player_number ?? k.player_number,
-        character_name: k.player?.character?.name ?? 'Player',
-      })).sort((a, b) => {
+      return this.playerKingdoms.map(k => {
+        const pn = k.player?.player_number ?? k.player_number;
+        const name = k.player?.character?.name ?? 'Player';
+        return {
+          ...k,
+          player_number: pn,
+          character_name: pn === this.myPlayerNumber && this.isSinglePlayerDuel ? `${name} (YOU)` : name,
+        };
+      }).sort((a, b) => {
         if (a.player_number === this.myPlayerNumber) return -1;
         if (b.player_number === this.myPlayerNumber) return 1;
         return a.player_number - b.player_number;

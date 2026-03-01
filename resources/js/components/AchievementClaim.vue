@@ -12,6 +12,7 @@
           <div class="claim-divider"></div>
 
           <div class="claim-reward">+{{ result.xp_awarded }} XP</div>
+          <div v-if="result.coins_awarded" class="claim-reward claim-coins">+{{ result.coins_awarded }} &#129689;</div>
 
           <div v-if="result.leveled_up" class="claim-levelup">
             Level Up! Lv.{{ result.new_level }}
@@ -47,6 +48,11 @@ const iconMap = {
   wizard: '\u{1F9D9}',
   castle: '\u{1F3F0}',
   people: '\u{1F465}',
+  calendar: '\u{1F4C5}',
+  handshake: '\u{1F91D}',
+  globe: '\u{1F30D}',
+  muscle: '\u{1F4AA}',
+  sparkles: '\u{2728}',
 };
 
 export default {
@@ -169,6 +175,11 @@ export default {
   padding: 6px 20px;
   border-radius: 6px;
   margin-top: 4px;
+}
+
+.claim-coins {
+  font-size: 0.95rem;
+  margin-top: 6px;
 }
 
 .claim-levelup {

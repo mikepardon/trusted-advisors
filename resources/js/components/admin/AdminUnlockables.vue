@@ -46,14 +46,15 @@
             </div>
             <div class="form-group">
               <label>Unlock Method</label>
-              <select v-model="form.unlock_method" @change="form.unlock_value = form.unlock_method === 'level' ? 1 : ''">
+              <select v-model="form.unlock_method" @change="form.unlock_value = form.unlock_method === 'level' || form.unlock_method === 'coins' ? 1 : ''">
                 <option value="level">Level</option>
                 <option value="achievement">Achievement</option>
+                <option value="coins">Coins</option>
               </select>
             </div>
             <div class="form-group">
-              <label>{{ form.unlock_method === 'level' ? 'Required Level' : 'Achievement' }}</label>
-              <input v-if="form.unlock_method === 'level'" v-model.number="form.unlock_value" type="number" required min="1" />
+              <label>{{ form.unlock_method === 'level' ? 'Required Level' : form.unlock_method === 'coins' ? 'Price (Coins)' : 'Achievement' }}</label>
+              <input v-if="form.unlock_method === 'level' || form.unlock_method === 'coins'" v-model.number="form.unlock_value" type="number" required min="1" />
               <select v-else v-model.number="form.unlock_value" required>
                 <option value="" disabled>Select achievement...</option>
                 <option v-for="a in achievements" :key="a.id" :value="a.id">{{ a.name }}</option>

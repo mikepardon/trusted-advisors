@@ -33,9 +33,36 @@
     <!-- Friends -->
     <div v-if="friends.length" class="friend-section">
       <h3 class="section-subtitle">Your Allies</h3>
-      <div v-for="f in friends" :key="f.id" class="friend-item">
-        <span class="friend-name clickable-name" @click="showProfileUserId = f.user.id">{{ f.user.name }}</span>
-        <button class="btn-danger action-btn" @click="removeFriendship(f.id)">Remove</button>
+      <div
+        v-for="f in friends"
+        :key="f.id"
+        class="friend-card"
+        @click="showProfileFriend = f"
+      >
+        <div class="friend-card-left">
+          <div class="friend-avatar">{{ f.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+          <div class="friend-info">
+            <span class="friend-card-name">{{ f.user.name }}</span>
+            <span class="friend-card-level">Lv.{{ f.user.level ?? 1 }}</span>
+          </div>
+        </div>
+        <div class="friend-card-stats">
+          <div class="friend-stat">
+            <span class="friend-stat-val stat-win">{{ f.stats?.wins ?? 0 }}</span>
+            <span class="friend-stat-label">W</span>
+          </div>
+          <span class="stat-slash">/</span>
+          <div class="friend-stat">
+            <span class="friend-stat-val stat-draw">{{ f.stats?.draws ?? 0 }}</span>
+            <span class="friend-stat-label">D</span>
+          </div>
+          <span class="stat-slash">/</span>
+          <div class="friend-stat">
+            <span class="friend-stat-val stat-loss">{{ f.stats?.losses ?? 0 }}</span>
+            <span class="friend-stat-label">L</span>
+          </div>
+        </div>
+        <div v-if="f.stats?.last_played" class="friend-last-played">{{ f.stats.last_played }}</div>
       </div>
     </div>
 
@@ -52,7 +79,13 @@
       No allies yet. Send a friend request above!
     </p>
 
-    <PlayerProfile v-if="showProfileUserId" :userId="showProfileUserId" @close="showProfileUserId = null" />
+    <PlayerProfile
+      v-if="showProfileFriend"
+      :userId="showProfileFriend.user.id"
+      :friendshipId="showProfileFriend.id"
+      @close="showProfileFriend = null"
+      @removed="showProfileFriend = null; fetchFriends()"
+    />
   </div>
 </template>
 
@@ -66,7 +99,7 @@ export default {
   data() {
     return {
       username: '',
-      showProfileUserId: null,
+      showProfileFriend: null,
       friends: [],
       pendingSent: [],
       pendingReceived: [],
@@ -204,15 +237,6 @@ export default {
   font-size: 1rem;
 }
 
-.clickable-name {
-  cursor: pointer;
-}
-
-.clickable-name:hover {
-  color: var(--accent-gold);
-  text-decoration: underline;
-}
-
 .friend-actions {
   display: flex;
   gap: 8px;
@@ -221,6 +245,114 @@ export default {
 .action-btn {
   padding: 4px 12px;
   font-size: 0.75rem;
+}
+
+/* Friend cards */
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.friend-card:hover {
+  border-color: var(--accent-gold);
+  background: rgba(212, 168, 67, 0.06);
+}
+
+.friend-card-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.friend-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-gold), #8a6a14);
+  color: var(--wood-dark);
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--border-gold);
+  flex-shrink: 0;
+}
+
+.friend-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.friend-card-name {
+  color: var(--text-bright);
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.friend-card-level {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.friend-card-stats {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.friend-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 20px;
+}
+
+.friend-stat-val {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.stat-win { color: #6abf50; }
+.stat-draw { color: var(--text-secondary); }
+.stat-loss { color: #d05040; }
+
+.stat-slash {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  opacity: 0.5;
+}
+
+.friend-stat-label {
+  font-size: 0.55rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.friend-last-played {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .friends-empty {
@@ -238,6 +370,10 @@ export default {
   .action-btn {
     padding: 4px 10px;
     font-size: 0.7rem;
+  }
+
+  .friend-last-played {
+    display: none;
   }
 }
 </style>

@@ -47,6 +47,7 @@
         <!-- Completion rewards -->
         <div v-if="completion" class="completion-rewards">
           <div v-if="myXp" class="reward-item reward-xp">+{{ myXp }} XP</div>
+          <div v-if="myCoins" class="reward-item reward-coins">+{{ myCoins }} Coins</div>
           <div v-if="myLevelUp" class="reward-item reward-level">Level Up! Lv.{{ myLevelUp }}</div>
           <div v-if="myEloChange" class="reward-item" :class="myEloChange > 0 ? 'reward-elo-up' : 'reward-elo-down'">
             ELO {{ myEloChange > 0 ? '+' : '' }}{{ myEloChange }}
@@ -56,6 +57,20 @@
           </div>
           <div v-if="completion.challenge_completed" class="reward-item reward-challenge">
             Challenge Complete: {{ completion.challenge_completed.title }} (+{{ completion.challenge_completed.reward_xp }} XP)
+          </div>
+        </div>
+
+        <!-- XP Progress Bar -->
+        <div v-if="myXpDetails" class="xp-progress-section">
+          <div class="xp-progress-header">
+            <span class="xp-level-label">Level {{ xpBarLevel }}</span>
+            <span class="xp-amount">+{{ myXp }} XP</span>
+          </div>
+          <div class="xp-progress-track">
+            <div class="xp-progress-fill" :style="{ width: xpBarPercent + '%' }"></div>
+          </div>
+          <div class="xp-progress-footer">
+            <span>{{ myXpDetails.new_xp }} / {{ xpForLevel(xpBarLevel + 1) }} XP</span>
           </div>
         </div>
 
@@ -137,12 +152,27 @@
       <!-- Completion rewards -->
       <div v-if="completion" class="completion-rewards">
         <div v-if="myXp" class="reward-item reward-xp">+{{ myXp }} XP</div>
+        <div v-if="myCoins" class="reward-item reward-coins">+{{ myCoins }} Coins</div>
         <div v-if="myLevelUp" class="reward-item reward-level">Level Up! Lv.{{ myLevelUp }}</div>
         <div v-for="ach in myAchievements" :key="ach.id" class="reward-item reward-achievement">
           {{ ach.name }}
         </div>
         <div v-if="completion.challenge_completed" class="reward-item reward-challenge">
           Challenge Complete: {{ completion.challenge_completed.title }} (+{{ completion.challenge_completed.reward_xp }} XP)
+        </div>
+      </div>
+
+      <!-- XP Progress Bar -->
+      <div v-if="myXpDetails" class="xp-progress-section">
+        <div class="xp-progress-header">
+          <span class="xp-level-label">Level {{ xpBarLevel }}</span>
+          <span class="xp-amount">+{{ myXp }} XP</span>
+        </div>
+        <div class="xp-progress-track">
+          <div class="xp-progress-fill" :style="{ width: xpBarPercent + '%' }"></div>
+        </div>
+        <div class="xp-progress-footer">
+          <span>{{ myXpDetails.new_xp }} / {{ xpForLevel(xpBarLevel + 1) }} XP</span>
         </div>
       </div>
 
@@ -190,6 +220,8 @@ export default {
       loading: true,
       rematchLoading: false,
       showProfileUserId: null,
+      xpBarPercent: 0,
+      xpBarLevel: 0,
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -299,6 +331,16 @@ export default {
       const vals = Object.values(this.completion.achievements_unlocked);
       return vals.length > 0 ? vals[0] : [];
     },
+    myXpDetails() {
+      if (!this.completion?.xp_details) return null;
+      const vals = Object.values(this.completion.xp_details);
+      return vals.length > 0 ? vals[0] : null;
+    },
+    myCoins() {
+      if (!this.completion?.coin_awards) return null;
+      const vals = Object.values(this.completion.coin_awards);
+      return vals.length > 0 ? vals[0]?.coins : null;
+    },
   },
   async mounted() {
     try {
@@ -314,11 +356,23 @@ export default {
 
       this.$nextTick(() => {
         if (this.isDuel) {
-          playSound('win'); // Both players hear the fanfare
+          playSound('win');
         } else if (this.isWin) {
           playSound('win');
         } else {
           playSound('totalLoss');
+        }
+        // Animate XP bar
+        this.animateXpBar();
+        // Update auth store with new stats
+        if (this.myXpDetails) {
+          const coinAwards = this.completion?.coin_awards ? Object.values(this.completion.coin_awards) : [];
+          const newCoins = coinAwards.length > 0 ? coinAwards[0]?.new_coins : undefined;
+          this.auth.updateUserStats({
+            xp: this.myXpDetails.new_xp,
+            level: this.myXpDetails.new_level,
+            coins: newCoins,
+          });
         }
       });
     } catch (e) {
@@ -337,6 +391,52 @@ export default {
     kingdomTotal(k) {
       return (k.wealth || 0) + (k.influence || 0) + (k.security || 0)
         + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);
+    },
+    xpForLevel(level) {
+      return Math.floor(100 * level * (level + 1) / 2);
+    },
+    animateXpBar() {
+      const d = this.myXpDetails;
+      if (!d) return;
+      const oldXp = d.old_xp;
+      const newXp = d.new_xp;
+      const oldLevel = d.old_level;
+      const newLevel = d.new_level;
+
+      // Start at old position
+      const oldLevelStart = this.xpForLevel(oldLevel);
+      const oldLevelEnd = this.xpForLevel(oldLevel + 1);
+      const oldPercent = oldLevelEnd > oldLevelStart
+        ? ((oldXp - oldLevelStart) / (oldLevelEnd - oldLevelStart)) * 100 : 0;
+
+      this.xpBarLevel = oldLevel;
+      this.xpBarPercent = Math.min(100, Math.max(0, oldPercent));
+
+      // Animate after a short delay
+      setTimeout(() => {
+        if (newLevel > oldLevel) {
+          // Fill current bar to 100%, then reset for new level
+          this.xpBarPercent = 100;
+          setTimeout(() => {
+            this.xpBarLevel = newLevel;
+            this.xpBarPercent = 0;
+            setTimeout(() => {
+              const newLevelStart = this.xpForLevel(newLevel);
+              const newLevelEnd = this.xpForLevel(newLevel + 1);
+              const newPercent = newLevelEnd > newLevelStart
+                ? ((newXp - newLevelStart) / (newLevelEnd - newLevelStart)) * 100 : 0;
+              this.xpBarPercent = Math.min(100, Math.max(0, newPercent));
+            }, 200);
+          }, 800);
+        } else {
+          // Same level, just animate to new position
+          const levelStart = this.xpForLevel(oldLevel);
+          const levelEnd = this.xpForLevel(oldLevel + 1);
+          const newPercent = levelEnd > levelStart
+            ? ((newXp - levelStart) / (levelEnd - levelStart)) * 100 : 0;
+          this.xpBarPercent = Math.min(100, Math.max(0, newPercent));
+        }
+      }, 600);
     },
     async rematch() {
       this.rematchLoading = true;
@@ -563,6 +663,12 @@ export default {
   border: 1px solid rgba(212, 168, 67, 0.4);
 }
 
+.reward-coins {
+  background: rgba(255, 200, 50, 0.2);
+  color: #f0c030;
+  border: 1px solid rgba(255, 200, 50, 0.4);
+}
+
 .reward-level {
   background: rgba(74, 138, 58, 0.2);
   color: #6abf50;
@@ -596,6 +702,56 @@ export default {
 @keyframes rewardPop {
   0% { transform: scale(0.5); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
+}
+
+/* XP Progress Bar */
+.xp-progress-section {
+  max-width: 400px;
+  margin: 0 auto 24px;
+}
+
+.xp-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.xp-level-label {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.xp-amount {
+  font-size: 0.85rem;
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.xp-progress-track {
+  height: 14px;
+  background: rgba(0, 0, 0, 0.4);
+  border-radius: 7px;
+  overflow: hidden;
+  border: 1px solid rgba(138, 106, 46, 0.3);
+}
+
+.xp-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a6a2e, #d4a843, #e8c468);
+  border-radius: 7px;
+  transition: width 1s ease-in-out;
+  box-shadow: 0 0 8px rgba(212, 168, 67, 0.4);
+}
+
+.xp-progress-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
 }
 
 /* Duel end screen */

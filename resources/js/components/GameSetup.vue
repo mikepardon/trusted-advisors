@@ -79,15 +79,15 @@
             class="mode-card"
             @click="playSound('clickCard'); gameType = 'cooperative'; step = 'settings'"
           >
-            <h3 class="mode-title">Cooperative</h3>
-            <p class="mode-desc">Work together to guide the kingdom through crisis</p>
+            <h3 class="mode-title">{{ gameMode === 'single' ? 'Classic' : 'Cooperative' }}</h3>
+            <p class="mode-desc">{{ gameMode === 'single' ? "You've been requested to save the land, are you up for the challenge?" : 'Work together to guide the kingdom through crisis' }}</p>
           </div>
           <div
             class="mode-card"
             @click="playSound('clickCard'); gameType = 'duel'; numPlayers = 2; step = 'settings'"
           >
             <h3 class="mode-title">Duel</h3>
-            <p class="mode-desc">Compete head-to-head: draft cards, build rival kingdoms (2 players)</p>
+            <p class="mode-desc">{{ gameMode === 'single' ? 'Challenge a bot: draft cards, build rival kingdoms' : 'Compete head-to-head: draft cards, build rival kingdoms (2 players)' }}</p>
           </div>
         </div>
 
@@ -126,9 +126,23 @@
         <template v-if="gameType === 'duel'">
           <h2 class="section-title">Duel Mode</h2>
           <p class="flavor-text">
-            Two advisors compete to build rival kingdoms.
-            Draft cards through bluff and choice. 2 players locked.
+            {{ gameMode === 'single' ? 'Challenge a bot to build rival kingdoms. Draft cards through bluff and choice.' : 'Two advisors compete to build rival kingdoms. Draft cards through bluff and choice. 2 players locked.' }}
           </p>
+
+          <!-- Bot difficulty selector for single-player duel -->
+          <div v-if="gameMode === 'single'" class="bot-difficulty-select">
+            <label>Bot Difficulty:</label>
+            <div class="player-buttons">
+              <button
+                v-for="d in ['easy', 'medium', 'hard']"
+                :key="d"
+                :class="{ 'btn-primary': botDifficulty === d }"
+                @click="playSound('clickToggle'); botDifficulty = d"
+              >
+                {{ d.charAt(0).toUpperCase() + d.slice(1) }}
+              </button>
+            </div>
+          </div>
         </template>
 
         <!-- Online: friends picker -->
@@ -297,6 +311,19 @@
 
         <p class="tap-hint">Tap an advisor to select</p>
 
+        <div v-if="lockedCharacters.length" class="locked-section">
+          <p class="locked-label">Locked Advisors</p>
+          <div class="locked-list">
+            <div v-for="c in lockedCharacters" :key="c.id" class="locked-card">
+              <img :src="c.image_url || '/images/character.png'" :alt="c.name" class="locked-portrait" />
+              <div class="locked-info">
+                <span class="locked-name">{{ c.name }}</span>
+                <span class="locked-req">{{ c.unlock_requirement }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <button class="back-btn back-btn-centered" @click="playSound('clickNav'); goBack()">&#8592; Back</button>
       </div>
     </div>
@@ -349,6 +376,7 @@ export default {
       addFriendUsername: '',
       addFriendError: '',
       addFriendSuccess: '',
+      botDifficulty: 'medium',
       // Game length options
       gameLengthOptions: [
         { label: '1 Year', rounds: 12 },
@@ -365,10 +393,15 @@ export default {
     },
     availableCharacters() {
       const selectedIds = Object.values(this.playerSelections);
-      return this.characters.filter(c => !selectedIds.includes(c.id));
+      return this.characters.filter(c => !selectedIds.includes(c.id) && !c.is_locked_for_user);
+    },
+    lockedCharacters() {
+      return this.characters.filter(c => c.is_locked_for_user);
     },
     allPlayersPicked() {
-      return Object.keys(this.playerSelections).length >= this.numPlayers;
+      // Single-player duel: only 1 character needed (bot gets assigned automatically)
+      const needed = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
+      return Object.keys(this.playerSelections).length >= needed;
     },
   },
   watch: {
@@ -425,16 +458,15 @@ export default {
       if (this.gameMode === 'single') {
         this.numPlayers = 1;
         this.gameType = 'cooperative';
-        this.step = 'settings';
       } else {
         this.numPlayers = 2;
         this.gameType = 'cooperative';
         if (this.gameMode === 'online') {
           this.fetchFriendsForPicker();
         }
-        // Show game type selection (cooperative vs duel) before settings
-        this.step = 'gameType';
       }
+      // All modes can choose game type (single player duel = vs bot)
+      this.step = 'gameType';
     },
     async fetchFriendsForPicker() {
       this.friendsLoading = true;
@@ -503,13 +535,17 @@ export default {
           this.$router.push(`/game/${this.gameId}`);
           return;
         }
+        const gamePayload = {
+          game_mode: this.gameMode,
+          game_type: this.gameType,
+          num_players: this.numPlayers,
+          total_rounds: this.totalRounds,
+        };
+        if (this.gameMode === 'single' && this.gameType === 'duel') {
+          gamePayload.bot_difficulty = this.botDifficulty;
+        }
         const [gameRes, charsRes] = await Promise.all([
-          axios.post('/api/games', {
-            game_mode: this.gameMode,
-            game_type: this.gameType,
-            num_players: this.numPlayers,
-            total_rounds: this.totalRounds,
-          }),
+          axios.post('/api/games', gamePayload),
           axios.get('/api/characters'),
         ]);
         this.gameId = gameRes.data.id;
@@ -532,7 +568,8 @@ export default {
       if (!char) return;
       playSound('clickCard');
       this.playerSelections[this.currentPickingPlayer] = char.id;
-      if (this.currentPickingPlayer < this.numPlayers) {
+      const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
+      if (this.currentPickingPlayer < pickCount) {
         this.currentPickingPlayer++;
         this.$nextTick(() => {
           this.activeSlideIndex = 0;
@@ -590,12 +627,15 @@ export default {
       this.starting = true;
       try {
         const selectedIds = [];
-        for (let i = 1; i <= this.numPlayers; i++) {
+        const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
+        for (let i = 1; i <= pickCount; i++) {
           selectedIds.push(this.playerSelections[i]);
         }
-        await axios.post(`/api/games/${this.gameId}/start`, {
-          characters: selectedIds,
-        });
+        const startPayload = { characters: selectedIds };
+        if (this.gameMode === 'single' && this.gameType === 'duel') {
+          startPayload.bot_difficulty = this.botDifficulty;
+        }
+        await axios.post(`/api/games/${this.gameId}/start`, startPayload);
         this.$router.push(`/game/${this.gameId}`);
       } catch (e) {
         alert('Failed to start: ' + (e.response?.data?.error || e.message));
@@ -764,6 +804,13 @@ export default {
   height: 50px;
   font-size: 1.2rem;
   border-radius: 6px;
+}
+
+.bot-difficulty-select .player-buttons button {
+  width: auto;
+  min-width: 80px;
+  padding: 8px 16px;
+  font-size: 1rem;
 }
 
 /* Game length selector */
@@ -1143,6 +1190,64 @@ export default {
 @keyframes hintPulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
+}
+
+/* Locked characters */
+.locked-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(138, 106, 46, 0.2);
+}
+
+.locked-label {
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  opacity: 0.6;
+}
+
+.locked-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+}
+
+.locked-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(138, 106, 46, 0.15);
+  border-radius: 8px;
+  padding: 6px 12px;
+  opacity: 0.5;
+}
+
+.locked-portrait {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  filter: grayscale(1);
+}
+
+.locked-name {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.locked-req {
+  display: block;
+  color: var(--accent-gold);
+  font-size: 0.7rem;
+  opacity: 0.8;
 }
 
 /* Summary panel */

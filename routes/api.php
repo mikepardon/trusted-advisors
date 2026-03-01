@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CoinShopController;
 use App\Http\Controllers\FriendshipController;
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\GameLobbyController;
@@ -65,6 +66,15 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/duel-roll', [GameController::class, 'duelRoll']);
     Route::get('/games/{game}/duel-hand/{playerNumber}', [GameController::class, 'duelHand']);
 
+    // Bot turn (single-player duel)
+    Route::post('/games/{game}/bot-turn', [GameController::class, 'botTurn']);
+
+    // Character ability
+    Route::post('/games/{game}/use-ability', [GameController::class, 'useAbility']);
+
+    // Item management
+    Route::post('/games/{game}/discard-item', [GameController::class, 'discardItem']);
+
     // Cancel game
     Route::post('/games/{game}/cancel', [GameController::class, 'cancelGame']);
 
@@ -82,6 +92,10 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/seasons', [GameController::class, 'seasons']);
 
     Route::get('/users/{user}/profile', [UserProfileController::class, 'show']);
+
+    // Coin shop
+    Route::get('/shop', [CoinShopController::class, 'index']);
+    Route::post('/shop/{unlockable}/purchase', [CoinShopController::class, 'purchase']);
 
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);

@@ -73,6 +73,13 @@
             </div>
           </div>
         </div>
+
+        <!-- Friend actions -->
+        <div v-if="friendshipId" class="profile-actions">
+          <button class="btn-primary action-btn-profile" @click="requestDuel">&#9876; Request a Duel</button>
+          <button v-if="!confirmRemove" class="btn-danger action-btn-profile" @click="confirmRemove = true">Remove Friend</button>
+          <button v-else class="btn-danger action-btn-profile" @click="removeFriend">Click to Confirm</button>
+        </div>
       </template>
     </div>
   </div>
@@ -85,13 +92,15 @@ export default {
   name: 'PlayerProfile',
   props: {
     userId: { type: [Number, String], required: true },
+    friendshipId: { type: [Number, String], default: null },
   },
-  emits: ['close'],
+  emits: ['close', 'removed'],
   data() {
     return {
       profile: null,
       loading: true,
       error: null,
+      confirmRemove: false,
     };
   },
   computed: {
@@ -115,6 +124,33 @@ export default {
       this.error = 'Could not load profile.';
     }
     this.loading = false;
+  },
+  methods: {
+    async removeFriend() {
+      try {
+        await axios.delete(`/api/friends/${this.friendshipId}`);
+        this.$emit('removed');
+      } catch {
+        this.error = 'Failed to remove friend.';
+      }
+    },
+    async requestDuel() {
+      try {
+        // Create a new online duel game and invite this friend
+        const gameRes = await axios.post('/api/games', {
+          game_mode: 'online',
+          game_type: 'duel',
+          num_players: 2,
+          total_rounds: 24,
+        });
+        const gameId = gameRes.data.id;
+        await axios.post(`/api/games/${gameId}/invite`, { user_id: this.userId });
+        this.$emit('close');
+        this.$router.push(`/game/${gameId}`);
+      } catch (e) {
+        this.error = e.response?.data?.error || 'Failed to create duel invite.';
+      }
+    },
   },
 };
 </script>
@@ -347,6 +383,22 @@ export default {
   display: block;
   color: var(--text-secondary);
   font-size: 0.75rem;
+}
+
+/* Profile actions */
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(138, 106, 46, 0.2);
+}
+
+.action-btn-profile {
+  width: 100%;
+  padding: 10px;
+  font-size: 0.9rem;
 }
 
 @media (max-width: 768px) {

@@ -9,6 +9,30 @@
       <span class="card-difficulty">Difficulty {{ card.difficulty }}</span>
     </div>
 
+    <!-- Ability activation (before roll) -->
+    <div v-if="canRoll && !hasRolled && !isRolling && ability && abilityUses > 0" class="ability-section">
+      <button
+        v-if="!abilityActivated"
+        class="btn-ability"
+        :disabled="activatingAbility"
+        @click="$emit('use-ability')"
+      >
+        &#9733; {{ ability.name }}: {{ ability.description }}
+        <span class="ability-uses-badge">({{ abilityUses }} use{{ abilityUses > 1 ? 's' : '' }} left)</span>
+      </button>
+      <div v-else class="ability-activated">
+        &#9733; {{ ability.name }} activated!
+      </div>
+    </div>
+
+    <!-- Shadow peek (if shadow ability was used) -->
+    <div v-if="peekedCards && peekedCards.length" class="peek-section">
+      <p class="peek-title">&#128065; Glimpse of the Future:</p>
+      <div v-for="(pc, i) in peekedCards" :key="i" class="peek-card">
+        {{ pc.title }} (Difficulty {{ pc.difficulty }})
+      </div>
+    </div>
+
     <!-- Dice rolling area -->
     <div class="dice-area">
       <div class="dice-row">
@@ -33,15 +57,6 @@
           </span>
         </template>
       </div>
-
-      <button
-        v-if="!hasRolled && !isRolling && canRoll"
-        class="btn-roll"
-        :disabled="submitting"
-        @click="startRolling"
-      >
-        Roll!
-      </button>
 
       <p v-if="!canRoll && !hasRolled" class="waiting-text">
         Waiting for opponent to roll...
@@ -95,8 +110,13 @@ export default {
     playerName: { type: String, default: 'Player' },
     canRoll: { type: Boolean, default: false },
     rollData: { type: Object, default: null },
+    ability: { type: Object, default: null },
+    abilityUses: { type: Number, default: 0 },
+    abilityActivated: { type: Boolean, default: false },
+    activatingAbility: { type: Boolean, default: false },
+    peekedCards: { type: Array, default: null },
   },
-  emits: ['roll'],
+  emits: ['roll', 'use-ability'],
   data() {
     return {
       isRolling: false,
@@ -114,7 +134,14 @@ export default {
     },
   },
   methods: {
+    scheduleAutoRoll() {
+      // If ability is available, give player time to decide (3s), otherwise roll quickly
+      const hasAbility = this.ability && this.abilityUses > 0 && !this.abilityActivated;
+      const delay = hasAbility ? 3000 : 600;
+      this._autoRollTimer = setTimeout(() => this.startRolling(), delay);
+    },
     startRolling() {
+      if (this._autoRollTimer) clearTimeout(this._autoRollTimer);
       if (this.isRolling || this.hasRolled || this.submitting) return;
 
       playSound('dice');
@@ -140,7 +167,17 @@ export default {
       }, 70);
     },
   },
+  mounted() {
+    if (this.canRoll && !this.hasRolled && !this.isRolling) {
+      this.scheduleAutoRoll();
+    }
+  },
   watch: {
+    canRoll(val) {
+      if (val && !this.hasRolled && !this.isRolling) {
+        this.scheduleAutoRoll();
+      }
+    },
     rollData(val) {
       if (val) {
         this.$nextTick(() => {
@@ -341,9 +378,77 @@ export default {
   text-align: center;
 }
 
+/* Ability section */
+.ability-section {
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+.btn-ability {
+  background: linear-gradient(135deg, #2a1a40, #4a2a6a);
+  color: #d4a0ff;
+  border: 2px solid #8a60c0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.btn-ability:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3a2a50, #5a3a7a);
+  box-shadow: 0 0 15px rgba(138, 96, 192, 0.4);
+  border-color: #b080e0;
+}
+
+.btn-ability:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ability-uses-badge {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
+.ability-activated {
+  color: #d4a0ff;
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  padding: 8px;
+  background: rgba(138, 96, 192, 0.15);
+  border: 1px solid rgba(138, 96, 192, 0.3);
+  border-radius: 6px;
+}
+
+/* Shadow peek */
+.peek-section {
+  background: rgba(138, 96, 192, 0.1);
+  border: 1px solid rgba(138, 96, 192, 0.25);
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+}
+
+.peek-title {
+  color: #d4a0ff;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.peek-card {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  padding: 2px 0;
+}
+
 @media (max-width: 768px) {
   .duel-roll { padding: 12px; }
   .face-badge { padding: 4px 10px; font-size: 0.8rem; }
   .roll-summary { flex-direction: column; gap: 6px; }
+  .btn-ability { font-size: 0.75rem; padding: 8px 12px; }
 }
 </style>
