@@ -28,6 +28,7 @@ use App\Models\Item;
 use App\Models\Season;
 use App\Models\Unlockable;
 use App\Models\UserAchievement;
+use App\Models\User;
 use App\Models\UserUnlockable;
 use App\Services\BotService;
 use App\Services\GameCompletionService;
@@ -1777,9 +1778,9 @@ class GameController extends Controller
     }
 
     /**
-     * Process the bot's turn in a single-player duel.
+     * Process the opponent's turn in a duel (bot player).
      */
-    public function botTurn(Game $game, Request $request): JsonResponse
+    public function opponentTurn(Game $game, Request $request): JsonResponse
     {
         if (!$game->isDuel()) {
             return response()->json(['error' => 'Not a duel game'], 422);
@@ -1791,6 +1792,7 @@ class GameController extends Controller
             return response()->json(['error' => 'No bot player in this game'], 422);
         }
 
+        $botUser = User::find($bot->user_id);
         $botService = app(BotService::class);
         $phase = $game->duel_phase;
 
@@ -1798,9 +1800,8 @@ class GameController extends Controller
         if ($phase === 'offering' && $game->offerer_player_number === $bot->player_number) {
             $handId = $botService->decideDuelOffer($game, $bot);
 
-            // Simulate the offer via internal call
             $fakeRequest = Request::create('', 'POST', ['revealed_hand_id' => $handId]);
-            $fakeRequest->setUserResolver(fn () => $request->user());
+            $fakeRequest->setUserResolver(fn () => $botUser);
             return $this->duelOffer($game->fresh(), $fakeRequest);
         }
 
@@ -1811,7 +1812,7 @@ class GameController extends Controller
                 $handId = $botService->decideDuelChoice($game, $bot);
 
                 $fakeRequest = Request::create('', 'POST', ['chosen_hand_id' => $handId]);
-                $fakeRequest->setUserResolver(fn () => $request->user());
+                $fakeRequest->setUserResolver(fn () => $botUser);
                 return $this->duelChoose($game->fresh(), $fakeRequest);
             }
         }
@@ -1819,7 +1820,7 @@ class GameController extends Controller
         // Bot is rolling
         if ($phase === 'rolling_offerer' && $game->offerer_player_number === $bot->player_number) {
             $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
-            $fakeRequest->setUserResolver(fn () => $request->user());
+            $fakeRequest->setUserResolver(fn () => $botUser);
             return $this->duelRoll($game->fresh(), $fakeRequest);
         }
 
@@ -1827,12 +1828,12 @@ class GameController extends Controller
             $chooser = $game->getChooser();
             if ($chooser && $chooser->is_bot) {
                 $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
-                $fakeRequest->setUserResolver(fn () => $request->user());
+                $fakeRequest->setUserResolver(fn () => $botUser);
                 return $this->duelRoll($game->fresh(), $fakeRequest);
             }
         }
 
-        return response()->json(['error' => 'Not the bot\'s turn'], 422);
+        return response()->json(['error' => 'Not the opponent\'s turn'], 422);
     }
 
     public function history(Request $request): JsonResponse

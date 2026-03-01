@@ -695,8 +695,8 @@ export default {
     },
 
     async triggerBotTurn() {
-      if (this._botTurnPending) return;
-      this._botTurnPending = true;
+      if (this._opponentTurnPending) return;
+      this._opponentTurnPending = true;
 
       // Delay for natural feel: longer for online (looks like real player)
       const delay = this.isOnline
@@ -705,7 +705,7 @@ export default {
       await new Promise(r => setTimeout(r, delay));
 
       try {
-        const res = await axios.post(`/api/games/${this.gameId}/bot-turn`);
+        const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
         const data = res.data;
 
         if (this.duelPhase === 'offering' && data.duel_phase === 'choosing') {
@@ -744,7 +744,7 @@ export default {
         console.error('Bot turn failed:', e);
       }
 
-      this._botTurnPending = false;
+      this._opponentTurnPending = false;
     },
 
     handleNextRoundStarted(data) {
