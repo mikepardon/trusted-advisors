@@ -9,6 +9,12 @@ class MatchmakingEntry extends Model
 {
     protected $fillable = ['user_id', 'elo_rating', 'elo_range', 'total_rounds', 'status', 'matched_game_id', 'bot_timeout'];
 
+    protected $casts = [
+        'elo_rating' => 'integer',
+        'elo_range' => 'integer',
+        'bot_timeout' => 'integer',
+    ];
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
