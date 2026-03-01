@@ -2,7 +2,10 @@
   <div>
     <div class="page-header">
       <h2 class="page-title">Decision Cards</h2>
-      <button class="btn-primary" @click="openCreate">+ New Card</button>
+      <div class="header-buttons">
+        <button class="btn-primary" @click="openCreate">+ New Card</button>
+        <button class="btn-ai" @click="showAiModal = true">Generate with AI</button>
+      </div>
     </div>
 
     <AdminSearchInput v-model="searchQuery" />
@@ -160,6 +163,34 @@
         </form>
       </div>
     </div>
+    <!-- AI Generate Modal -->
+    <div v-if="showAiModal" class="modal-overlay" @click.self="showAiModal = false">
+      <div class="modal-content">
+        <h3>Generate Card with AI</h3>
+        <div class="form-group">
+          <label>Category (optional)</label>
+          <select v-model="aiCategory">
+            <option value="">Any</option>
+            <option value="military">Military</option>
+            <option value="political">Political</option>
+            <option value="economic">Economic</option>
+            <option value="religious">Religious</option>
+            <option value="social">Social</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Prompt (optional — describe the card you want)</label>
+          <textarea v-model="aiPrompt" rows="3" placeholder="e.g. A situation involving a suspiciously generous merchant"></textarea>
+        </div>
+        <div v-if="aiError" class="form-error">{{ aiError }}</div>
+        <div class="modal-actions">
+          <button class="btn-primary" :disabled="aiGenerating" @click="generateWithAi">
+            {{ aiGenerating ? 'Generating...' : 'Generate' }}
+          </button>
+          <button type="button" @click="showAiModal = false">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -182,6 +213,11 @@ export default {
       editing: null,
       saving: false,
       formError: '',
+      showAiModal: false,
+      aiPrompt: '',
+      aiCategory: '',
+      aiGenerating: false,
+      aiError: '',
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -379,6 +415,47 @@ export default {
       }
       this.saving = false;
     },
+    async generateWithAi() {
+      this.aiError = '';
+      this.aiGenerating = true;
+      try {
+        const res = await axios.post('/api/admin/ai/generate-card', {
+          prompt: this.aiPrompt || undefined,
+          category: this.aiCategory || undefined,
+        });
+        const data = res.data;
+        this.showAiModal = false;
+        this.aiPrompt = '';
+        this.aiCategory = '';
+        // Open create modal pre-filled with AI data
+        const maxSort = this.cards.reduce((m, c) => Math.max(m, c.sort_order), 0);
+        const posData = this.objToForm(data.positive_effects);
+        const negData = this.objToForm(data.negative_effects);
+        this.editing = null;
+        this.form = {
+          title: data.title || '',
+          description: data.description || '',
+          sort_order: maxSort + 1,
+          difficulty: data.difficulty || 6,
+          category: data.category || '',
+          positive: { ...posData.stats },
+          negative: { ...negData.stats },
+          positive_flavor: data.positive_flavor || '',
+          negative_flavor: data.negative_flavor || '',
+          positiveRecoverDie: posData.recoverDie,
+          positiveDrawItem: posData.drawItem,
+          positiveRemoveCurse: posData.removeCurse,
+          negativeLoseDie: negData.loseDie,
+          negativeDiscardItem: negData.discardItem,
+          negativeDrawItem: negData.drawItem,
+        };
+        this.formError = '';
+        this.showModal = true;
+      } catch (e) {
+        this.aiError = e.response?.data?.message || e.response?.data?.error || 'AI generation failed';
+      }
+      this.aiGenerating = false;
+    },
     async confirmDelete(card) {
       if (!confirm(`Delete card "${card.title}"?`)) return;
       try {
@@ -404,6 +481,33 @@ export default {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1.5rem;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-ai {
+  background: rgba(100, 60, 180, 0.2);
+  color: #b080e0;
+  border: 1px solid rgba(100, 60, 180, 0.4);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-ai:hover {
+  background: rgba(100, 60, 180, 0.35);
+  border-color: rgba(140, 90, 210, 0.6);
+}
+
+.btn-ai:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .loading { text-align: center; color: var(--text-secondary); padding: 40px; }

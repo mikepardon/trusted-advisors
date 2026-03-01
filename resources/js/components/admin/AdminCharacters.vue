@@ -2,7 +2,10 @@
   <div>
     <div class="page-header">
       <h2 class="page-title">Characters</h2>
-      <button class="btn-primary" @click="openCreate">+ New Character</button>
+      <div class="header-buttons">
+        <button class="btn-primary" @click="openCreate">+ New Character</button>
+        <button class="btn-ai" @click="showAiModal = true">Generate with AI</button>
+      </div>
     </div>
 
     <!-- Dice per player count rules -->
@@ -147,6 +150,23 @@
         </form>
       </div>
     </div>
+    <!-- AI Generate Modal -->
+    <div v-if="showAiModal" class="modal-overlay" @click.self="showAiModal = false">
+      <div class="modal-content">
+        <h3>Generate Character with AI</h3>
+        <div class="form-group">
+          <label>Prompt (optional — describe the character you want)</label>
+          <textarea v-model="aiPrompt" rows="3" placeholder="e.g. A cowardly knight who is secretly brilliant at accounting"></textarea>
+        </div>
+        <div v-if="aiError" class="form-error">{{ aiError }}</div>
+        <div class="modal-actions">
+          <button class="btn-primary" :disabled="aiGenerating" @click="generateWithAi">
+            {{ aiGenerating ? 'Generating...' : 'Generate' }}
+          </button>
+          <button type="button" @click="showAiModal = false">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -178,6 +198,10 @@ export default {
       rulesSaved: false,
       imageUploading: false,
       imageUploaded: false,
+      showAiModal: false,
+      aiPrompt: '',
+      aiGenerating: false,
+      aiError: '',
     };
   },
   computed: {
@@ -349,6 +373,36 @@ export default {
       this.imageUploading = false;
       event.target.value = '';
     },
+    async generateWithAi() {
+      this.aiError = '';
+      this.aiGenerating = true;
+      try {
+        const res = await axios.post('/api/admin/ai/generate-character', {
+          prompt: this.aiPrompt || undefined,
+        });
+        const data = res.data;
+        this.showAiModal = false;
+        this.aiPrompt = '';
+        // Open create modal pre-filled with AI data
+        this.editing = null;
+        this.form = {
+          name: data.name || '',
+          description: data.description || '',
+          wild_value: data.wild_value || 3,
+          wild_ability: data.wild_ability || '',
+          wild_ability_description: data.wild_ability_description || '',
+          addon_id: null,
+        };
+        this.die1Input = (data.dice?.[0] || []).join(', ');
+        this.die2Input = (data.dice?.[1] || []).join(', ');
+        this.die3Input = (data.dice?.[2] || []).join(', ');
+        this.formError = '';
+        this.showModal = true;
+      } catch (e) {
+        this.aiError = e.response?.data?.message || e.response?.data?.error || 'AI generation failed';
+      }
+      this.aiGenerating = false;
+    },
     async confirmDelete(c) {
       if (!confirm(`Delete character "${c.name}"? This cannot be undone.`)) return;
       try {
@@ -374,6 +428,33 @@ export default {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1.5rem;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-ai {
+  background: rgba(100, 60, 180, 0.2);
+  color: #b080e0;
+  border: 1px solid rgba(100, 60, 180, 0.4);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-ai:hover {
+  background: rgba(100, 60, 180, 0.35);
+  border-color: rgba(140, 90, 210, 0.6);
+}
+
+.btn-ai:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 /* Rules panel */

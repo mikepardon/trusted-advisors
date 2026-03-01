@@ -23,6 +23,7 @@ use App\Http\Controllers\Admin\SoundAssetController;
 use App\Http\Controllers\Admin\UnlockableController;
 use App\Http\Controllers\Admin\AddonController;
 use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\AiGeneratorController;
 use App\Http\Controllers\Admin\GameManagementController;
 use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
@@ -150,4 +151,9 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('users/{user}', [AdminUserController::class, 'show']);
     Route::post('users/{user}/ban', [AdminUserController::class, 'ban']);
     Route::get('users/{user}/login-logs', [AdminUserController::class, 'loginLogs']);
+
+    // AI content generation
+    Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);
+    Route::post('ai/generate-card', [AiGeneratorController::class, 'generateCard']);
+    Route::post('ai/generate-event', [AiGeneratorController::class, 'generateEvent']);
 });

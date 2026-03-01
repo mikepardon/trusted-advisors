@@ -2,7 +2,10 @@
   <div>
     <div class="page-header">
       <h2 class="page-title">Events</h2>
-      <button class="btn-primary" @click="openCreate">+ New Event</button>
+      <div class="header-buttons">
+        <button class="btn-primary" @click="openCreate">+ New Event</button>
+        <button class="btn-ai" @click="showAiModal = true">Generate with AI</button>
+      </div>
     </div>
 
     <AdminSearchInput v-model="searchQuery" />
@@ -77,6 +80,23 @@
         </form>
       </div>
     </div>
+    <!-- AI Generate Modal -->
+    <div v-if="showAiModal" class="modal-overlay" @click.self="showAiModal = false">
+      <div class="modal-content">
+        <h3>Generate Event with AI</h3>
+        <div class="form-group">
+          <label>Prompt (optional — describe the event you want)</label>
+          <textarea v-model="aiPrompt" rows="3" placeholder="e.g. A plague that only affects left-handed people"></textarea>
+        </div>
+        <div v-if="aiError" class="form-error">{{ aiError }}</div>
+        <div class="modal-actions">
+          <button class="btn-primary" :disabled="aiGenerating" @click="generateWithAi">
+            {{ aiGenerating ? 'Generating...' : 'Generate' }}
+          </button>
+          <button type="button" @click="showAiModal = false">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -97,6 +117,10 @@ export default {
       editing: null,
       saving: false,
       formError: '',
+      showAiModal: false,
+      aiPrompt: '',
+      aiGenerating: false,
+      aiError: '',
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -191,6 +215,31 @@ export default {
       }
       this.saving = false;
     },
+    async generateWithAi() {
+      this.aiError = '';
+      this.aiGenerating = true;
+      try {
+        const res = await axios.post('/api/admin/ai/generate-event', {
+          prompt: this.aiPrompt || undefined,
+        });
+        const data = res.data;
+        this.showAiModal = false;
+        this.aiPrompt = '';
+        // Open create modal pre-filled with AI data
+        this.editing = null;
+        this.form = {
+          title: data.title || '',
+          effect: data.effect || '',
+          modifiers: { ...(data.stat_modifiers || {}) },
+          addon_id: null,
+        };
+        this.formError = '';
+        this.showModal = true;
+      } catch (e) {
+        this.aiError = e.response?.data?.message || e.response?.data?.error || 'AI generation failed';
+      }
+      this.aiGenerating = false;
+    },
     async confirmDelete(ev) {
       if (!confirm(`Delete event "${ev.title}"?`)) return;
       try {
@@ -216,6 +265,33 @@ export default {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1.5rem;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-ai {
+  background: rgba(100, 60, 180, 0.2);
+  color: #b080e0;
+  border: 1px solid rgba(100, 60, 180, 0.4);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-ai:hover {
+  background: rgba(100, 60, 180, 0.35);
+  border-color: rgba(140, 90, 210, 0.6);
+}
+
+.btn-ai:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .loading { text-align: center; color: var(--text-secondary); padding: 40px; }
