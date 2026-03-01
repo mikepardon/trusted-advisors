@@ -48,18 +48,38 @@
           </button>
         </div>
       </div>
+
+      <div class="settings-group">
+        <h3 class="group-title">Gameplay</h3>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Show Hints</span>
+            <span class="setting-desc">Helpful tips for new features as you explore</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: hintsEnabled }"
+            @click="toggleHints"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
 import { getSoundSettings, saveSoundSettings, playSound } from '../sounds';
+import { getHintsSetting, setHintsSetting } from '../hints';
 
 export default {
   name: 'SettingsPage',
   data() {
     return {
       settings: getSoundSettings(),
+      hintsEnabled: getHintsSetting(),
     };
   },
   methods: {
@@ -67,6 +87,13 @@ export default {
       this.settings[key] = !this.settings[key];
       saveSoundSettings(this.settings);
       if (this.settings[key]) {
+        playSound('clickToggle');
+      }
+    },
+    toggleHints() {
+      this.hintsEnabled = !this.hintsEnabled;
+      setHintsSetting(this.hintsEnabled);
+      if (this.hintsEnabled) {
         playSound('clickToggle');
       }
     },

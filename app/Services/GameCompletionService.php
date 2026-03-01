@@ -28,6 +28,7 @@ class GameCompletionService
             'xp_details' => [],
             'coin_awards' => [],
             'level_ups' => [],
+            'new_unlocks' => [],
             'elo_changes' => [],
             'achievements_unlocked' => [],
             'challenge_completed' => null,
@@ -51,6 +52,9 @@ class GameCompletionService
             ];
             if ($xpResult['leveled_up']) {
                 $summary['level_ups'][$user->id] = $xpResult['new_level'];
+            }
+            if (!empty($xpResult['new_unlocks'])) {
+                $summary['new_unlocks'][$user->id] = $xpResult['new_unlocks'];
             }
 
             // Coins
@@ -131,6 +135,30 @@ class GameCompletionService
                 $target = $criteria['count'] ?? 10;
                 return ['current' => $this->getUserDuelPlays($user), 'target' => $target];
 
+            case 'solo_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserSoloPlays($user), 'target' => $target];
+
+            case 'solo_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserSoloWins($user), 'target' => $target];
+
+            case 'local_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserLocalPlays($user), 'target' => $target];
+
+            case 'online_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserOnlineWins($user), 'target' => $target];
+
+            case 'coop_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserCoopPlays($user), 'target' => $target];
+
+            case 'coop_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getUserCoopWins($user), 'target' => $target];
+
             case 'wins_with_characters':
                 $target = $criteria['count'] ?? 5;
                 return ['current' => $this->getUserCharacterWins($user), 'target' => $target];
@@ -198,10 +226,11 @@ class GameCompletionService
         $user->save();
 
         $leveledUp = $user->level > $oldLevel;
+        $newUnlocks = [];
 
         // Check level-based unlockables on level up
         if ($leveledUp) {
-            $this->checkLevelUnlockables($user);
+            $newUnlocks = $this->checkLevelUnlockables($user);
         }
 
         return [
@@ -211,6 +240,7 @@ class GameCompletionService
             'old_xp' => $oldXp,
             'old_level' => $oldLevel,
             'new_xp' => $user->xp,
+            'new_unlocks' => $newUnlocks,
         ];
     }
 
@@ -388,6 +418,24 @@ class GameCompletionService
             case 'duel_plays':
                 return $this->getUserDuelPlays($user) >= ($criteria['count'] ?? 10);
 
+            case 'solo_plays':
+                return $this->getUserSoloPlays($user) >= ($criteria['count'] ?? 5);
+
+            case 'solo_wins':
+                return $this->getUserSoloWins($user) >= ($criteria['count'] ?? 5);
+
+            case 'local_plays':
+                return $this->getUserLocalPlays($user) >= ($criteria['count'] ?? 5);
+
+            case 'online_wins':
+                return $this->getUserOnlineWins($user) >= ($criteria['count'] ?? 5);
+
+            case 'coop_plays':
+                return $this->getUserCoopPlays($user) >= ($criteria['count'] ?? 5);
+
+            case 'coop_wins':
+                return $this->getUserCoopWins($user) >= ($criteria['count'] ?? 5);
+
             case 'all_stats_below':
                 return $this->isWinner($user, $game, $game->players) && $this->checkAllStatsBelow($user, $game, $criteria['value'] ?? 5);
 
@@ -527,7 +575,7 @@ class GameCompletionService
         }
     }
 
-    private function checkLevelUnlockables(User $user): void
+    private function checkLevelUnlockables(User $user): array
     {
         $levelUnlockables = Unlockable::where('unlock_method', 'level')
             ->where('unlock_value', '<=', $user->level)
@@ -537,6 +585,7 @@ class GameCompletionService
             ->pluck('unlockable_id')
             ->toArray();
 
+        $newUnlocks = [];
         foreach ($levelUnlockables as $unlockable) {
             if (!in_array($unlockable->id, $alreadyUnlocked)) {
                 UserUnlockable::create([
@@ -544,8 +593,15 @@ class GameCompletionService
                     'unlockable_id' => $unlockable->id,
                     'unlocked_at' => now(),
                 ]);
+                $newUnlocks[] = [
+                    'id' => $unlockable->id,
+                    'name' => $unlockable->name,
+                    'type' => $unlockable->type,
+                ];
             }
         }
+
+        return $newUnlocks;
     }
 
     private function getUserOnlinePlays(User $user): int
@@ -576,6 +632,98 @@ class GameCompletionService
         return Game::where('status', 'completed')
             ->where('game_type', 'duel')
             ->whereIn('id', $duelGameIds)
+            ->count();
+    }
+
+    private function getUserSoloPlays(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_mode', 'single')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+    }
+
+    private function getUserSoloWins(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_mode', 'single')
+            ->where('win', true)
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+    }
+
+    private function getUserLocalPlays(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_mode', 'pass_and_play')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+    }
+
+    private function getUserOnlineWins(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        // Coop online wins
+        $coopWins = Game::where('status', 'completed')
+            ->where('game_mode', 'online')
+            ->where('game_type', '!=', 'duel')
+            ->where('win', true)
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+
+        // Duel online wins
+        $duelWins = Game::where('status', 'completed')
+            ->where('game_mode', 'online')
+            ->where('game_type', 'duel')
+            ->whereIn('id', $participantGameIds)
+            ->where(function ($q) use ($user) {
+                $q->whereHas('players', function ($pq) use ($user) {
+                    $pq->where('user_id', $user->id)
+                        ->whereColumn('player_number', 'games.winner_player_number');
+                });
+            })
+            ->count();
+
+        return $coopWins + $duelWins;
+    }
+
+    private function getUserCoopPlays(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_type', '!=', 'duel')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
+            ->count();
+    }
+
+    private function getUserCoopWins(User $user): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        return Game::where('status', 'completed')
+            ->where('game_type', '!=', 'duel')
+            ->where('win', true)
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            })
             ->count();
     }
 

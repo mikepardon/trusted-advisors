@@ -42,6 +42,36 @@
           <em>and</em> triggers a unique character ability &mdash; rallying troops,
           divine insight, or a risky gamble.
         </p>
+        <p>
+          Each character also has a <strong>manual ability</strong> that can be
+          activated once per game for a powerful one-time effect.
+        </p>
+      </div>
+
+      <div class="htp-section">
+        <h3>Items</h3>
+        <p>
+          Items are earned through card effects and events. They provide
+          <strong>passive bonuses</strong> like extra roll power or reduced difficulty.
+        </p>
+        <ul>
+          <li>You can hold up to <strong>2 items</strong> at a time. If you gain a third, you must discard one.</li>
+          <li><span class="hl-neg">Cursed items</span> cannot be discarded and impose penalties each round.</li>
+          <li>Some cards grant the <em>Remove Curse</em> effect to cleanse cursed items.</li>
+        </ul>
+      </div>
+
+      <div class="htp-section">
+        <h3>Events</h3>
+        <p>
+          Every few months, a <strong>kingdom event</strong> triggers &mdash; a plague,
+          a festival, a drought. Events modify stats and may impose special mechanics:
+        </p>
+        <ul>
+          <li><strong>Reduce Dice</strong> &mdash; Advisors temporarily roll fewer dice.</li>
+          <li><strong>Grant Items</strong> &mdash; Each advisor receives a random item.</li>
+          <li><strong>Altered Deal</strong> &mdash; The number of positive and negative cards changes.</li>
+        </ul>
       </div>
 
       <div class="htp-section">
@@ -52,9 +82,45 @@
         </p>
         <p>
           <span class="hl-neg">If any stat hits 0, the kingdom falls.</span>
-          Survive all 24 months and you win! The higher your stats at the end,
+          Survive all months and you win! The higher your stats at the end,
           the more glorious your legacy.
         </p>
+      </div>
+
+      <div class="htp-section">
+        <h3>Duel Mode</h3>
+        <p>
+          In <span class="hl-wild">Duel</span> mode, two rival kingdoms compete head-to-head.
+          Each player has their own kingdom stats starting at 8.
+        </p>
+        <ul>
+          <li>One player <strong>offers</strong> cards; the other <strong>chooses</strong> which to take.</li>
+          <li>Each player rolls independently. Negative effects <em>always</em> apply; positive effects only on success.</li>
+          <li><strong>Win</strong> by reaching 20 in 3 stats. <strong>Lose</strong> if any stat hits 0.</li>
+        </ul>
+      </div>
+
+      <div class="htp-section">
+        <h3>Play Modes</h3>
+        <ul>
+          <li><strong>Solo</strong> &mdash; Play alone with 1 advisor.</li>
+          <li><strong>Local (Pass &amp; Play)</strong> &mdash; Multiple advisors on one device, taking turns.</li>
+          <li><strong>Online</strong> &mdash; Play with friends in real-time. Invite via friend list or game code.</li>
+        </ul>
+      </div>
+
+      <div class="htp-section">
+        <h3>Progression</h3>
+        <p>
+          Earn <strong>XP</strong> from every game. Level up to unlock new characters,
+          items, and cosmetics. Online duel games also award <strong>ELO rating</strong>
+          for competitive ranking.
+        </p>
+        <ul>
+          <li>Complete <strong>achievements</strong> for bonus XP and coin rewards.</li>
+          <li>Check the <strong>daily challenge</strong> for a special task each day.</li>
+          <li>Climb the <strong>leaderboard</strong> to see how you rank against other players.</li>
+        </ul>
       </div>
 
       <div class="htp-section">
@@ -64,6 +130,8 @@
           <li>High difficulty cards are risky but offer big payoffs.</li>
           <li>Pick negative cards with effects you can afford to absorb.</li>
           <li>Coordinate with other advisors &mdash; you roll together!</li>
+          <li>Items with roll bonuses stack &mdash; equip wisely before tough months.</li>
+          <li>In Duel, consider which card your opponent will want before offering.</li>
         </ul>
       </div>
     </div>

@@ -2,6 +2,10 @@
   <div class="achievements-page">
     <h2 class="section-title">Achievements</h2>
 
+    <HintBubble hint-id="achievements-claim">
+      Earned an achievement? Tap <strong>Claim</strong> to collect your XP and coin rewards!
+    </HintBubble>
+
     <div v-if="loading" class="ach-loading">Loading...</div>
 
     <div v-else class="ach-grid">
@@ -58,11 +62,12 @@
 <script>
 import axios from 'axios';
 import AchievementClaim from './AchievementClaim.vue';
+import HintBubble from './HintBubble.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'AchievementsList',
-  components: { AchievementClaim },
+  components: { AchievementClaim, HintBubble },
   data() {
     return {
       achievements: [],

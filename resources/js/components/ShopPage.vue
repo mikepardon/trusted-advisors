@@ -2,6 +2,10 @@
   <div class="shop-page">
     <h2 class="section-title">Shop</h2>
 
+    <HintBubble hint-id="shop-coins">
+      Earn coins by completing games and claiming achievements. Spend them here on cosmetics and unlocks!
+    </HintBubble>
+
     <div class="coin-balance">
       &#129689; {{ coins }}
     </div>
@@ -91,10 +95,12 @@
 
 <script>
 import axios from 'axios';
+import HintBubble from './HintBubble.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'ShopPage',
+  components: { HintBubble },
   data() {
     return {
       items: [],

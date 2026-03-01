@@ -70,7 +70,21 @@
             <div class="xp-progress-fill" :style="{ width: xpBarPercent + '%' }"></div>
           </div>
           <div class="xp-progress-footer">
-            <span>{{ myXpDetails.new_xp }} / {{ xpForLevel(xpBarLevel + 1) }} XP</span>
+            <span>{{ xpBarDisplayXp }} / {{ xpForLevel(xpBarLevel + 1) }} XP</span>
+          </div>
+          <transition name="levelup-pop">
+            <div v-if="showLevelUp" class="level-up-banner">
+              <span class="level-up-star">&#11088;</span>
+              <span class="level-up-text">Level {{ myXpDetails.new_level }}!</span>
+              <span class="level-up-star">&#11088;</span>
+            </div>
+          </transition>
+          <div v-if="myUnlocks.length && showLevelUp" class="new-unlocks">
+            <div v-for="unlock in myUnlocks" :key="unlock.id" class="unlock-item">
+              <span class="unlock-icon">&#127381;</span>
+              <span class="unlock-name">{{ unlock.name }}</span>
+              <button class="btn-unlock-claim" @click="$router.push('/shop')">View</button>
+            </div>
           </div>
         </div>
 
@@ -175,7 +189,21 @@
           <div class="xp-progress-fill" :style="{ width: xpBarPercent + '%' }"></div>
         </div>
         <div class="xp-progress-footer">
-          <span>{{ myXpDetails.new_xp }} / {{ xpForLevel(xpBarLevel + 1) }} XP</span>
+          <span>{{ xpBarDisplayXp }} / {{ xpForLevel(xpBarLevel + 1) }} XP</span>
+        </div>
+        <transition name="levelup-pop">
+          <div v-if="showLevelUp" class="level-up-banner">
+            <span class="level-up-star">&#11088;</span>
+            <span class="level-up-text">Level {{ myXpDetails.new_level }}!</span>
+            <span class="level-up-star">&#11088;</span>
+          </div>
+        </transition>
+        <div v-if="myUnlocks.length && showLevelUp" class="new-unlocks">
+          <div v-for="unlock in myUnlocks" :key="unlock.id" class="unlock-item">
+            <span class="unlock-icon">&#127381;</span>
+            <span class="unlock-name">{{ unlock.name }}</span>
+            <button class="btn-unlock-claim" @click="$router.push('/shop')">View</button>
+          </div>
         </div>
       </div>
 
@@ -229,6 +257,8 @@ export default {
       showProfileUserId: null,
       xpBarPercent: 0,
       xpBarLevel: 0,
+      xpBarDisplayXp: 0,
+      showLevelUp: false,
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -348,6 +378,11 @@ export default {
       const vals = Object.values(this.completion.coin_awards);
       return vals.length > 0 ? vals[0]?.coins : null;
     },
+    myUnlocks() {
+      if (!this.completion?.new_unlocks) return [];
+      const vals = Object.values(this.completion.new_unlocks);
+      return vals.length > 0 ? vals[0] : [];
+    },
   },
   async mounted() {
     try {
@@ -418,6 +453,11 @@ export default {
 
       this.xpBarLevel = oldLevel;
       this.xpBarPercent = Math.min(100, Math.max(0, oldPercent));
+      this.xpBarDisplayXp = oldXp;
+      this.showLevelUp = false;
+
+      // Animate the XP counter
+      this.animateXpCounter(oldXp, newXp, newLevel > oldLevel ? 1200 : 1600);
 
       // Animate after a short delay
       setTimeout(() => {
@@ -427,14 +467,16 @@ export default {
           setTimeout(() => {
             this.xpBarLevel = newLevel;
             this.xpBarPercent = 0;
+            this.showLevelUp = true;
+            playSound('win');
             setTimeout(() => {
               const newLevelStart = this.xpForLevel(newLevel);
               const newLevelEnd = this.xpForLevel(newLevel + 1);
               const newPercent = newLevelEnd > newLevelStart
                 ? ((newXp - newLevelStart) / (newLevelEnd - newLevelStart)) * 100 : 0;
               this.xpBarPercent = Math.min(100, Math.max(0, newPercent));
-            }, 200);
-          }, 800);
+            }, 300);
+          }, 1000);
         } else {
           // Same level, just animate to new position
           const levelStart = this.xpForLevel(oldLevel);
@@ -444,6 +486,20 @@ export default {
           this.xpBarPercent = Math.min(100, Math.max(0, newPercent));
         }
       }, 600);
+    },
+    animateXpCounter(from, to, duration) {
+      const start = performance.now();
+      const step = (now) => {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        // Ease-out cubic
+        const eased = 1 - Math.pow(1 - progress, 3);
+        this.xpBarDisplayXp = Math.round(from + (to - from) * eased);
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        }
+      };
+      requestAnimationFrame(step);
     },
     async shareReplay() {
       try {
@@ -780,6 +836,99 @@ export default {
   margin-top: 4px;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+/* Level-up banner */
+.level-up-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(212, 168, 67, 0.2), rgba(232, 196, 104, 0.1));
+  border: 2px solid var(--accent-gold);
+  border-radius: 8px;
+  animation: levelGlow 1.5s ease-in-out infinite alternate;
+}
+
+@keyframes levelGlow {
+  from { box-shadow: 0 0 8px rgba(212, 168, 67, 0.3); }
+  to { box-shadow: 0 0 24px rgba(212, 168, 67, 0.5); }
+}
+
+.level-up-star {
+  font-size: 1.3rem;
+  animation: starSpin 1s ease-in-out;
+}
+
+@keyframes starSpin {
+  0% { transform: scale(0) rotate(-180deg); }
+  60% { transform: scale(1.3) rotate(10deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+
+.level-up-text {
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: var(--accent-gold);
+  letter-spacing: 2px;
+}
+
+.levelup-pop-enter-active {
+  transition: opacity 0.4s ease, transform 0.4s ease;
+}
+
+.levelup-pop-enter-from {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+/* New unlocks */
+.new-unlocks {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unlock-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(180, 130, 255, 0.1);
+  border: 1px solid rgba(180, 130, 255, 0.3);
+  border-radius: 6px;
+  animation: rewardPop 0.5s ease;
+}
+
+.unlock-icon {
+  font-size: 1.1rem;
+}
+
+.unlock-name {
+  flex: 1;
+  font-family: 'Cinzel', serif;
+  color: #b482ff;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.btn-unlock-claim {
+  padding: 4px 14px;
+  font-size: 0.75rem;
+  background: rgba(180, 130, 255, 0.2);
+  border: 1px solid rgba(180, 130, 255, 0.4);
+  color: #b482ff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+}
+
+.btn-unlock-claim:hover {
+  background: rgba(180, 130, 255, 0.35);
 }
 
 /* Duel end screen */

@@ -2,6 +2,10 @@
   <div class="leaderboard-page">
     <h2 class="section-title">Leaderboards</h2>
 
+    <HintBubble hint-id="leaderboard-elo">
+      Play <strong>online duels</strong> to earn ELO rating and climb the competitive rankings!
+    </HintBubble>
+
     <!-- Tabs -->
     <div class="tab-row">
       <button class="tab-btn" :class="{ active: tab === 'global' }" @click="tab = 'global'; fetchData()">Global</button>
@@ -56,11 +60,12 @@
 
 <script>
 import axios from 'axios';
+import HintBubble from './HintBubble.vue';
 import PlayerProfile from './PlayerProfile.vue';
 
 export default {
   name: 'LeaderboardPage',
-  components: { PlayerProfile },
+  components: { HintBubble, PlayerProfile },
   data() {
     return {
       tab: 'global',

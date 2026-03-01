@@ -2,6 +2,10 @@
   <div class="history-page">
     <h2 class="section-title">Campaign History</h2>
 
+    <HintBubble hint-id="campaigns-replay">
+      Tap any completed game to see the results, or hit <strong>Replay</strong> to watch a round-by-round recap.
+    </HintBubble>
+
     <div v-if="loading" class="history-loading">Loading...</div>
 
     <div v-else-if="activeGames.length === 0 && games.length === 0" class="history-empty">
@@ -35,7 +39,7 @@
               </div>
               <div class="active-players">
                 <span v-for="(p, i) in game.players" :key="i" class="player-name">
-                  {{ p.character_name || 'Unassigned' }}<span v-if="i < game.players.length - 1">, </span>
+                  {{ p.character_name || 'Unassigned' }}<template v-if="game.game_mode === 'online' && p.username"> ({{ p.username }})</template><span v-if="i < game.players.length - 1">, </span>
                 </span>
                 <span v-if="!game.players || game.players.length === 0" class="player-name dim">
                   {{ game.num_players }} player{{ game.num_players !== 1 ? 's' : '' }}
@@ -88,19 +92,33 @@
         </div>
       </div>
     </template>
+
+    <ConfirmModal
+      :visible="!!cancelTarget"
+      title="Cancel Game"
+      message="Cancel this game? It will be ended as a loss."
+      confirm-text="End Game"
+      :dangerous="true"
+      @confirm="doCancelGame"
+      @cancel="cancelTarget = null"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import ConfirmModal from './ConfirmModal.vue';
+import HintBubble from './HintBubble.vue';
 
 export default {
   name: 'GameHistory',
+  components: { ConfirmModal, HintBubble },
   data() {
     return {
       games: [],
       activeGames: [],
       loading: true,
+      cancelTarget: null,
     };
   },
   async mounted() {
@@ -121,8 +139,12 @@ export default {
     resumeGame(game) {
       this.$router.push('/game/' + game.id);
     },
-    async cancelGame(game) {
-      if (!confirm('Cancel this game? It will be ended as a loss.')) return;
+    cancelGame(game) {
+      this.cancelTarget = game;
+    },
+    async doCancelGame() {
+      const game = this.cancelTarget;
+      this.cancelTarget = null;
       try {
         await axios.post(`/api/games/${game.id}/cancel`);
         await this.fetchGames();
@@ -147,7 +169,13 @@ export default {
       if (!game.players || game.players.length === 0) {
         return game.num_players + 'P';
       }
-      return game.players.map(p => p.character_name || '?').join(', ');
+      return game.players.map(p => {
+        const name = p.character_name || '?';
+        if (game.game_mode === 'online' && p.username) {
+          return `${name} (${p.username})`;
+        }
+        return name;
+      }).join(', ');
     },
   },
 };

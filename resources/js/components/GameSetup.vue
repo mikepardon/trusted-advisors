@@ -14,6 +14,10 @@
     <!-- Daily Challenge Banner -->
     <DailyChallengeBanner />
 
+    <HintBubble hint-id="home-duel-mode">
+      Try <strong>Duel mode</strong> for competitive 1v1 battles! Choose it after selecting a play mode.
+    </HintBubble>
+
     <!-- STEP 0: Mode selection -->
     <Transition name="fade" mode="out-in">
     <div v-if="step === 'mode'" key="mode">
@@ -348,6 +352,7 @@ import { playSound } from '../sounds';
 import DailyChallengeBanner from './DailyChallengeBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import MatchmakingQueue from './MatchmakingQueue.vue';
+import HintBubble from './HintBubble.vue';
 import StoryIntro from './StoryIntro.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
@@ -356,7 +361,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { DailyChallengeBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
+  components: { DailyChallengeBanner, HintBubble, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
   setup() {
     const auth = useAuth();
     return { auth, playSound };

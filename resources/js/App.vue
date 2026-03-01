@@ -71,8 +71,7 @@
           <router-link v-if="auth.state.user?.is_admin" to="/admin" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Admin</router-link>
           <template v-if="auth.state.user">
             <div class="menu-popup-divider"></div>
-            <button v-if="!confirmingLogout" class="menu-popup-item menu-popup-logout" @click.stop="confirmingLogout = true">Logout</button>
-            <button v-else class="menu-popup-item menu-popup-logout" @click.stop="handleLogout">Are you sure?</button>
+            <button class="menu-popup-item menu-popup-logout" @click.stop="showLogoutConfirm = true; showMenuPopup = false">Logout</button>
           </template>
         </div>
       </div>
@@ -94,11 +93,22 @@
     </transition>
 
     <Tutorial v-if="showTutorial" @close="showTutorial = false" />
+
+    <ConfirmModal
+      :visible="showLogoutConfirm"
+      title="Logout"
+      message="Are you sure you want to log out?"
+      confirm-text="Logout"
+      :dangerous="true"
+      @confirm="handleLogout"
+      @cancel="showLogoutConfirm = false"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import ConfirmModal from './components/ConfirmModal.vue';
 import HowToPlay from './components/HowToPlay.vue';
 import NotificationsDrawer from './components/NotificationsDrawer.vue';
 import SplashScreen from './components/SplashScreen.vue';
@@ -109,7 +119,7 @@ import { initOneSignal, promptPushPermission } from './onesignal';
 
 export default {
   name: 'App',
-  components: { HowToPlay, NotificationsDrawer, SplashScreen, Tutorial },
+  components: { ConfirmModal, HowToPlay, NotificationsDrawer, SplashScreen, Tutorial },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -120,7 +130,7 @@ export default {
       showHowToPlay: false,
       showNotifications: false,
       showMenuPopup: false,
-      confirmingLogout: false,
+      showLogoutConfirm: false,
       notifCount: 0,
       streakToast: null,
       showTutorial: false,
@@ -182,7 +192,7 @@ export default {
       }
     };
     check();
-    this._closeMenuOnClick = () => { this.showMenuPopup = false; this.confirmingLogout = false; };
+    this._closeMenuOnClick = () => { this.showMenuPopup = false; };
     document.addEventListener('click', this._closeMenuOnClick);
   },
   beforeUnmount() {
@@ -212,8 +222,8 @@ export default {
       playSound('clickMenu');
     },
     async handleLogout() {
+      this.showLogoutConfirm = false;
       this.showMenuPopup = false;
-      this.confirmingLogout = false;
       if (this._notifTimer) clearInterval(this._notifTimer);
       await this.auth.logout();
       this.notifCount = 0;

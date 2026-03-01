@@ -1805,7 +1805,7 @@ class GameController extends Controller
         // Include games where user is host OR a participant
         $participantGameIds = GamePlayer::where('user_id', $userId)->pluck('game_id');
 
-        $activeGames = Game::with('players.character')
+        $activeGames = Game::with(['players.character', 'players.user'])
             ->where(function ($q) use ($userId, $participantGameIds) {
                 $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
             })
@@ -1822,10 +1822,11 @@ class GameController extends Controller
                 'num_players' => $game->num_players,
                 'players' => $game->players->map(fn ($p) => [
                     'character_name' => $p->character?->name,
+                    'username' => $p->user?->name,
                 ])->values(),
             ]);
 
-        $completedGames = Game::with('players.character')
+        $completedGames = Game::with(['players.character', 'players.user'])
             ->where(function ($q) use ($userId, $participantGameIds) {
                 $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
             })
@@ -1845,6 +1846,7 @@ class GameController extends Controller
                 'played_at' => $game->updated_at->toDateTimeString(),
                 'players' => $game->players->map(fn ($p) => [
                     'character_name' => $p->character?->name,
+                    'username' => $p->user?->name,
                 ])->values(),
             ]);
 
