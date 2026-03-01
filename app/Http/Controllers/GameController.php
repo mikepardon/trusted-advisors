@@ -1027,7 +1027,9 @@ class GameController extends Controller
      */
     public function nextRound(Game $game, Request $request): JsonResponse
     {
-        if ($game->status !== 'active' || $game->round_phase !== 'resolving') {
+        $inResolving = $game->round_phase === 'resolving'
+            || ($game->isDuel() && $game->duel_phase === 'resolving');
+        if ($game->status !== 'active' || !$inResolving) {
             return response()->json(['error' => 'Not in resolving phase'], 422);
         }
 
@@ -1865,29 +1867,43 @@ class GameController extends Controller
                 ])->values(),
             ]);
 
-        $completedGames = Game::with(['players.character', 'players.user'])
+        $completedGames = Game::with(['players.character', 'players.user', 'playerKingdoms'])
             ->where(function ($q) use ($userId, $participantGameIds) {
                 $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
             })
             ->where('status', 'completed')
             ->orderByDesc('updated_at')
             ->get()
-            ->map(fn ($game) => [
-                'id' => $game->id,
-                'win' => $game->win,
-                'game_mode' => $game->game_mode,
-                'game_type' => $game->game_type ?? 'cooperative',
-                'score' => $game->wealth + $game->influence + $game->security + $game->religion + $game->food + $game->happiness,
-                'winner_player_number' => $game->winner_player_number,
-                'num_players' => $game->num_players,
-                'rounds_survived' => $game->current_round,
-                'total_rounds' => $game->total_rounds,
-                'played_at' => $game->updated_at->toDateTimeString(),
-                'players' => $game->players->map(fn ($p) => [
-                    'character_name' => $p->character?->name,
-                    'username' => $p->user?->name,
-                ])->values(),
-            ]);
+            ->map(function ($game) use ($userId) {
+                $myPlayer = $game->players->firstWhere('user_id', $userId);
+                $myPlayerNumber = $myPlayer?->player_number;
+
+                // Duel: use player kingdom scores; Cooperative: use shared stats
+                if ($game->isDuel() && $game->playerKingdoms->isNotEmpty()) {
+                    $myKingdom = $game->playerKingdoms->firstWhere('game_player_id', $myPlayer?->id);
+                    $score = $myKingdom ? $myKingdom->totalScore() : 0;
+                } else {
+                    $score = $game->wealth + $game->influence + $game->security + $game->religion + $game->food + $game->happiness;
+                }
+
+                return [
+                    'id' => $game->id,
+                    'win' => $game->win,
+                    'game_mode' => $game->game_mode,
+                    'game_type' => $game->game_type ?? 'cooperative',
+                    'score' => $score,
+                    'winner_player_number' => $game->winner_player_number,
+                    'my_player_number' => $myPlayerNumber,
+                    'num_players' => $game->num_players,
+                    'rounds_survived' => $game->current_round,
+                    'total_rounds' => $game->total_rounds,
+                    'played_at' => $game->updated_at->toDateTimeString(),
+                    'players' => $game->players->map(fn ($p) => [
+                        'character_name' => $p->character?->name,
+                        'username' => $p->user?->name,
+                    ])->values(),
+                ];
+            });
 
         return response()->json([
             'active_games' => $activeGames,
@@ -2218,6 +2234,7 @@ class GameController extends Controller
             $players = $game->players()->with('user')->get();
 
             foreach ($players as $player) {
+                if ($player->is_bot) continue;
                 if ($player->user) {
                     $onesignal->sendToUser(
                         $player->user,
@@ -2241,6 +2258,12 @@ class GameController extends Controller
             return;
         }
 
+        // Skip notifications for bot players
+        $player = $game->players()->where('player_number', $playerNumber)->first();
+        if ($player?->is_bot) {
+            return;
+        }
+
         // Broadcast in-game alert via WebSocket
         try {
             event(new \App\Events\GameAlertSent($game->id, $message, $playerNumber));
@@ -2250,7 +2273,7 @@ class GameController extends Controller
 
         // Push notification via OneSignal
         try {
-            $player = $game->players()->where('player_number', $playerNumber)->with('user')->first();
+            $player = $player->load('user');
             if ($player?->user) {
                 app(OneSignalService::class)->sendToUser(
                     $player->user,

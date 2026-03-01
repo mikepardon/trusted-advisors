@@ -65,7 +65,7 @@
             @click="$router.push('/game/' + game.id + '/over')"
           >
             <div class="completed-main">
-              <span :class="['outcome-badge', game.win ? 'outcome-win' : 'outcome-loss']">
+              <span :class="['outcome-badge', isWin(game) ? 'outcome-win' : 'outcome-loss']">
                 {{ outcomeLabel(game) }}
               </span>
               <div class="completed-badges">
@@ -159,9 +159,16 @@ export default {
     typeLabel(type) {
       return type === 'duel' ? 'Duel' : 'Classic';
     },
+    isWin(game) {
+      if (game.game_type === 'duel') {
+        return game.winner_player_number && game.winner_player_number === game.my_player_number;
+      }
+      return game.win;
+    },
     outcomeLabel(game) {
       if (game.game_type === 'duel') {
-        return game.winner_player_number ? 'Decided' : 'Draw';
+        if (!game.winner_player_number) return 'Draw';
+        return game.winner_player_number === game.my_player_number ? 'Victory' : 'Defeat';
       }
       return game.win ? 'Victory' : 'Defeat';
     },
