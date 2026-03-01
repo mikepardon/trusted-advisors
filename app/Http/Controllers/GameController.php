@@ -2258,7 +2258,19 @@ class GameController extends Controller
             ];
 
             if (!$isEarned) {
-                $data['progress'] = $completionService->getProgress($user, $a->criteria);
+                $progress = $completionService->getProgress($user, $a->criteria);
+                $data['progress'] = $progress;
+
+                // Auto-earn if criteria already met (e.g. wins before achievement was seeded)
+                if ($progress && isset($progress['current'], $progress['target']) && $progress['current'] >= $progress['target']) {
+                    UserAchievement::create([
+                        'user_id' => $user->id,
+                        'achievement_id' => $a->id,
+                        'unlocked_at' => now(),
+                    ]);
+                    $data['earned'] = true;
+                    $data['claimed'] = false;
+                }
             }
 
             return $data;
