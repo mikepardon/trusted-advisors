@@ -16,6 +16,7 @@ class MatchFound implements ShouldBroadcastNow
         public int $userId,
         public int $gameId,
         public string $opponentName,
+        public int $opponentElo = 1200,
     ) {}
 
     public function broadcastOn(): array
@@ -28,6 +29,7 @@ class MatchFound implements ShouldBroadcastNow
         return [
             'game_id' => $this->gameId,
             'opponent_name' => $this->opponentName,
+            'opponent_elo' => $this->opponentElo,
         ];
     }
 }

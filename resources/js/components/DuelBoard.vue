@@ -307,6 +307,9 @@ export default {
     botPlayer() {
       return this.gameData?.game?.players?.find(p => p.is_bot);
     },
+    hasBotPlayer() {
+      return !!this.botPlayer;
+    },
     myRollData() {
       if (this.isOfferer) return this.offererRollData;
       return this.chooserRollData;
@@ -316,7 +319,7 @@ export default {
       return this.offererRollData;
     },
     isCurrentTurnBot() {
-      if (!this.isSinglePlayerDuel || !this.botPlayer) return false;
+      if (!this.hasBotPlayer) return false;
       const botNum = this.botPlayer.player_number;
       const phase = this.duelPhase;
       if (phase === 'offering' && this.offererNumber === botNum) return true;
@@ -371,19 +374,18 @@ export default {
       this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
       this.playerKingdoms = data.player_kingdoms || [];
 
-      // Online: determine my player number
-      if (this.isOnline) {
+      // Determine my player number
+      if (this.isOnline || this.isSinglePlayerDuel) {
         const userId = this.auth.state.user?.id;
         const myPlayer = data.game?.players?.find(p => p.user_id === userId);
         if (myPlayer) {
           this.activePlayerNumber = myPlayer.player_number;
+        } else if (this.isSinglePlayerDuel) {
+          this.activePlayerNumber = 1;
         }
-        this.updateOnlineWaiting();
-      }
-
-      // Single-player duel: always player 1
-      if (this.isSinglePlayerDuel) {
-        this.activePlayerNumber = 1;
+        if (this.isOnline && !this.hasBotPlayer) {
+          this.updateOnlineWaiting();
+        }
       }
 
       // If entering offering or choosing phase, load cards
@@ -402,7 +404,7 @@ export default {
     },
 
     updateOnlineWaiting() {
-      if (!this.isOnline) {
+      if (!this.isOnline || this.hasBotPlayer) {
         this.showWaiting = false;
         return;
       }
@@ -466,7 +468,7 @@ export default {
 
         if (this.isPassAndPlay) {
           this.initiatePassAndPlayHandoff(this.chooserNumber);
-        } else if (this.isSinglePlayerDuel) {
+        } else if (this.hasBotPlayer) {
           // Bot is chooser — trigger bot turn (watcher handles it)
         } else {
           this.updateOnlineWaiting();
@@ -489,10 +491,9 @@ export default {
         if (this.isPassAndPlay) {
           this.myCard = res.data.offerer_card?.card || null;
           this.initiatePassAndPlayHandoff(this.offererNumber);
-        } else if (this.isSinglePlayerDuel) {
-          // Load my card for rolling
+        } else if (this.hasBotPlayer) {
+          // Load my card for rolling; bot turn handled by watcher
           await this.loadMyRollCard();
-          // Bot may need to roll first if they're offerer — watcher handles it
         } else {
           await this.loadMyRollCard();
           this.updateOnlineWaiting();
@@ -571,7 +572,7 @@ export default {
           if (this.isPassAndPlay) {
             this.myCard = null;
             this.initiatePassAndPlayHandoff(this.chooserNumber);
-          } else if (this.isSinglePlayerDuel) {
+          } else if (this.hasBotPlayer) {
             this.myCard = null;
             // Bot needs to roll as chooser — watcher handles it
           } else {
@@ -635,7 +636,7 @@ export default {
 
         if (this.isPassAndPlay) {
           this.initiatePassAndPlayHandoff(this.offererNumber);
-        } else if (this.isSinglePlayerDuel) {
+        } else if (this.hasBotPlayer) {
           // Load hand for human player; bot turn handled by watcher
           await this.loadDuelHand();
         }

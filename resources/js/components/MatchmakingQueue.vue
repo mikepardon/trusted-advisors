@@ -5,6 +5,7 @@
     <div v-if="matched" class="match-found">
       <p class="match-text">Opponent found!</p>
       <p class="opponent-name">{{ opponentName }}</p>
+      <p v-if="opponentElo" class="opponent-elo">ELO: {{ opponentElo }}</p>
     </div>
 
     <template v-else>
@@ -45,6 +46,7 @@ export default {
       entry: null,
       matched: false,
       opponentName: '',
+      opponentElo: null,
       elapsed: 0,
       elapsedTimer: null,
       pollTimer: null,
@@ -68,7 +70,7 @@ export default {
       this.entry = res.data;
 
       if (this.entry.status === 'matched') {
-        this.onMatchFound(this.entry.matched_game_id);
+        this.onMatchFound(this.entry.matched_game_id, this.entry.opponent_name, this.entry.opponent_elo);
         return;
       }
 
@@ -101,7 +103,7 @@ export default {
       try {
         const res = await axios.get('/api/matchmaking/status');
         if (res.data.status === 'matched') {
-          this.onMatchFound(res.data.matched_game_id);
+          this.onMatchFound(res.data.matched_game_id, res.data.opponent_name, res.data.opponent_elo);
         }
       } catch {
         // ignore poll errors
@@ -111,7 +113,7 @@ export default {
       if (!window.Echo || !this.auth.state.user) return;
       window.Echo.private(`user.${this.auth.state.user.id}`)
         .listen('MatchFound', (data) => {
-          this.onMatchFound(data.game_id, data.opponent_name);
+          this.onMatchFound(data.game_id, data.opponent_name, data.opponent_elo);
         });
     },
     unsubscribeEcho() {
@@ -122,11 +124,12 @@ export default {
         channel.stopListening('MatchFound');
       }
     },
-    onMatchFound(gameId, opponentName) {
+    onMatchFound(gameId, opponentName, opponentElo) {
       clearInterval(this.elapsedTimer);
       clearInterval(this.pollTimer);
       this.matched = true;
       this.opponentName = opponentName || 'Opponent';
+      this.opponentElo = opponentElo || null;
 
       setTimeout(() => {
         this.$emit('matched', gameId);
@@ -241,6 +244,13 @@ export default {
   color: var(--text-bright);
   font-size: 1.2rem;
   font-weight: 600;
+}
+
+.opponent-elo {
+  color: var(--accent-gold);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 4px;
 }
 
 @keyframes matchPop {

@@ -40,9 +40,9 @@ class MatchmakingController extends Controller
         // Immediately attempt to find a match
         $match = $this->findMatch($entry);
         if ($match) {
-            $game = $this->createMatch($entry, $match);
+            $this->createMatch($entry, $match);
             $entry->refresh();
-            return response()->json($entry);
+            return $this->matchedResponse($entry);
         }
 
         return response()->json($entry);
@@ -73,7 +73,7 @@ class MatchmakingController extends Controller
         }
 
         if ($entry->status === 'matched') {
-            return response()->json($entry);
+            return $this->matchedResponse($entry);
         }
 
         // Widen ELO range: +100 per 5 seconds elapsed, max 500
@@ -88,16 +88,37 @@ class MatchmakingController extends Controller
         if ($match) {
             $this->createMatch($entry, $match);
             $entry->refresh();
-            return response()->json($entry);
+            return $this->matchedResponse($entry);
         }
 
         // Bot fallback: if elapsed >= bot_timeout, match with a bot
         if ($entry->bot_timeout && $elapsed >= $entry->bot_timeout) {
             $this->createBotMatch($entry);
             $entry->refresh();
+            return $this->matchedResponse($entry);
         }
 
         return response()->json($entry);
+    }
+
+    private function matchedResponse(MatchmakingEntry $entry): JsonResponse
+    {
+        $data = $entry->toArray();
+
+        // Find opponent in the matched game
+        if ($entry->matched_game_id) {
+            $opponent = GamePlayer::where('game_id', $entry->matched_game_id)
+                ->where('user_id', '!=', $entry->user_id)
+                ->with('user')
+                ->first();
+
+            if ($opponent?->user) {
+                $data['opponent_name'] = $opponent->user->name;
+                $data['opponent_elo'] = $opponent->user->elo_rating ?? 1200;
+            }
+        }
+
+        return response()->json($data);
     }
 
     private function findMatch(MatchmakingEntry $entry): ?MatchmakingEntry
@@ -155,7 +176,7 @@ class MatchmakingController extends Controller
 
             $entry->update(['status' => 'matched', 'matched_game_id' => $game->id]);
 
-            broadcast(new MatchFound($entry->user_id, $game->id, $bot->name));
+            broadcast(new MatchFound($entry->user_id, $game->id, $bot->name, $bot->elo_rating ?? 1200));
         });
     }
 
@@ -190,8 +211,8 @@ class MatchmakingController extends Controller
             $user1 = $entry1->user;
             $user2 = $entry2->user;
 
-            broadcast(new MatchFound($entry1->user_id, $game->id, $user2->name));
-            broadcast(new MatchFound($entry2->user_id, $game->id, $user1->name));
+            broadcast(new MatchFound($entry1->user_id, $game->id, $user2->name, $user2->elo_rating ?? 1200));
+            broadcast(new MatchFound($entry2->user_id, $game->id, $user1->name, $user1->elo_rating ?? 1200));
 
             return $game;
         });
