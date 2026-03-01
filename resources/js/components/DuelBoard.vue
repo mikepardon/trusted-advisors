@@ -697,8 +697,10 @@ export default {
       if (this._botTurnPending) return;
       this._botTurnPending = true;
 
-      // Delay 1-2s for natural feel
-      const delay = 1000 + Math.random() * 1000;
+      // Delay for natural feel: longer for online (looks like real player)
+      const delay = this.isOnline
+        ? 3000 + Math.random() * 4000  // 3-7s for online bot matches
+        : 1000 + Math.random() * 1000; // 1-2s for single-player
       await new Promise(r => setTimeout(r, delay));
 
       try {

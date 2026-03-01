@@ -77,7 +77,7 @@ class MatchmakingController extends Controller
         }
 
         // Widen ELO range: +100 per 5 seconds elapsed, max 500
-        $elapsed = (int) now()->diffInSeconds($entry->created_at);
+        $elapsed = (int) $entry->created_at->diffInSeconds(now());
         $newRange = min(500, 100 + (int) floor($elapsed / 5) * 100);
         if ($newRange !== $entry->elo_range) {
             $entry->update(['elo_range' => $newRange]);
