@@ -24,6 +24,9 @@ import AdminSeasons from './components/admin/AdminSeasons.vue';
 import AdminAchievements from './components/admin/AdminAchievements.vue';
 import AdminUnlockables from './components/admin/AdminUnlockables.vue';
 import AdminChallenges from './components/admin/AdminChallenges.vue';
+import AdminGames from './components/admin/AdminGames.vue';
+import AdminXp from './components/admin/AdminXp.vue';
+import AdminAddons from './components/admin/AdminAddons.vue';
 import SettingsPage from './components/SettingsPage.vue';
 import { fetchSoundUrls } from './sounds';
 
@@ -50,6 +53,9 @@ const routes = [
             { path: 'items', component: AdminItems },
             { path: 'sounds', component: AdminSounds },
             { path: 'bot-games', component: AdminBotGames },
+            { path: 'games', component: AdminGames },
+            { path: 'xp', component: AdminXp },
+            { path: 'addons', component: AdminAddons },
             { path: 'seasons', component: AdminSeasons },
             { path: 'achievements', component: AdminAchievements },
             { path: 'unlockables', component: AdminUnlockables },

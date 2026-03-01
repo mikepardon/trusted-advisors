@@ -3,6 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Achievement;
+use App\Models\Character;
+use App\Models\Item;
 use App\Models\Unlockable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,7 +14,43 @@ class UnlockableController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(Unlockable::orderBy('type')->orderBy('unlock_method')->get());
+        $allUnlockables = Unlockable::orderBy('type')
+            ->orderBy('unlock_method')
+            ->get();
+
+        // Resolve entity names manually (dynamic entity() relationship breaks eager loading)
+        $characterIds = $allUnlockables->where('type', 'character')->pluck('entity_id')->unique();
+        $itemIds = $allUnlockables->where('type', 'item')->pluck('entity_id')->unique();
+        $characterNames = Character::whereIn('id', $characterIds)->pluck('name', 'id');
+        $itemNames = Item::whereIn('id', $itemIds)->pluck('name', 'id');
+
+        // Pre-load achievements for unlock_method=achievement
+        $achIds = $allUnlockables->where('unlock_method', 'achievement')->pluck('unlock_value')->unique();
+        $achNames = Achievement::whereIn('id', $achIds)->pluck('name', 'id');
+
+        $unlockables = $allUnlockables->map(function ($u) use ($characterNames, $itemNames, $achNames) {
+            $u->entity_name = $u->type === 'character'
+                ? ($characterNames[$u->entity_id] ?? "#{$u->entity_id}")
+                : ($itemNames[$u->entity_id] ?? "#{$u->entity_id}");
+
+            $u->unlock_label = $u->unlock_method === 'achievement'
+                ? ($achNames[$u->unlock_value] ?? "Achievement #{$u->unlock_value}")
+                : "Level {$u->unlock_value}";
+
+            return $u;
+        });
+
+        // Also return dropdown options
+        $characters = Character::orderBy('name')->get(['id', 'name']);
+        $items = Item::orderBy('name')->get(['id', 'name']);
+        $achievements = Achievement::orderBy('name')->get(['id', 'name', 'key']);
+
+        return response()->json([
+            'unlockables' => $unlockables,
+            'characters' => $characters,
+            'items' => $items,
+            'achievements' => $achievements,
+        ]);
     }
 
     public function store(Request $request): JsonResponse

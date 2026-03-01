@@ -42,8 +42,9 @@
                 </span>
               </div>
             </div>
-            <div class="active-card-action">
-              Resume &rarr;
+            <div class="active-card-actions">
+              <button class="btn-cancel" @click.stop="cancelGame(game)">Cancel</button>
+              <span class="resume-link">Resume &rarr;</span>
             </div>
           </div>
         </div>
@@ -103,18 +104,31 @@ export default {
     };
   },
   async mounted() {
-    try {
-      const res = await axios.get('/api/games/history');
-      this.games = res.data.completed_games || [];
-      this.activeGames = res.data.active_games || [];
-    } catch {
-      // silently fail
-    }
-    this.loading = false;
+    await this.fetchGames();
   },
   methods: {
+    async fetchGames() {
+      this.loading = true;
+      try {
+        const res = await axios.get('/api/games/history');
+        this.games = res.data.completed_games || [];
+        this.activeGames = res.data.active_games || [];
+      } catch {
+        // silently fail
+      }
+      this.loading = false;
+    },
     resumeGame(game) {
       this.$router.push('/game/' + game.id);
+    },
+    async cancelGame(game) {
+      if (!confirm('Cancel this game? It will be ended as a loss.')) return;
+      try {
+        await axios.post(`/api/games/${game.id}/cancel`);
+        await this.fetchGames();
+      } catch (e) {
+        alert('Failed to cancel: ' + (e.response?.data?.error || e.message));
+      }
     },
     modeLabel(mode) {
       const labels = { single: 'Solo', pass_and_play: 'Local', online: 'Online' };
@@ -234,12 +248,33 @@ export default {
   font-style: italic;
 }
 
-.active-card-action {
-  text-align: right;
+.active-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.resume-link {
   font-family: 'Cinzel', serif;
   font-size: 0.8rem;
   color: var(--accent-gold);
   letter-spacing: 1px;
+}
+
+.btn-cancel {
+  background: rgba(160, 48, 32, 0.12);
+  border: 1px solid rgba(160, 48, 32, 0.3);
+  color: #d05040;
+  padding: 3px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: rgba(160, 48, 32, 0.25);
 }
 
 /* === COMPLETED GAMES — Compact rows === */

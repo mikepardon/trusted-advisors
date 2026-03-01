@@ -26,17 +26,19 @@
       <p v-if="rulesSaved" class="rules-saved">Saved!</p>
     </div>
 
+    <AdminSearchInput v-model="searchQuery" />
+
     <div v-if="loading" class="loading">Loading...</div>
 
     <div v-else class="table-wrap">
       <table class="admin-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <SortableHeader label="ID" field="id" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
             <th>Image</th>
-            <th>Name</th>
+            <SortableHeader label="Name" field="name" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
             <th>Description</th>
-            <th>Wild</th>
+            <SortableHeader label="Wild" field="wild_value" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
             <th>Ability</th>
             <th>Die 1</th>
             <th>Die 2</th>
@@ -45,23 +47,32 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="c in characters" :key="c.id">
-            <td>{{ c.id }}</td>
-            <td class="image-col">
-              <img :src="c.image_url || '/images/character.png'" class="char-thumb" />
-            </td>
-            <td class="name-col">{{ c.name }}</td>
-            <td class="desc-col">{{ truncate(c.description, 60) }}</td>
-            <td>{{ c.wild_value }}</td>
-            <td>{{ c.wild_ability }}</td>
-            <td class="dice-col">{{ c.dice[0]?.join(', ') }}</td>
-            <td class="dice-col">{{ c.dice[1]?.join(', ') }}</td>
-            <td class="dice-col">{{ c.dice[2]?.join(', ') }}</td>
-            <td class="actions-col">
-              <button @click="openEdit(c)">Edit</button>
-              <button class="btn-danger" @click="confirmDelete(c)">Delete</button>
-            </td>
-          </tr>
+          <template v-for="c in filteredCharacters" :key="c.id">
+            <tr>
+              <td>{{ c.id }}</td>
+              <td class="image-col">
+                <img :src="c.image_url || '/images/character.png'" class="char-thumb" />
+              </td>
+              <td class="name-col">
+                {{ c.name }}
+                <div v-if="c.unlock_info && c.unlock_info.length" class="unlock-tags">
+                  <span v-for="u in c.unlock_info" :key="u.id" class="unlock-tag">
+                    {{ u.method === 'level' ? 'Lvl ' + u.value : 'Achievement #' + u.value }}
+                  </span>
+                </div>
+              </td>
+              <td class="desc-col">{{ truncate(c.description, 60) }}</td>
+              <td>{{ c.wild_value }}</td>
+              <td>{{ c.wild_ability }}</td>
+              <td class="dice-col">{{ c.dice[0]?.join(', ') }}</td>
+              <td class="dice-col">{{ c.dice[1]?.join(', ') }}</td>
+              <td class="dice-col">{{ c.dice[2]?.join(', ') }}</td>
+              <td class="actions-col">
+                <button @click="openEdit(c)">Edit</button>
+                <button class="btn-danger" @click="confirmDelete(c)">Delete</button>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
@@ -117,6 +128,14 @@
             <input v-model="die3Input" placeholder="2, 3, 3, 2, 3, WILD" required />
           </div>
 
+          <div class="form-group">
+            <label>Addon</label>
+            <select v-model="form.addon_id">
+              <option :value="null">Base Game</option>
+              <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <div class="modal-actions">
@@ -133,18 +152,25 @@
 
 <script>
 import axios from 'axios';
+import AdminSearchInput from './AdminSearchInput.vue';
+import SortableHeader from './SortableHeader.vue';
 
 export default {
   name: 'AdminCharacters',
+  components: { AdminSearchInput, SortableHeader },
   data() {
     return {
       characters: [],
+      addons: [],
       loading: true,
+      searchQuery: '',
+      sortField: 'id',
+      sortDir: 'asc',
       showModal: false,
       editing: null,
       saving: false,
       formError: '',
-      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '' },
+      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null },
       die1Input: '',
       die2Input: '',
       die3Input: '',
@@ -154,16 +180,50 @@ export default {
       imageUploaded: false,
     };
   },
+  computed: {
+    filteredCharacters() {
+      let list = this.characters;
+      const q = this.searchQuery.toLowerCase().trim();
+      if (q) {
+        list = list.filter(c =>
+          c.name.toLowerCase().includes(q) ||
+          (c.description || '').toLowerCase().includes(q) ||
+          (c.wild_ability || '').toLowerCase().includes(q)
+        );
+      }
+      const field = this.sortField;
+      const dir = this.sortDir === 'asc' ? 1 : -1;
+      return [...list].sort((a, b) => {
+        const av = a[field] ?? '';
+        const bv = b[field] ?? '';
+        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+        return String(av).localeCompare(String(bv)) * dir;
+      });
+    },
+  },
   async mounted() {
-    await this.fetch();
-    await this.fetchRules();
+    await Promise.all([this.fetch(), this.fetchRules(), this.fetchAddons()]);
   },
   methods: {
+    toggleSort(field) {
+      if (this.sortField === field) {
+        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortField = field;
+        this.sortDir = 'asc';
+      }
+    },
     async fetch() {
       this.loading = true;
       const res = await axios.get('/api/admin/characters');
       this.characters = res.data;
       this.loading = false;
+    },
+    async fetchAddons() {
+      try {
+        const res = await axios.get('/api/admin/addons');
+        this.addons = res.data;
+      } catch { /* ignore */ }
     },
     async fetchRules() {
       try {
@@ -196,7 +256,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '' };
+      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null };
       this.die1Input = '';
       this.die2Input = '';
       this.die3Input = '';
@@ -215,6 +275,7 @@ export default {
         wild_value: c.wild_value,
         wild_ability: c.wild_ability,
         wild_ability_description: c.wild_ability_description || '',
+        addon_id: c.addon_id || null,
       };
       this.die1Input = c.dice[0]?.join(', ') || '';
       this.die2Input = c.dice[1]?.join(', ') || '';
@@ -246,6 +307,7 @@ export default {
 
       const payload = {
         ...this.form,
+        addon_id: this.form.addon_id || null,
         dice: [processDie(die1), processDie(die2), processDie(die3)],
       };
 
@@ -425,6 +487,23 @@ export default {
 .name-col {
   color: var(--text-bright);
   font-weight: 600;
+}
+
+.unlock-tags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
+.unlock-tag {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(212, 168, 67, 0.12);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  color: var(--accent-gold);
+  font-weight: 400;
   white-space: nowrap;
 }
 

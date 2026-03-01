@@ -7,10 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class UserAchievement extends Model
 {
-    protected $fillable = ['user_id', 'achievement_id', 'unlocked_at'];
+    protected $fillable = ['user_id', 'achievement_id', 'unlocked_at', 'claimed_at'];
 
     protected $casts = [
         'unlocked_at' => 'datetime',
+        'claimed_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

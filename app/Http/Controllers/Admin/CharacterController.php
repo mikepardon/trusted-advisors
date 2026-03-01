@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Character;
+use App\Models\Unlockable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -12,7 +13,23 @@ class CharacterController extends Controller
 {
     public function index(): JsonResponse
     {
-        return response()->json(Character::orderBy('name')->get());
+        $characters = Character::orderBy('name')->get();
+
+        // Attach unlockable info for each character
+        $unlockables = Unlockable::where('type', 'character')
+            ->get()
+            ->groupBy('entity_id');
+
+        $characters->each(function ($c) use ($unlockables) {
+            $charUnlockables = $unlockables[$c->id] ?? collect();
+            $c->unlock_info = $charUnlockables->map(fn ($u) => [
+                'id' => $u->id,
+                'method' => $u->unlock_method,
+                'value' => $u->unlock_value,
+            ])->values();
+        });
+
+        return response()->json($characters);
     }
 
     public function show(Character $character): JsonResponse
@@ -30,6 +47,7 @@ class CharacterController extends Controller
             'wild_value' => 'required|integer|min:1|max:10',
             'wild_ability' => 'required|string|max:50',
             'wild_ability_description' => 'nullable|string',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $character = Character::create($validated);
@@ -47,6 +65,7 @@ class CharacterController extends Controller
             'wild_value' => 'required|integer|min:1|max:10',
             'wild_ability' => 'required|string|max:50',
             'wild_ability_description' => 'nullable|string',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $character->update($validated);

@@ -69,6 +69,22 @@
         </div>
       </div>
 
+      <!-- Charts -->
+      <div class="charts-grid" v-if="hasChartData">
+        <div class="chart-card">
+          <h4 class="chart-title">Games by Mode</h4>
+          <Doughnut :data="modeChartData" :options="chartOptions" />
+        </div>
+        <div class="chart-card">
+          <h4 class="chart-title">Games by Type</h4>
+          <Doughnut :data="typeChartData" :options="chartOptions" />
+        </div>
+        <div class="chart-card">
+          <h4 class="chart-title">Win Rate</h4>
+          <Doughnut :data="winChartData" :options="chartOptions" />
+        </div>
+      </div>
+
       <!-- Content -->
       <h3 class="section-title">Content</h3>
       <div class="stats-grid cols-4">
@@ -116,9 +132,14 @@
 
 <script>
 import axios from 'axios';
+import { Doughnut } from 'vue-chartjs';
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+
+ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default {
   name: 'AdminDashboard',
+  components: { Doughnut },
   data() {
     return {
       loading: true,
@@ -130,6 +151,70 @@ export default {
       const completed = this.stats.completed_games || 0;
       if (completed === 0) return 0;
       return Math.round((this.stats.wins / completed) * 100);
+    },
+    hasChartData() {
+      return this.stats.completed_games > 0 || this.stats.active_games > 0;
+    },
+    modeChartData() {
+      const modes = this.stats.games_by_mode || {};
+      return {
+        labels: ['Single', 'Pass & Play', 'Online'],
+        datasets: [{
+          data: [modes.single || 0, modes.pass_and_play || 0, modes.online || 0],
+          backgroundColor: ['#d4a843', '#8a6a2e', '#e8c468'],
+          borderColor: 'rgba(30, 25, 18, 0.8)',
+          borderWidth: 2,
+        }],
+      };
+    },
+    typeChartData() {
+      const types = this.stats.games_by_type || {};
+      return {
+        labels: ['Cooperative', 'Duel'],
+        datasets: [{
+          data: [types.cooperative || 0, types.duel || 0],
+          backgroundColor: ['#4a8a3a', '#a03020'],
+          borderColor: 'rgba(30, 25, 18, 0.8)',
+          borderWidth: 2,
+        }],
+      };
+    },
+    winChartData() {
+      const wins = this.stats.wins || 0;
+      const completed = this.stats.completed_games || 0;
+      const losses = Math.max(0, completed - wins);
+      return {
+        labels: ['Wins', 'Losses'],
+        datasets: [{
+          data: [wins, losses],
+          backgroundColor: ['#4a8a3a', '#a03020'],
+          borderColor: 'rgba(30, 25, 18, 0.8)',
+          borderWidth: 2,
+        }],
+      };
+    },
+    chartOptions() {
+      return {
+        responsive: true,
+        maintainAspectRatio: true,
+        plugins: {
+          legend: {
+            position: 'bottom',
+            labels: {
+              color: '#b8a67a',
+              padding: 14,
+              font: { size: 12 },
+            },
+          },
+          tooltip: {
+            backgroundColor: 'rgba(30, 25, 18, 0.95)',
+            titleColor: '#d4a843',
+            bodyColor: '#e0d6c2',
+            borderColor: '#8a6a2e',
+            borderWidth: 1,
+          },
+        },
+      };
     },
   },
   async mounted() {
@@ -209,10 +294,34 @@ export default {
   padding: 40px;
 }
 
+/* Charts */
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.chart-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 18px;
+  text-align: center;
+}
+
+.chart-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+}
+
 @media (max-width: 768px) {
   .cols-4 { grid-template-columns: repeat(2, 1fr); }
   .cols-3 { grid-template-columns: repeat(3, 1fr); }
   .stat-count { font-size: 1.6rem; }
   .stat-card { padding: 14px; }
+  .charts-grid { grid-template-columns: 1fr; }
 }
 </style>

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class DailyChallenge extends Model
 {
-    protected $fillable = ['date', 'title', 'description', 'criteria', 'reward_xp', 'is_manual'];
+    protected $fillable = ['date', 'title', 'description', 'criteria', 'reward_xp', 'is_manual', 'addon_id'];
 
     protected $casts = [
         'criteria' => 'array',

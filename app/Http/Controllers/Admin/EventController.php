@@ -25,6 +25,7 @@ class EventController extends Controller
             'title' => 'required|string|max:255',
             'effect' => 'required|string',
             'stat_modifiers' => 'nullable|array',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $event = Event::create($validated);
@@ -38,6 +39,7 @@ class EventController extends Controller
             'title' => 'required|string|max:255',
             'effect' => 'required|string',
             'stat_modifiers' => 'nullable|array',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $event->update($validated);

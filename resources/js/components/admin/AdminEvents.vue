@@ -5,10 +5,12 @@
       <button class="btn-primary" @click="openCreate">+ New Event</button>
     </div>
 
+    <AdminSearchInput v-model="searchQuery" />
+
     <div v-if="loading" class="loading">Loading...</div>
 
     <div v-else class="cards-list">
-      <div v-for="ev in events" :key="ev.id" class="item-card">
+      <div v-for="ev in filteredEvents" :key="ev.id" class="item-card">
         <div class="item-header">
           <h4>{{ ev.title }}</h4>
           <div class="item-actions">
@@ -56,6 +58,14 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label>Addon</label>
+            <select v-model="form.addon_id">
+              <option :value="null">Base Game</option>
+              <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <div class="modal-actions">
@@ -72,13 +82,17 @@
 
 <script>
 import axios from 'axios';
+import AdminSearchInput from './AdminSearchInput.vue';
 
 export default {
   name: 'AdminEvents',
+  components: { AdminSearchInput },
   data() {
     return {
       events: [],
+      addons: [],
       loading: true,
+      searchQuery: '',
       showModal: false,
       editing: null,
       saving: false,
@@ -91,11 +105,21 @@ export default {
         { key: 'food', label: 'Food', icon: '\u{1F33E}' },
         { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
       ],
-      form: { title: '', effect: '', modifiers: {} },
+      form: { title: '', effect: '', modifiers: {}, addon_id: null },
     };
   },
+  computed: {
+    filteredEvents() {
+      const q = this.searchQuery.toLowerCase().trim();
+      if (!q) return this.events;
+      return this.events.filter(ev =>
+        (ev.title || '').toLowerCase().includes(q) ||
+        (ev.effect || '').toLowerCase().includes(q)
+      );
+    },
+  },
   async mounted() {
-    await this.fetch();
+    await Promise.all([this.fetch(), this.fetchAddons()]);
   },
   methods: {
     async fetch() {
@@ -103,6 +127,12 @@ export default {
       const res = await axios.get('/api/admin/events');
       this.events = res.data;
       this.loading = false;
+    },
+    async fetchAddons() {
+      try {
+        const res = await axios.get('/api/admin/addons');
+        this.addons = res.data;
+      } catch { /* ignore */ }
     },
     statIcon(stat) {
       const s = this.stats.find(s => s.key === stat);
@@ -118,7 +148,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { title: '', effect: '', modifiers: {} };
+      this.form = { title: '', effect: '', modifiers: {}, addon_id: null };
       this.formError = '';
       this.showModal = true;
     },
@@ -128,6 +158,7 @@ export default {
         title: ev.title,
         effect: ev.effect,
         modifiers: { ...(ev.stat_modifiers || {}) },
+        addon_id: ev.addon_id || null,
       };
       this.formError = '';
       this.showModal = true;
@@ -143,6 +174,7 @@ export default {
         title: this.form.title,
         effect: this.form.effect,
         stat_modifiers,
+        addon_id: this.form.addon_id || null,
       };
 
       this.saving = true;

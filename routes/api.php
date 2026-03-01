@@ -19,6 +19,8 @@ use App\Http\Controllers\Admin\BotGameController;
 use App\Http\Controllers\Admin\SeasonController;
 use App\Http\Controllers\Admin\SoundAssetController;
 use App\Http\Controllers\Admin\UnlockableController;
+use App\Http\Controllers\Admin\AddonController;
+use App\Http\Controllers\Admin\GameManagementController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -63,6 +65,9 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/duel-roll', [GameController::class, 'duelRoll']);
     Route::get('/games/{game}/duel-hand/{playerNumber}', [GameController::class, 'duelHand']);
 
+    // Cancel game
+    Route::post('/games/{game}/cancel', [GameController::class, 'cancelGame']);
+
     // Game replay
     Route::get('/games/{game}/replay', [ReplayController::class, 'show']);
 
@@ -72,6 +77,7 @@ Route::middleware('auth:web')->group(function () {
 
     // Achievements & daily challenge for current user
     Route::get('/achievements', [GameController::class, 'achievements']);
+    Route::post('/achievements/{achievement}/claim', [GameController::class, 'claimAchievement']);
     Route::get('/daily-challenge', [GameController::class, 'dailyChallenge']);
     Route::get('/seasons', [GameController::class, 'seasons']);
 
@@ -102,10 +108,14 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::apiResource('achievements', AchievementController::class);
     Route::apiResource('unlockables', UnlockableController::class);
     Route::apiResource('daily-challenges', DailyChallengeController::class);
+    Route::apiResource('addons', AddonController::class);
     Route::get('rules', [GameRuleController::class, 'index']);
     Route::put('rules/{key}', [GameRuleController::class, 'update']);
     Route::post('characters/{character}/image', [CharacterController::class, 'uploadImage']);
     Route::get('sound-assets', [SoundAssetController::class, 'index']);
     Route::post('sound-assets/{key}/upload', [SoundAssetController::class, 'upload']);
     Route::post('bot-simulate', [BotGameController::class, 'simulate']);
+    Route::get('games', [GameManagementController::class, 'index']);
+    Route::post('games/{game}/cancel', [GameManagementController::class, 'cancel']);
+    Route::get('levels', [DashboardController::class, 'levels']);
 });

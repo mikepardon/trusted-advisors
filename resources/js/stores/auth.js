@@ -58,6 +58,13 @@ async function logout() {
     state.user = null;
 }
 
+function updateUserStats({ xp, level }) {
+    if (state.user) {
+        if (xp !== undefined) state.user.xp = xp;
+        if (level !== undefined) state.user.level = level;
+    }
+}
+
 export function useAuth() {
-    return { state, fetchUser, login, register, logout, verifyEmail, resendVerification };
+    return { state, fetchUser, login, register, logout, verifyEmail, resendVerification, updateUserStats };
 }

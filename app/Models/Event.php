@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Event extends Model
 {
-    protected $fillable = ['title', 'effect', 'stat_modifiers', 'mechanic', 'mechanic_data'];
+    protected $fillable = ['title', 'effect', 'stat_modifiers', 'mechanic', 'mechanic_data', 'addon_id'];
 
     protected $casts = [
         'stat_modifiers' => 'array',

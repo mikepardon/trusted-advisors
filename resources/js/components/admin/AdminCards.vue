@@ -5,22 +5,24 @@
       <button class="btn-primary" @click="openCreate">+ New Card</button>
     </div>
 
+    <AdminSearchInput v-model="searchQuery" />
+
     <div v-if="loading" class="loading">Loading...</div>
 
     <div v-else class="table-wrap">
       <table class="admin-table">
         <thead>
           <tr>
-            <th>#</th>
-            <th>Title</th>
-            <th>Difficulty</th>
-            <th>Category</th>
+            <SortableHeader label="#" field="sort_order" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="Title" field="title" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="Difficulty" field="difficulty" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="Category" field="category" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
             <th>Description</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="card in cards" :key="card.id">
+          <tr v-for="card in filteredCards" :key="card.id">
             <td>{{ card.sort_order }}</td>
             <td class="name-col">{{ card.title }}</td>
             <td>
@@ -163,13 +165,19 @@
 
 <script>
 import axios from 'axios';
+import AdminSearchInput from './AdminSearchInput.vue';
+import SortableHeader from './SortableHeader.vue';
 
 export default {
   name: 'AdminCards',
+  components: { AdminSearchInput, SortableHeader },
   data() {
     return {
       cards: [],
       loading: true,
+      searchQuery: '',
+      sortField: 'sort_order',
+      sortDir: 'asc',
       showModal: false,
       editing: null,
       saving: false,
@@ -201,10 +209,40 @@ export default {
       },
     };
   },
+  computed: {
+    filteredCards() {
+      let list = this.cards;
+      const q = this.searchQuery.toLowerCase().trim();
+      if (q) {
+        list = list.filter(c =>
+          (c.title || '').toLowerCase().includes(q) ||
+          (c.description || '').toLowerCase().includes(q) ||
+          (c.category || '').toLowerCase().includes(q) ||
+          String(c.difficulty).includes(q)
+        );
+      }
+      const field = this.sortField;
+      const dir = this.sortDir === 'asc' ? 1 : -1;
+      return [...list].sort((a, b) => {
+        const av = a[field] ?? '';
+        const bv = b[field] ?? '';
+        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+        return String(av).localeCompare(String(bv)) * dir;
+      });
+    },
+  },
   async mounted() {
     await this.fetch();
   },
   methods: {
+    toggleSort(field) {
+      if (this.sortField === field) {
+        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortField = field;
+        this.sortDir = 'asc';
+      }
+    },
     async fetch() {
       this.loading = true;
       const res = await axios.get('/api/admin/cards');

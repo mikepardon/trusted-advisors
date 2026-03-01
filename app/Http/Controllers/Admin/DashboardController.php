@@ -8,6 +8,7 @@ use App\Models\Character;
 use App\Models\Event;
 use App\Models\Game;
 use App\Models\Item;
+use App\Models\Unlockable;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 
@@ -56,5 +57,50 @@ class DashboardController extends Controller
                 'items' => Item::count(),
             ],
         ]);
+    }
+
+    public function levels(): JsonResponse
+    {
+        $maxLevel = 50;
+        $unlockables = Unlockable::where('unlock_method', 'level')
+            ->get()
+            ->groupBy('unlock_value');
+
+        // Load entity names separately since the dynamic entity() relationship
+        // doesn't work with eager loading (type is null on the blank model)
+        $characterIds = $unlockables->flatten()->where('type', 'character')->pluck('entity_id')->unique();
+        $itemIds = $unlockables->flatten()->where('type', 'item')->pluck('entity_id')->unique();
+        $characterNames = Character::whereIn('id', $characterIds)->pluck('name', 'id');
+        $itemNames = Item::whereIn('id', $itemIds)->pluck('name', 'id');
+
+        $levels = [];
+        for ($i = 1; $i <= $maxLevel; $i++) {
+            $xpNeeded = User::xpForLevel($i);
+            $xpToNext = User::xpForLevel($i + 1) - $xpNeeded;
+            $rewards = [];
+
+            if (isset($unlockables[$i])) {
+                foreach ($unlockables[$i] as $u) {
+                    $entityName = $u->type === 'character'
+                        ? ($characterNames[$u->entity_id] ?? "#{$u->entity_id}")
+                        : ($itemNames[$u->entity_id] ?? "#{$u->entity_id}");
+                    $rewards[] = [
+                        'id' => $u->id,
+                        'type' => $u->type,
+                        'entity_id' => $u->entity_id,
+                        'entity_name' => $entityName,
+                    ];
+                }
+            }
+
+            $levels[] = [
+                'level' => $i,
+                'total_xp' => $xpNeeded,
+                'xp_to_next' => $xpToNext,
+                'rewards' => $rewards,
+            ];
+        }
+
+        return response()->json($levels);
     }
 }

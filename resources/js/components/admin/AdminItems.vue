@@ -5,10 +5,12 @@
       <button class="btn-primary" @click="openCreate">+ New Item</button>
     </div>
 
+    <AdminSearchInput v-model="searchQuery" />
+
     <div v-if="loading" class="loading">Loading...</div>
 
     <div v-else class="cards-list">
-      <div v-for="item in items" :key="item.id" class="item-card">
+      <div v-for="item in filteredItems" :key="item.id" class="item-card">
         <div class="item-header">
           <h4>{{ item.name }}</h4>
           <div class="item-actions">
@@ -89,6 +91,14 @@
             </label>
           </div>
 
+          <div class="form-group">
+            <label>Addon</label>
+            <select v-model="form.addon_id">
+              <option :value="null">Base Game</option>
+              <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
+            </select>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <div class="modal-actions">
@@ -105,13 +115,17 @@
 
 <script>
 import axios from 'axios';
+import AdminSearchInput from './AdminSearchInput.vue';
 
 export default {
   name: 'AdminItems',
+  components: { AdminSearchInput },
   data() {
     return {
       items: [],
+      addons: [],
       loading: true,
+      searchQuery: '',
       showModal: false,
       editing: null,
       saving: false,
@@ -125,11 +139,23 @@ export default {
         stat: 'food',
         is_negative: false,
         is_consumable: false,
+        addon_id: null,
       },
     };
   },
+  computed: {
+    filteredItems() {
+      const q = this.searchQuery.toLowerCase().trim();
+      if (!q) return this.items;
+      return this.items.filter(item =>
+        (item.name || '').toLowerCase().includes(q) ||
+        (item.description || '').toLowerCase().includes(q) ||
+        (item.effect_type || '').toLowerCase().includes(q)
+      );
+    },
+  },
   async mounted() {
-    await this.fetch();
+    await Promise.all([this.fetch(), this.fetchAddons()]);
   },
   methods: {
     async fetch() {
@@ -137,6 +163,12 @@ export default {
       const res = await axios.get('/api/admin/items');
       this.items = res.data;
       this.loading = false;
+    },
+    async fetchAddons() {
+      try {
+        const res = await axios.get('/api/admin/addons');
+        this.addons = res.data;
+      } catch { /* ignore */ }
     },
     openCreate() {
       this.editing = null;
@@ -149,6 +181,7 @@ export default {
         stat: 'food',
         is_negative: false,
         is_consumable: false,
+        addon_id: null,
       };
       this.formError = '';
       this.showModal = true;
@@ -164,6 +197,7 @@ export default {
         stat: item.effect?.stat || 'food',
         is_negative: item.is_negative || false,
         is_consumable: item.is_consumable || false,
+        addon_id: item.addon_id || null,
       };
       this.formError = '';
       this.showModal = true;
@@ -176,6 +210,7 @@ export default {
         effect_type: this.form.effect_type,
         is_negative: this.form.is_negative,
         is_consumable: this.form.is_consumable,
+        addon_id: this.form.addon_id || null,
         effect: {
           bonus_type: this.form.bonus_type,
           bonus_value: this.form.bonus_value,

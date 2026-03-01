@@ -1871,12 +1871,39 @@ class GameController extends Controller
     public function achievements(Request $request): JsonResponse
     {
         $user = $request->user();
-        $allAchievements = Achievement::orderBy('category')->orderBy('name')->get();
-        $earned = UserAchievement::where('user_id', $user->id)->pluck('achievement_id')->toArray();
+        $allAchievements = Achievement::orderBy('tier_group')->orderBy('tier')->orderBy('name')->get();
+        $userAchievements = UserAchievement::where('user_id', $user->id)->get()->keyBy('achievement_id');
         $completionService = app(GameCompletionService::class);
 
-        $result = $allAchievements->map(function ($a) use ($earned, $user, $completionService) {
-            $isEarned = in_array($a->id, $earned);
+        // Group tiered achievements to determine visibility
+        $tierGroups = $allAchievements->whereNotNull('tier_group')->groupBy('tier_group');
+
+        $visible = collect();
+
+        // Add standalone achievements (no tier_group) — always visible
+        foreach ($allAchievements->whereNull('tier_group') as $a) {
+            $visible->push($a);
+        }
+
+        // For tiered groups: show earned ones + the lowest unearned tier
+        foreach ($tierGroups as $group => $achievements) {
+            $sorted = $achievements->sortBy('tier');
+            $foundUnearned = false;
+
+            foreach ($sorted as $a) {
+                $isEarned = $userAchievements->has($a->id);
+                if ($isEarned) {
+                    $visible->push($a);
+                } elseif (!$foundUnearned) {
+                    $visible->push($a);
+                    $foundUnearned = true;
+                }
+            }
+        }
+
+        $result = $visible->sortBy('category')->values()->map(function ($a) use ($userAchievements, $user, $completionService) {
+            $ua = $userAchievements->get($a->id);
+            $isEarned = $ua !== null;
             $data = [
                 'id' => $a->id,
                 'key' => $a->key,
@@ -1885,6 +1912,10 @@ class GameController extends Controller
                 'icon' => $a->icon,
                 'category' => $a->category,
                 'earned' => $isEarned,
+                'claimed' => $ua && $ua->claimed_at !== null,
+                'reward_xp' => $a->reward_xp,
+                'tier' => $a->tier,
+                'tier_group' => $a->tier_group,
                 'progress' => null,
             ];
 
@@ -1896,6 +1927,68 @@ class GameController extends Controller
         });
 
         return response()->json($result);
+    }
+
+    public function claimAchievement(Request $request, Achievement $achievement): JsonResponse
+    {
+        $user = $request->user();
+
+        $ua = UserAchievement::where('user_id', $user->id)
+            ->where('achievement_id', $achievement->id)
+            ->first();
+
+        if (!$ua) {
+            return response()->json(['error' => 'Achievement not earned.'], 403);
+        }
+
+        if ($ua->claimed_at !== null) {
+            return response()->json(['error' => 'Already claimed.'], 409);
+        }
+
+        $ua->claimed_at = now();
+        $ua->save();
+
+        // Award XP
+        $oldLevel = $user->level;
+        $user->xp += $achievement->reward_xp;
+        $user->level = \App\Models\User::calculateLevel($user->xp);
+        $user->save();
+
+        $leveledUp = $user->level > $oldLevel;
+
+        // Find next tier in same group
+        $nextTier = null;
+        if ($achievement->tier_group) {
+            $next = Achievement::where('tier_group', $achievement->tier_group)
+                ->where('tier', $achievement->tier + 1)
+                ->first();
+
+            if ($next) {
+                $nextUa = UserAchievement::where('user_id', $user->id)
+                    ->where('achievement_id', $next->id)
+                    ->first();
+
+                $nextTier = [
+                    'id' => $next->id,
+                    'key' => $next->key,
+                    'name' => $next->name,
+                    'description' => $next->description,
+                    'icon' => $next->icon,
+                    'reward_xp' => $next->reward_xp,
+                    'tier' => $next->tier,
+                    'earned' => $nextUa !== null,
+                    'claimed' => $nextUa && $nextUa->claimed_at !== null,
+                ];
+            }
+        }
+
+        return response()->json([
+            'xp_awarded' => $achievement->reward_xp,
+            'new_xp' => $user->xp,
+            'new_level' => $user->level,
+            'leveled_up' => $leveledUp,
+            'next_tier' => $nextTier,
+        ]);
     }
 
     public function dailyChallenge(Request $request): JsonResponse
@@ -1924,5 +2017,29 @@ class GameController extends Controller
     public function seasons(): JsonResponse
     {
         return response()->json(Season::orderByDesc('starts_at')->get());
+    }
+
+    public function cancelGame(Request $request, Game $game): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        // Verify user is host or participant
+        $isHost = $game->user_id === $userId;
+        $isParticipant = $game->players()->where('user_id', $userId)->exists();
+
+        if (!$isHost && !$isParticipant) {
+            return response()->json(['error' => 'You are not part of this game.'], 403);
+        }
+
+        if ($game->status === 'completed') {
+            return response()->json(['error' => 'Game is already completed.'], 422);
+        }
+
+        $game->update([
+            'status' => 'completed',
+            'win' => false,
+        ]);
+
+        return response()->json(['message' => 'Game cancelled.']);
     }
 }

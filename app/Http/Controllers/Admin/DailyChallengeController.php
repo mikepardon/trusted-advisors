@@ -24,6 +24,7 @@ class DailyChallengeController extends Controller
             'criteria.type' => 'required|string',
             'reward_xp' => 'sometimes|integer|min:0',
             'is_manual' => 'boolean',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $validated['is_manual'] = true;
@@ -45,6 +46,7 @@ class DailyChallengeController extends Controller
             'criteria' => 'sometimes|array',
             'criteria.type' => 'required_with:criteria|string',
             'reward_xp' => 'sometimes|integer|min:0',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $dailyChallenge->update($validated);

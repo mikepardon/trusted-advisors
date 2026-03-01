@@ -28,6 +28,7 @@ class ItemController extends Controller
             'effect_type' => 'required|string|in:passive,active',
             'is_negative' => 'boolean',
             'is_consumable' => 'boolean',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $item = Item::create($validated);
@@ -44,6 +45,7 @@ class ItemController extends Controller
             'effect_type' => 'required|string|in:passive,active',
             'is_negative' => 'boolean',
             'is_consumable' => 'boolean',
+            'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
         $item->update($validated);
