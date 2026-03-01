@@ -6,7 +6,7 @@
       class="kingdom-col"
       :class="{ 'kingdom-yours': kingdom.player_number === myPlayerNumber }"
     >
-      <h3 class="kingdom-name">{{ kingdom.character_name }}</h3>
+      <h3 class="kingdom-name kingdom-name-clickable" @click="$emit('show-character', kingdom.player_number)">{{ kingdom.character_name }}</h3>
       <div class="kingdom-stats">
         <div v-for="stat in stats" :key="stat.key" class="stat-row">
           <span class="stat-icon">{{ stat.icon }}</span>
@@ -42,6 +42,7 @@ export default {
     myPlayerNumber: { type: Number, default: 1 },
     isSinglePlayerDuel: { type: Boolean, default: false },
   },
+  emits: ['show-character'],
   data() {
     return {
       stats: [
@@ -177,6 +178,16 @@ export default {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.kingdom-name-clickable {
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.kingdom-name-clickable:hover {
+  color: var(--accent-gold-bright);
+  text-decoration: underline;
 }
 
 .kingdom-stats {

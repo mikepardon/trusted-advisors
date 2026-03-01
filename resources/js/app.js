@@ -27,16 +27,21 @@ import AdminChallenges from './components/admin/AdminChallenges.vue';
 import AdminGames from './components/admin/AdminGames.vue';
 import AdminXp from './components/admin/AdminXp.vue';
 import AdminAddons from './components/admin/AdminAddons.vue';
+import AdminUsers from './components/admin/AdminUsers.vue';
+import ShopPage from './components/ShopPage.vue';
 import SettingsPage from './components/SettingsPage.vue';
+import AuthCallback from './components/AuthCallback.vue';
 import { fetchSoundUrls } from './sounds';
 
 const routes = [
     { path: '/', component: GameSetup },
+    { path: '/auth/callback', component: AuthCallback },
     { path: '/campaigns', component: GameHistory, meta: { auth: true } },
     { path: '/friends', component: FriendsList, meta: { auth: true } },
     { path: '/profile', component: ProfilePage, meta: { auth: true } },
     { path: '/leaderboard', component: LeaderboardPage, meta: { auth: true } },
     { path: '/achievements', component: AchievementsList, meta: { auth: true } },
+    { path: '/shop', component: ShopPage, meta: { auth: true } },
     { path: '/settings', component: SettingsPage },
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
     { path: '/game/:id/over', component: GameOver, props: true, meta: { auth: true } },
@@ -60,6 +65,7 @@ const routes = [
             { path: 'achievements', component: AdminAchievements },
             { path: 'unlockables', component: AdminUnlockables },
             { path: 'challenges', component: AdminChallenges },
+            { path: 'users', component: AdminUsers },
         ],
     },
 ];

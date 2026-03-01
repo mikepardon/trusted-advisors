@@ -2,132 +2,89 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EmailVerificationCode;
+use App\Models\LoginLog;
 use App\Models\User;
 use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
 
 class AuthController extends Controller
 {
-    public function register(Request $request): JsonResponse
+    public function handleOAuthCallback(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'name' => ['required', 'string', 'min:4', 'max:20', 'regex:/^[a-zA-Z0-9]+$/', 'unique:users,name'],
-            'email' => 'required|email|unique:users,email',
-            'password' => 'required|string|min:4|confirmed',
-        ], [
-            'name.min' => 'Username must be at least 4 characters.',
-            'name.max' => 'Username must be 20 characters or fewer.',
-            'name.regex' => 'Username can only contain letters and numbers.',
+            'code' => 'required|string',
+            'code_verifier' => 'required|string',
         ]);
 
-        $user = User::create([
-            'name' => strtolower($validated['name']),
-            'email' => strtolower($validated['email']),
-            'password' => Hash::make($validated['password']),
+        $authConfig = config('services.mpgames_auth');
+
+        // Exchange authorization code for tokens
+        $tokenResponse = Http::asForm()->post($authConfig['url'] . '/oauth/token', [
+            'grant_type' => 'authorization_code',
+            'client_id' => $authConfig['client_id'],
+            'redirect_uri' => $authConfig['redirect_uri'],
+            'code' => $validated['code'],
+            'code_verifier' => $validated['code_verifier'],
         ]);
 
-        // Register email with OneSignal
-        app(OneSignalService::class)->registerEmail($user);
-
-        // Generate and send verification code
-        $this->sendVerificationCode($user);
-
-        return response()->json([
-            'requires_verification' => true,
-            'user_id' => $user->id,
-        ]);
-    }
-
-    public function verifyEmail(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
-            'code' => 'required|string|size:6',
-        ]);
-
-        $verification = EmailVerificationCode::where('user_id', $validated['user_id'])
-            ->where('code', $validated['code'])
-            ->where('expires_at', '>', now())
-            ->latest()
-            ->first();
-
-        if (!$verification) {
-            return response()->json(['message' => 'Invalid or expired verification code.'], 422);
+        if ($tokenResponse->failed()) {
+            return response()->json(['message' => 'Authentication failed.'], 401);
         }
 
-        $user = User::findOrFail($validated['user_id']);
-        $user->update(['email_verified_at' => now()]);
+        $tokens = $tokenResponse->json();
 
-        // Clean up used codes
-        EmailVerificationCode::where('user_id', $user->id)->delete();
+        // Fetch user info from auth service
+        $userResponse = Http::withToken($tokens['access_token'])
+            ->get($authConfig['url'] . '/api/user');
 
+        if ($userResponse->failed()) {
+            return response()->json(['message' => 'Failed to retrieve user info.'], 401);
+        }
+
+        $authUser = $userResponse->json();
+
+        // Find existing user by auth_id, or match by email/name for migration
+        $user = User::where('auth_id', $authUser['id'])->first();
+
+        if (!$user) {
+            $user = User::where('email', strtolower($authUser['email']))->first()
+                ?? User::where('name', strtolower($authUser['username']))->first();
+
+            if ($user) {
+                // Link existing account to auth service
+                $user->auth_id = $authUser['id'];
+                $user->email = strtolower($authUser['email']);
+            } else {
+                // Create new local user
+                $user = new User();
+                $user->auth_id = $authUser['id'];
+                $user->email = strtolower($authUser['email']);
+                $user->email_verified_at = now();
+            }
+        }
+
+        // Sync profile fields from auth service
+        $user->name = strtolower($authUser['username']);
+        $user->avatar_url = $authUser['avatar_url'] ?? null;
+        $user->refresh_token = $tokens['refresh_token'] ?? null;
+        $user->save();
+
+        // Register email with OneSignal for new users
+        if ($user->wasRecentlyCreated) {
+            app(OneSignalService::class)->registerEmail($user);
+        }
+
+        // Check if user is banned
+        if ($user->banned_at) {
+            return response()->json(['message' => 'Your account has been suspended.'], 403);
+        }
+
+        // Login and regenerate session
         Auth::login($user);
-        $request->session()->regenerate();
-
-        return response()->json($user);
-    }
-
-    public function resendVerification(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'user_id' => 'required|integer|exists:users,id',
-        ]);
-
-        $user = User::findOrFail($validated['user_id']);
-
-        if ($user->email_verified_at) {
-            return response()->json(['message' => 'Email already verified.'], 422);
-        }
-
-        // Rate limit: check if a code was sent in the last 60 seconds
-        $recent = EmailVerificationCode::where('user_id', $user->id)
-            ->where('created_at', '>', now()->subSeconds(60))
-            ->exists();
-
-        if ($recent) {
-            return response()->json(['message' => 'Please wait before requesting another code.'], 429);
-        }
-
-        $this->sendVerificationCode($user);
-
-        return response()->json(['message' => 'Verification code sent.']);
-    }
-
-    public function login(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'name' => 'required|string',
-            'password' => 'required|string',
-        ]);
-
-        $input = $validated['name'];
-        $loginField = str_contains($input, '@') ? 'email' : 'name';
-        $loginValue = strtolower($input);
-
-        if (!Auth::attempt([$loginField => $loginValue, 'password' => $validated['password']])) {
-            return response()->json(['message' => 'Invalid credentials'], 401);
-        }
-
-        $user = Auth::user();
-
-        // Check email verification
-        if (!$user->email_verified_at) {
-            $userId = $user->id;
-            Auth::logout();
-            $request->session()->invalidate();
-            $request->session()->regenerateToken();
-
-            return response()->json([
-                'requires_verification' => true,
-                'user_id' => $userId,
-            ], 403);
-        }
-
         $request->session()->regenerate();
 
         // Handle login streak
@@ -136,22 +93,27 @@ class AuthController extends Controller
         $lastLogin = $user->last_login_at;
 
         if (!$lastLogin || $lastLogin->lt($now->copy()->subDay()->startOfDay())) {
-            // No previous login or more than 1 day ago - reset streak
             $user->login_streak = 1;
         } elseif ($lastLogin->lt($now->copy()->startOfDay())) {
-            // Last login was yesterday - increment streak
             $user->login_streak++;
             $streakXp = $user->login_streak * 10;
             $user->xp += $streakXp;
             $user->level = User::calculateLevel($user->xp);
         }
-        // else: already logged in today, no change
 
         if ($user->login_streak > $user->max_login_streak) {
             $user->max_login_streak = $user->login_streak;
         }
         $user->last_login_at = $now;
         $user->save();
+
+        // Record login log
+        LoginLog::create([
+            'user_id' => $user->id,
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'logged_in_at' => $now,
+        ]);
 
         $response = $user->toArray();
         if ($streakXp > 0) {
@@ -178,24 +140,6 @@ class AuthController extends Controller
         return $user
             ? response()->json($user)
             : response()->json(null, 204);
-    }
-
-    public function changePassword(Request $request): JsonResponse
-    {
-        $validated = $request->validate([
-            'current_password' => 'required|string',
-            'new_password' => 'required|string|min:4|confirmed',
-        ]);
-
-        $user = $request->user();
-
-        if (!Hash::check($validated['current_password'], $user->password)) {
-            return response()->json(['message' => 'Current password is incorrect'], 422);
-        }
-
-        $user->update(['password' => Hash::make($validated['new_password'])]);
-
-        return response()->json(['message' => 'Password updated']);
     }
 
     public function registerPushId(Request $request): JsonResponse
@@ -242,25 +186,5 @@ class AuthController extends Controller
         ];
 
         return response()->json($stats);
-    }
-
-    private function sendVerificationCode(User $user): void
-    {
-        $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
-
-        EmailVerificationCode::create([
-            'user_id' => $user->id,
-            'code' => $code,
-            'expires_at' => now()->addMinutes(15),
-        ]);
-
-        $html = '<div style="font-family: Georgia, serif; max-width: 480px; margin: 0 auto; padding: 30px; background: #1a1209; color: #e8d5b0; border: 1px solid #6b5b3a; border-radius: 8px;">'
-            . '<h2 style="color: #c9a84c; font-size: 1.4rem; text-align: center;">Trusted Advisors</h2>'
-            . '<p style="text-align: center;">Your verification code is:</p>'
-            . '<p style="text-align: center; font-size: 2rem; font-weight: bold; letter-spacing: 6px; color: #c9a84c;">' . $code . '</p>'
-            . '<p style="text-align: center; font-size: 0.85rem; color: #a09080;">This code expires in 15 minutes.</p>'
-            . '</div>';
-
-        app(OneSignalService::class)->sendEmailToUser($user, 'Trusted Advisors - Verify Your Email', $html);
     }
 }

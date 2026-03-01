@@ -1,6 +1,7 @@
 import { reactive } from 'vue';
 import axios from 'axios';
 import { initOneSignal, promptPushPermission } from '../onesignal';
+import { generateCodeVerifier, generateCodeChallenge, generateState } from '../pkce';
 
 const state = reactive({
     user: null,
@@ -19,37 +20,63 @@ async function fetchUser() {
     }
 }
 
-async function login(name, password) {
-    const res = await axios.post('/api/auth/login', { name, password });
-    if (res.data.requires_verification) {
-        return res.data; // { requires_verification: true, user_id }
+async function startLogin() {
+    const verifier = generateCodeVerifier();
+    const challenge = await generateCodeChallenge(verifier);
+    const oauthState = generateState();
+
+    sessionStorage.setItem('pkce_code_verifier', verifier);
+    sessionStorage.setItem('oauth_state', oauthState);
+
+    const authUrl = import.meta.env.VITE_AUTH_URL;
+    const clientId = import.meta.env.VITE_OAUTH_CLIENT_ID;
+    const redirectUri = import.meta.env.VITE_OAUTH_REDIRECT_URI;
+
+    const params = new URLSearchParams({
+        client_id: clientId,
+        redirect_uri: redirectUri,
+        response_type: 'code',
+        scope: '',
+        state: oauthState,
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+    });
+
+    window.location.href = `${authUrl}/oauth/authorize?${params.toString()}`;
+}
+
+async function handleCallback(code, returnedState) {
+    const savedState = sessionStorage.getItem('oauth_state');
+    if (returnedState !== savedState) {
+        throw new Error('Invalid state parameter. Please try again.');
     }
+
+    const verifier = sessionStorage.getItem('pkce_code_verifier');
+    if (!verifier) {
+        throw new Error('Missing PKCE verifier. Please try again.');
+    }
+
+    const res = await axios.post('/api/auth/callback', {
+        code,
+        code_verifier: verifier,
+    });
+
+    // Clean up sessionStorage
+    sessionStorage.removeItem('pkce_code_verifier');
+    sessionStorage.removeItem('oauth_state');
+
     if (res.data.streak_xp_awarded) {
         state.streakNotification = {
             streak: res.data.login_streak,
             xp: res.data.streak_xp_awarded,
         };
     }
+
     state.user = res.data;
-    // Register push subscription for newly logged-in user
+
+    // Register push subscription
     initOneSignal().then(() => promptPushPermission());
-    return res.data;
-}
 
-async function register(name, email, password, password_confirmation) {
-    const res = await axios.post('/api/auth/register', { name, email, password, password_confirmation });
-    return res.data; // { requires_verification: true, user_id }
-}
-
-async function verifyEmail(userId, code) {
-    const res = await axios.post('/api/auth/verify-email', { user_id: userId, code });
-    state.user = res.data;
-    initOneSignal().then(() => promptPushPermission());
-    return res.data;
-}
-
-async function resendVerification(userId) {
-    const res = await axios.post('/api/auth/resend-verification', { user_id: userId });
     return res.data;
 }
 
@@ -67,5 +94,5 @@ function updateUserStats({ xp, level, coins }) {
 }
 
 export function useAuth() {
-    return { state, fetchUser, login, register, logout, verifyEmail, resendVerification, updateUserStats };
+    return { state, fetchUser, startLogin, handleCallback, logout, updateUserStats };
 }

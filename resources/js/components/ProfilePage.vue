@@ -72,28 +72,14 @@
       </div>
     </div>
 
-    <!-- Change Password -->
+    <!-- Account Management -->
     <div class="card-panel">
-      <h2 class="section-title">Change Password</h2>
-      <form @submit.prevent="changePassword" class="password-form">
-        <div class="form-group">
-          <label>Current Password</label>
-          <input v-model="pw.current_password" type="password" required />
-        </div>
-        <div class="form-group">
-          <label>New Password</label>
-          <input v-model="pw.new_password" type="password" required minlength="4" />
-        </div>
-        <div class="form-group">
-          <label>Confirm New Password</label>
-          <input v-model="pw.new_password_confirmation" type="password" required minlength="4" />
-        </div>
-        <p v-if="pwError" class="pw-error">{{ pwError }}</p>
-        <p v-if="pwSuccess" class="pw-success">{{ pwSuccess }}</p>
-        <button type="submit" class="btn-primary pw-btn" :disabled="pwSaving">
-          {{ pwSaving ? 'Saving...' : 'Update Password' }}
-        </button>
-      </form>
+      <h2 class="section-title">Account</h2>
+      <div class="account-link-wrap">
+        <a :href="authServiceUrl + '/settings'" target="_blank" rel="noopener" class="btn-primary account-link">
+          Manage Account
+        </a>
+      </div>
     </div>
   </div>
 </template>
@@ -112,10 +98,7 @@ export default {
     return {
       gameStats: {},
       statsLoading: true,
-      pw: { current_password: '', new_password: '', new_password_confirmation: '' },
-      pwError: '',
-      pwSuccess: '',
-      pwSaving: false,
+      authServiceUrl: import.meta.env.VITE_AUTH_URL || '',
     };
   },
   computed: {
@@ -141,27 +124,7 @@ export default {
     }
     this.statsLoading = false;
   },
-  methods: {
-    async changePassword() {
-      this.pwError = '';
-      this.pwSuccess = '';
-
-      if (this.pw.new_password !== this.pw.new_password_confirmation) {
-        this.pwError = 'Passwords do not match.';
-        return;
-      }
-
-      this.pwSaving = true;
-      try {
-        await axios.post('/api/auth/change-password', this.pw);
-        this.pwSuccess = 'Password updated successfully.';
-        this.pw = { current_password: '', new_password: '', new_password_confirmation: '' };
-      } catch (e) {
-        this.pwError = e.response?.data?.message || 'Failed to update password.';
-      }
-      this.pwSaving = false;
-    },
-  },
+  methods: {},
 };
 </script>
 
@@ -327,56 +290,16 @@ export default {
 .stat-win .stat-number { color: #6abf50; }
 .stat-loss .stat-number { color: #d05040; }
 
-/* Password form */
-.password-form {
-  max-width: 360px;
-  margin: 0 auto;
+/* Account link */
+.account-link-wrap {
+  text-align: center;
 }
 
-.form-group {
-  margin-bottom: 12px;
-}
-
-.form-group label {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  margin-bottom: 4px;
-}
-
-.form-group input {
-  width: 100%;
-  background: var(--bg-primary);
-  border: 1px solid rgba(138, 106, 46, 0.3);
-  color: var(--text-bright);
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-family: inherit;
+.account-link {
+  display: inline-block;
+  padding: 10px 28px;
   font-size: 0.95rem;
-}
-
-.form-group input:focus {
-  outline: none;
-  border-color: var(--accent-gold);
-}
-
-.pw-error {
-  color: var(--accent-red);
-  font-size: 0.85rem;
-  margin-bottom: 8px;
-}
-
-.pw-success {
-  color: var(--accent-green);
-  font-size: 0.85rem;
-  margin-bottom: 8px;
-}
-
-.pw-btn {
-  display: block;
-  margin: 0 auto;
-  padding: 8px 24px;
-  font-size: 0.95rem;
+  text-decoration: none;
 }
 
 @media (max-width: 768px) {

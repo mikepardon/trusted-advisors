@@ -9,7 +9,9 @@
       "Bash(\"/c/Users/Michael/.config/herd/bin/php.bat\" artisan reverb:start --debug)",
       "Bash(curl:*)",
       "Bash(ls:*)",
-      "Bash(/c/Users/Michael/.config/herd/bin/php.bat artisan migrate)"
+      "Bash(/c/Users/Michael/.config/herd/bin/php.bat artisan migrate)",
+      "Bash(/c/Users/Michael/.config/herd/bin/php.bat:*)",
+      "Bash(/c/Users/Michael/.config/herd/bin/php.bat -l app/Http/Controllers/Admin/UnlockableController.php)"
     ]
   }
 }

@@ -19,9 +19,11 @@ class User extends Authenticatable
      * @var list<string>
      */
     protected $fillable = [
+        'auth_id',
         'name',
         'email',
         'password',
+        'avatar_url',
         'is_admin',
         'onesignal_player_id',
         'onesignal_email_token',
@@ -32,6 +34,7 @@ class User extends Authenticatable
         'login_streak',
         'max_login_streak',
         'last_login_at',
+        'refresh_token',
     ];
 
     /**
@@ -42,6 +45,7 @@ class User extends Authenticatable
     protected $hidden = [
         'password',
         'remember_token',
+        'refresh_token',
     ];
 
     /**
@@ -53,7 +57,6 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-            'password' => 'hashed',
             'is_admin' => 'boolean',
             'xp' => 'integer',
             'level' => 'integer',
@@ -62,6 +65,7 @@ class User extends Authenticatable
             'login_streak' => 'integer',
             'max_login_streak' => 'integer',
             'last_login_at' => 'datetime',
+            'banned_at' => 'datetime',
         ];
     }
 
@@ -108,5 +112,23 @@ class User extends Authenticatable
     public function eloHistory(): HasMany
     {
         return $this->hasMany(UserEloHistory::class);
+    }
+
+    public function coinTransactions(): HasMany
+    {
+        return $this->hasMany(CoinTransaction::class);
+    }
+
+    public function recordCoinTransaction(int $amount, string $type, string $source, ?int $referenceId = null, string $description = ''): void
+    {
+        CoinTransaction::create([
+            'user_id' => $this->id,
+            'amount' => $amount,
+            'type' => $type,
+            'source' => $source,
+            'reference_id' => $referenceId,
+            'description' => $description,
+            'balance_after' => $this->coins,
+        ]);
     }
 }

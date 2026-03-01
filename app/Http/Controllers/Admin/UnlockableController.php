@@ -33,9 +33,13 @@ class UnlockableController extends Controller
                 ? ($characterNames[$u->entity_id] ?? "#{$u->entity_id}")
                 : ($itemNames[$u->entity_id] ?? "#{$u->entity_id}");
 
-            $u->unlock_label = $u->unlock_method === 'achievement'
-                ? ($achNames[$u->unlock_value] ?? "Achievement #{$u->unlock_value}")
-                : "Level {$u->unlock_value}";
+            if ($u->unlock_method === 'achievement') {
+                $u->unlock_label = $achNames[$u->unlock_value] ?? "Achievement #{$u->unlock_value}";
+            } elseif ($u->unlock_method === 'coins') {
+                $u->unlock_label = "{$u->unlock_value} coins";
+            } else {
+                $u->unlock_label = "Level {$u->unlock_value}";
+            }
 
             return $u;
         });
@@ -58,7 +62,7 @@ class UnlockableController extends Controller
         $validated = $request->validate([
             'type' => 'required|string|in:character,item',
             'entity_id' => 'required|integer',
-            'unlock_method' => 'required|string|in:level,achievement',
+            'unlock_method' => 'required|string|in:level,achievement,coins',
             'unlock_value' => 'required|integer|min:1',
         ]);
 
@@ -76,7 +80,7 @@ class UnlockableController extends Controller
         $validated = $request->validate([
             'type' => 'sometimes|string|in:character,item',
             'entity_id' => 'sometimes|integer',
-            'unlock_method' => 'sometimes|string|in:level,achievement',
+            'unlock_method' => 'sometimes|string|in:level,achievement,coins',
             'unlock_value' => 'sometimes|integer|min:1',
         ]);
 

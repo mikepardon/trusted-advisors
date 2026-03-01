@@ -21,6 +21,7 @@ use App\Http\Controllers\Admin\SeasonController;
 use App\Http\Controllers\Admin\SoundAssetController;
 use App\Http\Controllers\Admin\UnlockableController;
 use App\Http\Controllers\Admin\AddonController;
+use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\GameManagementController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
@@ -39,15 +40,11 @@ Route::get('/storage/{path}', function (string $path) {
 })->where('path', '.*');
 Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
 Route::get('/auth/me', [AuthController::class, 'me']);
-Route::post('/auth/register', [AuthController::class, 'register']);
-Route::post('/auth/login', [AuthController::class, 'login']);
-Route::post('/auth/verify-email', [AuthController::class, 'verifyEmail']);
-Route::post('/auth/resend-verification', [AuthController::class, 'resendVerification']);
+Route::post('/auth/callback', [AuthController::class, 'handleOAuthCallback']);
 
 // Auth required
 Route::middleware('auth:web')->group(function () {
     Route::post('/auth/logout', [AuthController::class, 'logout']);
-    Route::post('/auth/change-password', [AuthController::class, 'changePassword']);
     Route::post('/auth/push-subscribe', [AuthController::class, 'registerPushId']);
     Route::get('/auth/stats', [AuthController::class, 'stats']);
 
@@ -96,6 +93,7 @@ Route::middleware('auth:web')->group(function () {
     // Coin shop
     Route::get('/shop', [CoinShopController::class, 'index']);
     Route::post('/shop/{unlockable}/purchase', [CoinShopController::class, 'purchase']);
+    Route::get('/coin-transactions', [CoinShopController::class, 'transactions']);
 
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);
@@ -132,4 +130,8 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('games', [GameManagementController::class, 'index']);
     Route::post('games/{game}/cancel', [GameManagementController::class, 'cancel']);
     Route::get('levels', [DashboardController::class, 'levels']);
+    Route::get('users', [AdminUserController::class, 'index']);
+    Route::get('users/{user}', [AdminUserController::class, 'show']);
+    Route::post('users/{user}/ban', [AdminUserController::class, 'ban']);
+    Route::get('users/{user}/login-logs', [AdminUserController::class, 'loginLogs']);
 });

@@ -1353,7 +1353,9 @@ class GameController extends Controller
             }
         }
 
-        $game->update(['duel_phase' => 'rolling_offerer']);
+        // Online: both players roll simultaneously; others: sequential
+        $rollingPhase = $game->isOnline() ? 'rolling' : 'rolling_offerer';
+        $game->update(['duel_phase' => $rollingPhase]);
 
         // Reload hands with updated assignments
         $updatedHands = $game->playerHands()
@@ -1370,14 +1372,15 @@ class GameController extends Controller
                 $chooser->player_number,
                 $chooserCard ? ['hand_id' => $chooserCard->id, 'card' => $chooserCard->card] : null,
                 $offererCard ? ['hand_id' => $offererCard->id, 'card' => $offererCard->card] : null,
-                'rolling_offerer',
+                $rollingPhase,
             ));
             $this->notifyPlayer($game, $game->offerer_player_number, 'Cards chosen — time to roll your dice!');
+            $this->notifyPlayer($game, $chooser->player_number, 'Cards chosen — time to roll your dice!');
         }
 
         return response()->json([
             'success' => true,
-            'duel_phase' => 'rolling_offerer',
+            'duel_phase' => $rollingPhase,
             'chooser_card' => $chooserCard ? ['hand_id' => $chooserCard->id, 'card' => $chooserCard->card] : null,
             'offerer_card' => $offererCard ? ['hand_id' => $offererCard->id, 'card' => $offererCard->card] : null,
         ]);
@@ -1392,19 +1395,46 @@ class GameController extends Controller
             return response()->json(['error' => 'Not a duel game'], 422);
         }
 
-        if (!in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser'])) {
+        if (!in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'rolling'])) {
             return response()->json(['error' => 'Not in a rolling phase'], 422);
         }
 
         // Determine who's rolling
         $offerer = $game->getOfferer();
         $chooser = $game->getChooser();
-        $rollingPlayer = $game->duel_phase === 'rolling_offerer' ? $offerer : $chooser;
 
-        // Online mode: verify authenticated user matches the rolling player
-        if ($game->isOnline()) {
-            if (!$request->user() || $request->user()->id !== $rollingPlayer->user_id) {
-                return response()->json(['error' => 'It is not your turn to roll'], 403);
+        if ($game->duel_phase === 'rolling') {
+            // Simultaneous rolling (online) — determine player from auth
+            $user = $request->user();
+            if (!$user) {
+                return response()->json(['error' => 'Authentication required'], 403);
+            }
+
+            if ($user->id === $offerer->user_id) {
+                $rollingPlayer = $offerer;
+            } elseif ($user->id === $chooser->user_id) {
+                $rollingPlayer = $chooser;
+            } else {
+                return response()->json(['error' => 'You are not in this game'], 403);
+            }
+
+            // Check if this player already rolled this round
+            $alreadyRolled = GameRoundResult::where('game_id', $game->id)
+                ->where('round_number', $game->current_round)
+                ->where('game_player_id', $rollingPlayer->id)
+                ->exists();
+
+            if ($alreadyRolled) {
+                return response()->json(['error' => 'You have already rolled this round'], 422);
+            }
+        } else {
+            $rollingPlayer = $game->duel_phase === 'rolling_offerer' ? $offerer : $chooser;
+
+            // Online mode: verify authenticated user matches the rolling player
+            if ($game->isOnline()) {
+                if (!$request->user() || $request->user()->id !== $rollingPlayer->user_id) {
+                    return response()->json(['error' => 'It is not your turn to roll'], 403);
+                }
             }
         }
 
@@ -1548,7 +1578,20 @@ class GameController extends Controller
         $duelResult = $game->checkDuelStatBounds($kingdom);
 
         // Advance duel_phase
-        if ($game->duel_phase === 'rolling_offerer') {
+        if ($game->duel_phase === 'rolling') {
+            // Simultaneous: check if both players have now rolled
+            $rollCount = GameRoundResult::where('game_id', $game->id)
+                ->where('round_number', $game->current_round)
+                ->count();
+
+            if ($rollCount >= 2) {
+                $game->update([
+                    'duel_phase' => 'resolving',
+                    'round_phase' => 'resolving',
+                ]);
+            }
+            // else: stay in 'rolling' phase, waiting for other player
+        } elseif ($game->duel_phase === 'rolling_offerer') {
             $game->update(['duel_phase' => 'rolling_chooser']);
         } else {
             $game->update([
@@ -1579,7 +1622,7 @@ class GameController extends Controller
                 $rollData,
                 $freshGame->duel_phase,
             ));
-            // If moving to rolling_chooser, notify the chooser
+            // Sequential: notify chooser it's their turn
             if ($freshGame->duel_phase === 'rolling_chooser') {
                 $chooserNumber = $freshGame->offerer_player_number === 1 ? 2 : 1;
                 $this->notifyPlayer($game, $chooserNumber, 'Your rival has rolled — now it\'s your turn!');
@@ -1975,10 +2018,8 @@ class GameController extends Controller
                     $descriptions[] = "{$playerName}'s Divine: WILD counts double (+{$bonus})";
                     break;
                 case 'gamble':
-                    $bonus = random_int(-3, 5);
-                    $adjustedTotal += $bonus;
-                    $sign = $bonus >= 0 ? '+' : '';
-                    $descriptions[] = "{$playerName}'s Gamble: rerolled all dice ({$sign}{$bonus})";
+                    // WILD triggers notification only — player can manually activate Gamble
+                    $descriptions[] = "{$playerName}'s Gamble: WILD rolled! Use ability to gamble.";
                     break;
                 case 'shadow':
                     $descriptions[] = "{$playerName}'s Shadow: glimpsed the future (no roll effect)";
@@ -2076,11 +2117,8 @@ class GameController extends Controller
                     break;
 
                 case 'gamble':
-                    // Reroll all dice (simulated: random -3 to +5)
-                    $bonus = random_int(-3, 5);
-                    $adjustedTotal += $bonus;
-                    $sign = $bonus >= 0 ? '+' : '';
-                    $descriptions[] = "{$playerName}'s Gamble: rerolled all dice ({$sign}{$bonus})";
+                    // WILD triggers notification only — player can manually activate Gamble
+                    $descriptions[] = "{$playerName}'s Gamble: WILD rolled! Use ability to gamble.";
                     break;
 
                 case 'shadow':
@@ -2139,6 +2177,14 @@ class GameController extends Controller
             return;
         }
 
+        // Broadcast in-game alert via WebSocket
+        try {
+            event(new \App\Events\GameAlertSent($game->id, $message, $playerNumber));
+        } catch (\Throwable $e) {
+            // Alert failure should never break game flow
+        }
+
+        // Push notification via OneSignal
         try {
             $player = $game->players()->where('player_number', $playerNumber)->with('user')->first();
             if ($player?->user) {
@@ -2250,6 +2296,10 @@ class GameController extends Controller
         $user->coins += $coinsAwarded;
 
         $user->save();
+
+        if ($coinsAwarded > 0) {
+            $user->recordCoinTransaction($coinsAwarded, 'earn', 'achievement', $achievement->id, "Claimed achievement: {$achievement->name}");
+        }
 
         $leveledUp = $user->level > $oldLevel;
 

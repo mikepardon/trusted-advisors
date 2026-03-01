@@ -235,6 +235,8 @@ class GameCompletionService
         $user->coins += $total;
         $user->save();
 
+        $user->recordCoinTransaction($total, 'earn', 'game', $game->id, 'Game completion reward');
+
         return [
             'coins' => $total,
             'old_coins' => $oldCoins,

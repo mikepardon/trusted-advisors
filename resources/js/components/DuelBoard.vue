@@ -5,6 +5,17 @@
       :playerKingdoms="playerKingdoms"
       :myPlayerNumber="activePlayerNumber"
       :isSinglePlayerDuel="isSinglePlayerDuel"
+      @show-character="openCharacterModal"
+    />
+
+    <!-- Character Info Modal -->
+    <CharacterInfoModal
+      v-if="showCharacterModal && selectedCharacterData"
+      :character="selectedCharacterData.character"
+      :activeDice="selectedCharacterData.activeDice"
+      :abilityUses="selectedCharacterData.abilityUses"
+      :items="selectedCharacterData.items"
+      @close="showCharacterModal = false"
     />
 
     <!-- Player Items -->
@@ -85,7 +96,34 @@
       </div>
     </template>
 
-    <!-- === ROLLING OFFERER === -->
+    <!-- === SIMULTANEOUS ROLLING (online) === -->
+    <template v-if="duelPhase === 'rolling' && !showHandoff && !showWaiting">
+      <DuelRollPhase
+        :card="myCard"
+        :playerName="isOfferer ? offererName : chooserName"
+        :canRoll="!myRollData"
+        :rollData="myRollData"
+        :ability="myAbility"
+        :abilityUses="myAbilityUses"
+        :abilityActivated="abilityActivated"
+        :activatingAbility="activatingAbility"
+        :peekedCards="peekedCards"
+        @roll="submitRoll"
+        @use-ability="activateAbility"
+      />
+      <div v-if="myRollData && !opponentRollData" class="waiting-inline">
+        <p>Waiting for opponent to roll...</p>
+      </div>
+      <DuelRollPhase
+        v-if="opponentRollData"
+        :card="opponentRollData.card"
+        :playerName="isOfferer ? chooserName : offererName"
+        :canRoll="false"
+        :rollData="opponentRollData"
+      />
+    </template>
+
+    <!-- === ROLLING OFFERER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_offerer' && !showHandoff && !showWaiting">
       <DuelRollPhase
         :card="myCard"
@@ -102,7 +140,7 @@
       />
     </template>
 
-    <!-- === ROLLING CHOOSER === -->
+    <!-- === ROLLING CHOOSER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_chooser' && !showHandoff && !showWaiting">
       <!-- Show offerer's completed roll -->
       <DuelRollPhase
@@ -151,11 +189,12 @@ import DuelResolvePhase from './DuelResolvePhase.vue';
 import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
 import PlayerItems from './PlayerItems.vue';
 import EventReveal from './EventReveal.vue';
+import CharacterInfoModal from './CharacterInfoModal.vue';
 import { useAuth } from '../stores/auth';
 
 export default {
   name: 'DuelBoard',
-  components: { DuelKingdomStats, DuelOfferPhase, DuelChoosePhase, DuelRollPhase, DuelResolvePhase, TurnHandoffOverlay, PlayerItems, EventReveal },
+  components: { DuelKingdomStats, DuelOfferPhase, DuelChoosePhase, DuelRollPhase, DuelResolvePhase, TurnHandoffOverlay, PlayerItems, EventReveal, CharacterInfoModal },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -193,6 +232,9 @@ export default {
       abilityActivated: false,
       activatingAbility: false,
       peekedCards: null,
+      // Character info modal
+      showCharacterModal: false,
+      selectedCharacterData: null,
     };
   },
   computed: {
@@ -265,6 +307,14 @@ export default {
     botPlayer() {
       return this.gameData?.game?.players?.find(p => p.is_bot);
     },
+    myRollData() {
+      if (this.isOfferer) return this.offererRollData;
+      return this.chooserRollData;
+    },
+    opponentRollData() {
+      if (this.isOfferer) return this.chooserRollData;
+      return this.offererRollData;
+    },
     isCurrentTurnBot() {
       if (!this.isSinglePlayerDuel || !this.botPlayer) return false;
       const botNum = this.botPlayer.player_number;
@@ -292,6 +342,18 @@ export default {
     },
   },
   methods: {
+    openCharacterModal(playerNumber) {
+      const player = this.gameData?.game?.players?.find(p => p.player_number === playerNumber);
+      if (!player?.character) return;
+      this.selectedCharacterData = {
+        character: player.character,
+        activeDice: Math.max(1, 3 - (player.lost_dice || 0)),
+        abilityUses: player.ability_uses ?? 0,
+        items: player.items || [],
+      };
+      this.showCharacterModal = true;
+    },
+
     checkEventReveal() {
       const round = this.gameData?.current_round || this.gameData?.game?.current_round || 0;
       const event = this.currentEvent;
@@ -331,6 +393,11 @@ export default {
         }
       }
 
+      // If entering simultaneous rolling phase, load my card
+      if (this.duelPhase === 'rolling') {
+        this.loadMyRollCard();
+      }
+
       this.checkEventReveal();
     },
 
@@ -351,6 +418,9 @@ export default {
       } else if (phase === 'choosing' && myNum !== choNum) {
         this.showWaiting = true;
         this.waitingMessage = 'Waiting for Choice';
+      } else if (phase === 'rolling' ) {
+        // Simultaneous rolling — no full-screen waiting overlay
+        this.showWaiting = false;
       } else if (phase === 'rolling_offerer' && myNum !== offNum) {
         this.showWaiting = true;
         this.waitingMessage = 'Opponent is Rolling';
@@ -412,8 +482,9 @@ export default {
           chosen_hand_id: chosenHandId,
         });
 
-        this.duelPhase = 'rolling_offerer';
-        this.$emit('phase-updated', 'rolling_offerer');
+        const phase = res.data.duel_phase || 'rolling_offerer';
+        this.duelPhase = phase;
+        this.$emit('phase-updated', phase);
 
         if (this.isPassAndPlay) {
           this.myCard = res.data.offerer_card?.card || null;
@@ -469,7 +540,27 @@ export default {
 
         const rollResult = res.data;
 
-        if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
+        if (this.duelPhase === 'rolling') {
+          // Simultaneous rolling (online)
+          if (rollResult.player_number === this.offererNumber) {
+            this.offererRollData = rollResult;
+          } else {
+            this.chooserRollData = rollResult;
+          }
+
+          await this.refreshKingdoms();
+
+          if (rollResult.duel_result) {
+            this.isGameOver = true;
+          }
+
+          // If opponent already rolled (via broadcast), transition to resolving
+          if (this.offererRollData && this.chooserRollData) {
+            this.duelPhase = 'resolving';
+            this.$emit('phase-updated', 'resolving');
+          }
+          // Otherwise, stay in 'rolling' and wait for opponent's broadcast
+        } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
           this.offererRollData = rollResult;
           this.duelPhase = 'rolling_chooser';
           this.$emit('phase-updated', 'rolling_chooser');
@@ -565,11 +656,11 @@ export default {
       this.duelPhase = data.duel_phase;
       this.loadMyRollCard();
       this.showWaiting = false;
+      // For simultaneous rolling, no waiting overlay needed
       this.updateOnlineWaiting();
     },
 
     handleDuelRollComplete(data) {
-      this.duelPhase = data.duel_phase;
       const rollData = data.roll_data;
 
       if (rollData.player_number === this.offererNumber) {
@@ -583,9 +674,18 @@ export default {
       }
 
       this.refreshKingdoms();
+
+      // If both rolls are in during simultaneous rolling, advance to resolving
+      if (this.duelPhase === 'rolling' && this.offererRollData && this.chooserRollData) {
+        this.duelPhase = 'resolving';
+        this.$emit('phase-updated', 'resolving');
+      } else {
+        this.duelPhase = data.duel_phase;
+      }
+
       this.showWaiting = false;
 
-      // If it's now my turn to roll
+      // Sequential: if it's now my turn to roll
       if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
         this.loadMyRollCard();
       }
@@ -675,6 +775,10 @@ export default {
           this.triggerBotTurn();
         }
       }
+    } else if (this.duelPhase === 'rolling') {
+      // Simultaneous rolling (online) — load my card
+      await this.loadMyRollCard();
+      this.updateOnlineWaiting();
     } else if (this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
       if (this.isPassAndPlay) {
         const activeNum = this.duelPhase === 'rolling_offerer' ? this.offererNumber : this.chooserNumber;

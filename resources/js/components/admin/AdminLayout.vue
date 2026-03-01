@@ -60,7 +60,10 @@
       </div>
 
       <div class="nav-section">
-        <span class="nav-group-label">Tools</span>
+        <span class="nav-group-label">Management</span>
+        <router-link to="/admin/users" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128100;</span> Users
+        </router-link>
         <router-link to="/admin/games" class="nav-item" active-class="active">
           <span class="nav-icon">&#127918;</span> Games
         </router-link>

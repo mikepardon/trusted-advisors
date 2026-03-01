@@ -1,12 +1,23 @@
 <template>
   <div id="game-app" :class="{ 'is-admin': isAdmin }">
-    <SplashScreen v-if="showSplash" @done="showSplash = false" />
+    <SplashScreen v-if="showSplash" @done="splashDone" />
 
     <!-- Full header for non-game, non-admin pages -->
     <header v-if="!isAdmin && !isGamePage" class="game-header">
       <div class="header-top-bar">
         <div v-if="auth.state.user" class="header-player" @click="$router.push('/profile')">
-          <div class="player-avatar">{{ auth.state.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+          <div class="avatar-ring-wrap">
+            <svg class="xp-ring" viewBox="0 0 44 44">
+              <circle class="xp-ring-bg" cx="22" cy="22" r="20" />
+              <circle
+                class="xp-ring-progress"
+                cx="22" cy="22" r="20"
+                :stroke-dasharray="xpRingCircumference"
+                :stroke-dashoffset="xpRingOffset"
+              />
+            </svg>
+            <div class="player-avatar">{{ auth.state.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+          </div>
           <span class="player-level">Lv.{{ auth.state.user.level ?? 1 }}</span>
         </div>
         <img
@@ -105,7 +116,7 @@ export default {
   },
   data() {
     return {
-      showSplash: !window.location.pathname.startsWith('/admin'),
+      showSplash: !window.location.pathname.startsWith('/admin') && !document.cookie.includes('splash_seen=1'),
       showHowToPlay: false,
       showNotifications: false,
       showMenuPopup: false,
@@ -127,6 +138,23 @@ export default {
   computed: {
     isAdmin() {
       return this.$route.path.startsWith('/admin');
+    },
+    xpProgress() {
+      const user = this.auth.state.user;
+      if (!user) return 0;
+      const level = user.level ?? 1;
+      const xp = user.xp ?? 0;
+      const currentLevelXp = 100 * level * (level + 1) / 2;
+      const nextLevelXp = 100 * (level + 1) * (level + 2) / 2;
+      const range = nextLevelXp - currentLevelXp;
+      if (range <= 0) return 1;
+      return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
+    },
+    xpRingCircumference() {
+      return 2 * Math.PI * 20; // r=20
+    },
+    xpRingOffset() {
+      return this.xpRingCircumference * (1 - this.xpProgress);
     },
     isGamePage() {
       return /^\/game\/\d+(\/.*)?$/.test(this.$route.path);
@@ -162,6 +190,11 @@ export default {
     document.removeEventListener('click', this._closeMenuOnClick);
   },
   methods: {
+    splashDone() {
+      this.showSplash = false;
+      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
+      document.cookie = `splash_seen=1; expires=${expires}; path=/`;
+    },
     goHome() {
       playSound('clickNav');
       if (this.$route.path === '/') {
@@ -184,7 +217,11 @@ export default {
       if (this._notifTimer) clearInterval(this._notifTimer);
       await this.auth.logout();
       this.notifCount = 0;
-      this.$router.push('/');
+      if (this.$route.path === '/') {
+        window.location.reload();
+      } else {
+        this.$router.replace('/');
+      }
     },
     async pollNotifCount() {
       const fetch = async () => {
@@ -302,8 +339,44 @@ body {
   transition: transform 0.2s;
 }
 
+.avatar-ring-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-ring-wrap .player-avatar {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.xp-ring {
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+}
+
+.xp-ring-bg {
+  fill: none;
+  stroke: rgba(138, 106, 46, 0.25);
+  stroke-width: 2.5;
+}
+
+.xp-ring-progress {
+  fill: none;
+  stroke: var(--accent-gold);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
+}
+
 .header-player:hover .player-avatar {
-  transform: scale(1.08);
+  transform: translate(-50%, -50%) scale(1.08);
 }
 
 .player-level {
@@ -727,10 +800,20 @@ button:disabled {
     max-width: 160px;
   }
 
+  .avatar-ring-wrap {
+    width: 38px;
+    height: 38px;
+  }
+
+  .xp-ring {
+    width: 38px;
+    height: 38px;
+  }
+
   .player-avatar {
-    width: 32px;
-    height: 32px;
-    font-size: 1rem;
+    width: 28px;
+    height: 28px;
+    font-size: 0.9rem;
   }
 
   .header-coins {

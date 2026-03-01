@@ -40,4 +40,10 @@ return [
         'rest_api_key' => env('ONESIGNAL_REST_API_KEY'),
     ],
 
+    'mpgames_auth' => [
+        'url' => env('AUTH_SERVICE_URL', 'https://auth.mpgames.io'),
+        'client_id' => env('OAUTH_CLIENT_ID'),
+        'redirect_uri' => env('OAUTH_REDIRECT_URI'),
+    ],
+
 ];
