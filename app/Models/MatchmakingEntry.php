@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class MatchmakingEntry extends Model
 {
-    protected $fillable = ['user_id', 'elo_rating', 'elo_range', 'total_rounds', 'status', 'matched_game_id'];
+    protected $fillable = ['user_id', 'elo_rating', 'elo_range', 'total_rounds', 'status', 'matched_game_id', 'bot_timeout'];
 
     public function user(): BelongsTo
     {

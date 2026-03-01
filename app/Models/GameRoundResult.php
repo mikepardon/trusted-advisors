@@ -11,6 +11,7 @@ class GameRoundResult extends Model
         'game_id', 'round_number', 'card_id', 'game_player_id',
         'success', 'dice_results', 'stat_totals', 'required', 'effects_applied',
         'result_type', 'cards_included', 'wild_triggers',
+        'special_effects', 'kingdom_snapshot', 'event_data',
     ];
 
     protected $casts = [
@@ -21,6 +22,9 @@ class GameRoundResult extends Model
         'effects_applied' => 'array',
         'cards_included' => 'array',
         'wild_triggers' => 'array',
+        'special_effects' => 'array',
+        'kingdom_snapshot' => 'array',
+        'event_data' => 'array',
     ];
 
     public function game(): BelongsTo

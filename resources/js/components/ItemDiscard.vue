@@ -175,8 +175,9 @@ export default {
 
 .item-top-row {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
+  position: relative;
 }
 
 .item-name {
@@ -201,6 +202,8 @@ export default {
 }
 
 .cursed-label {
+  position: absolute;
+  right: 0;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -211,6 +214,8 @@ export default {
 }
 
 .selected-label {
+  position: absolute;
+  right: 0;
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 1px;

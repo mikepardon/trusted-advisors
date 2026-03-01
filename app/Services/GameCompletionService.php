@@ -163,6 +163,44 @@ class GameCompletionService
                 $target = $criteria['count'] ?? 5;
                 return ['current' => $this->getUserCharacterWins($user), 'target' => $target];
 
+            // Cross-product: mode + type combinations
+            case 'single_classic_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'single', 'classic'), 'target' => $target];
+            case 'single_classic_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'single', 'classic', true), 'target' => $target];
+            case 'single_duel_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'single', 'duel'), 'target' => $target];
+            case 'single_duel_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'single', 'duel', true), 'target' => $target];
+            case 'local_classic_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'pass_and_play', 'classic'), 'target' => $target];
+            case 'local_classic_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'pass_and_play', 'classic', true), 'target' => $target];
+            case 'local_duel_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'pass_and_play', 'duel'), 'target' => $target];
+            case 'local_duel_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'pass_and_play', 'duel', true), 'target' => $target];
+            case 'online_classic_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'online', 'classic'), 'target' => $target];
+            case 'online_classic_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'online', 'classic', true), 'target' => $target];
+            case 'online_duel_plays':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'online', 'duel'), 'target' => $target];
+            case 'online_duel_wins':
+                $target = $criteria['count'] ?? 5;
+                return ['current' => $this->getFilteredGameCount($user, 'online', 'duel', true), 'target' => $target];
+
             default:
                 return null;
         }
@@ -445,6 +483,32 @@ class GameCompletionService
             case 'wins_with_characters':
                 return $this->getUserCharacterWins($user) >= ($criteria['count'] ?? 5);
 
+            // Cross-product: mode + type combinations
+            case 'single_classic_plays':
+                return $this->getFilteredGameCount($user, 'single', 'classic') >= ($criteria['count'] ?? 5);
+            case 'single_classic_wins':
+                return $this->getFilteredGameCount($user, 'single', 'classic', true) >= ($criteria['count'] ?? 5);
+            case 'single_duel_plays':
+                return $this->getFilteredGameCount($user, 'single', 'duel') >= ($criteria['count'] ?? 5);
+            case 'single_duel_wins':
+                return $this->getFilteredGameCount($user, 'single', 'duel', true) >= ($criteria['count'] ?? 5);
+            case 'local_classic_plays':
+                return $this->getFilteredGameCount($user, 'pass_and_play', 'classic') >= ($criteria['count'] ?? 5);
+            case 'local_classic_wins':
+                return $this->getFilteredGameCount($user, 'pass_and_play', 'classic', true) >= ($criteria['count'] ?? 5);
+            case 'local_duel_plays':
+                return $this->getFilteredGameCount($user, 'pass_and_play', 'duel') >= ($criteria['count'] ?? 5);
+            case 'local_duel_wins':
+                return $this->getFilteredGameCount($user, 'pass_and_play', 'duel', true) >= ($criteria['count'] ?? 5);
+            case 'online_classic_plays':
+                return $this->getFilteredGameCount($user, 'online', 'classic') >= ($criteria['count'] ?? 5);
+            case 'online_classic_wins':
+                return $this->getFilteredGameCount($user, 'online', 'classic', true) >= ($criteria['count'] ?? 5);
+            case 'online_duel_plays':
+                return $this->getFilteredGameCount($user, 'online', 'duel') >= ($criteria['count'] ?? 5);
+            case 'online_duel_wins':
+                return $this->getFilteredGameCount($user, 'online', 'duel', true) >= ($criteria['count'] ?? 5);
+
             case 'no_stat_above':
                 return $this->isWinner($user, $game, $game->players) && $this->checkNoStatAbove($user, $game, $criteria['value'] ?? 10);
 
@@ -725,6 +789,46 @@ class GameCompletionService
                 $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
             })
             ->count();
+    }
+
+    /**
+     * Generic helper for counting games by mode + type combination.
+     * @param string|null $mode 'single', 'pass_and_play', 'online', or null for any
+     * @param string|null $type 'duel', 'classic' (non-duel), or null for any
+     * @param bool $winOnly Only count wins
+     */
+    private function getFilteredGameCount(User $user, ?string $mode, ?string $type, bool $winOnly = false): int
+    {
+        $participantGameIds = GamePlayer::where('user_id', $user->id)->pluck('game_id');
+
+        $query = Game::where('status', 'completed')
+            ->where(function ($q) use ($user, $participantGameIds) {
+                $q->where('user_id', $user->id)->orWhereIn('id', $participantGameIds);
+            });
+
+        if ($mode) {
+            $query->where('game_mode', $mode);
+        }
+
+        if ($type === 'duel') {
+            $query->where('game_type', 'duel');
+        } elseif ($type === 'classic') {
+            $query->where('game_type', '!=', 'duel');
+        }
+
+        if ($winOnly) {
+            if ($type === 'duel') {
+                $query->whereIn('id', $participantGameIds)
+                    ->whereHas('players', function ($pq) use ($user) {
+                        $pq->where('user_id', $user->id)
+                            ->whereColumn('player_number', 'games.winner_player_number');
+                    });
+            } else {
+                $query->where('win', true);
+            }
+        }
+
+        return $query->count();
     }
 
     private function getUserCharacterWins(User $user): int

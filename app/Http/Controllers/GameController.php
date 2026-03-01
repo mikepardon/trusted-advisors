@@ -255,11 +255,16 @@ class GameController extends Controller
         } else {
             // Create players for single/pass_and_play
             foreach ($validated['characters'] as $index => $characterId) {
-                GamePlayer::create([
+                $playerData = [
                     'game_id' => $game->id,
                     'character_id' => $characterId,
                     'player_number' => $index + 1,
-                ]);
+                ];
+                // Assign the authenticated user to player 1 so they receive XP/rewards
+                if ($index === 0 && $request->user()) {
+                    $playerData['user_id'] = $request->user()->id;
+                }
+                GamePlayer::create($playerData);
             }
 
             // Single-player duel: create bot as player 2
@@ -904,11 +909,36 @@ class GameController extends Controller
         foreach ($itemGrants as $grant) {
             $item = Item::find($grant['item_id']);
             if ($item) {
+                $grantPlayer = $players->firstWhere('id', $grant['player_id']);
+                $isConsumed = $item->is_consumable;
+                $immediateDesc = null;
+                if ($isConsumed && $grantPlayer) {
+                    $immediateDesc = $this->applyImmediateItemEffect($game, $grantPlayer, $item);
+                }
                 GamePlayerItem::create([
                     'game_player_id' => $grant['player_id'],
                     'item_id' => $item->id,
                     'acquired_round' => $game->current_round,
+                    'is_used' => $isConsumed,
                 ]);
+                if ($grantPlayer) {
+                    $playerChar = $grantPlayer->character->name;
+                    $effect = [
+                        'type' => 'draw_item',
+                        'phase' => 'positive',
+                        'player' => $playerChar,
+                        'item' => $item->name,
+                        'is_negative' => $item->is_negative ?? false,
+                        'description' => "{$playerChar} received {$item->name}!",
+                        'is_consumable' => $isConsumed,
+                    ];
+                    if ($isConsumed && $immediateDesc) {
+                        $effect['type'] = 'immediate_item';
+                        $effect['immediate_description'] = $immediateDesc;
+                        $effect['description'] .= " ({$immediateDesc})";
+                    }
+                    $specialEffects[] = $effect;
+                }
             }
         }
 
@@ -943,6 +973,9 @@ class GameController extends Controller
                 'negative' => $handsForNegativePhase->pluck('card_id')->toArray(),
             ],
             'wild_triggers' => $wildTriggers,
+            'special_effects' => $specialEffects,
+            'kingdom_snapshot' => $game->fresh()->only($stats),
+            'event_data' => $event ? ['id' => $event->id, 'name' => $event->name, 'description' => $event->description] : null,
         ]);
 
         // Check game over
@@ -1577,6 +1610,7 @@ class GameController extends Controller
         }
 
         // Save round result
+        $duelEvent = $this->getCurrentEvent($game);
         GameRoundResult::create([
             'game_id' => $game->id,
             'round_number' => $game->current_round,
@@ -1594,6 +1628,9 @@ class GameController extends Controller
             'stat_totals' => ['total_roll' => $totalRoll, 'total_difficulty' => $difficulty],
             'effects_applied' => $statEffects,
             'wild_triggers' => $wildTriggers,
+            'special_effects' => [],
+            'kingdom_snapshot' => $kingdom ? $kingdom->fresh()->only(['wealth', 'influence', 'security', 'religion', 'food', 'happiness']) : null,
+            'event_data' => $duelEvent ? ['id' => $duelEvent->id, 'name' => $duelEvent->name, 'description' => $duelEvent->description] : null,
         ]);
 
         // Check instant win/loss after roll

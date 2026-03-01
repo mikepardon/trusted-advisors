@@ -52,7 +52,7 @@ export default {
   },
   computed: {
     userElo() {
-      return this.auth.state.user?.elo || 1200;
+      return this.auth.state.user?.elo_rating || 1200;
     },
     formattedElapsed() {
       const mins = Math.floor(this.elapsed / 60);

@@ -25,6 +25,7 @@ class User extends Authenticatable
         'password',
         'avatar_url',
         'is_admin',
+        'is_bot',
         'onesignal_player_id',
         'onesignal_email_token',
         'xp',
@@ -46,6 +47,7 @@ class User extends Authenticatable
         'password',
         'remember_token',
         'refresh_token',
+        'is_bot',
     ];
 
     /**
@@ -58,6 +60,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'is_admin' => 'boolean',
+            'is_bot' => 'boolean',
             'xp' => 'integer',
             'level' => 'integer',
             'elo_rating' => 'integer',

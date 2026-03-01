@@ -55,6 +55,8 @@ class ReplayController extends Controller
             'roundResults.card',
             'roundResults.player.character',
             'playerKingdoms.player.character',
+            'playerHands.card',
+            'playerHands.player.character',
         ]);
 
         $roundResults = $game->roundResults->groupBy('round_number')->map(function ($results) {
@@ -70,13 +72,28 @@ class ReplayController extends Controller
                     'required' => $result->required,
                     'effects_applied' => $result->effects_applied,
                     'result_type' => $result->result_type,
+                    'cards_included' => $result->cards_included,
+                    'wild_triggers' => $result->wild_triggers,
+                    'special_effects' => $result->special_effects,
+                    'kingdom_snapshot' => $result->kingdom_snapshot,
+                    'event_data' => $result->event_data,
                 ];
             });
         });
 
+        // Group card hands by round with details
+        $hands = $game->playerHands->groupBy('round_number')->map(fn ($roundHands) =>
+            $roundHands->map(fn ($h) => [
+                'card' => $h->card,
+                'player' => $h->player,
+                'role' => $h->role,
+            ])
+        );
+
         return response()->json([
-            'game' => $game->makeHidden('roundResults'),
+            'game' => $game->makeHidden(['roundResults', 'playerHands']),
             'rounds' => $roundResults,
+            'hands' => $hands,
             'total_rounds_played' => $game->current_round,
         ]);
     }

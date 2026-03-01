@@ -6,6 +6,7 @@ use App\Events\MatchFound;
 use App\Models\Game;
 use App\Models\GamePlayer;
 use App\Models\MatchmakingEntry;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -31,8 +32,9 @@ class MatchmakingController extends Controller
 
         $entry = MatchmakingEntry::create([
             'user_id' => $user->id,
-            'elo_rating' => $user->elo ?? 1200,
+            'elo_rating' => $user->elo_rating ?? 1200,
             'total_rounds' => $request->total_rounds,
+            'bot_timeout' => rand(53, 83),
         ]);
 
         // Immediately attempt to find a match
@@ -74,9 +76,9 @@ class MatchmakingController extends Controller
             return response()->json($entry);
         }
 
-        // Widen ELO range: +50 per 10 seconds elapsed, max 500
+        // Widen ELO range: +100 per 5 seconds elapsed, max 500
         $elapsed = now()->diffInSeconds($entry->created_at);
-        $newRange = min(500, 100 + (int) floor($elapsed / 10) * 50);
+        $newRange = min(500, 100 + (int) floor($elapsed / 5) * 100);
         if ($newRange !== $entry->elo_range) {
             $entry->update(['elo_range' => $newRange]);
         }
@@ -85,6 +87,13 @@ class MatchmakingController extends Controller
         $match = $this->findMatch($entry);
         if ($match) {
             $this->createMatch($entry, $match);
+            $entry->refresh();
+            return response()->json($entry);
+        }
+
+        // Bot fallback: if elapsed >= bot_timeout, match with a bot
+        if ($entry->bot_timeout && $elapsed >= $entry->bot_timeout) {
+            $this->createBotMatch($entry);
             $entry->refresh();
         }
 
@@ -107,6 +116,47 @@ class MatchmakingController extends Controller
             })
             ->orderByRaw('ABS(elo_rating - ?)', [$entry->elo_rating])
             ->first();
+    }
+
+    private function createBotMatch(MatchmakingEntry $entry): void
+    {
+        // Pick a bot user near the player's ELO
+        $bot = User::where('is_bot', true)
+            ->orderByRaw('ABS(elo_rating - ?)', [$entry->elo_rating])
+            ->first();
+
+        if (!$bot) {
+            return;
+        }
+
+        DB::transaction(function () use ($entry, $bot) {
+            $game = Game::create([
+                'status' => 'setup',
+                'game_mode' => 'online',
+                'game_type' => 'duel',
+                'num_players' => 2,
+                'total_rounds' => $entry->total_rounds,
+                'current_round' => 0,
+                'user_id' => $entry->user_id,
+            ]);
+
+            GamePlayer::create([
+                'game_id' => $game->id,
+                'user_id' => $entry->user_id,
+                'player_number' => 1,
+            ]);
+
+            GamePlayer::create([
+                'game_id' => $game->id,
+                'user_id' => $bot->id,
+                'player_number' => 2,
+                'is_bot' => true,
+            ]);
+
+            $entry->update(['status' => 'matched', 'matched_game_id' => $game->id]);
+
+            broadcast(new MatchFound($entry->user_id, $game->id, $bot->name));
+        });
     }
 
     private function createMatch(MatchmakingEntry $entry1, MatchmakingEntry $entry2): Game

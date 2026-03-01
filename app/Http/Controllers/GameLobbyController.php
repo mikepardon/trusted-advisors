@@ -200,6 +200,24 @@ class GameLobbyController extends Controller
 
         $player->update(['character_id' => $validated['character_id']]);
 
+        // Auto-select character for bot player if present
+        $botPlayer = GamePlayer::where('game_id', $game->id)
+            ->where('is_bot', true)
+            ->whereNull('character_id')
+            ->first();
+
+        if ($botPlayer) {
+            $takenIds = GamePlayer::where('game_id', $game->id)
+                ->whereNotNull('character_id')
+                ->pluck('character_id')
+                ->toArray();
+
+            $botCharacter = Character::whereNotIn('id', $takenIds)->inRandomOrder()->first();
+            if ($botCharacter) {
+                $botPlayer->update(['character_id' => $botCharacter->id]);
+            }
+        }
+
         // Check if all players have selected
         $totalPlayers = GamePlayer::where('game_id', $game->id)->count();
         $selectedCount = GamePlayer::where('game_id', $game->id)->whereNotNull('character_id')->count();
