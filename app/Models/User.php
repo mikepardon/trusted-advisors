@@ -80,8 +80,9 @@ class User extends Authenticatable
 
     public static function xpForLevel(int $level): int
     {
-        // Total XP needed to reach this level: 100 * N * (N + 1) / 2
-        return (int) (100 * $level * ($level + 1) / 2);
+        // Total cumulative XP needed to reach this level
+        // Level 1 = 0 (start here), Level 2 = 100, Level 3 = 300, Level 4 = 600...
+        return (int) (100 * ($level - 1) * $level / 2);
     }
 
     public function games(): HasMany

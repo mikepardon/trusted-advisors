@@ -38,36 +38,58 @@
         </div>
         <div v-for="result in currentRoundData" :key="result.id" class="result-card card-panel">
           <div class="result-header">
-            <strong class="card-name">{{ result.card?.name || 'Unknown Card' }}</strong>
+            <strong class="card-name">{{ resultCardName(result) }}</strong>
             <span v-if="result.player" class="player-tag">{{ result.player?.character?.name || 'Player' }}</span>
           </div>
 
           <div class="result-body">
-            <!-- Dice rolls -->
-            <div v-if="result.dice_results" class="dice-section">
-              <span class="sub-label">Dice:</span>
-              <span v-for="(d, i) in result.dice_results" :key="i" class="die-face">{{ d }}</span>
-              <span class="dice-outcome" :class="result.success ? 'outcome-pass' : 'outcome-fail'">
-                {{ result.success ? 'Success' : 'Failed' }}
-              </span>
-            </div>
+            <!-- Duel dice (array of player roll objects) -->
+            <template v-if="isDuelResult(result)">
+              <div v-for="(pr, pi) in result.dice_results" :key="pi" class="dice-section">
+                <span class="sub-label">{{ pr.character_name }}:</span>
+                <span v-for="(roll, ri) in pr.rolls" :key="ri" class="die-face">{{ roll.value }}</span>
+                <span class="dice-total">= {{ pr.rolls.reduce((s, r) => s + r.value, 0) }}</span>
+              </div>
+              <div class="dice-section">
+                <span class="sub-label">vs Difficulty {{ result.stat_totals?.total_difficulty }}</span>
+                <span class="dice-outcome" :class="result.success ? 'outcome-pass' : 'outcome-fail'">
+                  {{ result.success ? 'Success' : 'Failed' }}
+                </span>
+              </div>
+            </template>
 
-            <!-- Stat changes -->
-            <div v-if="result.effects_applied && result.effects_applied.length" class="effects-section">
+            <!-- Cooperative dice (flat array of numbers) -->
+            <template v-else-if="result.dice_results">
+              <div class="dice-section">
+                <span class="sub-label">Dice:</span>
+                <span v-for="(d, i) in result.dice_results" :key="i" class="die-face">{{ d }}</span>
+                <span class="dice-outcome" :class="result.success ? 'outcome-pass' : 'outcome-fail'">
+                  {{ result.success ? 'Success' : 'Failed' }}
+                </span>
+              </div>
+            </template>
+
+            <!-- Stat changes (effects_applied as object for duel, array for cooperative) -->
+            <div v-if="hasEffects(result)" class="effects-section">
               <span class="sub-label">Effects:</span>
               <div class="effects-list">
-                <span v-for="(eff, i) in result.effects_applied" :key="i" class="effect-tag">
-                  {{ eff }}
-                </span>
+                <template v-if="Array.isArray(result.effects_applied)">
+                  <span v-for="(eff, i) in result.effects_applied" :key="i" class="effect-tag">{{ eff }}</span>
+                </template>
+                <template v-else>
+                  <span v-for="(val, stat) in result.effects_applied" :key="stat" class="effect-tag" :class="val > 0 ? 'effect-positive' : 'effect-negative'">
+                    {{ formatStatName(stat) }} {{ val > 0 ? '+' : '' }}{{ val }}
+                  </span>
+                </template>
               </div>
             </div>
 
-            <!-- Stat totals after this round -->
-            <div v-if="result.stat_totals" class="stats-after">
+            <!-- Stat totals (only show kingdom stats, not roll/difficulty) -->
+            <div v-if="hasKingdomStats(result)" class="stats-after">
               <span class="sub-label">Stats After:</span>
               <div class="stat-chips">
                 <span v-for="(val, stat) in result.stat_totals" :key="stat" class="stat-chip">
-                  {{ stat }}: {{ val }}
+                  {{ formatStatName(stat) }}: {{ val }}
                 </span>
               </div>
             </div>
@@ -110,6 +132,9 @@ export default {
     currentRoundData() {
       return this.rounds[this.currentRound] || [];
     },
+    isDuel() {
+      return this.game?.game_type === 'duel';
+    },
   },
   async mounted() {
     try {
@@ -126,6 +151,31 @@ export default {
     this.loading = false;
   },
   methods: {
+    isDuelResult(result) {
+      return Array.isArray(result.dice_results) && result.dice_results.length > 0 && result.dice_results[0]?.rolls;
+    },
+    resultCardName(result) {
+      if (result.card?.name) return result.card.name;
+      // For duel results, use the player's character name as context
+      if (this.isDuel && result.player?.character?.name) {
+        return result.player.character.name + "'s Turn";
+      }
+      return 'Card';
+    },
+    hasEffects(result) {
+      if (!result.effects_applied) return false;
+      if (Array.isArray(result.effects_applied)) return result.effects_applied.length > 0;
+      return Object.keys(result.effects_applied).length > 0;
+    },
+    hasKingdomStats(result) {
+      if (!result.stat_totals) return false;
+      // Don't show total_roll/total_difficulty as "stats after" — those are roll metadata
+      const keys = Object.keys(result.stat_totals);
+      return keys.some(k => !['total_roll', 'total_difficulty'].includes(k));
+    },
+    formatStatName(stat) {
+      return stat.charAt(0).toUpperCase() + stat.slice(1).replace(/_/g, ' ');
+    },
     async shareReplay() {
       try {
         const res = await axios.post(`/api/games/${this.id}/share`);
@@ -307,6 +357,12 @@ export default {
   border-radius: 4px;
 }
 
+.dice-total {
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
 .outcome-pass { color: #6abf50; background: rgba(74, 138, 58, 0.15); }
 .outcome-fail { color: #d05040; background: rgba(160, 48, 32, 0.15); }
 
@@ -327,6 +383,16 @@ export default {
   border-radius: 4px;
   background: rgba(100, 100, 160, 0.15);
   color: #a0a0d0;
+}
+
+.effect-positive {
+  background: rgba(74, 138, 58, 0.15);
+  color: #6abf50;
+}
+
+.effect-negative {
+  background: rgba(160, 48, 32, 0.15);
+  color: #d05040;
 }
 
 .stats-after {

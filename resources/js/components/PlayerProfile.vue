@@ -108,12 +108,11 @@ export default {
       if (!this.profile) return 0;
       const level = this.profile.level || 1;
       const xp = this.profile.xp || 0;
-      const currentLevelXp = (100 * level * (level + 1)) / 2;
-      const prevLevelXp = (100 * (level - 1) * level) / 2;
-      const progress = xp - prevLevelXp;
-      const range = currentLevelXp - prevLevelXp;
+      const currentLevelXp = (100 * (level - 1) * level) / 2;
+      const nextLevelXp = this.profile.xp_for_next_level || (100 * level * (level + 1) / 2);
+      const range = nextLevelXp - currentLevelXp;
       if (range <= 0) return 0;
-      return Math.min(100, Math.round((progress / range) * 100));
+      return Math.min(100, Math.round(((xp - currentLevelXp) / range) * 100));
     },
   },
   async mounted() {

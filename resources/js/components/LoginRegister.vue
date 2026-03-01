@@ -117,11 +117,22 @@ export default {
   font-weight: 500;
   cursor: pointer;
   border: none;
-  transition: opacity 0.15s;
+  transition: background 0.15s, opacity 0.15s;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  letter-spacing: 0;
 }
 
 .social-btn:hover {
-  opacity: 0.9;
+  transform: none;
+  box-shadow: none;
+}
+
+.google-btn:hover {
+  background: #f0f0f0;
+}
+
+.apple-btn:hover {
+  background: #1a1a1a;
 }
 
 .social-icon {

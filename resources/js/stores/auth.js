@@ -40,6 +40,7 @@ async function startLogin(provider = null) {
         state: oauthState,
         code_challenge: challenge,
         code_challenge_method: 'S256',
+        prompt: 'login',
     });
 
     if (provider) {

@@ -400,7 +400,7 @@ export default {
         + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);
     },
     xpForLevel(level) {
-      return Math.floor(100 * level * (level + 1) / 2);
+      return Math.floor(100 * (level - 1) * level / 2);
     },
     animateXpBar() {
       const d = this.myXpDetails;

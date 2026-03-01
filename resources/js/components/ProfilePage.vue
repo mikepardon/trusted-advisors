@@ -104,15 +104,12 @@ export default {
   computed: {
     xpPercent() {
       const xp = this.gameStats.xp || 0;
-      const next = this.gameStats.xp_for_next_level || 300;
-      // Calculate XP for current level to get progress within level
       const level = this.gameStats.level || 1;
-      const currentLevelXp = (100 * level * (level + 1)) / 2;
-      const prevLevelXp = (100 * (level - 1) * level) / 2;
-      const progressInLevel = xp - prevLevelXp;
-      const levelRange = currentLevelXp - prevLevelXp;
-      if (levelRange <= 0) return 0;
-      return Math.min(100, Math.round((progressInLevel / levelRange) * 100));
+      const currentLevelXp = (100 * (level - 1) * level) / 2;
+      const nextLevelXp = this.gameStats.xp_for_next_level || (100 * level * (level + 1) / 2);
+      const range = nextLevelXp - currentLevelXp;
+      if (range <= 0) return 0;
+      return Math.min(100, Math.round(((xp - currentLevelXp) / range) * 100));
     },
   },
   async mounted() {

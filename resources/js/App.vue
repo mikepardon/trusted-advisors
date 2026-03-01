@@ -144,8 +144,8 @@ export default {
       if (!user) return 0;
       const level = user.level ?? 1;
       const xp = user.xp ?? 0;
-      const currentLevelXp = 100 * level * (level + 1) / 2;
-      const nextLevelXp = 100 * (level + 1) * (level + 2) / 2;
+      const currentLevelXp = 100 * (level - 1) * level / 2;
+      const nextLevelXp = 100 * level * (level + 1) / 2;
       const range = nextLevelXp - currentLevelXp;
       if (range <= 0) return 1;
       return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
