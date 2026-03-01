@@ -84,6 +84,17 @@
             </span>
           </div>
 
+          <div v-if="positivePhase.item_modifiers && positivePhase.item_modifiers.length" class="item-modifiers-section">
+            <span
+              v-for="(mod, i) in positivePhase.item_modifiers"
+              :key="'im-' + i"
+              class="item-mod-tag"
+              :class="modTagClass(mod)"
+            >
+              {{ mod.item_name }} ({{ modLabel(mod) }})
+            </span>
+          </div>
+
           <!-- Show effects preview (but stats haven't moved yet) -->
           <div v-if="positivePhase.success && Object.keys(filterStatEffects(positivePhase.effects || {})).length" class="effects-row">
             <span
@@ -340,6 +351,19 @@ export default {
       }
       return result;
     },
+    modLabel(mod) {
+      const labels = {
+        roll_bonus: '+' + mod.value + ' to roll',
+        roll_penalty: mod.value + ' to roll',
+        difficulty_reduction: '-' + mod.value + ' difficulty',
+        difficulty_increase: '+' + mod.value + ' difficulty',
+      };
+      return labels[mod.type] || mod.type;
+    },
+    modTagClass(mod) {
+      if (mod.type === 'roll_bonus' || mod.type === 'difficulty_reduction') return 'mod-helpful';
+      return 'mod-harmful';
+    },
     specialIcon(type) {
       const icons = {
         draw_item: '\u{1F3C6}',
@@ -588,6 +612,31 @@ export default {
 
 .badge-success { background: rgba(74, 138, 58, 0.2); color: #4a8a3a; }
 .badge-failure { background: rgba(160, 48, 32, 0.2); color: #c0392b; }
+
+.item-modifiers-section {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  animation: fadeIn 0.3s ease;
+}
+
+.item-mod-tag {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-style: italic;
+}
+
+.mod-helpful {
+  background: rgba(74, 138, 58, 0.12);
+  color: #6abf5e;
+}
+
+.mod-harmful {
+  background: rgba(160, 48, 32, 0.12);
+  color: #e57373;
+}
 
 .no-effects {
   color: var(--text-secondary);

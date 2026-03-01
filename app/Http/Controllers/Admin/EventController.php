@@ -26,6 +26,8 @@ class EventController extends Controller
             'effect' => 'required|string',
             'stat_modifiers' => 'nullable|array',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            'mechanic' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal',
+            'mechanic_data' => 'nullable|array',
         ]);
 
         $event = Event::create($validated);
@@ -40,6 +42,8 @@ class EventController extends Controller
             'effect' => 'required|string',
             'stat_modifiers' => 'nullable|array',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            'mechanic' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal',
+            'mechanic_data' => 'nullable|array',
         ]);
 
         $event->update($validated);

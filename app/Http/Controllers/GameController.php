@@ -569,14 +569,29 @@ class GameController extends Controller
         $totalDifficulty = $positiveHands->sum(fn ($h) => $h->card->difficulty);
 
         // Apply item difficulty modifiers (only active/non-used items)
+        $itemModifiers = [];
         foreach ($players as $player) {
             foreach ($player->items->where('is_used', false) as $playerItem) {
                 $effect = $playerItem->item->effect;
                 $bonusType = $effect['bonus_type'] ?? '';
                 if ($bonusType === 'difficulty_reduction') {
-                    $totalDifficulty -= abs((int) ($effect['bonus_value'] ?? 0));
+                    $value = abs((int) ($effect['bonus_value'] ?? 0));
+                    $totalDifficulty -= $value;
+                    $itemModifiers[] = [
+                        'item_name' => $playerItem->item->name,
+                        'type' => 'difficulty_reduction',
+                        'value' => $value,
+                        'player' => $player->character->name,
+                    ];
                 } elseif ($bonusType === 'difficulty_increase') {
-                    $totalDifficulty += abs((int) ($effect['bonus_value'] ?? 0));
+                    $value = abs((int) ($effect['bonus_value'] ?? 0));
+                    $totalDifficulty += $value;
+                    $itemModifiers[] = [
+                        'item_name' => $playerItem->item->name,
+                        'type' => 'difficulty_increase',
+                        'value' => $value,
+                        'player' => $player->character->name,
+                    ];
                 }
             }
         }
@@ -634,7 +649,14 @@ class GameController extends Controller
                 $effect = $playerItem->item->effect;
                 $bonusType = $effect['bonus_type'] ?? '';
                 if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
-                    $totalRoll += (int) ($effect['bonus_value'] ?? 0);
+                    $value = (int) ($effect['bonus_value'] ?? 0);
+                    $totalRoll += $value;
+                    $itemModifiers[] = [
+                        'item_name' => $playerItem->item->name,
+                        'type' => $bonusType,
+                        'value' => $value,
+                        'player' => $player->character->name,
+                    ];
                 }
             }
 
@@ -938,6 +960,7 @@ class GameController extends Controller
                 'dice_results' => $diceResults,
                 'wild_triggers' => $wildTriggers,
                 'ability_effects' => $abilityEffects['descriptions'],
+                'item_modifiers' => $itemModifiers,
                 'success' => $positiveSuccess,
                 'effects' => $positiveSuccess ? $positiveEffects : [],
             ],
@@ -2422,6 +2445,8 @@ class GameController extends Controller
                     'items' => $activeItems->map(fn ($pi) => [
                         'id' => $pi->id,
                         'item_name' => $pi->item->name,
+                        'description' => $pi->item->description,
+                        'effect' => $pi->item->effect,
                         'is_cursed' => $pi->is_cursed,
                     ])->values(),
                 ];

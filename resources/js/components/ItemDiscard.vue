@@ -19,9 +19,15 @@
             }"
             @click="!item.is_cursed && selectItem(item.id)"
           >
-            <span class="item-name">{{ item.item_name }}</span>
-            <span v-if="item.is_cursed" class="cursed-label">Cursed</span>
-            <span v-else-if="selectedId === item.id" class="selected-label">Discard</span>
+            <div class="item-top-row">
+              <span class="item-name">{{ item.item_name }}</span>
+              <span v-if="item.is_cursed" class="cursed-label">Cursed</span>
+              <span v-else-if="selectedId === item.id" class="selected-label">Discard</span>
+            </div>
+            <div v-if="effectSummary(item)" class="item-effect" :class="effectClass(item)">
+              {{ effectSummary(item) }}
+            </div>
+            <div v-if="item.description" class="item-desc">{{ item.description }}</div>
           </div>
         </div>
 
@@ -58,6 +64,24 @@ export default {
     this.visible = true;
   },
   methods: {
+    effectSummary(item) {
+      if (!item?.effect) return '';
+      const type = item.effect.bonus_type || '';
+      const value = item.effect.bonus_value ?? 0;
+      switch (type) {
+        case 'roll_bonus': return `+${value} to rolls`;
+        case 'roll_penalty': return `${value} to rolls`;
+        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
+        case 'difficulty_increase': return `+${Math.abs(value)} difficulty`;
+        default: return '';
+      }
+    },
+    effectClass(item) {
+      const type = item?.effect?.bonus_type || '';
+      if (type === 'roll_bonus' || type === 'difficulty_reduction') return 'eff-positive';
+      if (type === 'roll_penalty' || type === 'difficulty_increase') return 'eff-negative';
+      return '';
+    },
     selectItem(id) {
       this.selectedId = this.selectedId === id ? null : id;
     },
@@ -123,8 +147,8 @@ export default {
 
 .discard-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 4px;
   padding: 12px 16px;
   border: 2px solid rgba(138, 106, 46, 0.3);
   border-radius: 8px;
@@ -149,10 +173,31 @@ export default {
   border-color: rgba(192, 57, 43, 0.3);
 }
 
+.item-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .item-name {
   font-family: 'Cinzel', serif;
   color: var(--text-bright, #e8d5b0);
   font-size: 0.95rem;
+}
+
+.item-effect {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.item-effect.eff-positive { color: #6abf5e; }
+.item-effect.eff-negative { color: #e57373; }
+
+.item-desc {
+  font-size: 0.78rem;
+  color: var(--text-secondary, #a09080);
+  font-style: italic;
+  line-height: 1.3;
 }
 
 .cursed-label {

@@ -28,6 +28,10 @@
             {{ statIcon(stat) }} {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
           </span>
         </div>
+        <div class="item-meta" v-if="ev.mechanic">
+          <strong>Mechanic:</strong>
+          <span class="mechanic-badge">{{ mechanicLabel(ev.mechanic) }}</span>
+        </div>
       </div>
     </div>
 
@@ -59,6 +63,36 @@
                 />
               </div>
             </div>
+          </div>
+
+          <div class="form-group">
+            <label>Mechanic</label>
+            <select v-model="form.mechanic">
+              <option :value="null">None</option>
+              <option value="stat_modifier">Stat Modifier Only</option>
+              <option value="reduce_dice">Reduce Dice</option>
+              <option value="grant_items">Grant Items</option>
+              <option value="altered_deal">Altered Deal</option>
+            </select>
+          </div>
+
+          <div v-if="form.mechanic === 'reduce_dice'" class="form-group">
+            <label>Dice to Remove</label>
+            <input type="number" v-model.number="form.mechanic_data.amount" min="1" max="5" placeholder="1" />
+          </div>
+
+          <div v-if="form.mechanic === 'grant_items'" class="form-group mechanic-checkbox">
+            <label>
+              <input type="checkbox" v-model="form.mechanic_data.random" />
+              Grant random item to each advisor
+            </label>
+          </div>
+
+          <div v-if="form.mechanic === 'altered_deal'" class="form-group">
+            <label>Positive Cards</label>
+            <input type="number" v-model.number="form.mechanic_data.positive_cards" min="0" max="10" placeholder="2" />
+            <label class="mt-label">Negative Cards</label>
+            <input type="number" v-model.number="form.mechanic_data.negative_cards" min="0" max="10" placeholder="2" />
           </div>
 
           <div class="form-group">
@@ -129,7 +163,7 @@ export default {
         { key: 'food', label: 'Food', icon: '\u{1F33E}' },
         { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
       ],
-      form: { title: '', effect: '', modifiers: {}, addon_id: null },
+      form: { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {} },
     };
   },
   computed: {
@@ -158,6 +192,15 @@ export default {
         this.addons = res.data;
       } catch { /* ignore */ }
     },
+    mechanicLabel(mechanic) {
+      const labels = {
+        stat_modifier: 'Stat Modifier Only',
+        reduce_dice: 'Reduce Dice',
+        grant_items: 'Grant Items',
+        altered_deal: 'Altered Deal',
+      };
+      return labels[mechanic] || mechanic;
+    },
     statIcon(stat) {
       const s = this.stats.find(s => s.key === stat);
       return s ? s.icon : '';
@@ -172,7 +215,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { title: '', effect: '', modifiers: {}, addon_id: null };
+      this.form = { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {} };
       this.formError = '';
       this.showModal = true;
     },
@@ -183,6 +226,8 @@ export default {
         effect: ev.effect,
         modifiers: { ...(ev.stat_modifiers || {}) },
         addon_id: ev.addon_id || null,
+        mechanic: ev.mechanic || null,
+        mechanic_data: { ...(ev.mechanic_data || {}) },
       };
       this.formError = '';
       this.showModal = true;
@@ -194,11 +239,18 @@ export default {
         ? { ...this.form.modifiers }
         : null;
 
+      const mechanic = this.form.mechanic || null;
+      const mechanic_data = mechanic && Object.keys(this.form.mechanic_data).length > 0
+        ? { ...this.form.mechanic_data }
+        : null;
+
       const payload = {
         title: this.form.title,
         effect: this.form.effect,
         stat_modifiers,
         addon_id: this.form.addon_id || null,
+        mechanic,
+        mechanic_data,
       };
 
       this.saving = true;
@@ -337,6 +389,33 @@ export default {
 
 .mod-pos { background: rgba(39, 174, 96, 0.2); color: #27ae60; }
 .mod-neg { background: rgba(192, 57, 43, 0.2); color: #c0392b; }
+
+.mechanic-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-left: 6px;
+  font-size: 0.8rem;
+  background: rgba(100, 60, 180, 0.2);
+  color: #b080e0;
+}
+
+.mechanic-checkbox label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-bright);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.mechanic-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-gold);
+}
+
+.mt-label { margin-top: 8px; }
 
 /* Modal */
 .modal-overlay {
