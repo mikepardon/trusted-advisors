@@ -5,6 +5,20 @@ window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 window.axios.defaults.withCredentials = true;
 window.axios.defaults.withXSRFToken = true;
 
+// Retry once on CSRF token mismatch (419) by refreshing the token
+window.axios.interceptors.response.use(
+    response => response,
+    async error => {
+        const originalRequest = error.config;
+        if (error.response?.status === 419 && !originalRequest._retried) {
+            originalRequest._retried = true;
+            await window.axios.get('/api/auth/me');
+            return window.axios(originalRequest);
+        }
+        return Promise.reject(error);
+    }
+);
+
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 window.Pusher = Pusher;
