@@ -83,7 +83,7 @@
                   </div>
                 </div>
                 <div class="advisor-wild">
-                  <span class="wild-badge">WILD = {{ char.wild_value }}</span>
+                  <span class="wild-badge">W = {{ char.wild_value }}</span>
                   <span class="wild-desc">{{ char.wild_ability }}: {{ char.wild_ability_description }}</span>
                 </div>
               </div>

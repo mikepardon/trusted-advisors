@@ -50,6 +50,7 @@ class CharacterController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
+            'is_available' => 'boolean',
         ]);
 
         $character = Character::create($validated);
@@ -70,6 +71,7 @@ class CharacterController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
+            'is_available' => 'boolean',
         ]);
 
         $character->update($validated);

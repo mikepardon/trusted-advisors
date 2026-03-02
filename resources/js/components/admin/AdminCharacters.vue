@@ -58,6 +58,7 @@
               </td>
               <td class="name-col">
                 {{ c.name }}
+                <span v-if="c.is_available === false" class="unavailable-tag">Unavailable</span>
                 <div v-if="c.unlock_info && c.unlock_info.length" class="unlock-tags">
                   <span v-for="u in c.unlock_info" :key="u.id" class="unlock-tag">
                     {{ u.method === 'level' ? 'Lvl ' + u.value : 'Achievement #' + u.value }}
@@ -147,6 +148,15 @@
             </div>
           </div>
 
+          <div class="form-group">
+            <label style="display: flex; align-items: center; gap: 8px;">
+              <input type="checkbox" v-model="form.is_available" />
+              <span :style="form.is_available ? '' : 'color: #d05040; font-weight: 600;'">
+                {{ form.is_available ? 'Available (shown to all players)' : 'Unavailable (hidden unless owned)' }}
+              </span>
+            </label>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <div class="modal-actions">
@@ -198,7 +208,7 @@ export default {
       editing: null,
       saving: false,
       formError: '',
-      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true },
+      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true },
       die1Input: '',
       die2Input: '',
       die3Input: '',
@@ -288,7 +298,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true };
+      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true };
       this.die1Input = '';
       this.die2Input = '';
       this.die3Input = '';
@@ -310,6 +320,7 @@ export default {
         addon_id: c.addon_id || null,
         available_cooperative: c.available_cooperative ?? true,
         available_duel: c.available_duel ?? true,
+        is_available: c.is_available ?? true,
       };
       this.die1Input = c.dice[0]?.join(', ') || '';
       this.die2Input = c.dice[1]?.join(', ') || '';
@@ -578,6 +589,17 @@ export default {
 .name-col {
   color: var(--text-bright);
   font-weight: 600;
+}
+
+.unavailable-tag {
+  font-size: 0.65rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(160, 48, 32, 0.15);
+  border: 1px solid rgba(160, 48, 32, 0.3);
+  color: #d05040;
+  font-weight: 600;
+  margin-left: 6px;
 }
 
 .unlock-tags {

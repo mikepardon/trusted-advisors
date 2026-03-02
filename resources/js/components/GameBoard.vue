@@ -382,6 +382,12 @@ export default {
 
         // If in selecting phase, load current player's hand
         if (this.gameData.round_phase === 'selecting') {
+          // Auto-resolve if all assigned but round wasn't resolved (recovery from stuck state)
+          if (this.gameData.all_assigned && (this.isSinglePlayer || this.isPassAndPlay)) {
+            await this.resolveRound();
+            return;
+          }
+
           if (this.isOnline) {
             this.setupOnlinePlayer();
             // Check if I already assigned

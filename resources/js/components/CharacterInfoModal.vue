@@ -21,7 +21,7 @@
             <span class="die-label">Die {{ dIdx + 1 }}</span>
             <div class="die-faces">
               <span v-for="(face, fIdx) in die" :key="fIdx" class="die-face" :class="{ 'face-wild': face === 'WILD' }">
-                {{ face }}
+                {{ face === 'WILD' ? 'W' : face }}
               </span>
             </div>
           </div>

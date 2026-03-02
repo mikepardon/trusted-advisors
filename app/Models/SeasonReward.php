@@ -9,6 +9,7 @@ class SeasonReward extends Model
 {
     protected $fillable = [
         'season_id',
+        'metric',
         'placement',
         'reward_xp',
         'reward_coins',

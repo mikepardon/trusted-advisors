@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\UserAchievement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AdminUserController extends Controller
 {
@@ -52,9 +53,15 @@ class AdminUserController extends Controller
             $q->where('user_id', $user->id);
         })->where('status', 'completed')->count();
 
-        $gamesWon = Game::whereHas('players', function ($q) use ($user) {
-            $q->where('user_id', $user->id)->where('is_winner', true);
-        })->where('status', 'completed')->count();
+        $gamesWon = DB::table('games')
+            ->join('game_players', 'games.id', '=', 'game_players.game_id')
+            ->where('games.status', 'completed')
+            ->where('game_players.user_id', $user->id)
+            ->where(function ($q) {
+                $q->where('games.win', true)
+                   ->orWhereColumn('game_players.player_number', 'games.winner_player_number');
+            })
+            ->count();
 
         $achievementCount = UserAchievement::where('user_id', $user->id)->count();
 

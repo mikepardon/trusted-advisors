@@ -59,39 +59,56 @@
       <div class="modal-content rewards-modal">
         <h3>Rewards: {{ rewardsSeason?.name }}</h3>
 
-        <table class="rewards-table" v-if="rewards.length">
-          <thead>
-            <tr>
-              <th>Place</th>
-              <th>XP</th>
-              <th>Coins</th>
-              <th>Character</th>
-              <th>Title</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="r in rewards" :key="r.id">
-              <td>{{ ordinal(r.placement) }}</td>
-              <td>{{ r.reward_xp }}</td>
-              <td>{{ r.reward_coins }}</td>
-              <td>{{ r.reward_character?.name || '-' }}</td>
-              <td>{{ r.reward_title || '-' }}</td>
-              <td>
-                <button class="btn-sm" @click="editReward(r)">Edit</button>
-                <button class="btn-sm btn-danger" @click="deleteReward(r)">Del</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <template v-if="rewards.length">
+          <div v-for="(group, metric) in groupedRewards" :key="metric" class="metric-group">
+            <h4 class="metric-label">{{ metricLabel(metric) }}</h4>
+            <table class="rewards-table">
+              <thead>
+                <tr>
+                  <th>Place</th>
+                  <th>XP</th>
+                  <th>Coins</th>
+                  <th>Character</th>
+                  <th>Title</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="r in group" :key="r.id">
+                  <td>{{ ordinal(r.placement) }}</td>
+                  <td>{{ r.reward_xp }}</td>
+                  <td>{{ r.reward_coins }}</td>
+                  <td>{{ r.reward_character?.name || '-' }}</td>
+                  <td>{{ r.reward_title || '-' }}</td>
+                  <td>
+                    <button class="btn-sm" @click="editReward(r)">Edit</button>
+                    <button class="btn-sm btn-danger" @click="deleteReward(r)">Del</button>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </template>
         <p v-else class="empty">No rewards defined yet.</p>
 
         <h4 class="reward-form-title">{{ editingReward ? 'Edit Reward' : 'Add Reward' }}</h4>
         <form @submit.prevent="saveReward" class="reward-form">
           <div class="reward-form-row">
             <div class="form-group">
-              <label>Placement</label>
-              <input v-model.number="rewardForm.placement" type="number" min="1" required />
+              <label>Metric</label>
+              <select v-model="rewardForm.metric">
+                <option value="elo">ELO Rating</option>
+                <option value="score">Highest Score</option>
+                <option value="wins">Most Wins</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>From</label>
+              <input v-model.number="rewardForm.placement_from" type="number" min="1" required />
+            </div>
+            <div class="form-group">
+              <label>To</label>
+              <input v-model.number="rewardForm.placement_to" type="number" min="1" required />
             </div>
             <div class="form-group">
               <label>XP</label>
@@ -146,8 +163,19 @@ export default {
       allCharacters: [],
       editingReward: null,
       rewardFormError: '',
-      rewardForm: { placement: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' },
+      rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' },
     };
+  },
+  computed: {
+    groupedRewards() {
+      const groups = {};
+      for (const r of this.rewards) {
+        const m = r.metric || 'elo';
+        if (!groups[m]) groups[m] = [];
+        groups[m].push(r);
+      }
+      return groups;
+    },
   },
   async mounted() { this.load(); },
   methods: {
@@ -206,25 +234,43 @@ export default {
     resetRewardForm() {
       this.editingReward = null;
       this.rewardFormError = '';
-      this.rewardForm = { placement: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' };
+      this.rewardForm = { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' };
     },
     editReward(r) {
       this.editingReward = r.id;
       this.rewardForm = {
-        placement: r.placement,
+        metric: r.metric || 'elo',
+        placement_from: r.placement,
+        placement_to: r.placement,
         reward_xp: r.reward_xp,
         reward_coins: r.reward_coins,
         reward_character_id: r.reward_character_id,
         reward_title: r.reward_title || '',
       };
     },
+    metricLabel(m) {
+      const labels = { elo: 'ELO Rating', score: 'Highest Score', wins: 'Most Wins' };
+      return labels[m] || m;
+    },
     async saveReward() {
       this.rewardFormError = '';
+      const from = this.rewardForm.placement_from;
+      const to = this.rewardForm.placement_to;
+      if (to < from) {
+        this.rewardFormError = '"To" must be >= "From"';
+        return;
+      }
       try {
         if (this.editingReward) {
-          await axios.put(`/api/admin/seasons/${this.rewardsSeason.id}/rewards/${this.editingReward}`, this.rewardForm);
+          // Editing a single reward — use placement_from as the placement
+          const payload = { ...this.rewardForm, placement: from };
+          await axios.put(`/api/admin/seasons/${this.rewardsSeason.id}/rewards/${this.editingReward}`, payload);
         } else {
-          await axios.post(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`, this.rewardForm);
+          // Create one reward per placement in the range
+          for (let p = from; p <= to; p++) {
+            const payload = { ...this.rewardForm, placement: p };
+            await axios.post(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`, payload);
+          }
         }
         const res = await axios.get(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`);
         this.rewards = res.data;
@@ -284,4 +330,6 @@ export default {
 .reward-form-title { font-family: 'Cinzel', serif; color: var(--accent-gold); font-size: 1rem; margin-bottom: 12px; }
 .reward-form-row { display: flex; gap: 10px; margin-bottom: 10px; }
 .reward-form-row .form-group { flex: 1; }
+.metric-group { margin-bottom: 16px; }
+.metric-label { font-family: 'Cinzel', serif; color: var(--accent-gold); font-size: 0.9rem; margin-bottom: 6px; opacity: 0.85; }
 </style>

@@ -524,6 +524,11 @@ export default {
           this.initiatePassAndPlayHandoff(this.offererNumber);
         } else if (this.hasBotPlayer) {
           await this.loadMyRollCards();
+          // Bot needs to roll — watcher won't fire since isCurrentTurnBot stayed true (choosing → rolling)
+          if (this.isCurrentTurnBot) {
+            this._opponentTurnPending = false;
+            this.triggerBotTurn();
+          }
         } else {
           await this.loadMyRollCards();
           this.updateOnlineWaiting();

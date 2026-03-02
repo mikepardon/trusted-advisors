@@ -2,7 +2,10 @@
   <div>
     <div class="page-header">
       <h2 class="page-title">Daily Challenges</h2>
-      <button class="btn-primary" @click="openCreate">+ New Challenge</button>
+      <div class="page-header-actions">
+        <button class="btn-secondary" @click="showGenerateModal = true">Generate Range</button>
+        <button class="btn-primary" @click="openCreate">+ New Challenge</button>
+      </div>
     </div>
 
     <!-- List -->
@@ -115,6 +118,32 @@
         </form>
       </div>
     </div>
+
+    <!-- Generate Range Modal -->
+    <div v-if="showGenerateModal" class="modal-overlay" @click.self="showGenerateModal = false">
+      <div class="modal-content">
+        <h3>Generate Daily Challenges</h3>
+        <p class="gen-desc">Auto-generate one challenge per day from the template pool. Existing dates are skipped.</p>
+        <form @submit.prevent="generateRange">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Start Date</label>
+              <input v-model="genForm.start_date" type="date" required />
+            </div>
+            <div class="form-group">
+              <label>End Date</label>
+              <input v-model="genForm.end_date" type="date" required />
+            </div>
+          </div>
+          <div v-if="genResult" class="gen-result">{{ genResult }}</div>
+          <div v-if="genError" class="form-error">{{ genError }}</div>
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary" :disabled="generating">{{ generating ? 'Generating...' : 'Generate' }}</button>
+            <button type="button" @click="showGenerateModal = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -137,6 +166,12 @@ export default {
         criteria_character_id: 1, criteria_count: 5,
         reward_xp: 100, addon_id: null,
       },
+      // Generate range
+      showGenerateModal: false,
+      generating: false,
+      genForm: { start_date: '', end_date: '' },
+      genResult: '',
+      genError: '',
     };
   },
   async mounted() { await Promise.all([this.load(), this.fetchAddons()]); },
@@ -223,6 +258,19 @@ export default {
       await axios.delete(`/api/admin/daily-challenges/${c.id}`);
       this.load();
     },
+    async generateRange() {
+      this.generating = true;
+      this.genResult = '';
+      this.genError = '';
+      try {
+        const res = await axios.post('/api/admin/daily-challenges/generate', this.genForm);
+        this.genResult = res.data.message;
+        this.load();
+      } catch (e) {
+        this.genError = e.response?.data?.message || 'Error generating challenges';
+      }
+      this.generating = false;
+    },
   },
 };
 </script>
@@ -255,5 +303,9 @@ export default {
 .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-gold); }
 .form-error { color: var(--accent-red); font-size: 0.9rem; margin: 10px 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+.page-header-actions { display: flex; gap: 8px; }
+.btn-secondary { background: rgba(138, 106, 46, 0.15); border: 1px solid rgba(138, 106, 46, 0.4); color: var(--accent-gold); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.85rem; }
+.gen-desc { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px; }
+.gen-result { font-size: 0.9rem; color: #6abf50; margin: 10px 0; }
 @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
 </style>

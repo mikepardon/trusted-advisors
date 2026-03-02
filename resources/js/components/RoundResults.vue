@@ -33,7 +33,7 @@
                   class="face-badge"
                   :class="roll.face === 'WILD' ? 'face-wild' : 'face-num'"
                 >
-                  {{ roll.face === 'WILD' ? 'WILD ' + roll.value : roll.face }}
+                  {{ roll.face === 'WILD' ? 'W ' + roll.value : roll.face }}
                 </span>
               </span>
               <span class="roll-subtotal">= {{ playerSubtotal(pr) }}</span>

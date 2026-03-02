@@ -48,7 +48,7 @@
               roll.rerolled ? 'face-rerolled' : '',
             ]"
           >
-            {{ roll.face === 'WILD' ? 'WILD ' + roll.value : roll.face }}
+            {{ roll.face === 'WILD' ? 'W ' + roll.value : roll.face }}
           </span>
         </template>
 

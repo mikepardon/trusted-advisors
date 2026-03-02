@@ -87,50 +87,42 @@
         </div>
       </div>
 
-      <!-- Mode Cards (full width) -->
-      <div class="card-panel">
-        <h2 class="section-title">New Game</h2>
-        <p class="flavor-text hide-mobile">
-          The kingdom stands at a crossroads. The realm needs leaders.
-          How shall this campaign be waged?
-        </p>
-
-        <div class="mode-cards">
-          <div
-            class="mode-card"
-            @click="playSound('clickCard'); gameMode = 'single'; selectMode()"
-          >
-            <h3 class="mode-title">Single Player</h3>
-            <p class="mode-desc">Guide the realm alone with one advisor</p>
-          </div>
-          <div
-            class="mode-card"
-            @click="playSound('clickCard'); gameMode = 'pass_and_play'; selectMode()"
-          >
-            <h3 class="mode-title">Pass and Play</h3>
-            <p class="mode-desc">Take turns on the same device (2-6 advisors)</p>
-          </div>
-          <div
-            class="mode-card"
-            @click="playSound('clickCard'); gameMode = 'online'; selectMode()"
-          >
-            <h3 class="mode-title">Online</h3>
-            <p class="mode-desc">Play with friends over the network (2-6 advisors)</p>
-          </div>
+      <!-- Mode Cards -->
+      <div class="mode-cards">
+        <div
+          class="mode-card mode-card-half"
+          @click="playSound('clickCard'); gameMode = 'online'; selectMode()"
+        >
+          <h3 class="mode-title">Online</h3>
+          <p class="mode-desc">Play with friends over the network</p>
+        </div>
+        <div
+          class="mode-card mode-card-half"
+          @click="playSound('clickCard'); gameMode = 'single'; selectMode()"
+        >
+          <h3 class="mode-title">Single Player</h3>
+          <p class="mode-desc">Guide the realm alone with one advisor</p>
+        </div>
+        <div
+          class="mode-card mode-card-full"
+          @click="playSound('clickCard'); gameMode = 'pass_and_play'; selectMode()"
+        >
+          <h3 class="mode-title">Pass and Play</h3>
+          <p class="mode-desc">Take turns on the same device (2-6 advisors)</p>
         </div>
       </div>
 
       <!-- Active Season Card -->
-      <div v-if="activeSeason" class="card-panel season-card" @click="$router.push('/season')">
+      <div v-if="activeSeason" class="season-card" @click="$router.push('/season')">
         <div class="season-card-header">
           <h3 class="season-card-name">{{ activeSeason.name }}</h3>
-          <span class="season-card-time">{{ seasonTimeLeft }}</span>
+          <h3 v-if="homeStats.seasonRank" class="season-card-rank">#{{ homeStats.seasonRank }}</h3>
         </div>
+        <div class="season-card-time">{{ seasonTimeLeft }}</div>
         <div class="season-card-bar">
           <div class="season-card-fill" :style="{ width: seasonPercent + '%' }"></div>
         </div>
         <div class="season-card-meta">
-          <span v-if="homeStats.seasonRank">Your Rank: <strong>#{{ homeStats.seasonRank }}</strong></span>
           <span v-if="activeSeason.topReward" class="season-card-reward">
             1st: {{ activeSeason.topReward }}
           </span>
@@ -393,7 +385,7 @@
                 <div class="advisor-dice">
                   <div class="dice-row" v-for="(die, di) in char.dice" :key="di">
                     <span class="dice-label">Die {{ di + 1 }}:</span>
-                    <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face }}</span>
+                    <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face === 'WILD' ? 'W' : face }}</span>
                   </div>
                 </div>
                 <div class="advisor-wild">
@@ -904,9 +896,10 @@ export default {
 /* Mode cards */
 .mode-cards {
   display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 20px;
+  justify-content: space-between;
 }
 
 .mode-card {
@@ -916,6 +909,15 @@ export default {
   padding: 18px 20px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
+  box-sizing: border-box;
+}
+
+.mode-card-half {
+  width: 48%;
+}
+
+.mode-card-full {
+  width: 100%;
 }
 
 .mode-card:hover {
@@ -1810,6 +1812,10 @@ export default {
 
 /* Active Season Card */
 .season-card {
+  background: linear-gradient(180deg, #2a1f14, #1a1209);
+  border: 2px solid rgba(138, 106, 46, 0.3);
+  border-radius: 10px;
+  padding: 14px 18px;
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -1822,7 +1828,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .season-card-name {
@@ -1831,9 +1837,16 @@ export default {
   font-size: 0.95rem;
 }
 
+.season-card-rank {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.95rem;
+}
+
 .season-card-time {
   color: var(--text-secondary);
   font-size: 0.8rem;
+  margin-bottom: 8px;
 }
 
 .season-card-bar {

@@ -665,7 +665,7 @@ button:disabled {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  padding: 4px 16px;
+  padding: 4px 0;
   background: none;
   border: none;
   color: var(--text-secondary);

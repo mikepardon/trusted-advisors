@@ -99,6 +99,7 @@ class SeasonController extends Controller
     public function storeReward(Request $request, Season $season): JsonResponse
     {
         $validated = $request->validate([
+            'metric' => 'sometimes|string|in:elo,score,wins',
             'placement' => 'required|integer|min:1',
             'reward_xp' => 'integer|min:0',
             'reward_coins' => 'integer|min:0',
@@ -120,6 +121,7 @@ class SeasonController extends Controller
         }
 
         $validated = $request->validate([
+            'metric' => 'sometimes|string|in:elo,score,wins',
             'placement' => 'sometimes|integer|min:1',
             'reward_xp' => 'integer|min:0',
             'reward_coins' => 'integer|min:0',

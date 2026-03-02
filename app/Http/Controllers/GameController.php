@@ -86,9 +86,17 @@ class GameController extends Controller
         $characters = Character::all();
 
         $charUnlockables = Unlockable::where('type', 'character')->get()->keyBy('entity_id');
-        $userUnlockableIds = UserUnlockable::where('user_id', $user->id)->pluck('unlockable_id')->toArray();
+        $userUnlockables = UserUnlockable::where('user_id', $user->id)->get()->keyBy('unlockable_id');
 
-        $result = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds) {
+        $result = $characters->filter(function ($c) use ($charUnlockables, $userUnlockables) {
+            // Hide unavailable characters unless user owns them
+            if (!$c->is_available) {
+                $unlockable = $charUnlockables[$c->id] ?? null;
+                if (!$unlockable) return true; // default unlocked chars always visible
+                return isset($userUnlockables[$unlockable->id]);
+            }
+            return true;
+        })->map(function ($c) use ($charUnlockables, $userUnlockables) {
             $data = [
                 'id' => $c->id,
                 'name' => $c->name,
@@ -104,20 +112,25 @@ class GameController extends Controller
             if (!$unlockable) {
                 $data['is_unlocked'] = true;
                 $data['unlock_requirement'] = null;
+                $data['unlock_method'] = null;
+                $data['unlocked_at'] = null;
             } else {
-                $isUnlocked = in_array($unlockable->id, $userUnlockableIds);
+                $userUnlockable = $userUnlockables[$unlockable->id] ?? null;
+                $isUnlocked = $userUnlockable !== null;
                 $data['is_unlocked'] = $isUnlocked;
+                $data['unlock_method'] = $unlockable->unlock_method;
+                $data['unlocked_at'] = $isUnlocked ? $userUnlockable->unlocked_at?->toDateString() : null;
                 $data['unlock_requirement'] = !$isUnlocked
                     ? ($unlockable->unlock_method === 'level'
                         ? "Reach level {$unlockable->unlock_value}"
                         : ($unlockable->unlock_method === 'shop'
-                            ? "Purchase from shop ({$unlockable->coin_price} coins)"
+                            ? "Purchase from shop ({$unlockable->unlock_value} coins)"
                             : "Earn required achievement"))
                     : null;
             }
 
             return $data;
-        });
+        })->values();
 
         return response()->json($result);
     }
@@ -3097,7 +3110,7 @@ class GameController extends Controller
             ->whereNotNull('game_players.user_id')
             ->select(
                 'game_players.user_id',
-                DB::raw('COUNT(CASE WHEN game_players.is_winner = 1 THEN 1 END) as wins'),
+                DB::raw("COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) as wins"),
                 DB::raw('COUNT(*) as games_played')
             )
             ->groupBy('game_players.user_id')
@@ -3129,7 +3142,10 @@ class GameController extends Controller
                 ->where('games.season_id', $season->id)
                 ->where('games.status', 'completed')
                 ->where('game_players.user_id', $userId)
-                ->where('game_players.is_winner', true)
+                ->where(function ($q) {
+                    $q->where('games.win', true)
+                       ->orWhereColumn('game_players.player_number', 'games.winner_player_number');
+                })
                 ->count();
 
             $rank = DB::table('games')
@@ -3137,9 +3153,9 @@ class GameController extends Controller
                 ->where('games.season_id', $season->id)
                 ->where('games.status', 'completed')
                 ->whereNotNull('game_players.user_id')
-                ->select('game_players.user_id', DB::raw('COUNT(CASE WHEN game_players.is_winner = 1 THEN 1 END) as wins'))
+                ->select('game_players.user_id', DB::raw("COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) as wins"))
                 ->groupBy('game_players.user_id')
-                ->havingRaw('COUNT(CASE WHEN game_players.is_winner = 1 THEN 1 END) > ?', [$userWins])
+                ->havingRaw("COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) > ?", [$userWins])
                 ->count();
 
             $userRank = $rank + 1;

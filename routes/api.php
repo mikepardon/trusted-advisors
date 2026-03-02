@@ -143,6 +143,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::delete('seasons/{season}/rewards/{reward}', [SeasonController::class, 'destroyReward']);
     Route::apiResource('achievements', AchievementController::class);
     Route::apiResource('unlockables', UnlockableController::class);
+    Route::post('daily-challenges/generate', [DailyChallengeController::class, 'generateRange']);
     Route::apiResource('daily-challenges', DailyChallengeController::class);
     Route::apiResource('addons', AddonController::class);
     Route::get('rules', [GameRuleController::class, 'index']);

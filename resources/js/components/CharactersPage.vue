@@ -34,7 +34,7 @@
         <div v-if="selected.dice" class="char-modal-dice">
           <div v-for="(die, di) in selected.dice" :key="di" class="char-dice-row">
             <span class="char-dice-label">Die {{ di + 1 }}:</span>
-            <span v-for="(face, fi) in die" :key="fi" class="char-dice-face">{{ face }}</span>
+            <span v-for="(face, fi) in die" :key="fi" class="char-dice-face">{{ face === 'WILD' ? 'W' : face }}</span>
           </div>
         </div>
 
@@ -46,6 +46,10 @@
         <div v-if="!selected.is_unlocked" class="char-modal-locked">
           <span class="char-lock-icon">&#128274;</span>
           <span>{{ selected.unlock_requirement }}</span>
+        </div>
+        <div v-else-if="selected.unlocked_at" class="char-modal-unlocked">
+          <span class="char-unlock-icon">&#9989;</span>
+          <span>Unlocked on {{ selected.unlocked_at }}</span>
         </div>
       </div>
     </div>
@@ -325,6 +329,21 @@ export default {
 }
 
 .char-lock-icon {
+  margin-right: 6px;
+}
+
+.char-modal-unlocked {
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(74, 138, 58, 0.1);
+  border: 1px solid rgba(74, 138, 58, 0.3);
+  border-radius: 6px;
+  text-align: center;
+  color: #6abf50;
+  font-size: 0.85rem;
+}
+
+.char-unlock-icon {
   margin-right: 6px;
 }
 
