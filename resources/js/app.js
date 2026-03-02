@@ -13,6 +13,8 @@ import FriendsList from './components/FriendsList.vue';
 import ProfilePage from './components/ProfilePage.vue';
 import LeaderboardPage from './components/LeaderboardPage.vue';
 import AchievementsList from './components/AchievementsList.vue';
+import SeasonPage from './components/SeasonPage.vue';
+import CharactersPage from './components/CharactersPage.vue';
 import AdminLayout from './components/admin/AdminLayout.vue';
 import AdminDashboard from './components/admin/AdminDashboard.vue';
 import AdminCharacters from './components/admin/AdminCharacters.vue';
@@ -43,6 +45,8 @@ const routes = [
     { path: '/profile', component: ProfilePage, meta: { auth: true } },
     { path: '/leaderboard', component: LeaderboardPage, meta: { auth: true } },
     { path: '/achievements', component: AchievementsList, meta: { auth: true } },
+    { path: '/season', component: SeasonPage, meta: { auth: true } },
+    { path: '/characters', component: CharactersPage, meta: { auth: true } },
     { path: '/shop', component: ShopPage, meta: { auth: true } },
     { path: '/settings', component: SettingsPage },
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },

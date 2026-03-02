@@ -72,6 +72,50 @@
       </div>
     </div>
 
+    <!-- My Advisors -->
+    <div class="card-panel">
+      <h2 class="section-title">My Advisors</h2>
+      <div v-if="charsLoading" class="stats-loading">Loading advisors...</div>
+      <div v-else class="char-grid">
+        <div
+          v-for="c in myCharacters"
+          :key="c.id"
+          class="char-card"
+          :class="{ 'char-locked': !c.is_unlocked }"
+          @click="c.is_unlocked ? (selectedChar = c) : null"
+        >
+          <img
+            :src="c.image_url || '/images/character.png'"
+            :alt="c.name"
+            class="char-portrait"
+            :class="{ 'char-grayscale': !c.is_unlocked }"
+          />
+          <span class="char-name">{{ c.name }}</span>
+          <span v-if="!c.is_unlocked" class="char-lock">&#128274; {{ c.unlock_requirement }}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Character detail modal -->
+    <div v-if="selectedChar" class="char-modal-overlay" @click.self="selectedChar = null">
+      <div class="char-modal-card">
+        <img :src="selectedChar.image_url || '/images/character.png'" :alt="selectedChar.name" class="char-modal-portrait" />
+        <h3 class="char-modal-name">{{ selectedChar.name }}</h3>
+        <p class="char-modal-desc">{{ selectedChar.description }}</p>
+        <div v-if="selectedChar.dice" class="char-modal-dice">
+          <div v-for="(die, di) in selectedChar.dice" :key="di" class="dice-row">
+            <span class="dice-label">Die {{ di + 1 }}:</span>
+            <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face }}</span>
+          </div>
+        </div>
+        <div v-if="selectedChar.wild_ability" class="char-modal-wild">
+          <span class="wild-badge">W = {{ selectedChar.wild_value }}</span>
+          <span class="wild-desc">{{ selectedChar.wild_ability }}: {{ selectedChar.wild_ability_description }}</span>
+        </div>
+        <button class="btn-primary char-modal-close" @click="selectedChar = null">Close</button>
+      </div>
+    </div>
+
     <!-- Account Management -->
     <div class="card-panel">
       <h2 class="section-title">Account</h2>
@@ -98,6 +142,9 @@ export default {
     return {
       gameStats: {},
       statsLoading: true,
+      myCharacters: [],
+      charsLoading: true,
+      selectedChar: null,
       authServiceUrl: import.meta.env.VITE_AUTH_URL || '',
     };
   },
@@ -113,13 +160,14 @@ export default {
     },
   },
   async mounted() {
-    try {
-      const res = await axios.get('/api/auth/stats');
-      this.gameStats = res.data;
-    } catch {
-      this.gameStats = {};
-    }
+    const [statsRes, charsRes] = await Promise.allSettled([
+      axios.get('/api/auth/stats'),
+      axios.get('/api/my-characters'),
+    ]);
+    this.gameStats = statsRes.status === 'fulfilled' ? statsRes.value.data : {};
     this.statsLoading = false;
+    this.myCharacters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
+    this.charsLoading = false;
   },
   methods: {},
 };
@@ -299,9 +347,173 @@ export default {
   text-decoration: none;
 }
 
+/* My Advisors */
+.char-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.char-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.char-card:hover:not(.char-locked) {
+  border-color: var(--accent-gold);
+}
+
+.char-locked {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.char-portrait {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(138, 106, 46, 0.3);
+}
+
+.char-grayscale {
+  filter: grayscale(1);
+}
+
+.char-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.char-lock {
+  font-size: 0.6rem;
+  color: var(--text-secondary);
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Character detail modal */
+.char-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.char-modal-card {
+  background: linear-gradient(180deg, #3a2a1a, #2a1f14);
+  border: 2px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 340px;
+  width: 90%;
+  text-align: center;
+}
+
+.char-modal-portrait {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--accent-gold);
+  margin-bottom: 12px;
+}
+
+.char-modal-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.2rem;
+  margin-bottom: 8px;
+}
+
+.char-modal-desc {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.char-modal-dice {
+  margin-bottom: 12px;
+}
+
+.char-modal-dice .dice-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  justify-content: center;
+}
+
+.char-modal-dice .dice-label {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  min-width: 42px;
+}
+
+.char-modal-dice .dice-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  background: rgba(212, 168, 67, 0.12);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 4px;
+  color: var(--text-bright);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.char-modal-wild {
+  background: rgba(212, 168, 67, 0.08);
+  border-top: 1px solid rgba(212, 168, 67, 0.2);
+  border-radius: 6px;
+  padding: 8px;
+  margin-bottom: 16px;
+}
+
+.char-modal-wild .wild-badge {
+  display: inline-block;
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.char-modal-wild .wild-desc {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-style: italic;
+}
+
+.char-modal-close {
+  padding: 8px 28px;
+}
+
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .char-grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 </style>

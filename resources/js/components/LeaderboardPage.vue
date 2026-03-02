@@ -44,6 +44,7 @@
         :key="entry.user_id"
         class="lb-row"
         :class="{ 'lb-current': entry.is_current_user }"
+        :ref="entry.is_current_user ? 'currentUserRow' : undefined"
       >
         <span class="lb-rank">{{ entry.rank }}</span>
         <span class="lb-name lb-clickable" @click="showProfileUserId = entry.user_id">
@@ -51,6 +52,18 @@
           <span class="lb-level">Lv.{{ entry.level }}</span>
         </span>
         <span class="lb-value">{{ formatValue(entry.value) }}</span>
+      </div>
+    </div>
+
+    <!-- Floating current player row (when scrolled out of view) -->
+    <div v-if="currentUserEntry && !currentUserVisible" class="lb-float">
+      <div class="lb-row lb-current lb-float-row">
+        <span class="lb-rank">{{ currentUserEntry.rank }}</span>
+        <span class="lb-name">
+          {{ currentUserEntry.username }}
+          <span class="lb-level">Lv.{{ currentUserEntry.level }}</span>
+        </span>
+        <span class="lb-value">{{ formatValue(currentUserEntry.value) }}</span>
       </div>
     </div>
 
@@ -70,13 +83,19 @@ export default {
     return {
       tab: 'global',
       showProfileUserId: null,
-      metric: 'wins',
+      metric: 'elo',
       seasonId: null,
       gameType: null,
       entries: [],
       seasons: [],
       loading: true,
+      currentUserVisible: true,
     };
+  },
+  computed: {
+    currentUserEntry() {
+      return this.entries.find(e => e.is_current_user) || null;
+    },
   },
   async mounted() {
     try {
@@ -84,6 +103,9 @@ export default {
       this.seasons = res.data;
     } catch {}
     this.fetchData();
+  },
+  beforeUnmount() {
+    if (this._observer) this._observer.disconnect();
   },
   methods: {
     async fetchData() {
@@ -98,6 +120,22 @@ export default {
         this.entries = res.data;
       } catch {}
       this.loading = false;
+      this.$nextTick(() => this.setupVisibilityObserver());
+    },
+    setupVisibilityObserver() {
+      if (this._observer) this._observer.disconnect();
+      const row = Array.isArray(this.$refs.currentUserRow)
+        ? this.$refs.currentUserRow[0]
+        : this.$refs.currentUserRow;
+      if (!row) {
+        this.currentUserVisible = !this.currentUserEntry;
+        return;
+      }
+      this._observer = new IntersectionObserver(
+        ([entry]) => { this.currentUserVisible = entry.isIntersecting; },
+        { threshold: 0.5 }
+      );
+      this._observer.observe(row);
     },
     formatValue(val) {
       if (val >= 1000) return (val / 1000).toFixed(1) + 'k';
@@ -227,6 +265,25 @@ export default {
   color: var(--accent-gold);
   font-size: 1rem;
   font-weight: 700;
+}
+
+/* Floating current user row */
+.lb-float {
+  position: sticky;
+  bottom: 0;
+  padding: 8px 0 0;
+  background: linear-gradient(180deg, transparent, var(--bg-primary) 30%);
+}
+
+.lb-float-row {
+  box-shadow: 0 -2px 12px rgba(212, 168, 67, 0.3);
+  border-color: var(--accent-gold);
+  animation: floatGlow 2s ease-in-out infinite;
+}
+
+@keyframes floatGlow {
+  0%, 100% { box-shadow: 0 -2px 12px rgba(212, 168, 67, 0.2); }
+  50% { box-shadow: 0 -2px 20px rgba(212, 168, 67, 0.4); }
 }
 
 @media (max-width: 768px) {

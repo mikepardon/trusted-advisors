@@ -16,6 +16,7 @@
           <div class="list-dates">{{ formatDate(s.starts_at) }} &mdash; {{ formatDate(s.ends_at) }}</div>
         </div>
         <div class="list-actions">
+          <button class="btn-sm" @click="openRewards(s)">Rewards</button>
           <button class="btn-sm" @click="openEdit(s)">Edit</button>
           <button class="btn-sm btn-danger" @click="deleteSeason(s)">Del</button>
         </div>
@@ -53,6 +54,76 @@
         </form>
       </div>
     </div>
+    <!-- Rewards Modal -->
+    <div v-if="showRewardsModal" class="modal-overlay" @click.self="showRewardsModal = false">
+      <div class="modal-content rewards-modal">
+        <h3>Rewards: {{ rewardsSeason?.name }}</h3>
+
+        <table class="rewards-table" v-if="rewards.length">
+          <thead>
+            <tr>
+              <th>Place</th>
+              <th>XP</th>
+              <th>Coins</th>
+              <th>Character</th>
+              <th>Title</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="r in rewards" :key="r.id">
+              <td>{{ ordinal(r.placement) }}</td>
+              <td>{{ r.reward_xp }}</td>
+              <td>{{ r.reward_coins }}</td>
+              <td>{{ r.reward_character?.name || '-' }}</td>
+              <td>{{ r.reward_title || '-' }}</td>
+              <td>
+                <button class="btn-sm" @click="editReward(r)">Edit</button>
+                <button class="btn-sm btn-danger" @click="deleteReward(r)">Del</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-else class="empty">No rewards defined yet.</p>
+
+        <h4 class="reward-form-title">{{ editingReward ? 'Edit Reward' : 'Add Reward' }}</h4>
+        <form @submit.prevent="saveReward" class="reward-form">
+          <div class="reward-form-row">
+            <div class="form-group">
+              <label>Placement</label>
+              <input v-model.number="rewardForm.placement" type="number" min="1" required />
+            </div>
+            <div class="form-group">
+              <label>XP</label>
+              <input v-model.number="rewardForm.reward_xp" type="number" min="0" />
+            </div>
+            <div class="form-group">
+              <label>Coins</label>
+              <input v-model.number="rewardForm.reward_coins" type="number" min="0" />
+            </div>
+          </div>
+          <div class="reward-form-row">
+            <div class="form-group">
+              <label>Character</label>
+              <select v-model="rewardForm.reward_character_id">
+                <option :value="null">None</option>
+                <option v-for="c in allCharacters" :key="c.id" :value="c.id">{{ c.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Title</label>
+              <input v-model="rewardForm.reward_title" type="text" placeholder="e.g. Season Champion" />
+            </div>
+          </div>
+          <div v-if="rewardFormError" class="form-error">{{ rewardFormError }}</div>
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary">{{ editingReward ? 'Update' : 'Add' }}</button>
+            <button v-if="editingReward" type="button" @click="resetRewardForm">Cancel Edit</button>
+            <button type="button" @click="showRewardsModal = false">Close</button>
+          </div>
+        </form>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -68,6 +139,14 @@ export default {
       editing: null,
       formError: '',
       form: { name: '', starts_at: '', ends_at: '', is_active: false },
+      // Rewards
+      showRewardsModal: false,
+      rewardsSeason: null,
+      rewards: [],
+      allCharacters: [],
+      editingReward: null,
+      rewardFormError: '',
+      rewardForm: { placement: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' },
     };
   },
   async mounted() { this.load(); },
@@ -113,6 +192,57 @@ export default {
       await axios.delete(`/api/admin/seasons/${s.id}`);
       this.load();
     },
+    async openRewards(s) {
+      this.rewardsSeason = s;
+      this.resetRewardForm();
+      this.showRewardsModal = true;
+      const [rewardsRes, charsRes] = await Promise.all([
+        axios.get(`/api/admin/seasons/${s.id}/rewards`),
+        axios.get('/api/characters'),
+      ]);
+      this.rewards = rewardsRes.data;
+      this.allCharacters = charsRes.data;
+    },
+    resetRewardForm() {
+      this.editingReward = null;
+      this.rewardFormError = '';
+      this.rewardForm = { placement: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' };
+    },
+    editReward(r) {
+      this.editingReward = r.id;
+      this.rewardForm = {
+        placement: r.placement,
+        reward_xp: r.reward_xp,
+        reward_coins: r.reward_coins,
+        reward_character_id: r.reward_character_id,
+        reward_title: r.reward_title || '',
+      };
+    },
+    async saveReward() {
+      this.rewardFormError = '';
+      try {
+        if (this.editingReward) {
+          await axios.put(`/api/admin/seasons/${this.rewardsSeason.id}/rewards/${this.editingReward}`, this.rewardForm);
+        } else {
+          await axios.post(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`, this.rewardForm);
+        }
+        const res = await axios.get(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`);
+        this.rewards = res.data;
+        this.resetRewardForm();
+      } catch (e) {
+        this.rewardFormError = e.response?.data?.error || e.response?.data?.message || 'Error';
+      }
+    },
+    async deleteReward(r) {
+      if (!confirm(`Delete reward for ${this.ordinal(r.placement)} place?`)) return;
+      await axios.delete(`/api/admin/seasons/${this.rewardsSeason.id}/rewards/${r.id}`);
+      this.rewards = this.rewards.filter(rw => rw.id !== r.id);
+    },
+    ordinal(n) {
+      const s = ['th', 'st', 'nd', 'rd'];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    },
     formatDate(d) {
       if (!d) return '';
       return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
@@ -145,4 +275,13 @@ export default {
 .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-gold); }
 .form-error { color: var(--accent-red); font-size: 0.9rem; margin: 10px 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+/* Rewards modal */
+.rewards-modal { max-width: 650px; }
+.rewards-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.85rem; }
+.rewards-table th { text-align: left; color: var(--accent-gold); font-family: 'Cinzel', serif; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 8px; border-bottom: 1px solid rgba(138, 106, 46, 0.3); }
+.rewards-table td { padding: 6px 8px; color: var(--text-bright); border-bottom: 1px solid rgba(138, 106, 46, 0.1); }
+.reward-form-title { font-family: 'Cinzel', serif; color: var(--accent-gold); font-size: 1rem; margin-bottom: 12px; }
+.reward-form-row { display: flex; gap: 10px; margin-bottom: 10px; }
+.reward-form-row .form-group { flex: 1; }
 </style>

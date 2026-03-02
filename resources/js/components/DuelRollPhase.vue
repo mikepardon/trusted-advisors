@@ -77,7 +77,12 @@
       </div>
 
       <div class="roll-total-banner">
-        Total Roll: <strong>{{ rollData.total_roll }}</strong>
+        Roll: <strong>{{ rollData.total_roll }}</strong>
+        <span v-if="totalDifficulty" class="roll-vs">vs</span>
+        <span v-if="totalDifficulty" class="roll-difficulty">Difficulty: <strong>{{ totalDifficulty }}</strong></span>
+        <span v-if="totalDifficulty" class="result-badge roll-result-badge" :class="rollData.total_roll >= totalDifficulty ? 'badge-success' : 'badge-failure'">
+          {{ rollData.total_roll >= totalDifficulty ? 'SUCCESS' : 'FAILURE' }}
+        </span>
       </div>
 
       <!-- Per-card results -->
@@ -85,9 +90,6 @@
         <div class="card-result-header">
           <span class="card-result-name">{{ cr.card?.title || 'Card ' + (idx + 1) }}</span>
           <span class="card-result-diff">Difficulty {{ cr.difficulty }}</span>
-          <span class="result-badge" :class="cr.success ? 'badge-success' : 'badge-failure'">
-            {{ cr.success ? 'SUCCESS' : 'FAILURE' }}
-          </span>
         </div>
         <div v-if="Object.keys(cr.effects || {}).length" class="effects-row">
           <span
@@ -212,6 +214,10 @@ export default {
         }];
       }
       return [];
+    },
+    totalDifficulty() {
+      if (!this.cardResults.length) return 0;
+      return this.cardResults.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
     },
     combinedEffects() {
       if (!this.rollData) return {};
@@ -411,10 +417,29 @@ export default {
   text-align: center;
   font-size: 1.15rem;
   color: var(--text-bright);
-  padding: 8px;
+  padding: 10px 12px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
   margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.roll-vs {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.roll-difficulty {
+  font-size: 1.05rem;
+}
+
+.roll-result-badge {
+  margin-left: 4px;
 }
 
 .card-result {

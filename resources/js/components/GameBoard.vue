@@ -7,6 +7,7 @@
         ref="lobby"
         :gameId="id"
         :hostId="gameData.game.user_id"
+        :gameType="gameData.game.game_type || 'cooperative'"
         @start-game="startOnlineGame"
         @lobby-updated="fetchGame"
       />

@@ -101,10 +101,13 @@ Route::middleware('auth:web')->group(function () {
 
     // Achievements & daily challenge for current user
     Route::get('/achievements', [GameController::class, 'achievements']);
+    Route::post('/achievements/claim-all', [GameController::class, 'claimAllAchievements']);
     Route::post('/achievements/{achievement}/claim', [GameController::class, 'claimAchievement']);
     Route::get('/daily-challenge', [GameController::class, 'dailyChallenge']);
     Route::get('/seasons', [GameController::class, 'seasons']);
+    Route::get('/seasons/{season}', [GameController::class, 'seasonDetail']);
 
+    Route::get('/my-characters', [GameController::class, 'myCharacters']);
     Route::get('/users/{user}/profile', [UserProfileController::class, 'show']);
 
     // Coin shop
@@ -134,6 +137,10 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::apiResource('events', EventController::class);
     Route::apiResource('items', ItemController::class);
     Route::apiResource('seasons', SeasonController::class);
+    Route::get('seasons/{season}/rewards', [SeasonController::class, 'rewards']);
+    Route::post('seasons/{season}/rewards', [SeasonController::class, 'storeReward']);
+    Route::put('seasons/{season}/rewards/{reward}', [SeasonController::class, 'updateReward']);
+    Route::delete('seasons/{season}/rewards/{reward}', [SeasonController::class, 'destroyReward']);
     Route::apiResource('achievements', AchievementController::class);
     Route::apiResource('unlockables', UnlockableController::class);
     Route::apiResource('daily-challenges', DailyChallengeController::class);

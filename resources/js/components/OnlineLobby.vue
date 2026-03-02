@@ -150,6 +150,7 @@ export default {
   props: {
     gameId: { type: [String, Number], required: true },
     hostId: { type: Number, required: true },
+    gameType: { type: String, default: 'cooperative' },
   },
   emits: ['start-game', 'lobby-updated'],
   setup() {
@@ -196,6 +197,10 @@ export default {
       return this.players.filter(p => p.character_id).map(p => p.character_id);
     },
     availableCharacters() {
+      if (this.gameType === 'duel') {
+        // Duel: both players can pick the same character
+        return this.characters.filter(c => !c.is_locked_for_user);
+      }
       return this.characters.filter(c => !this.takenCharacterIds.includes(c.id) && !c.is_locked_for_user);
     },
     swiperModules() {

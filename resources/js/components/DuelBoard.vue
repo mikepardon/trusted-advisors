@@ -83,9 +83,17 @@
       </div>
     </template>
 
-    <!-- === SIMULTANEOUS ROLLING (online) === -->
+    <!-- === SIMULTANEOUS ROLLING === -->
     <template v-if="duelPhase === 'rolling' && !showHandoff && !showWaiting">
+      <!-- Roll Tabs -->
+      <div class="duel-roll-tabs">
+        <button class="roll-tab" :class="myTabClass" @click="rollTab = 'mine'">You</button>
+        <button class="roll-tab" :class="opponentTabClass" @click="rollTab = 'opponent'">{{ opponentCharacterName }}</button>
+      </div>
+
+      <!-- Your Roll (v-show to preserve dice animation state) -->
       <DuelRollPhase
+        v-show="rollTab === 'mine'"
         :cards="myCards"
         :playerName="isOfferer ? offererName : chooserName"
         :canRoll="!myRollData"
@@ -102,15 +110,24 @@
         @reroll="handleReroll"
         @continue="handleContinueAfterRoll"
       />
-      <div v-if="myRollData && !opponentRollData" class="waiting-inline">
-        <p>Waiting for opponent to roll...</p>
+
+      <!-- Opponent's Roll -->
+      <template v-if="rollTab === 'opponent'">
+        <DuelRollPhase
+          v-if="opponentRollData"
+          :rollData="opponentRollData"
+          :playerName="opponentCharacterName"
+          :canRoll="false"
+        />
+        <div v-else class="waiting-inline">
+          <p>Waiting for {{ opponentCharacterName }} to roll...</p>
+        </div>
+      </template>
+
+      <!-- Post-continue waiting -->
+      <div v-if="rollTab === 'mine' && myRollData && !opponentRollData && !pendingRerollDecision" class="waiting-inline">
+        <p>Waiting for {{ opponentCharacterName }} to roll...</p>
       </div>
-      <DuelRollPhase
-        v-if="opponentRollData"
-        :rollData="opponentRollData"
-        :playerName="isOfferer ? chooserName : offererName"
-        :canRoll="false"
-      />
     </template>
 
     <!-- === ROLLING OFFERER (sequential: pass-and-play / single-player) === -->
@@ -232,6 +249,8 @@ export default {
       // Reroll
       rerolling: false,
       pendingRerollDecision: false,
+      // Roll tab nav
+      rollTab: 'mine',
       // Character info modal
       showCharacterModal: false,
       selectedCharacterData: null,
@@ -316,11 +335,35 @@ export default {
       if (this.isOfferer) return this.chooserRollData;
       return this.offererRollData;
     },
+    opponentCharacterName() {
+      const opponentNum = this.activePlayerNumber === 1 ? 2 : 1;
+      const player = this.gameData?.game?.players?.find(p => p.player_number === opponentNum);
+      return player?.character?.name || `Player ${opponentNum}`;
+    },
+    myTabClass() {
+      const cls = { active: this.rollTab === 'mine' };
+      if (this.myRollData?.cards?.length) {
+        cls['tab-success'] = this.myRollData.cards[0].success === true;
+        cls['tab-failure'] = this.myRollData.cards[0].success === false;
+      }
+      return cls;
+    },
+    opponentTabClass() {
+      const cls = { active: this.rollTab === 'opponent' };
+      if (this.opponentRollData?.cards?.length) {
+        cls['tab-success'] = this.opponentRollData.cards[0].success === true;
+        cls['tab-failure'] = this.opponentRollData.cards[0].success === false;
+      } else {
+        cls['tab-waiting'] = true;
+      }
+      return cls;
+    },
     isCurrentTurnBot() {
       if (!this.hasBotPlayer) return false;
       const botNum = this.botPlayer.player_number;
       const phase = this.duelPhase;
       if (phase === 'choosing') return true; // Bot always needs to select in choosing phase
+      if (phase === 'rolling') return true; // Bot needs to roll in simultaneous mode
       if (phase === 'rolling_offerer' && this.offererNumber === botNum) return true;
       if (phase === 'rolling_chooser' && this.chooserNumber === botNum) return true;
       return false;
@@ -536,38 +579,23 @@ export default {
           await this.refreshKingdoms();
           if (rollResult.duel_result) this.isGameOver = true;
 
-          // If player has reroll ability, wait for their decision before advancing
-          if (this.hasRerollAbility && !this.abilityActivated) {
-            this.pendingRerollDecision = true;
-            return;
-          }
-
-          if (this.offererRollData && this.chooserRollData) {
-            this.duelPhase = 'resolving';
-            this.$emit('phase-updated', 'resolving');
-          }
+          // Always pause for player to review results and optionally use abilities
+          this.pendingRerollDecision = true;
+          return;
         } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
           this.offererRollData = rollResult;
           await this.refreshKingdoms();
 
-          // If offerer has reroll ability, wait for their decision
-          if (this.isOfferer && this.hasRerollAbility && !this.abilityActivated) {
-            this.pendingRerollDecision = true;
-            return;
-          }
-
-          this.advanceAfterOffererRoll();
+          // Always pause for player to review results
+          this.pendingRerollDecision = true;
+          return;
         } else {
           this.chooserRollData = rollResult;
           await this.refreshKingdoms();
 
-          // If chooser has reroll ability, wait for their decision
-          if (this.isChooser && this.hasRerollAbility && !this.abilityActivated) {
-            this.pendingRerollDecision = true;
-            return;
-          }
-
-          this.advanceAfterChooserRoll(rollResult);
+          // Always pause for player to review results
+          this.pendingRerollDecision = true;
+          return;
         }
       } catch (e) {
         alert('Failed to roll: ' + (e.response?.data?.error || e.message));
@@ -642,7 +670,12 @@ export default {
           this.duelPhase = 'resolving';
           this.$emit('phase-updated', 'resolving');
         }
+        // If opponent hasn't rolled yet, stay in rolling phase
+        // Bot should already be triggered via isCurrentTurnBot watcher
       } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
+        // Reset ability state for chooser's turn
+        this.abilityActivated = false;
+        this.peekedCards = null;
         this.advanceAfterOffererRoll();
       } else {
         this.advanceAfterChooserRoll(this.chooserRollData);
@@ -681,6 +714,7 @@ export default {
         this.pendingRerollDecision = false;
         this.rerolling = false;
         this.waitingForOpponentSelection = false;
+        this.rollTab = 'mine';
 
         // Update from response
         this.syncFromGameData(res.data);
@@ -722,10 +756,10 @@ export default {
 
       this.refreshKingdoms();
 
-      if (this.duelPhase === 'rolling' && this.offererRollData && this.chooserRollData) {
+      if (this.duelPhase === 'rolling' && this.offererRollData && this.chooserRollData && !this.pendingRerollDecision) {
         this.duelPhase = 'resolving';
         this.$emit('phase-updated', 'resolving');
-      } else {
+      } else if (this.duelPhase !== 'rolling' || !this.pendingRerollDecision) {
         this.duelPhase = data.duel_phase;
       }
 
@@ -760,6 +794,13 @@ export default {
             this.waitingForOpponentSelection = false;
             this.$emit('phase-updated', phase);
             await this.loadMyRollCards();
+
+            // Bot may need to roll next — watcher won't fire since isCurrentTurnBot was already true
+            if (this.isCurrentTurnBot) {
+              this._opponentTurnPending = false;
+              this.triggerBotTurn();
+              return;
+            }
           }
         } else if (data.player_number !== undefined) {
           // Bot rolled
@@ -774,8 +815,15 @@ export default {
           await this.refreshKingdoms();
 
           const game = await axios.get(`/api/games/${this.gameId}`);
-          this.duelPhase = game.data.duel_phase || game.data.game?.duel_phase;
+          const newPhase = game.data.duel_phase || game.data.game?.duel_phase;
           this.$emit('game-data-updated', game.data);
+
+          // Don't auto-advance to resolving if human still reviewing their roll
+          if (newPhase === 'resolving' && this.pendingRerollDecision) {
+            // Stay in rolling — will advance when human clicks Continue
+          } else {
+            this.duelPhase = newPhase;
+          }
 
           if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
             await this.loadMyRollCards();
@@ -801,6 +849,7 @@ export default {
       this.pendingRerollDecision = false;
       this.rerolling = false;
       this.waitingForOpponentSelection = false;
+      this.rollTab = 'mine';
       this.syncFromGameData(data);
       this.$emit('game-data-updated', data);
     },
@@ -943,5 +992,63 @@ export default {
   font-family: 'Cinzel', serif;
   font-weight: 700;
   color: var(--text-bright, #f0e6d2);
+}
+
+/* Roll Tab Nav */
+.duel-roll-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+  justify-content: center;
+}
+
+.roll-tab {
+  flex: 1;
+  max-width: 180px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: rgba(0, 0, 0, 0.2);
+  border: 2px solid rgba(138, 106, 46, 0.3);
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.roll-tab.active {
+  background: rgba(212, 168, 67, 0.12);
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.roll-tab.tab-success {
+  border-color: #4a8a3a;
+  color: #5ea84a;
+}
+
+.roll-tab.tab-success.active {
+  background: rgba(74, 138, 58, 0.12);
+}
+
+.roll-tab.tab-failure {
+  border-color: #a03020;
+  color: #c0392b;
+}
+
+.roll-tab.tab-failure.active {
+  background: rgba(160, 48, 32, 0.12);
+}
+
+.roll-tab.tab-waiting {
+  opacity: 0.6;
+  animation: tabPulse 2s ease-in-out infinite;
+}
+
+@keyframes tabPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 0.8; }
 }
 </style>

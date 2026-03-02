@@ -11,20 +11,86 @@
     <!-- Logged in -->
     <template v-else>
 
-    <!-- Daily Challenge Banner -->
-    <DailyChallengeBanner />
+    <!-- Home Top Bar (mobile header replacement) -->
+    <div v-if="step === 'mode'" class="home-top-bar">
+      <div class="home-top-left" @click="$router.push('/profile')">
+        <div class="home-avatar">{{ auth.state.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+        <div class="home-user-info">
+          <span class="home-username">{{ auth.state.user.name }}</span>
+          <span class="home-level">Lv.{{ homeStats.level || 1 }}</span>
+        </div>
+      </div>
+      <div class="home-top-right">
+        <div class="home-elo" @click="$router.push('/leaderboard')">
+          <span class="elo-trophy">&#127942;</span>
+          <span class="elo-value">{{ homeStats.elo || 1000 }}</span>
+        </div>
+        <div class="home-coins" @click="$router.push('/shop')">
+          <span>&#129689;</span>
+          <span>{{ auth.state.user.coins ?? 0 }}</span>
+        </div>
+      </div>
+    </div>
 
-    <HintBubble hint-id="home-duel-mode">
-      Try <strong>Duel mode</strong> for competitive 1v1 battles! Choose it after selecting a play mode.
-    </HintBubble>
+    <!-- Mobile Menu Overlay -->
+    <div v-if="showMobileMenu" class="mobile-menu-overlay" @click.self="showMobileMenu = false">
+      <div class="mobile-menu-panel">
+        <button class="mobile-menu-item" @click="showMobileMenu = false; openRules()">Rules</button>
+        <button class="mobile-menu-item" @click="showMobileMenu = false; openTutorial()">Tutorial</button>
+        <router-link to="/settings" class="mobile-menu-item" @click="showMobileMenu = false">Settings</router-link>
+        <router-link v-if="auth.state.user?.is_admin" to="/admin" class="mobile-menu-item" @click="showMobileMenu = false">Admin</router-link>
+        <div class="mobile-menu-divider"></div>
+        <button class="mobile-menu-item mobile-menu-logout" @click="handleMobileLogout">Logout</button>
+      </div>
+    </div>
 
     <!-- STEP 0: Mode selection -->
     <Transition name="fade" mode="out-in">
     <div v-if="step === 'mode'" key="mode">
+
+      <!-- Grid: col-8 (content) + col-4 (nav icons) -->
+      <div class="home-grid">
+        <div class="home-grid-main">
+          <!-- Daily Challenge Banner (enhanced) -->
+          <div class="daily-enhanced">
+            <DailyChallengeBanner />
+          </div>
+
+          <HintBubble hint-id="home-duel-mode">
+            Try <strong>Duel mode</strong> for competitive 1v1 battles! Choose it after selecting a play mode.
+          </HintBubble>
+
+          <!-- In-Progress Games Button -->
+          <div class="card-panel in-progress-card" @click="$router.push('/campaigns')">
+            <div class="in-progress-row">
+              <span class="in-progress-icon">&#9876;</span>
+              <div class="in-progress-text">
+                <span class="in-progress-title">Continue Game</span>
+                <span class="in-progress-sub">View in-progress campaigns</span>
+              </div>
+              <span class="in-progress-arrow">&#8250;</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="home-grid-side">
+          <button class="side-icon-btn" @click="showMobileMenu = true" title="Menu">&#9776;</button>
+          <button class="side-icon-btn" @click="openNotifications()" title="Alerts">
+            &#128276;
+            <span v-if="pendingInvites.length > 0" class="side-badge">{{ pendingInvites.length }}</span>
+          </button>
+          <button class="side-icon-btn" @click="$router.push('/leaderboard')" title="Ranks">&#127942;</button>
+          <button class="side-icon-btn" @click="$router.push('/achievements')" title="Achievements">
+            &#127941;
+            <span v-if="homeStats.unclaimed > 0" class="side-badge">{{ homeStats.unclaimed }}</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Mode Cards (full width) -->
       <div class="card-panel">
-        <p class="user-greeting">Hail, {{ auth.state.user.name }}</p>
         <h2 class="section-title">New Game</h2>
-        <p class="flavor-text">
+        <p class="flavor-text hide-mobile">
           The kingdom stands at a crossroads. The realm needs leaders.
           How shall this campaign be waged?
         </p>
@@ -51,6 +117,23 @@
             <h3 class="mode-title">Online</h3>
             <p class="mode-desc">Play with friends over the network (2-6 advisors)</p>
           </div>
+        </div>
+      </div>
+
+      <!-- Active Season Card -->
+      <div v-if="activeSeason" class="card-panel season-card" @click="$router.push('/season')">
+        <div class="season-card-header">
+          <h3 class="season-card-name">{{ activeSeason.name }}</h3>
+          <span class="season-card-time">{{ seasonTimeLeft }}</span>
+        </div>
+        <div class="season-card-bar">
+          <div class="season-card-fill" :style="{ width: seasonPercent + '%' }"></div>
+        </div>
+        <div class="season-card-meta">
+          <span v-if="homeStats.seasonRank">Your Rank: <strong>#{{ homeStats.seasonRank }}</strong></span>
+          <span v-if="activeSeason.topReward" class="season-card-reward">
+            1st: {{ activeSeason.topReward }}
+          </span>
         </div>
       </div>
 
@@ -362,6 +445,11 @@ import 'swiper/css/effect-cards';
 export default {
   name: 'GameSetup',
   components: { DailyChallengeBanner, HintBubble, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
+  inject: {
+    openNotifications: { default: () => () => {} },
+    openRules: { default: () => () => {} },
+    openTutorial: { default: () => () => {} },
+  },
   setup() {
     const auth = useAuth();
     return { auth, playSound };
@@ -392,6 +480,10 @@ export default {
       addFriendError: '',
       addFriendSuccess: '',
       botDifficulty: 'medium',
+      // Home screen stats
+      homeStats: { level: 1, elo: 1000, seasonRank: null, unclaimed: 0 },
+      activeSeason: null,
+      showMobileMenu: false,
       // Game length options
       gameLengthOptions: [
         { label: '1 Year', rounds: 12 },
@@ -407,8 +499,32 @@ export default {
       return [EffectCards];
     },
     availableCharacters() {
+      if (this.gameType === 'duel') {
+        // Duel: both players can pick the same character
+        return this.characters.filter(c => !c.is_locked_for_user);
+      }
       const selectedIds = Object.values(this.playerSelections);
       return this.characters.filter(c => !selectedIds.includes(c.id) && !c.is_locked_for_user);
+    },
+    seasonPercent() {
+      if (!this.activeSeason) return 0;
+      const start = new Date(this.activeSeason.starts_at).getTime();
+      const end = new Date(this.activeSeason.ends_at).getTime();
+      const now = Date.now();
+      if (now >= end) return 100;
+      if (now <= start) return 0;
+      return Math.round(((now - start) / (end - start)) * 100);
+    },
+    seasonTimeLeft() {
+      if (!this.activeSeason) return '';
+      const end = new Date(this.activeSeason.ends_at);
+      const now = new Date();
+      if (now >= end) return 'Ended';
+      const diff = end - now;
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      if (days > 1) return `${days}d left`;
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      return `${hours}h left`;
     },
     lockedCharacters() {
       return this.characters.filter(c => c.is_locked_for_user);
@@ -430,6 +546,7 @@ export default {
     if (this.auth.state.user) {
       await this.fetchPendingInvites();
       this.subscribeToInvites();
+      this.fetchHomeStats();
     }
   },
   beforeUnmount() {
@@ -438,6 +555,50 @@ export default {
     }
   },
   methods: {
+    async fetchHomeStats() {
+      try {
+        const [statsRes, achRes, seasonsRes] = await Promise.allSettled([
+          axios.get('/api/auth/stats'),
+          axios.get('/api/achievements'),
+          axios.get('/api/seasons'),
+        ]);
+
+        if (statsRes.status === 'fulfilled') {
+          const s = statsRes.value.data;
+          this.homeStats.level = s.level || 1;
+          this.homeStats.elo = s.elo_rating || 1000;
+        }
+
+        if (achRes.status === 'fulfilled') {
+          this.homeStats.unclaimed = achRes.value.data.filter(a => a.earned && !a.claimed).length;
+        }
+
+        if (seasonsRes.status === 'fulfilled') {
+          const seasons = seasonsRes.value.data;
+          const active = seasons.find(s => s.is_active);
+          if (active) {
+            this.activeSeason = active;
+            // Fetch season detail for rank and rewards
+            try {
+              const detailRes = await axios.get(`/api/seasons/${active.id}`);
+              this.homeStats.seasonRank = detailRes.data.user_rank;
+              // Build top reward preview
+              const rewards = detailRes.data.season?.rewards;
+              if (rewards && rewards.length) {
+                const first = rewards.find(r => r.placement === 1);
+                if (first) {
+                  const parts = [];
+                  if (first.reward_xp) parts.push(`${first.reward_xp} XP`);
+                  if (first.reward_coins) parts.push(`${first.reward_coins} coins`);
+                  if (first.reward_character) parts.push(first.reward_character.name);
+                  this.activeSeason.topReward = parts.join(' + ') || null;
+                }
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+    },
     async fetchPendingInvites() {
       try {
         const res = await axios.get('/api/game-invites/pending');
@@ -645,6 +806,11 @@ export default {
           this.step = 'story';
         }
       }
+    },
+    async handleMobileLogout() {
+      this.showMobileMenu = false;
+      await this.auth.logout();
+      window.location.reload();
     },
     resetToHome() {
       this.step = 'mode';
@@ -1334,8 +1500,393 @@ export default {
   font-size: 1.1rem;
 }
 
+/* Home Top Bar */
+.home-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+.home-top-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.home-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-gold), #8a6a14);
+  color: var(--wood-dark);
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--border-gold);
+  box-shadow: 0 2px 8px rgba(212, 168, 67, 0.3);
+  flex-shrink: 0;
+}
+
+.home-user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.home-username {
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.home-level {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.7rem;
+  letter-spacing: 1px;
+}
+
+.home-top-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.home-elo {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.home-elo:hover {
+  background: rgba(212, 168, 67, 0.2);
+  border-color: var(--accent-gold);
+}
+
+.elo-trophy {
+  font-size: 0.9rem;
+}
+
+.elo-value {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.home-coins {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 16px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: var(--accent-gold);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.home-coins:hover {
+  background: rgba(212, 168, 67, 0.2);
+  border-color: var(--accent-gold);
+}
+
+/* Home Grid Layout */
+.home-grid {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.home-grid-main {
+  min-width: 0;
+}
+
+.home-grid-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.side-icon-btn {
+  position: relative;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background: rgba(26, 18, 9, 0.9);
+  border: 1px solid rgba(138, 106, 46, 0.4);
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+  letter-spacing: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  flex-shrink: 0;
+}
+
+.side-icon-btn:hover {
+  color: var(--accent-gold);
+  border-color: var(--accent-gold);
+  background: rgba(42, 31, 20, 0.95);
+  transform: none;
+  box-shadow: 0 2px 12px rgba(212, 168, 67, 0.2);
+}
+
+.side-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 0.55rem;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 3px;
+}
+
+/* Mobile Menu Overlay */
+.mobile-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-menu-panel {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-gold);
+  border-radius: 12px;
+  padding: 8px 0;
+  min-width: 200px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6);
+}
+
+.mobile-menu-item {
+  display: block;
+  width: 100%;
+  padding: 12px 24px;
+  background: none;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+  letter-spacing: 0;
+}
+
+.mobile-menu-item:hover {
+  background: rgba(212, 168, 67, 0.1);
+  color: var(--accent-gold);
+  transform: none;
+  box-shadow: none;
+}
+
+.mobile-menu-divider {
+  height: 1px;
+  background: rgba(138, 106, 46, 0.3);
+  margin: 4px 0;
+}
+
+.mobile-menu-logout {
+  color: var(--accent-red);
+}
+
+.mobile-menu-logout:hover {
+  background: rgba(160, 48, 32, 0.15);
+  color: #d05040;
+}
+
+/* Enhanced Daily Challenge */
+.daily-enhanced {
+  margin-bottom: 10px;
+}
+
+.daily-enhanced :deep(.daily-banner) {
+  padding: 14px 16px;
+  border-width: 2px;
+  border-radius: 10px;
+  margin-bottom: 8px;
+}
+
+.daily-enhanced :deep(.banner-icon) {
+  font-size: 1.6rem;
+}
+
+.daily-enhanced :deep(.banner-title) {
+  font-size: 1rem;
+}
+
+.daily-enhanced :deep(.banner-reward) {
+  font-size: 0.85rem;
+  padding: 2px 8px;
+}
+
+/* In-Progress Games in grid */
+.home-grid-main .in-progress-card {
+  margin-bottom: 0;
+}
+
+/* In-Progress Games Card */
+.in-progress-card {
+  cursor: pointer;
+  transition: border-color 0.2s;
+  padding: 14px 18px;
+}
+
+.in-progress-card:hover {
+  border-color: var(--accent-gold);
+}
+
+.in-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.in-progress-icon {
+  font-size: 1.5rem;
+  color: var(--accent-gold);
+  flex-shrink: 0;
+}
+
+.in-progress-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.in-progress-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.in-progress-sub {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.in-progress-arrow {
+  font-size: 1.5rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* Active Season Card */
+.season-card {
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.season-card:hover {
+  border-color: var(--accent-gold);
+}
+
+.season-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.season-card-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.95rem;
+}
+
+.season-card-time {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.season-card-bar {
+  width: 100%;
+  height: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 6px;
+}
+
+.season-card-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #8a6a2e, #d4a843);
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
+
+.season-card-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+.season-card-meta strong {
+  color: var(--accent-gold);
+}
+
+.season-card-reward {
+  font-size: 0.75rem;
+  color: var(--accent-gold);
+  opacity: 0.8;
+}
+
+.hide-mobile {
+  display: block;
+}
+
+/* Desktop: hide mobile top bar (use App.vue header instead) */
+@media (min-width: 769px) {
+  .home-top-bar {
+    display: none;
+  }
+}
+
 /* ---- Mobile compact ---- */
 @media (max-width: 768px) {
+  .hide-mobile {
+    display: none;
+  }
+
   .section-title {
     font-size: 1.3rem;
     margin-bottom: 10px;
@@ -1344,6 +1895,15 @@ export default {
   .flavor-text {
     font-size: 0.95rem;
     margin-bottom: 18px;
+  }
+
+  .mode-card {
+    padding: 12px 16px;
+  }
+
+  .mode-desc {
+    font-size: 0.8rem;
+    margin-top: 2px;
   }
 
   .player-buttons button {
@@ -1441,6 +2001,16 @@ export default {
 
   .selected-count {
     font-size: 0.8rem;
+  }
+
+  .home-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .home-username {
+    font-size: 0.85rem;
   }
 }
 </style>

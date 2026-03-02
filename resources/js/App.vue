@@ -43,38 +43,27 @@
     </main>
 
     <!-- Bottom nav -->
-    <nav v-if="!isAdmin" class="bottom-nav">
+    <nav v-if="!isAdmin && auth.state.user" class="bottom-nav">
+      <router-link to="/shop" class="nav-item" :class="{ active: $route.path === '/shop' }" @click="navSound">
+        <span class="nav-icon">&#128722;</span>
+        <span class="nav-label">Shop</span>
+      </router-link>
+      <router-link to="/characters" class="nav-item" :class="{ active: $route.path === '/characters' }" @click="navSound">
+        <span class="nav-icon">&#127183;</span>
+        <span class="nav-label">Cards</span>
+      </router-link>
       <button class="nav-item" :class="{ active: $route.path === '/' }" @click="goHome">
-        <span class="nav-icon">&#127968;</span>
-        <span class="nav-label">Home</span>
-      </button>
-      <router-link v-if="auth.state.user" to="/campaigns" class="nav-item" :class="{ active: $route.path === '/campaigns' }" @click="navSound">
         <span class="nav-icon">&#9876;</span>
         <span class="nav-label">Campaigns</span>
+      </button>
+      <router-link to="/friends" class="nav-item" :class="{ active: $route.path === '/friends' }" @click="navSound">
+        <span class="nav-icon">&#128101;</span>
+        <span class="nav-label">Friends</span>
       </router-link>
-      <router-link v-if="auth.state.user" to="/leaderboard" class="nav-item" :class="{ active: $route.path === '/leaderboard' }" @click="navSound">
-        <span class="nav-icon">&#127942;</span>
-        <span class="nav-label">Ranks</span>
+      <router-link to="/profile" class="nav-item" :class="{ active: $route.path === '/profile' }" @click="navSound">
+        <span class="nav-icon">&#128100;</span>
+        <span class="nav-label">Profile</span>
       </router-link>
-      <div class="nav-menu-wrap">
-        <button class="nav-item" @click.stop="menuSound(); showMenuPopup = !showMenuPopup">
-          <span class="nav-icon">&#9776;</span>
-          <span class="nav-label">Menu</span>
-        </button>
-        <div v-if="showMenuPopup" class="menu-popup">
-          <button class="menu-popup-item" @click="menuSound(); showHowToPlay = true; showMenuPopup = false">Rules</button>
-          <button class="menu-popup-item" @click="menuSound(); showTutorial = true; showMenuPopup = false">Tutorial</button>
-          <router-link v-if="auth.state.user" to="/profile" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Profile</router-link>
-          <router-link v-if="auth.state.user" to="/friends" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Friends</router-link>
-          <router-link v-if="auth.state.user" to="/achievements" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Achievements</router-link>
-          <router-link to="/settings" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Settings</router-link>
-          <router-link v-if="auth.state.user?.is_admin" to="/admin" class="menu-popup-item" @click="menuSound(); showMenuPopup = false">Admin</router-link>
-          <template v-if="auth.state.user">
-            <div class="menu-popup-divider"></div>
-            <button class="menu-popup-item menu-popup-logout" @click.stop="showLogoutConfirm = true; showMenuPopup = false">Logout</button>
-          </template>
-        </div>
-      </div>
     </nav>
 
     <HowToPlay v-if="showHowToPlay" @close="showHowToPlay = false" />
@@ -123,6 +112,13 @@ export default {
   setup() {
     const auth = useAuth();
     return { auth };
+  },
+  provide() {
+    return {
+      openNotifications: () => { this.showNotifications = true; },
+      openRules: () => { this.showHowToPlay = true; },
+      openTutorial: () => { this.showTutorial = true; },
+    };
   },
   data() {
     return {
@@ -803,38 +799,7 @@ button:disabled {
 /* ---- Responsive header ---- */
 @media (max-width: 768px) {
   .game-header {
-    padding: 8px 10px;
-  }
-
-  .header-logo {
-    max-width: 160px;
-  }
-
-  .avatar-ring-wrap {
-    width: 38px;
-    height: 38px;
-  }
-
-  .xp-ring {
-    width: 38px;
-    height: 38px;
-  }
-
-  .player-avatar {
-    width: 28px;
-    height: 28px;
-    font-size: 0.9rem;
-  }
-
-  .header-coins {
-    font-size: 0.7rem;
-    padding: 3px 8px;
-  }
-
-  .header-bell {
-    width: 32px;
-    height: 32px;
-    font-size: 1rem;
+    display: none !important;
   }
 }
 

@@ -30,7 +30,7 @@
               :disabled="claiming === ach.id"
               @click="claim(ach)"
             >
-              {{ claiming === ach.id ? '...' : 'Claim' }}
+              {{ claiming === ach.id ? '...' : claimLabel(ach) }}
             </button>
             <div v-else-if="ach.reward_xp || ach.reward_coins" class="ach-xp-preview">
               <span v-if="ach.reward_xp">+{{ ach.reward_xp }} XP</span>
@@ -50,12 +50,30 @@
       </div>
     </div>
 
+    <button v-if="unclaimedCount >= 2" class="claim-all-fab" @click="claimAll" :disabled="claimingAll">
+      {{ claimingAll ? 'Claiming...' : `Claim All (${unclaimedCount})` }}
+    </button>
+
     <AchievementClaim
       v-if="claimOverlay"
       :achievement="claimOverlay.achievement"
       :result="claimOverlay.result"
       @dismiss="onClaimDismiss"
     />
+
+    <!-- Batch claim summary overlay -->
+    <div v-if="batchClaimOverlay" class="batch-overlay" @click="batchClaimOverlay = null">
+      <div class="batch-overlay-card" @click.stop>
+        <h3 class="batch-title">Rewards Claimed!</h3>
+        <p class="batch-count">{{ batchClaimOverlay.count }} achievements claimed</p>
+        <div class="batch-rewards">
+          <div v-if="batchClaimOverlay.xp_awarded" class="batch-reward-row">+{{ batchClaimOverlay.xp_awarded }} XP</div>
+          <div v-if="batchClaimOverlay.coins_awarded" class="batch-reward-row">+{{ batchClaimOverlay.coins_awarded }} &#129689;</div>
+          <div v-if="batchClaimOverlay.leveled_up" class="batch-levelup">Level Up! Now Lv. {{ batchClaimOverlay.new_level }}</div>
+        </div>
+        <button class="btn-primary batch-dismiss" @click="batchClaimOverlay = null">Continue</button>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -73,7 +91,9 @@ export default {
       achievements: [],
       loading: true,
       claiming: null,
+      claimingAll: false,
       claimOverlay: null,
+      batchClaimOverlay: null,
       iconMap: {
         trophy: '\u{1F3C6}',
         shield: '\u{1F6E1}',
@@ -98,10 +118,21 @@ export default {
       },
     };
   },
+  computed: {
+    unclaimedCount() {
+      return this.achievements.filter(a => a.earned && !a.claimed).length;
+    },
+  },
   async mounted() {
     await this.fetchAchievements();
   },
   methods: {
+    claimLabel(ach) {
+      const parts = [];
+      if (ach.reward_xp) parts.push(`+${ach.reward_xp} XP`);
+      if (ach.reward_coins) parts.push(`+${ach.reward_coins} \u{1FA99}`);
+      return parts.length ? `Claim ${parts.join(' ')}` : 'Claim';
+    },
     async fetchAchievements() {
       this.loading = true;
       try {
@@ -134,6 +165,24 @@ export default {
     },
     onClaimDismiss() {
       this.claimOverlay = null;
+    },
+    async claimAll() {
+      this.claimingAll = true;
+      try {
+        const res = await axios.post('/api/achievements/claim-all');
+        const result = res.data;
+
+        const { updateUserStats } = useAuth();
+        updateUserStats({ xp: result.new_xp, level: result.new_level, coins: result.new_coins });
+
+        // Mark all unclaimed as claimed locally
+        this.achievements.forEach(a => {
+          if (a.earned && !a.claimed) a.claimed = true;
+        });
+
+        this.batchClaimOverlay = result;
+      } catch {}
+      this.claimingAll = false;
     },
   },
 };
@@ -318,6 +367,93 @@ export default {
   flex-shrink: 0;
   min-width: 40px;
   text-align: right;
+}
+
+/* Claim All FAB */
+.claim-all-fab {
+  position: sticky;
+  bottom: 16px;
+  display: block;
+  margin: 16px auto 0;
+  padding: 10px 28px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  font-weight: 700;
+  border-radius: 24px;
+  border: 2px solid var(--accent-gold);
+  background: linear-gradient(180deg, #4a3a24, #2a1f14);
+  color: var(--accent-gold);
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(212, 168, 67, 0.3);
+  z-index: 10;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.claim-all-fab:hover {
+  background: linear-gradient(180deg, #5a4a34, #3a2a1a);
+  box-shadow: 0 4px 20px rgba(212, 168, 67, 0.5);
+}
+
+.claim-all-fab:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Batch claim overlay */
+.batch-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.batch-overlay-card {
+  background: linear-gradient(180deg, #3a2a1a, #2a1f14);
+  border: 2px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 32px 28px;
+  text-align: center;
+  max-width: 360px;
+  width: 90%;
+}
+
+.batch-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+}
+
+.batch-count {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.batch-rewards {
+  margin-bottom: 20px;
+}
+
+.batch-reward-row {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.3rem;
+  margin-bottom: 4px;
+}
+
+.batch-levelup {
+  color: #6abf50;
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  margin-top: 8px;
+}
+
+.batch-dismiss {
+  padding: 8px 32px;
+  font-size: 1rem;
 }
 
 @media (max-width: 768px) {

@@ -175,14 +175,16 @@ class GameLobbyController extends Controller
             return response()->json(['error' => 'You are not in this game'], 403);
         }
 
-        // Check character not already taken
-        $taken = GamePlayer::where('game_id', $game->id)
-            ->where('character_id', $validated['character_id'])
-            ->where('id', '!=', $player->id)
-            ->exists();
+        // Check character not already taken (cooperative only — duel allows same character)
+        if ($game->game_type !== 'duel') {
+            $taken = GamePlayer::where('game_id', $game->id)
+                ->where('character_id', $validated['character_id'])
+                ->where('id', '!=', $player->id)
+                ->exists();
 
-        if ($taken) {
-            return response()->json(['error' => 'Character already taken'], 422);
+            if ($taken) {
+                return response()->json(['error' => 'Character already taken'], 422);
+            }
         }
 
         // Check if character is locked (dynamically via unlockables table)

@@ -92,18 +92,19 @@ class LeaderboardController extends Controller
                     $userStats[$participant->user_id] = ['wins' => 0, 'score' => 0];
                 }
 
-                // Score
+                // Score — track highest single-game score
+                $gameScore = 0;
                 if ($game->isDuel()) {
                     $kingdom = $game->playerKingdoms()->where('game_player_id', $participant->id)->first();
                     if ($kingdom) {
-                        $userStats[$participant->user_id]['score'] += $kingdom->wealth + $kingdom->influence +
+                        $gameScore = $kingdom->wealth + $kingdom->influence +
                             $kingdom->security + $kingdom->religion + $kingdom->food + $kingdom->happiness;
                     }
                 } else {
-                    // Use final_score when available (new composite scoring), fallback to stat sum for old games
-                    $userStats[$participant->user_id]['score'] += $game->final_score
+                    $gameScore = $game->final_score
                         ?? ($game->wealth + $game->influence + $game->security + $game->religion + $game->food + $game->happiness);
                 }
+                $userStats[$participant->user_id]['score'] = max($userStats[$participant->user_id]['score'], $gameScore);
 
                 // Wins
                 if ($game->isDuel()) {

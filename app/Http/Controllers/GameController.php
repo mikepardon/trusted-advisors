@@ -80,6 +80,48 @@ class GameController extends Controller
         return response()->json($characters);
     }
 
+    public function myCharacters(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $characters = Character::all();
+
+        $charUnlockables = Unlockable::where('type', 'character')->get()->keyBy('entity_id');
+        $userUnlockableIds = UserUnlockable::where('user_id', $user->id)->pluck('unlockable_id')->toArray();
+
+        $result = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds) {
+            $data = [
+                'id' => $c->id,
+                'name' => $c->name,
+                'image_url' => $c->image_url,
+                'description' => $c->description,
+                'dice' => $c->dice,
+                'wild_value' => $c->wild_value,
+                'wild_ability' => $c->wild_ability,
+                'wild_ability_description' => $c->wild_ability_description,
+            ];
+
+            $unlockable = $charUnlockables[$c->id] ?? null;
+            if (!$unlockable) {
+                $data['is_unlocked'] = true;
+                $data['unlock_requirement'] = null;
+            } else {
+                $isUnlocked = in_array($unlockable->id, $userUnlockableIds);
+                $data['is_unlocked'] = $isUnlocked;
+                $data['unlock_requirement'] = !$isUnlocked
+                    ? ($unlockable->unlock_method === 'level'
+                        ? "Reach level {$unlockable->unlock_value}"
+                        : ($unlockable->unlock_method === 'shop'
+                            ? "Purchase from shop ({$unlockable->coin_price} coins)"
+                            : "Earn required achievement"))
+                    : null;
+            }
+
+            return $data;
+        });
+
+        return response()->json($result);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -1617,9 +1659,9 @@ class GameController extends Controller
             $hand->update(['game_player_id' => $hand->offered_to_player_id]);
         }
 
-        // Determine rolling phase
-        $hasBotPlayer = $game->players()->where('is_bot', true)->exists();
-        $rollingPhase = ($game->isOnline() && !$hasBotPlayer) ? 'rolling' : 'rolling_offerer';
+        // Determine rolling phase — simultaneous for all except pass-and-play
+        $isPassAndPlay = $game->game_mode === 'pass_and_play';
+        $rollingPhase = $isPassAndPlay ? 'rolling_offerer' : 'rolling';
         $game->update(['duel_phase' => $rollingPhase]);
 
         // Reload hands with updated assignments
@@ -1672,7 +1714,7 @@ class GameController extends Controller
         $chooser = $game->getChooser();
 
         if ($game->duel_phase === 'rolling') {
-            // Simultaneous rolling (online) — determine player from auth
+            // Simultaneous rolling — determine player from auth
             $user = $request->user();
             if (!$user) {
                 return response()->json(['error' => 'Authentication required'], 403);
@@ -1785,16 +1827,28 @@ class GameController extends Controller
             $rollingPlayer->update(['ability_active_this_round' => false]);
         }
 
-        // Process each card against the single roll
+        // Process cards: sum difficulties for a single combined check
         $cardResults = [];
         $combinedEffects = [];
         $statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
         $scaling = $this->getDifficultyScaling($game);
 
+        // Calculate combined difficulty from all cards
+        $totalDifficulty = 0;
+        $cardData = [];
         foreach ($hands as $hand) {
             $card = $hand->card;
             $difficulty = max(1, $card->difficulty + $scaling - $difficultyReduction);
-            $success = $totalRoll >= $difficulty;
+            $totalDifficulty += $difficulty;
+            $cardData[] = ['card' => $card, 'difficulty' => $difficulty];
+        }
+
+        // One combined check: roll vs sum of all card difficulties
+        $success = $totalRoll >= $totalDifficulty;
+
+        foreach ($cardData as $cd) {
+            $card = $cd['card'];
+            $difficulty = $cd['difficulty'];
 
             $cardEffects = [];
             // Negative effects ALWAYS apply
@@ -1803,7 +1857,7 @@ class GameController extends Controller
                     $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $change;
                 }
             }
-            // Positive effects on success
+            // Positive effects only on success (all-or-nothing)
             if ($success) {
                 foreach (($card->positive_effects ?? []) as $stat => $change) {
                     if (in_array($stat, $statKeys)) {
@@ -2102,15 +2156,25 @@ class GameController extends Controller
         $abilityLabel = $ability === 'rally' ? 'Rally: rerolled lowest die!' : 'Gamble: rerolled all dice!';
         $abilityEffects['descriptions'][] = "{$character->name}'s {$abilityLabel}";
 
-        // Process each card against the new roll
+        // Process cards: sum difficulties for combined check
         $cardResults = [];
         $combinedEffects = [];
         $statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
 
+        $totalDifficulty = 0;
+        $cardData = [];
         foreach ($hands as $hand) {
             $card = $hand->card;
             $difficulty = max(1, $card->difficulty - $difficultyReduction);
-            $success = $totalRoll >= $difficulty;
+            $totalDifficulty += $difficulty;
+            $cardData[] = ['card' => $card, 'difficulty' => $difficulty];
+        }
+
+        $success = $totalRoll >= $totalDifficulty;
+
+        foreach ($cardData as $cd) {
+            $card = $cd['card'];
+            $difficulty = $cd['difficulty'];
 
             $cardEffects = [];
             foreach (($card->negative_effects ?? []) as $stat => $change) {
@@ -2300,15 +2364,25 @@ class GameController extends Controller
         }
 
         // Bot is rolling
-        if ($phase === 'rolling_offerer' && $game->offerer_player_number === $bot->player_number) {
-            $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
-            $fakeRequest->setUserResolver(fn () => $botUser);
-            return $this->duelRoll($game->fresh(), $fakeRequest);
-        }
+        if ($phase === 'rolling' || $phase === 'rolling_offerer' || $phase === 'rolling_chooser') {
+            // Determine if bot should roll in this phase
+            $shouldRoll = false;
 
-        if ($phase === 'rolling_chooser') {
-            $chooser = $game->getChooser();
-            if ($chooser && $chooser->is_bot) {
+            if ($phase === 'rolling') {
+                // Simultaneous mode — bot always needs to roll (check not already rolled)
+                $alreadyRolled = GameRoundResult::where('game_id', $game->id)
+                    ->where('round_number', $game->current_round)
+                    ->where('game_player_id', $bot->id)
+                    ->exists();
+                $shouldRoll = !$alreadyRolled;
+            } elseif ($phase === 'rolling_offerer') {
+                $shouldRoll = $game->offerer_player_number === $bot->player_number;
+            } else {
+                $chooser = $game->getChooser();
+                $shouldRoll = $chooser && $chooser->is_bot;
+            }
+
+            if ($shouldRoll) {
                 $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
                 $fakeRequest->setUserResolver(fn () => $botUser);
                 return $this->duelRoll($game->fresh(), $fakeRequest);
@@ -2934,6 +3008,53 @@ class GameController extends Controller
         ]);
     }
 
+    public function claimAllAchievements(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $unclaimed = UserAchievement::where('user_id', $user->id)
+            ->whereNull('claimed_at')
+            ->pluck('achievement_id');
+
+        if ($unclaimed->isEmpty()) {
+            return response()->json(['error' => 'No achievements to claim.'], 422);
+        }
+
+        $achievements = Achievement::whereIn('id', $unclaimed)->get();
+
+        $totalXp = 0;
+        $totalCoins = 0;
+        $oldLevel = $user->level;
+
+        foreach ($achievements as $achievement) {
+            UserAchievement::where('user_id', $user->id)
+                ->where('achievement_id', $achievement->id)
+                ->update(['claimed_at' => now()]);
+
+            $totalXp += $achievement->reward_xp;
+            $totalCoins += $achievement->reward_coins ?? 0;
+
+            if (($achievement->reward_coins ?? 0) > 0) {
+                $user->recordCoinTransaction($achievement->reward_coins, 'earn', 'achievement', $achievement->id, "Claimed achievement: {$achievement->name}");
+            }
+        }
+
+        $user->xp += $totalXp;
+        $user->coins += $totalCoins;
+        $user->level = User::calculateLevel($user->xp);
+        $user->save();
+
+        return response()->json([
+            'xp_awarded' => $totalXp,
+            'coins_awarded' => $totalCoins,
+            'new_xp' => $user->xp,
+            'new_level' => $user->level,
+            'new_coins' => $user->coins,
+            'leveled_up' => $user->level > $oldLevel,
+            'count' => $achievements->count(),
+        ]);
+    }
+
     public function dailyChallenge(Request $request): JsonResponse
     {
         $user = $request->user();
@@ -2960,6 +3081,84 @@ class GameController extends Controller
     public function seasons(): JsonResponse
     {
         return response()->json(Season::orderByDesc('starts_at')->get());
+    }
+
+    public function seasonDetail(Request $request, Season $season): JsonResponse
+    {
+        $season->load(['rewards' => function ($q) {
+            $q->with('rewardCharacter')->orderBy('placement');
+        }]);
+
+        // Get top 10 leaderboard for this season
+        $leaderboard = DB::table('games')
+            ->join('game_players', 'games.id', '=', 'game_players.game_id')
+            ->where('games.season_id', $season->id)
+            ->where('games.status', 'completed')
+            ->whereNotNull('game_players.user_id')
+            ->select(
+                'game_players.user_id',
+                DB::raw('COUNT(CASE WHEN game_players.is_winner = 1 THEN 1 END) as wins'),
+                DB::raw('COUNT(*) as games_played')
+            )
+            ->groupBy('game_players.user_id')
+            ->orderByDesc('wins')
+            ->limit(10)
+            ->get();
+
+        $userIds = $leaderboard->pluck('user_id')->toArray();
+        $users = User::whereIn('id', $userIds)->get()->keyBy('id');
+
+        $leaderboardData = $leaderboard->values()->map(function ($row, $index) use ($users) {
+            $user = $users[$row->user_id] ?? null;
+            return [
+                'rank' => $index + 1,
+                'user_id' => $row->user_id,
+                'name' => $user?->name ?? 'Unknown',
+                'wins' => $row->wins,
+                'games_played' => $row->games_played,
+                'elo_rating' => $user?->elo_rating ?? 1000,
+            ];
+        });
+
+        // User's own rank
+        $userRank = null;
+        $userId = $request->user()?->id;
+        if ($userId) {
+            $userWins = DB::table('games')
+                ->join('game_players', 'games.id', '=', 'game_players.game_id')
+                ->where('games.season_id', $season->id)
+                ->where('games.status', 'completed')
+                ->where('game_players.user_id', $userId)
+                ->where('game_players.is_winner', true)
+                ->count();
+
+            $rank = DB::table('games')
+                ->join('game_players', 'games.id', '=', 'game_players.game_id')
+                ->where('games.season_id', $season->id)
+                ->where('games.status', 'completed')
+                ->whereNotNull('game_players.user_id')
+                ->select('game_players.user_id', DB::raw('COUNT(CASE WHEN game_players.is_winner = 1 THEN 1 END) as wins'))
+                ->groupBy('game_players.user_id')
+                ->havingRaw('COUNT(CASE WHEN game_players.is_winner = 1 THEN 1 END) > ?', [$userWins])
+                ->count();
+
+            $userRank = $rank + 1;
+        }
+
+        $totalPlayers = DB::table('games')
+            ->join('game_players', 'games.id', '=', 'game_players.game_id')
+            ->where('games.season_id', $season->id)
+            ->where('games.status', 'completed')
+            ->whereNotNull('game_players.user_id')
+            ->distinct('game_players.user_id')
+            ->count('game_players.user_id');
+
+        return response()->json([
+            'season' => $season,
+            'leaderboard' => $leaderboardData,
+            'user_rank' => $userRank,
+            'total_players' => $totalPlayers,
+        ]);
     }
 
     public function cancelGame(Request $request, Game $game): JsonResponse

@@ -24,4 +24,9 @@ class Season extends Model
     {
         return $this->hasMany(Game::class);
     }
+
+    public function rewards(): HasMany
+    {
+        return $this->hasMany(SeasonReward::class);
+    }
 }

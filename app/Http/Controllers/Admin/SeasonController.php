@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Season;
+use App\Models\SeasonReward;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -84,6 +85,61 @@ class SeasonController extends Controller
     public function destroy(Season $season): JsonResponse
     {
         $season->delete();
+        return response()->json(null, 204);
+    }
+
+    // Season Rewards CRUD
+
+    public function rewards(Season $season): JsonResponse
+    {
+        $rewards = $season->rewards()->with('rewardCharacter')->orderBy('placement')->get();
+        return response()->json($rewards);
+    }
+
+    public function storeReward(Request $request, Season $season): JsonResponse
+    {
+        $validated = $request->validate([
+            'placement' => 'required|integer|min:1',
+            'reward_xp' => 'integer|min:0',
+            'reward_coins' => 'integer|min:0',
+            'reward_character_id' => 'nullable|exists:characters,id',
+            'reward_title' => 'nullable|string|max:255',
+        ]);
+
+        $validated['season_id'] = $season->id;
+        $reward = SeasonReward::create($validated);
+        $reward->load('rewardCharacter');
+
+        return response()->json($reward, 201);
+    }
+
+    public function updateReward(Request $request, Season $season, SeasonReward $reward): JsonResponse
+    {
+        if ($reward->season_id !== $season->id) {
+            return response()->json(['error' => 'Reward does not belong to this season.'], 404);
+        }
+
+        $validated = $request->validate([
+            'placement' => 'sometimes|integer|min:1',
+            'reward_xp' => 'integer|min:0',
+            'reward_coins' => 'integer|min:0',
+            'reward_character_id' => 'nullable|exists:characters,id',
+            'reward_title' => 'nullable|string|max:255',
+        ]);
+
+        $reward->update($validated);
+        $reward->load('rewardCharacter');
+
+        return response()->json($reward);
+    }
+
+    public function destroyReward(Season $season, SeasonReward $reward): JsonResponse
+    {
+        if ($reward->season_id !== $season->id) {
+            return response()->json(['error' => 'Reward does not belong to this season.'], 404);
+        }
+
+        $reward->delete();
         return response()->json(null, 204);
     }
 }
