@@ -19,7 +19,7 @@
     />
 
     <!-- Player Items -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="true" />
 
     <!-- Compact item/dice icons -->
     <div class="duel-bar-icons">
@@ -72,34 +72,21 @@
       </div>
     </div>
 
-    <!-- === OFFERING PHASE === -->
-    <template v-if="duelPhase === 'offering' && !showHandoff && !showWaiting">
-      <DuelOfferPhase
-        v-if="isMyTurnToOffer"
-        :cards="currentCards"
-        @offer="submitOffer"
-      />
-      <div v-else class="waiting-inline">
-        <p>The offerer is selecting cards to reveal...</p>
-      </div>
-    </template>
-
-    <!-- === CHOOSING PHASE === -->
+    <!-- === CHOOSING PHASE (both players select simultaneously) === -->
     <template v-if="duelPhase === 'choosing' && !showHandoff && !showWaiting">
       <DuelChoosePhase
-        v-if="isMyTurnToChoose"
         :cards="currentCards"
-        @choose="submitChoice"
+        @select="submitSelection"
       />
-      <div v-else class="waiting-inline">
-        <p>Your opponent is choosing a card...</p>
+      <div v-if="waitingForOpponentSelection" class="waiting-inline">
+        <p>Waiting for opponent to choose their card...</p>
       </div>
     </template>
 
     <!-- === SIMULTANEOUS ROLLING (online) === -->
     <template v-if="duelPhase === 'rolling' && !showHandoff && !showWaiting">
       <DuelRollPhase
-        :card="myCard"
+        :cards="myCards"
         :playerName="isOfferer ? offererName : chooserName"
         :canRoll="!myRollData"
         :rollData="myRollData"
@@ -108,25 +95,28 @@
         :abilityActivated="abilityActivated"
         :activatingAbility="activatingAbility"
         :peekedCards="peekedCards"
+        :rerolling="rerolling"
+        :needsContinue="pendingRerollDecision"
         @roll="submitRoll"
         @use-ability="activateAbility"
+        @reroll="handleReroll"
+        @continue="handleContinueAfterRoll"
       />
       <div v-if="myRollData && !opponentRollData" class="waiting-inline">
         <p>Waiting for opponent to roll...</p>
       </div>
       <DuelRollPhase
         v-if="opponentRollData"
-        :card="opponentRollData.card"
+        :rollData="opponentRollData"
         :playerName="isOfferer ? chooserName : offererName"
         :canRoll="false"
-        :rollData="opponentRollData"
       />
     </template>
 
     <!-- === ROLLING OFFERER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_offerer' && !showHandoff && !showWaiting">
       <DuelRollPhase
-        :card="myCard"
+        :cards="myCards"
         :playerName="offererName"
         :canRoll="isOfferer"
         :rollData="offererRollData"
@@ -135,8 +125,12 @@
         :abilityActivated="abilityActivated"
         :activatingAbility="activatingAbility"
         :peekedCards="peekedCards"
+        :rerolling="rerolling"
+        :needsContinue="pendingRerollDecision"
         @roll="submitRoll"
         @use-ability="activateAbility"
+        @reroll="handleReroll"
+        @continue="handleContinueAfterRoll"
       />
     </template>
 
@@ -145,14 +139,13 @@
       <!-- Show offerer's completed roll -->
       <DuelRollPhase
         v-if="offererRollData"
-        :card="offererRollData.card"
+        :rollData="offererRollData"
         :playerName="offererName"
         :canRoll="false"
-        :rollData="offererRollData"
       />
       <!-- Chooser's roll -->
       <DuelRollPhase
-        :card="myCard"
+        :cards="myCards"
         :playerName="chooserName"
         :canRoll="isChooser"
         :rollData="chooserRollData"
@@ -161,8 +154,12 @@
         :abilityActivated="abilityActivated"
         :activatingAbility="activatingAbility"
         :peekedCards="peekedCards"
+        :rerolling="rerolling"
+        :needsContinue="pendingRerollDecision"
         @roll="submitRoll"
         @use-ability="activateAbility"
+        @reroll="handleReroll"
+        @continue="handleContinueAfterRoll"
       />
     </template>
 
@@ -182,7 +179,6 @@
 <script>
 import axios from 'axios';
 import DuelKingdomStats from './DuelKingdomStats.vue';
-import DuelOfferPhase from './DuelOfferPhase.vue';
 import DuelChoosePhase from './DuelChoosePhase.vue';
 import DuelRollPhase from './DuelRollPhase.vue';
 import DuelResolvePhase from './DuelResolvePhase.vue';
@@ -194,7 +190,7 @@ import { useAuth } from '../stores/auth';
 
 export default {
   name: 'DuelBoard',
-  components: { DuelKingdomStats, DuelOfferPhase, DuelChoosePhase, DuelRollPhase, DuelResolvePhase, TurnHandoffOverlay, PlayerItems, EventReveal, CharacterInfoModal },
+  components: { DuelKingdomStats, DuelChoosePhase, DuelRollPhase, DuelResolvePhase, TurnHandoffOverlay, PlayerItems, EventReveal, CharacterInfoModal },
   setup() {
     const auth = useAuth();
     return { auth };
@@ -210,10 +206,11 @@ export default {
       offererPlayerNumber: null,
       playerKingdoms: [],
       currentCards: [],
-      myCard: null,
+      myCards: [],
       offererRollData: null,
       chooserRollData: null,
       isGameOver: false,
+      waitingForOpponentSelection: false,
       // Pass-and-play handoff
       showHandoff: false,
       handoffPlayerNumber: null,
@@ -232,6 +229,9 @@ export default {
       abilityActivated: false,
       activatingAbility: false,
       peekedCards: null,
+      // Reroll
+      rerolling: false,
+      pendingRerollDecision: false,
       // Character info modal
       showCharacterModal: false,
       selectedCharacterData: null,
@@ -263,12 +263,6 @@ export default {
     isChooser() {
       return this.activePlayerNumber === this.chooserNumber;
     },
-    isMyTurnToOffer() {
-      return this.activePlayerNumber === this.offererNumber;
-    },
-    isMyTurnToChoose() {
-      return this.activePlayerNumber === this.chooserNumber;
-    },
     offererName() {
       const player = this.gameData?.game?.players?.find(p => p.player_number === this.offererNumber);
       const name = player?.character?.name || `Player ${this.offererNumber}`;
@@ -298,6 +292,10 @@ export default {
       const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
       return player?.ability_uses ?? 0;
     },
+    hasRerollAbility() {
+      const ability = this.myAbility?.name;
+      return ['rally', 'gamble'].includes(ability) && this.myAbilityUses > 0;
+    },
     currentEvent() {
       return this.gameData?.current_event || null;
     },
@@ -322,8 +320,7 @@ export default {
       if (!this.hasBotPlayer) return false;
       const botNum = this.botPlayer.player_number;
       const phase = this.duelPhase;
-      if (phase === 'offering' && this.offererNumber === botNum) return true;
-      if (phase === 'choosing' && this.chooserNumber === botNum) return true;
+      if (phase === 'choosing') return true; // Bot always needs to select in choosing phase
       if (phase === 'rolling_offerer' && this.offererNumber === botNum) return true;
       if (phase === 'rolling_chooser' && this.chooserNumber === botNum) return true;
       return false;
@@ -388,16 +385,16 @@ export default {
         }
       }
 
-      // If entering offering or choosing phase, load cards
-      if (this.duelPhase === 'offering' || this.duelPhase === 'choosing') {
+      // If entering choosing phase, load cards
+      if (this.duelPhase === 'choosing') {
         if (!this.showHandoff) {
           this.loadDuelHand();
         }
       }
 
-      // If entering simultaneous rolling phase, load my card
-      if (this.duelPhase === 'rolling') {
-        this.loadMyRollCard();
+      // If entering rolling phase, load my cards
+      if (this.duelPhase === 'rolling' || this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
+        this.loadMyRollCards();
       }
 
       this.checkEventReveal();
@@ -414,13 +411,7 @@ export default {
       const offNum = this.offererNumber;
       const choNum = this.chooserNumber;
 
-      if (phase === 'offering' && myNum !== offNum) {
-        this.showWaiting = true;
-        this.waitingMessage = 'Waiting for Offer';
-      } else if (phase === 'choosing' && myNum !== choNum) {
-        this.showWaiting = true;
-        this.waitingMessage = 'Waiting for Choice';
-      } else if (phase === 'rolling' ) {
+      if (phase === 'rolling' ) {
         // Simultaneous rolling — no full-screen waiting overlay
         this.showWaiting = false;
       } else if (phase === 'rolling_offerer' && myNum !== offNum) {
@@ -457,59 +448,55 @@ export default {
       await this.loadDuelHand();
     },
 
-    async submitOffer(revealedHandId) {
+    async submitSelection(keptHandId) {
       try {
-        await axios.post(`/api/games/${this.gameId}/duel-offer`, {
-          revealed_hand_id: revealedHandId,
+        const res = await axios.post(`/api/games/${this.gameId}/duel-select`, {
+          kept_hand_id: keptHandId,
         });
 
-        this.duelPhase = 'choosing';
-        this.$emit('phase-updated', 'choosing');
+        if (res.data.waiting) {
+          // Waiting for opponent to select
+          this.waitingForOpponentSelection = true;
 
-        if (this.isPassAndPlay) {
-          this.initiatePassAndPlayHandoff(this.chooserNumber);
-        } else if (this.hasBotPlayer) {
-          // Bot is chooser — trigger bot turn (watcher handles it)
-        } else {
-          this.updateOnlineWaiting();
+          if (this.isPassAndPlay) {
+            // Pass-and-play: hand off to other player for their selection
+            this.waitingForOpponentSelection = false;
+            const otherPlayer = this.activePlayerNumber === 1 ? 2 : 1;
+            this.initiatePassAndPlayHandoff(otherPlayer);
+          } else if (this.hasBotPlayer) {
+            // Bot needs to select — trigger bot turn
+            this.triggerBotTurn();
+          }
+          return;
         }
-      } catch (e) {
-        alert('Failed to offer: ' + (e.response?.data?.error || e.message));
-      }
-    },
 
-    async submitChoice(chosenHandId) {
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/duel-choose`, {
-          chosen_hand_id: chosenHandId,
-        });
-
+        // Both selected — transition to rolling
         const phase = res.data.duel_phase || 'rolling_offerer';
         this.duelPhase = phase;
+        this.waitingForOpponentSelection = false;
         this.$emit('phase-updated', phase);
 
         if (this.isPassAndPlay) {
-          this.myCard = res.data.offerer_card?.card || null;
+          await this.loadMyRollCards();
           this.initiatePassAndPlayHandoff(this.offererNumber);
         } else if (this.hasBotPlayer) {
-          // Load my card for rolling; bot turn handled by watcher
-          await this.loadMyRollCard();
+          await this.loadMyRollCards();
         } else {
-          await this.loadMyRollCard();
+          await this.loadMyRollCards();
           this.updateOnlineWaiting();
         }
       } catch (e) {
-        alert('Failed to choose: ' + (e.response?.data?.error || e.message));
+        alert('Failed to select: ' + (e.response?.data?.error || e.message));
       }
     },
 
-    async loadMyRollCard() {
+    async loadMyRollCards() {
       try {
         const res = await axios.get(`/api/games/${this.gameId}/duel-hand/${this.activePlayerNumber}`);
         const cards = res.data.cards || [];
-        this.myCard = cards[0]?.card || null;
+        this.myCards = cards;
       } catch {
-        this.myCard = null;
+        this.myCards = [];
       }
     },
 
@@ -524,7 +511,6 @@ export default {
         if (res.data.peeked_cards) {
           this.peekedCards = res.data.peeked_cards;
         }
-        // Update the player's ability_uses in local gameData
         const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
         if (player) {
           player.ability_uses = res.data.remaining_uses;
@@ -538,65 +524,128 @@ export default {
     async submitRoll() {
       try {
         const res = await axios.post(`/api/games/${this.gameId}/duel-roll`);
-
         const rollResult = res.data;
 
+        // Store roll data
         if (this.duelPhase === 'rolling') {
-          // Simultaneous rolling (online)
           if (rollResult.player_number === this.offererNumber) {
             this.offererRollData = rollResult;
           } else {
             this.chooserRollData = rollResult;
           }
-
           await this.refreshKingdoms();
+          if (rollResult.duel_result) this.isGameOver = true;
 
-          if (rollResult.duel_result) {
-            this.isGameOver = true;
+          // If player has reroll ability, wait for their decision before advancing
+          if (this.hasRerollAbility && !this.abilityActivated) {
+            this.pendingRerollDecision = true;
+            return;
           }
 
-          // If opponent already rolled (via broadcast), transition to resolving
           if (this.offererRollData && this.chooserRollData) {
             this.duelPhase = 'resolving';
             this.$emit('phase-updated', 'resolving');
           }
-          // Otherwise, stay in 'rolling' and wait for opponent's broadcast
         } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
           this.offererRollData = rollResult;
-          this.duelPhase = 'rolling_chooser';
-          this.$emit('phase-updated', 'rolling_chooser');
-
-          // Refresh kingdoms
           await this.refreshKingdoms();
 
-          if (this.isPassAndPlay) {
-            this.myCard = null;
-            this.initiatePassAndPlayHandoff(this.chooserNumber);
-          } else if (this.hasBotPlayer) {
-            this.myCard = null;
-            // Bot needs to roll as chooser — watcher handles it
-          } else {
-            this.updateOnlineWaiting();
+          // If offerer has reroll ability, wait for their decision
+          if (this.isOfferer && this.hasRerollAbility && !this.abilityActivated) {
+            this.pendingRerollDecision = true;
+            return;
           }
+
+          this.advanceAfterOffererRoll();
         } else {
           this.chooserRollData = rollResult;
-          this.duelPhase = 'resolving';
-          this.$emit('phase-updated', 'resolving');
-
-          // Refresh kingdoms
           await this.refreshKingdoms();
 
-          // Check for instant win/loss
-          if (rollResult.duel_result) {
-            this.isGameOver = true;
+          // If chooser has reroll ability, wait for their decision
+          if (this.isChooser && this.hasRerollAbility && !this.abilityActivated) {
+            this.pendingRerollDecision = true;
+            return;
           }
 
-          if (this.isPassAndPlay && this.offererRollData?.duel_result) {
-            this.isGameOver = true;
-          }
+          this.advanceAfterChooserRoll(rollResult);
         }
       } catch (e) {
         alert('Failed to roll: ' + (e.response?.data?.error || e.message));
+      }
+    },
+
+    advanceAfterOffererRoll() {
+      this.duelPhase = 'rolling_chooser';
+      this.$emit('phase-updated', 'rolling_chooser');
+      if (this.isPassAndPlay) {
+        this.myCards = [];
+        this.initiatePassAndPlayHandoff(this.chooserNumber);
+      } else if (this.hasBotPlayer) {
+        this.myCards = [];
+      } else {
+        this.updateOnlineWaiting();
+      }
+    },
+
+    advanceAfterChooserRoll(rollResult) {
+      this.duelPhase = 'resolving';
+      this.$emit('phase-updated', 'resolving');
+      if (rollResult?.duel_result) this.isGameOver = true;
+      if (this.isPassAndPlay && this.offererRollData?.duel_result) this.isGameOver = true;
+    },
+
+    async handleReroll() {
+      this.rerolling = true;
+      try {
+        const res = await axios.post(`/api/games/${this.gameId}/duel-reroll`, {
+          player_number: this.activePlayerNumber,
+        });
+        const rollResult = res.data;
+
+        // Update the roll data with rerolled results
+        if (this.duelPhase === 'rolling') {
+          if (rollResult.player_number === this.offererNumber) {
+            this.offererRollData = rollResult;
+          } else {
+            this.chooserRollData = rollResult;
+          }
+        } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
+          this.offererRollData = rollResult;
+        } else {
+          this.chooserRollData = rollResult;
+        }
+
+        // Update ability uses on the player
+        const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
+        if (player && rollResult.remaining_uses !== undefined) {
+          player.ability_uses = rollResult.remaining_uses;
+        }
+        this.abilityActivated = true;
+
+        await this.refreshKingdoms();
+
+        if (rollResult.duel_result) this.isGameOver = true;
+
+        // Keep pendingRerollDecision true so "Continue" button shows
+      } catch (e) {
+        alert('Reroll failed: ' + (e.response?.data?.error || e.message));
+      }
+      this.rerolling = false;
+    },
+
+    handleContinueAfterRoll() {
+      this.pendingRerollDecision = false;
+
+      // Now advance the phase as normal
+      if (this.duelPhase === 'rolling') {
+        if (this.offererRollData && this.chooserRollData) {
+          this.duelPhase = 'resolving';
+          this.$emit('phase-updated', 'resolving');
+        }
+      } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
+        this.advanceAfterOffererRoll();
+      } else {
+        this.advanceAfterChooserRoll(this.chooserRollData);
       }
     },
 
@@ -624,20 +673,23 @@ export default {
         // Reset state for next round
         this.offererRollData = null;
         this.chooserRollData = null;
-        this.myCard = null;
+        this.myCards = [];
         this.currentCards = [];
         this.isGameOver = false;
         this.abilityActivated = false;
         this.peekedCards = null;
+        this.pendingRerollDecision = false;
+        this.rerolling = false;
+        this.waitingForOpponentSelection = false;
 
         // Update from response
         this.syncFromGameData(res.data);
         this.$emit('game-data-updated', res.data);
 
         if (this.isPassAndPlay) {
-          this.initiatePassAndPlayHandoff(this.offererNumber);
+          // In pass-and-play, player 1 always picks first
+          this.initiatePassAndPlayHandoff(1);
         } else if (this.hasBotPlayer) {
-          // Load hand for human player; bot turn handled by watcher
           await this.loadDuelHand();
         }
       } catch (e) {
@@ -647,17 +699,11 @@ export default {
     },
 
     // Called from GameBoard when duel broadcasts are received
-    handleDuelOfferMade(data) {
-      this.duelPhase = data.duel_phase;
-      this.loadDuelHand();
-      this.showWaiting = false;
-    },
-
     handleDuelChoiceMade(data) {
       this.duelPhase = data.duel_phase;
-      this.loadMyRollCard();
+      this.waitingForOpponentSelection = false;
+      this.loadMyRollCards();
       this.showWaiting = false;
-      // For simultaneous rolling, no waiting overlay needed
       this.updateOnlineWaiting();
     },
 
@@ -676,7 +722,6 @@ export default {
 
       this.refreshKingdoms();
 
-      // If both rolls are in during simultaneous rolling, advance to resolving
       if (this.duelPhase === 'rolling' && this.offererRollData && this.chooserRollData) {
         this.duelPhase = 'resolving';
         this.$emit('phase-updated', 'resolving');
@@ -688,7 +733,7 @@ export default {
 
       // Sequential: if it's now my turn to roll
       if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
-        this.loadMyRollCard();
+        this.loadMyRollCards();
       }
 
       this.updateOnlineWaiting();
@@ -698,24 +743,24 @@ export default {
       if (this._opponentTurnPending) return;
       this._opponentTurnPending = true;
 
-      // Delay for natural feel: longer for online (looks like real player)
       const delay = this.isOnline
-        ? 3000 + Math.random() * 4000  // 3-7s for online bot matches
-        : 1000 + Math.random() * 1000; // 1-2s for single-player
+        ? 3000 + Math.random() * 4000
+        : 1000 + Math.random() * 1000;
       await new Promise(r => setTimeout(r, delay));
 
       try {
         const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
         const data = res.data;
 
-        if (this.duelPhase === 'offering' && data.duel_phase === 'choosing') {
-          this.duelPhase = 'choosing';
-          this.$emit('phase-updated', data.duel_phase);
-          await this.loadDuelHand();
-        } else if (this.duelPhase === 'choosing' && data.duel_phase === 'rolling_offerer') {
-          this.duelPhase = 'rolling_offerer';
-          this.$emit('phase-updated', data.duel_phase);
-          await this.loadMyRollCard();
+        if (this.duelPhase === 'choosing') {
+          if (data.waiting === false) {
+            // Both selected — transition to rolling
+            const phase = data.duel_phase || 'rolling_offerer';
+            this.duelPhase = phase;
+            this.waitingForOpponentSelection = false;
+            this.$emit('phase-updated', phase);
+            await this.loadMyRollCards();
+          }
         } else if (data.player_number !== undefined) {
           // Bot rolled
           if (data.player_number === this.offererNumber) {
@@ -728,16 +773,14 @@ export default {
           }
           await this.refreshKingdoms();
 
-          // Advance phase
           const game = await axios.get(`/api/games/${this.gameId}`);
           this.duelPhase = game.data.duel_phase || game.data.game?.duel_phase;
           this.$emit('game-data-updated', game.data);
 
-          // If now my turn to roll, load my card
           if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
-            await this.loadMyRollCard();
+            await this.loadMyRollCards();
           } else if (this.duelPhase === 'rolling_offerer' && this.activePlayerNumber === this.offererNumber) {
-            await this.loadMyRollCard();
+            await this.loadMyRollCards();
           }
         }
       } catch (e) {
@@ -750,11 +793,14 @@ export default {
     handleNextRoundStarted(data) {
       this.offererRollData = null;
       this.chooserRollData = null;
-      this.myCard = null;
+      this.myCards = [];
       this.currentCards = [];
       this.isGameOver = false;
       this.abilityActivated = false;
       this.peekedCards = null;
+      this.pendingRerollDecision = false;
+      this.rerolling = false;
+      this.waitingForOpponentSelection = false;
       this.syncFromGameData(data);
       this.$emit('game-data-updated', data);
     },
@@ -767,29 +813,25 @@ export default {
     }
 
     // Initial card load
-    if (this.duelPhase === 'offering' || this.duelPhase === 'choosing') {
+    if (this.duelPhase === 'choosing') {
       if (this.isPassAndPlay) {
-        const activeNum = this.duelPhase === 'offering' ? this.offererNumber : this.chooserNumber;
-        this.initiatePassAndPlayHandoff(activeNum);
+        this.initiatePassAndPlayHandoff(1);
       } else {
         await this.loadDuelHand();
-        // Single-player duel: if it's bot's turn, trigger bot
         if (this.isCurrentTurnBot) {
           this.triggerBotTurn();
         }
       }
     } else if (this.duelPhase === 'rolling') {
-      // Simultaneous rolling (online) — load my card
-      await this.loadMyRollCard();
+      await this.loadMyRollCards();
       this.updateOnlineWaiting();
     } else if (this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
       if (this.isPassAndPlay) {
         const activeNum = this.duelPhase === 'rolling_offerer' ? this.offererNumber : this.chooserNumber;
         this.initiatePassAndPlayHandoff(activeNum);
       } else {
-        await this.loadMyRollCard();
+        await this.loadMyRollCards();
         this.updateOnlineWaiting();
-        // Single-player duel: if it's bot's turn, trigger bot
         if (this.isCurrentTurnBot) {
           this.triggerBotTurn();
         }

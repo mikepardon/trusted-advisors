@@ -115,6 +115,10 @@
                 <span class="variant-label">Remove a curse</span>
               </label>
             </div>
+            <div class="form-group" style="margin-top: 8px;">
+              <label>Bonus Score (on success)</label>
+              <input type="number" v-model.number="form.positiveBonusScore" placeholder="0" style="width: 80px;" />
+            </div>
           </div>
 
           <!-- Negative Effects -->
@@ -148,6 +152,25 @@
               <label class="variant-check">
                 <input type="checkbox" v-model="form.negativeDrawItem" />
                 <span class="variant-label">Draw cursed item</span>
+              </label>
+            </div>
+            <div class="form-group" style="margin-top: 8px;">
+              <label>Bonus Score Penalty (on failure)</label>
+              <input type="number" v-model.number="form.negativeBonusScore" placeholder="0" style="width: 80px;" />
+            </div>
+          </div>
+
+          <!-- Availability -->
+          <div class="availability-section">
+            <h4 class="effects-title" style="color: var(--accent-gold);">Availability</h4>
+            <div class="variant-rules">
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.available_cooperative" />
+                <span class="variant-label">Available in Co-op</span>
+              </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.available_duel" />
+                <span class="variant-label">Available in Duel</span>
               </label>
             </div>
           </div>
@@ -242,6 +265,10 @@ export default {
         negativeLoseDie: false,
         negativeDiscardItem: false,
         negativeDrawItem: false,
+        positiveBonusScore: 0,
+        negativeBonusScore: 0,
+        available_cooperative: true,
+        available_duel: true,
       },
     };
   },
@@ -310,11 +337,13 @@ export default {
         if (form.positiveRecoverDie) obj['recover_die'] = 1;
         if (form.positiveDrawItem) obj['draw_item'] = 1;
         if (form.positiveRemoveCurse) obj['remove_curse'] = 1;
+        if (form.positiveBonusScore) obj['bonus_score'] = form.positiveBonusScore;
       }
       if (side === 'negative') {
         if (form.negativeLoseDie) obj['lose_die'] = 1;
         if (form.negativeDiscardItem) obj['discard_item'] = 1;
         if (form.negativeDrawItem) obj['draw_item'] = 1;
+        if (form.negativeBonusScore) obj['bonus_score'] = form.negativeBonusScore;
       }
       return obj;
     },
@@ -325,15 +354,17 @@ export default {
       let drawItem = false;
       let discardItem = false;
       let removeCurse = false;
+      let bonusScore = 0;
       for (const [key, val] of Object.entries(effects || {})) {
         if (key === 'recover_die') recoverDie = true;
         else if (key === 'lose_die') loseDie = true;
         else if (key === 'draw_item') drawItem = true;
         else if (key === 'discard_item') discardItem = true;
         else if (key === 'remove_curse') removeCurse = true;
+        else if (key === 'bonus_score') bonusScore = val;
         else obj[key] = val;
       }
-      return { stats: obj, recoverDie, loseDie, drawItem, discardItem, removeCurse };
+      return { stats: obj, recoverDie, loseDie, drawItem, discardItem, removeCurse, bonusScore };
     },
 
     openCreate() {
@@ -355,6 +386,10 @@ export default {
         negativeLoseDie: false,
         negativeDiscardItem: false,
         negativeDrawItem: false,
+        positiveBonusScore: 0,
+        negativeBonusScore: 0,
+        available_cooperative: true,
+        available_duel: true,
       };
       this.formError = '';
       this.showModal = true;
@@ -379,6 +414,10 @@ export default {
         negativeLoseDie: neg.loseDie,
         negativeDiscardItem: neg.discardItem,
         negativeDrawItem: neg.drawItem,
+        positiveBonusScore: pos.bonusScore || 0,
+        negativeBonusScore: neg.bonusScore || 0,
+        available_cooperative: card.available_cooperative ?? true,
+        available_duel: card.available_duel ?? true,
       };
       this.formError = '';
       this.showModal = true;
@@ -399,6 +438,8 @@ export default {
         negative_effects,
         positive_flavor: this.form.positive_flavor || null,
         negative_flavor: this.form.negative_flavor || null,
+        available_cooperative: this.form.available_cooperative,
+        available_duel: this.form.available_duel,
       };
 
       this.saving = true;

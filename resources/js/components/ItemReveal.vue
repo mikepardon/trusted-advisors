@@ -4,18 +4,20 @@
       <div class="item-reveal-content" :class="{ 'card-entered': cardVisible }">
         <p class="item-intro">{{ introText }}</p>
 
-        <div class="item-card" :class="{ 'card-show': cardVisible, cursed: item.is_cursed || item.is_negative }">
-          <div class="card-ornament">&#9876;</div>
+        <div class="item-card" :class="{ 'card-show': cardVisible, cursed: item.is_cursed || item.is_negative, blocked: isBlocked }">
+          <div class="card-ornament">{{ isBlocked ? '&#128683;' : '&#9876;' }}</div>
           <p class="card-recipient">{{ item.player }}</p>
           <h2 class="card-title">{{ item.item }}</h2>
-          <span v-if="item.is_cursed" class="cursed-tag">Cursed</span>
+          <span v-if="item.is_cursed && !isBlocked" class="cursed-tag">Cursed</span>
+          <span v-if="isBlocked" class="cursed-tag">Lost</span>
           <div class="card-divider"></div>
-          <p v-if="item.description" class="card-desc">{{ item.description }}</p>
-          <div class="card-effect" :class="item.is_cursed || item.is_negative ? 'effect-negative' : 'effect-positive'">
-            {{ item.is_cursed ? 'A dark burden befalls...' : 'A boon has been found!' }}
+          <p v-if="isBlocked" class="card-desc">Your inventory is full of cursed items. Remove curses to receive new items.</p>
+          <p v-else-if="item.description" class="card-desc">{{ item.description }}</p>
+          <div class="card-effect" :class="isBlocked || item.is_cursed || item.is_negative ? 'effect-negative' : 'effect-positive'">
+            {{ isBlocked ? 'Item could not be received!' : (item.is_cursed ? 'A dark burden befalls...' : 'A boon has been found!') }}
           </div>
-          <div v-if="item.is_consumable" class="card-immediate">Takes effect immediately!</div>
-          <div v-if="item.immediate_description" class="card-immediate-detail">{{ item.immediate_description }}</div>
+          <div v-if="item.is_consumable && !isBlocked" class="card-immediate">Takes effect immediately!</div>
+          <div v-if="item.immediate_description && !isBlocked" class="card-immediate-detail">{{ item.immediate_description }}</div>
         </div>
 
         <button class="btn-continue" :class="{ 'btn-show': cardVisible }" @click="dismiss">
@@ -40,7 +42,11 @@ export default {
     };
   },
   computed: {
+    isBlocked() {
+      return this.item.type === 'item_blocked';
+    },
     introText() {
+      if (this.isBlocked) return 'Item Lost!';
       if (this.item.is_cursed) return 'A cursed relic emerges...';
       return 'An item has been discovered!';
     },
@@ -111,6 +117,12 @@ export default {
 .item-card.cursed {
   border-color: rgba(192, 57, 43, 0.7);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(192, 57, 43, 0.15);
+}
+
+.item-card.blocked {
+  border-color: rgba(192, 57, 43, 0.7);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5), 0 0 20px rgba(192, 57, 43, 0.15);
+  opacity: 0.85;
 }
 
 .card-ornament {

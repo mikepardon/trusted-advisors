@@ -69,9 +69,9 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/next-round', [GameController::class, 'nextRound']);
 
     // Duel mode routes
-    Route::post('/games/{game}/duel-offer', [GameController::class, 'duelOffer']);
-    Route::post('/games/{game}/duel-choose', [GameController::class, 'duelChoose']);
+    Route::post('/games/{game}/duel-select', [GameController::class, 'duelSelect']);
     Route::post('/games/{game}/duel-roll', [GameController::class, 'duelRoll']);
+    Route::post('/games/{game}/duel-reroll', [GameController::class, 'duelReroll']);
     Route::get('/games/{game}/duel-hand/{playerNumber}', [GameController::class, 'duelHand']);
 
     // Opponent turn (duel)

@@ -7,11 +7,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Character extends Model
 {
-    protected $fillable = ['name', 'description', 'image_path', 'dice', 'wild_value', 'wild_ability', 'wild_ability_description', 'addon_id'];
+    protected $fillable = ['name', 'description', 'image_path', 'dice', 'wild_value', 'wild_ability', 'wild_ability_description', 'addon_id', 'available_cooperative', 'available_duel'];
 
     protected $casts = [
         'dice' => 'array',
         'wild_value' => 'integer',
+        'available_cooperative' => 'boolean',
+        'available_duel' => 'boolean',
     ];
 
     protected $appends = ['image_url'];

@@ -73,6 +73,25 @@ class EventSeeder extends Seeder
                 'mechanic' => 'altered_deal',
                 'mechanic_data' => ['positive_cards' => 1, 'negative_cards' => 2],
             ],
+            // Score events (co-op only)
+            [
+                'title' => 'Age of Legends',
+                'effect' => 'The kingdom enters a legendary era. Great deeds are recorded and your renown grows with each passing month.',
+                'stat_modifiers' => null,
+                'mechanic' => 'score_event',
+                'mechanic_data' => ['score_per_round' => 5],
+                'available_cooperative' => true,
+                'available_duel' => false,
+            ],
+            [
+                'title' => 'Dark Reputation',
+                'effect' => 'Rumors of tyranny spread from neighboring kingdoms, tarnishing your name. Your renown diminishes with each passing month.',
+                'stat_modifiers' => null,
+                'mechanic' => 'score_event',
+                'mechanic_data' => ['score_per_round' => -3],
+                'available_cooperative' => true,
+                'available_duel' => false,
+            ],
         ];
 
         foreach ($events as $event) {

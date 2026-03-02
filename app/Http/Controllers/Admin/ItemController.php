@@ -29,6 +29,8 @@ class ItemController extends Controller
             'is_negative' => 'boolean',
             'is_consumable' => 'boolean',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            'available_cooperative' => 'boolean',
+            'available_duel' => 'boolean',
         ]);
 
         $item = Item::create($validated);
@@ -46,6 +48,8 @@ class ItemController extends Controller
             'is_negative' => 'boolean',
             'is_consumable' => 'boolean',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            'available_cooperative' => 'boolean',
+            'available_duel' => 'boolean',
         ]);
 
         $item->update($validated);

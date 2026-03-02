@@ -2,15 +2,17 @@
   <div class="duel-roll">
     <h4 class="phase-title">{{ playerName }}'s Challenge</h4>
 
-    <!-- Show assigned card -->
-    <div v-if="card" class="roll-card">
-      <h3 class="card-title">{{ card.title }}</h3>
-      <p class="card-desc">{{ card.description }}</p>
-      <span class="card-difficulty">Difficulty {{ card.difficulty }}</span>
+    <!-- Show assigned cards (1 or 2) -->
+    <div v-if="displayCards.length" class="roll-cards">
+      <div v-for="(c, idx) in displayCards" :key="idx" class="roll-card">
+        <h3 class="card-title">{{ c.title }}</h3>
+        <p class="card-desc">{{ c.description }}</p>
+        <span class="card-difficulty">Difficulty {{ c.difficulty }}</span>
+      </div>
     </div>
 
-    <!-- Ability activation (before roll) -->
-    <div v-if="canRoll && !hasRolled && !isRolling && ability && abilityUses > 0" class="ability-section">
+    <!-- Ability activation (before roll) — only for NON-reroll abilities -->
+    <div v-if="canRoll && !hasRolled && !isRolling && ability && abilityUses > 0 && !isRerollAbility" class="ability-section">
       <button
         v-if="!abilityActivated"
         class="btn-ability"
@@ -41,7 +43,10 @@
             v-for="(roll, ri) in rollData.rolls"
             :key="ri"
             class="face-badge"
-            :class="roll.face === 'WILD' ? 'face-wild' : 'face-num'"
+            :class="[
+              roll.face === 'WILD' ? 'face-wild' : 'face-num',
+              roll.rerolled ? 'face-rerolled' : '',
+            ]"
           >
             {{ roll.face === 'WILD' ? 'WILD ' + roll.value : roll.face }}
           </span>
@@ -63,7 +68,7 @@
       </p>
     </div>
 
-    <!-- Roll results -->
+    <!-- Roll results per card -->
     <template v-if="hasRolled">
       <div v-if="rollData.ability_effects && rollData.ability_effects.length" class="wild-section">
         <div v-for="(desc, i) in rollData.ability_effects" :key="i" class="wild-trigger">
@@ -71,30 +76,73 @@
         </div>
       </div>
 
-      <div class="roll-summary">
-        <span class="roll-total" :class="rollData.success ? 'roll-pass' : 'roll-fail'">
-          Total Roll: {{ rollData.total_roll }}
-        </span>
-        <span class="roll-vs">vs</span>
-        <span class="roll-difficulty">Difficulty: {{ rollData.difficulty }}</span>
-        <span class="result-badge" :class="rollData.success ? 'badge-success' : 'badge-failure'">
-          {{ rollData.success ? 'SUCCESS' : 'FAILURE' }}
-        </span>
+      <div class="roll-total-banner">
+        Total Roll: <strong>{{ rollData.total_roll }}</strong>
       </div>
 
-      <!-- Effects -->
-      <div v-if="Object.keys(statEffects).length" class="effects-row">
-        <span
-          v-for="(val, stat) in statEffects"
-          :key="stat"
-          class="effect-badge"
-          :class="val > 0 ? 'effect-positive' : 'effect-negative'"
-        >
-          {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-        </span>
+      <!-- Per-card results -->
+      <div v-for="(cr, idx) in cardResults" :key="idx" class="card-result">
+        <div class="card-result-header">
+          <span class="card-result-name">{{ cr.card?.title || 'Card ' + (idx + 1) }}</span>
+          <span class="card-result-diff">Difficulty {{ cr.difficulty }}</span>
+          <span class="result-badge" :class="cr.success ? 'badge-success' : 'badge-failure'">
+            {{ cr.success ? 'SUCCESS' : 'FAILURE' }}
+          </span>
+        </div>
+        <div v-if="Object.keys(cr.effects || {}).length" class="effects-row">
+          <span
+            v-for="(val, stat) in cr.effects"
+            :key="stat"
+            class="effect-badge"
+            :class="val > 0 ? 'effect-positive' : 'effect-negative'"
+          >
+            {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+          </span>
+        </div>
       </div>
-      <div v-else class="no-effects">
+
+      <!-- Combined effects summary -->
+      <div v-if="Object.keys(combinedEffects).length" class="combined-effects">
+        <p class="combined-label">Combined Effects:</p>
+        <div class="effects-row">
+          <span
+            v-for="(val, stat) in combinedEffects"
+            :key="stat"
+            class="effect-badge"
+            :class="val > 0 ? 'effect-positive' : 'effect-negative'"
+          >
+            {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+          </span>
+        </div>
+      </div>
+      <div v-else-if="!cardResults.length" class="no-effects">
         No stat changes this round.
+      </div>
+
+      <!-- Post-roll reroll option (for rally/gamble abilities) -->
+      <div v-if="showRerollOption" class="reroll-section">
+        <button
+          class="btn-reroll"
+          :disabled="rerolling"
+          @click="$emit('reroll')"
+        >
+          &#9733; {{ ability.name }}: {{ rerollLabel }}
+          <span class="ability-uses-badge">({{ abilityUses }} use{{ abilityUses > 1 ? 's' : '' }} left)</span>
+        </button>
+        <button
+          class="btn-continue"
+          :disabled="rerolling"
+          @click="$emit('continue')"
+        >
+          {{ rerolling ? 'Rerolling...' : 'Continue' }}
+        </button>
+      </div>
+
+      <!-- Continue button (when no reroll available or already rerolled) -->
+      <div v-else-if="canRoll && needsContinue" class="reroll-section">
+        <button class="btn-continue" @click="$emit('continue')">
+          Continue
+        </button>
       </div>
     </template>
   </div>
@@ -106,6 +154,7 @@ import { playSound } from '../sounds';
 export default {
   name: 'DuelRollPhase',
   props: {
+    cards: { type: Array, default: () => [] },
     card: { type: Object, default: null },
     playerName: { type: String, default: 'Player' },
     canRoll: { type: Boolean, default: false },
@@ -115,8 +164,10 @@ export default {
     abilityActivated: { type: Boolean, default: false },
     activatingAbility: { type: Boolean, default: false },
     peekedCards: { type: Array, default: null },
+    rerolling: { type: Boolean, default: false },
+    needsContinue: { type: Boolean, default: false },
   },
-  emits: ['roll', 'use-ability'],
+  emits: ['roll', 'use-ability', 'reroll', 'continue'],
   data() {
     return {
       isRolling: false,
@@ -128,16 +179,51 @@ export default {
     hasRolled() {
       return this.rollData !== null;
     },
-    statEffects() {
-      if (!this.rollData?.effects) return {};
-      return this.rollData.effects;
+    isRerollAbility() {
+      if (!this.ability) return false;
+      return ['rally', 'gamble'].includes(this.ability.name);
+    },
+    showRerollOption() {
+      return this.hasRolled && this.canRoll && this.isRerollAbility
+        && this.abilityUses > 0 && !this.abilityActivated && !this.rollData?.rerolled;
+    },
+    rerollLabel() {
+      if (!this.ability) return '';
+      if (this.ability.name === 'rally') return 'Reroll lowest die?';
+      if (this.ability.name === 'gamble') return 'Reroll all dice?';
+      return this.ability.description;
+    },
+    displayCards() {
+      if (this.cards && this.cards.length) {
+        return this.cards.map(c => c.card || c);
+      }
+      if (this.card) return [this.card];
+      return [];
+    },
+    cardResults() {
+      if (!this.rollData) return [];
+      if (this.rollData.cards) return this.rollData.cards;
+      if (this.rollData.card) {
+        return [{
+          card: this.rollData.card,
+          difficulty: this.rollData.difficulty,
+          success: this.rollData.success,
+          effects: this.rollData.effects || {},
+        }];
+      }
+      return [];
+    },
+    combinedEffects() {
+      if (!this.rollData) return {};
+      if (this.rollData.combined_effects) return this.rollData.combined_effects;
+      if (this.rollData.effects) return this.rollData.effects;
+      return {};
     },
   },
   methods: {
     scheduleAutoRoll() {
-      // If ability is available, give player time to decide (3s), otherwise roll quickly
-      const hasAbility = this.ability && this.abilityUses > 0 && !this.abilityActivated;
-      const delay = hasAbility ? 3000 : 600;
+      const hasPreRollAbility = this.ability && this.abilityUses > 0 && !this.abilityActivated && !this.isRerollAbility;
+      const delay = hasPreRollAbility ? 3000 : 600;
       this._autoRollTimer = setTimeout(() => this.startRolling(), delay);
     },
     startRolling() {
@@ -181,7 +267,8 @@ export default {
     rollData(val) {
       if (val) {
         this.$nextTick(() => {
-          if (val.success) {
+          const anySuccess = (val.cards || []).some(c => c.success) || val.success;
+          if (anySuccess) {
             playSound('win');
           } else {
             playSound('fail');
@@ -210,12 +297,22 @@ export default {
   text-align: center;
 }
 
+.roll-cards {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .roll-card {
   background: rgba(0, 0, 0, 0.15);
   border-radius: 8px;
   padding: 12px;
-  margin-bottom: 16px;
   text-align: center;
+  flex: 1;
+  min-width: 140px;
+  max-width: 250px;
 }
 
 .card-title {
@@ -269,6 +366,15 @@ export default {
 .face-num { background: #6a4a2a; color: #f5e6cc; border: 1px solid #8a6a2e; }
 .face-wild { background: #d4a843; color: #1a1209; font-weight: 900; }
 
+.face-rerolled {
+  animation: rerollGlow 0.6s ease;
+}
+
+@keyframes rerollGlow {
+  0% { box-shadow: 0 0 12px rgba(138, 96, 192, 0.8); }
+  100% { box-shadow: none; }
+}
+
 .face-rolling {
   background: #4a3a24;
   color: var(--accent-gold);
@@ -280,29 +386,6 @@ export default {
   0% { transform: translateY(-1px) rotate(-2deg); }
   100% { transform: translateY(1px) rotate(2deg); }
 }
-
-.btn-roll {
-  background: linear-gradient(135deg, #8b2020, #b83030);
-  color: #f5e6cc;
-  border: 2px solid #d4a843;
-  padding: 10px 36px;
-  border-radius: 6px;
-  font-family: 'Cinzel', serif;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  letter-spacing: 1px;
-  transition: all 0.2s ease;
-  text-transform: uppercase;
-}
-
-.btn-roll:hover {
-  background: linear-gradient(135deg, #b83030, #8b2020);
-  transform: scale(1.05);
-  box-shadow: 0 0 12px rgba(212, 168, 67, 0.4);
-}
-
-.btn-roll:active { transform: scale(0.97); }
 
 .waiting-text {
   color: var(--text-secondary);
@@ -324,29 +407,48 @@ export default {
   margin-bottom: 3px;
 }
 
-.roll-summary {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 10px;
-  padding: 10px;
+.roll-total-banner {
+  text-align: center;
+  font-size: 1.15rem;
+  color: var(--text-bright);
+  padding: 8px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
-  justify-content: center;
+  margin-bottom: 10px;
 }
 
-.roll-total { font-weight: 700; font-size: 1.1rem; }
-.roll-pass { color: var(--accent-green); }
-.roll-fail { color: var(--accent-red); }
-.roll-vs { color: var(--text-secondary); font-style: italic; }
-.roll-difficulty { color: var(--text-bright); font-weight: 600; }
+.card-result {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 8px;
+}
+
+.card-result-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+.card-result-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+}
+
+.card-result-diff {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
 
 .result-badge {
-  font-size: 0.75rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  padding: 3px 10px;
+  padding: 2px 8px;
   border-radius: 4px;
   font-weight: 700;
 }
@@ -371,6 +473,21 @@ export default {
 .effect-positive { background: rgba(74, 138, 58, 0.15); color: #4a8a3a; }
 .effect-negative { background: rgba(160, 48, 32, 0.15); color: #c0392b; }
 
+.combined-effects {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(212, 168, 67, 0.08);
+  border-radius: 6px;
+}
+
+.combined-label {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+  margin-bottom: 4px;
+  font-weight: 600;
+}
+
 .no-effects {
   color: var(--text-secondary);
   font-style: italic;
@@ -378,7 +495,7 @@ export default {
   text-align: center;
 }
 
-/* Ability section */
+/* Ability section (pre-roll for non-reroll abilities) */
 .ability-section {
   text-align: center;
   margin-bottom: 12px;
@@ -423,6 +540,57 @@ export default {
   border-radius: 6px;
 }
 
+/* Post-roll reroll section */
+.reroll-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+  text-align: center;
+}
+
+.btn-reroll {
+  background: linear-gradient(135deg, #2a1a40, #4a2a6a);
+  color: #d4a0ff;
+  border: 2px solid #8a60c0;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+  text-align: center;
+  line-height: 1.4;
+}
+
+.btn-reroll:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3a2a50, #5a3a7a);
+  box-shadow: 0 0 15px rgba(138, 96, 192, 0.4);
+  border-color: #b080e0;
+}
+
+.btn-reroll:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.btn-continue {
+  background: rgba(212, 168, 67, 0.12);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  color: var(--accent-gold);
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-continue:hover:not(:disabled) {
+  background: rgba(212, 168, 67, 0.2);
+  border-color: var(--accent-gold);
+}
+
+.btn-continue:disabled { opacity: 0.5; cursor: not-allowed; }
+
 /* Shadow peek */
 .peek-section {
   background: rgba(138, 96, 192, 0.1);
@@ -448,7 +616,8 @@ export default {
 @media (max-width: 768px) {
   .duel-roll { padding: 12px; }
   .face-badge { padding: 4px 10px; font-size: 0.8rem; }
-  .roll-summary { flex-direction: column; gap: 6px; }
-  .btn-ability { font-size: 0.75rem; padding: 8px 12px; }
+  .btn-ability, .btn-reroll { font-size: 0.75rem; padding: 8px 12px; }
+  .roll-cards { flex-direction: column; align-items: center; }
+  .roll-card { max-width: 100%; }
 }
 </style>

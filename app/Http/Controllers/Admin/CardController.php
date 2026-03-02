@@ -33,6 +33,8 @@ class CardController extends Controller
             'positive_flavor' => 'nullable|string',
             'negative_flavor' => 'nullable|string',
             'category' => 'nullable|string|max:100',
+            'available_cooperative' => 'boolean',
+            'available_duel' => 'boolean',
         ]);
 
         $card = Card::create($validated);
@@ -52,6 +54,8 @@ class CardController extends Controller
             'positive_flavor' => 'nullable|string',
             'negative_flavor' => 'nullable|string',
             'category' => 'nullable|string|max:100',
+            'available_cooperative' => 'boolean',
+            'available_duel' => 'boolean',
         ]);
 
         $card->update($validated);

@@ -31,7 +31,23 @@
           </svg>
           <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
         </div>
+        <span class="stat-short">{{ stat.short }}</span>
       </div>
+    </div>
+    <div v-if="showLiveScore" class="live-score-row">
+      <div v-if="game.bonus_score" class="bonus-score-indicator">
+        <span class="bonus-label">Renown</span>
+        <span class="bonus-value">+{{ game.bonus_score }}</span>
+      </div>
+      <div class="live-score-indicator">
+        <span class="score-label">Score</span>
+        <span class="score-value">{{ liveScore }}</span>
+        <span class="score-rank" :class="'rank-' + liveRank.toLowerCase()">{{ liveRank }}</span>
+      </div>
+    </div>
+    <div v-else-if="game.bonus_score" class="bonus-score-indicator">
+      <span class="bonus-label">Renown</span>
+      <span class="bonus-value">+{{ game.bonus_score }}</span>
     </div>
   </div>
 </template>
@@ -45,12 +61,12 @@ export default {
   data() {
     return {
       stats: [
-        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
-        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
-        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
-        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
-        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
-        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
+        { key: 'wealth', label: 'Wealth', short: 'W', icon: '\u{1FA99}' },
+        { key: 'influence', label: 'Influence', short: 'INF', icon: '\u{1F3DB}' },
+        { key: 'security', label: 'Security', short: 'SEC', icon: '\u{1F6E1}' },
+        { key: 'religion', label: 'Religion', short: 'REL', icon: '\u{1F54C}' },
+        { key: 'food', label: 'Food', short: 'FD', icon: '\u{1F33E}' },
+        { key: 'happiness', label: 'Happiness', short: 'HAP', icon: '\u{1F3AD}' },
       ],
       prevValues: {},
       tweenedValues: {},
@@ -60,14 +76,39 @@ export default {
       tweenTimers: {},
     };
   },
+  computed: {
+    showLiveScore() {
+      return this.game.game_type !== 'duel' && this.game.status !== 'completed';
+    },
+    liveScore() {
+      const g = this.game;
+      const base = (g.wealth || 0) + (g.influence || 0) + (g.security || 0) + (g.religion || 0) + (g.food || 0) + (g.happiness || 0);
+      const years = Math.max(1, Math.floor((g.total_rounds || 12) / 12));
+      const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
+      const mult = multipliers[years] || 1.0;
+      const stats = [g.wealth || 0, g.influence || 0, g.security || 0, g.religion || 0, g.food || 0, g.happiness || 0];
+      const spread = Math.max(...stats) - Math.min(...stats);
+      const balance = Math.max(0, 30 - spread * 3);
+      const bonus = g.bonus_score || 0;
+      return Math.floor(base * mult) + balance + bonus;
+    },
+    liveRank() {
+      const s = this.liveScore;
+      if (s >= 200) return 'Legendary';
+      if (s >= 150) return 'Excellent';
+      if (s >= 100) return 'Good';
+      if (s >= 60) return 'Adequate';
+      return 'Poor';
+    },
+  },
   watch: {
     game: {
       handler(newGame, oldGame) {
-        if (!oldGame || !newGame) return;
+        if (!newGame) return;
         for (const stat of this.stats) {
           const oldVal = this.prevValues[stat.key];
           const newVal = newGame[stat.key];
-          if (oldVal === undefined) {
+          if (oldVal === undefined || !oldGame) {
             this.tweenedValues[stat.key] = newVal;
           } else if (newVal !== oldVal) {
             if (this.flashTimers[stat.key]) clearTimeout(this.flashTimers[stat.key]);
@@ -252,6 +293,11 @@ export default {
   transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
+/* Short stat labels — hidden on desktop */
+.stat-short {
+  display: none;
+}
+
 /* Radial progress — hidden on desktop */
 .radial-wrap {
   display: none;
@@ -298,6 +344,77 @@ export default {
 .radial-fill.bar-flash-up { stroke: #4caf50 !important; }
 .radial-fill.bar-flash-down { stroke: #e74c3c !important; }
 
+.live-score-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.live-score-indicator {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  background: rgba(39, 174, 96, 0.1);
+  border: 1px solid rgba(39, 174, 96, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.score-label {
+  color: var(--text-secondary);
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+}
+
+.score-value {
+  color: var(--text-bright);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.score-rank {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.rank-legendary { color: #f0c040; background: rgba(240, 192, 64, 0.15); }
+.rank-excellent { color: #4caf50; background: rgba(76, 175, 80, 0.15); }
+.rank-good { color: #60b8e0; background: rgba(96, 184, 224, 0.15); }
+.rank-adequate { color: var(--text-secondary); background: rgba(160, 144, 128, 0.15); }
+.rank-poor { color: #e57373; background: rgba(229, 115, 115, 0.15); }
+
+.bonus-score-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.bonus-label {
+  color: var(--text-secondary);
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+}
+
+.bonus-value {
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
 /* ---- Mobile compact mode ---- */
 @media (max-width: 768px) {
   .kingdom-stats {
@@ -335,6 +452,16 @@ export default {
 
   .stat-name {
     display: none;
+  }
+
+  .stat-short {
+    display: block;
+    font-size: 0.55rem;
+    text-align: center;
+    color: var(--text-secondary);
+    font-family: 'Cinzel', serif;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
   }
 
   .stat-value {

@@ -8,15 +8,13 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcastNow;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class DuelChoiceMade implements ShouldBroadcastNow
+class DuelGameOver implements ShouldBroadcastNow
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
     public function __construct(
         public int $gameId,
-        public array $player1Cards,
-        public array $player2Cards,
-        public string $duelPhase,
+        public array $gameOverData,
     ) {}
 
     public function broadcastOn(): array
@@ -26,10 +24,6 @@ class DuelChoiceMade implements ShouldBroadcastNow
 
     public function broadcastWith(): array
     {
-        return [
-            'player1_cards' => $this->player1Cards,
-            'player2_cards' => $this->player2Cards,
-            'duel_phase' => $this->duelPhase,
-        ];
+        return $this->gameOverData;
     }
 }

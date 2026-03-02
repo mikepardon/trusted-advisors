@@ -139,6 +139,14 @@
             </select>
           </div>
 
+          <div class="form-group">
+            <label style="color: var(--accent-gold); font-weight: 600;">Availability</label>
+            <div style="display: flex; gap: 16px; margin-top: 4px;">
+              <label><input type="checkbox" v-model="form.available_cooperative" /> Co-op</label>
+              <label><input type="checkbox" v-model="form.available_duel" /> Duel</label>
+            </div>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <div class="modal-actions">
@@ -190,7 +198,7 @@ export default {
       editing: null,
       saving: false,
       formError: '',
-      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null },
+      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true },
       die1Input: '',
       die2Input: '',
       die3Input: '',
@@ -280,7 +288,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null };
+      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true };
       this.die1Input = '';
       this.die2Input = '';
       this.die3Input = '';
@@ -300,6 +308,8 @@ export default {
         wild_ability: c.wild_ability,
         wild_ability_description: c.wild_ability_description || '',
         addon_id: c.addon_id || null,
+        available_cooperative: c.available_cooperative ?? true,
+        available_duel: c.available_duel ?? true,
       };
       this.die1Input = c.dice[0]?.join(', ') || '';
       this.die2Input = c.dice[1]?.join(', ') || '';

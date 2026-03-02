@@ -91,7 +91,7 @@
     <KingdomStats :game="displayGame" />
 
     <!-- Player Items -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="true" />
 
     <!-- Event Banner -->
     <EventBanner :event="gameData.current_event" />
@@ -294,11 +294,10 @@ export default {
     },
     duelPhaseLabel() {
       const phases = {
-        offering: 'Offering Cards',
-        choosing: 'Choosing Card',
+        choosing: 'Selecting Cards',
         rolling: 'Rolling Dice',
-        rolling_offerer: 'Offerer Rolling',
-        rolling_chooser: 'Chooser Rolling',
+        rolling_offerer: 'Player 1 Rolling',
+        rolling_chooser: 'Player 2 Rolling',
         resolving: 'Month Resolution',
       };
       const dp = this.gameData?.duel_phase || this.gameData?.game?.duel_phase;
@@ -638,11 +637,6 @@ export default {
           this.fetchGame();
         })
         // Duel events
-        .listen('DuelOfferMade', (data) => {
-          if (this.$refs.duelBoard) {
-            this.$refs.duelBoard.handleDuelOfferMade(data);
-          }
-        })
         .listen('DuelChoiceMade', (data) => {
           if (this.$refs.duelBoard) {
             this.$refs.duelBoard.handleDuelChoiceMade(data);
@@ -652,6 +646,12 @@ export default {
           if (this.$refs.duelBoard) {
             this.$refs.duelBoard.handleDuelRollComplete(data);
           }
+        })
+        .listen('DuelGameOver', (data) => {
+          if (data.completion) {
+            sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(data.completion));
+          }
+          this.$router.replace(`/game/${this.id}/over`);
         })
         .listen('GameAlertSent', (data) => {
           this.showGameAlert(data);
@@ -675,7 +675,7 @@ export default {
       }
     },
     queueItemReveals(specialEffects) {
-      const itemEffects = (specialEffects || []).filter(e => (e.type === 'draw_item' || e.type === 'immediate_item') && e.item);
+      const itemEffects = (specialEffects || []).filter(e => (e.type === 'draw_item' || e.type === 'immediate_item' || e.type === 'item_blocked') && e.item);
       if (itemEffects.length) {
         this.itemRevealQueue = [...itemEffects];
         this.showItemReveal = true;
@@ -691,6 +691,10 @@ export default {
       this.itemsOverLimit = updatedOverLimit || [];
     },
     showGameAlert(data) {
+      // Only show alerts intended for this player (or alerts without a specific target)
+      if (data.player_number && this.myPlayerNumber && data.player_number !== this.myPlayerNumber) {
+        return;
+      }
       const id = Date.now() + Math.random();
       this.gameAlerts.push({ id, message: data.message, type: data.type || 'info' });
       setTimeout(() => {
@@ -723,6 +727,9 @@ export default {
         if (res.data.game_over) {
           if (res.data.completion) {
             sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(res.data.completion));
+          }
+          if (res.data.score_breakdown) {
+            sessionStorage.setItem(`game_score_breakdown_${this.id}`, JSON.stringify(res.data.score_breakdown));
           }
           this.$router.replace(`/game/${this.id}/over`);
           return;

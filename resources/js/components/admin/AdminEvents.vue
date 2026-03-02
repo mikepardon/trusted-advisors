@@ -73,6 +73,7 @@
               <option value="reduce_dice">Reduce Dice</option>
               <option value="grant_items">Grant Items</option>
               <option value="altered_deal">Altered Deal</option>
+              <option value="score_event">Score Event</option>
             </select>
           </div>
 
@@ -93,6 +94,19 @@
             <input type="number" v-model.number="form.mechanic_data.positive_cards" min="0" max="10" placeholder="2" />
             <label class="mt-label">Negative Cards</label>
             <input type="number" v-model.number="form.mechanic_data.negative_cards" min="0" max="10" placeholder="2" />
+          </div>
+
+          <div v-if="form.mechanic === 'score_event'" class="form-group">
+            <label>Score Per Round</label>
+            <input type="number" v-model.number="form.mechanic_data.score_per_round" placeholder="5" />
+          </div>
+
+          <div class="form-group">
+            <label style="color: var(--accent-gold); font-weight: 600;">Availability</label>
+            <div style="display: flex; gap: 16px; margin-top: 4px;">
+              <label><input type="checkbox" v-model="form.available_cooperative" /> Co-op</label>
+              <label><input type="checkbox" v-model="form.available_duel" /> Duel</label>
+            </div>
           </div>
 
           <div class="form-group">
@@ -163,7 +177,7 @@ export default {
         { key: 'food', label: 'Food', icon: '\u{1F33E}' },
         { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
       ],
-      form: { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {} },
+      form: { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {}, available_cooperative: true, available_duel: true },
     };
   },
   computed: {
@@ -198,6 +212,7 @@ export default {
         reduce_dice: 'Reduce Dice',
         grant_items: 'Grant Items',
         altered_deal: 'Altered Deal',
+        score_event: 'Score Event',
       };
       return labels[mechanic] || mechanic;
     },
@@ -215,7 +230,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {} };
+      this.form = { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {}, available_cooperative: true, available_duel: true };
       this.formError = '';
       this.showModal = true;
     },
@@ -228,6 +243,8 @@ export default {
         addon_id: ev.addon_id || null,
         mechanic: ev.mechanic || null,
         mechanic_data: { ...(ev.mechanic_data || {}) },
+        available_cooperative: ev.available_cooperative ?? true,
+        available_duel: ev.available_duel ?? true,
       };
       this.formError = '';
       this.showModal = true;
@@ -251,6 +268,8 @@ export default {
         addon_id: this.form.addon_id || null,
         mechanic,
         mechanic_data,
+        available_cooperative: this.form.available_cooperative,
+        available_duel: this.form.available_duel,
       };
 
       this.saving = true;

@@ -20,20 +20,32 @@
 
           <p class="items-heading">Inventory</p>
 
-          <!-- Card display -->
-          <div class="item-card" :class="{ cursed: currentItem.is_cursed || currentItem.item?.is_negative, used: currentItem.is_used }">
+          <!-- Parchment card display -->
+          <div class="parchment-card" :class="{ cursed: currentItem.is_cursed || currentItem.item?.is_negative, used: currentItem.is_used }">
             <div class="card-ornament">&#9876;</div>
-            <h3 class="card-title">{{ currentItem.item?.name || 'Unknown Item' }}</h3>
-            <span v-if="currentItem.is_cursed" class="cursed-tag">Cursed</span>
-            <span v-if="currentItem.item?.is_consumable" class="type-tag immediate-tag">Immediate</span>
-            <span v-else-if="currentItem.item?.effect_type" class="type-tag ongoing-tag">Ongoing</span>
-            <span v-if="currentItem.is_used" class="type-tag used-tag">Used</span>
-            <div class="card-divider"></div>
-            <p class="card-desc">{{ currentItem.item?.description || '' }}</p>
-            <div class="card-divider"></div>
-            <div class="card-effect" :class="effectClass(currentItem)">
-              {{ effectSummary(currentItem.item) }}
+            <h3 class="parchment-title">{{ currentItem.item?.name || 'Unknown Item' }}</h3>
+
+            <!-- Tags row -->
+            <div class="tag-row">
+              <span v-if="currentItem.is_cursed" class="cursed-tag">Cursed</span>
+              <span v-if="currentItem.item?.is_consumable" class="type-tag immediate-tag">Immediate</span>
+              <span v-else-if="currentItem.item?.effect_type" class="type-tag ongoing-tag">Ongoing</span>
+              <span v-if="currentItem.is_used" class="type-tag used-tag">Used</span>
             </div>
+
+            <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
+
+            <p class="parchment-desc">{{ currentItem.item?.description || '' }}</p>
+
+            <div class="parchment-divider divider-thin"><span class="divider-ornament small">&#8226;</span></div>
+
+            <!-- Effect in stat-chip style -->
+            <div v-if="effectSummary(currentItem.item)" class="outcome-chips">
+              <span class="stat-chip" :class="effectChipClass(currentItem)">
+                {{ effectSummary(currentItem.item) }}
+              </span>
+            </div>
+
             <div class="card-meta">
               <span v-if="currentItem.item?.effect_type" class="meta-type">{{ currentItem.item.effect_type }}</span>
             </div>
@@ -102,15 +114,21 @@ export default {
           return `-${Math.abs(value)} difficulty`;
         case 'difficulty_increase':
           return `+${Math.abs(value)} difficulty`;
+        case 'score_bonus':
+          return `${value > 0 ? '+' : ''}${value} renown`;
+        case 'score_per_round':
+          return `+${value} renown/round`;
+        case 'score_multiplier':
+          return `${value}x score multiplier`;
         default:
           return item.description || 'Passive effect';
       }
     },
-    effectClass(pi) {
+    effectChipClass(pi) {
       const type = pi.item?.effect?.bonus_type || '';
-      if (type === 'roll_bonus' || type === 'difficulty_reduction') return 'effect-positive';
-      if (type === 'roll_penalty' || type === 'difficulty_increase') return 'effect-negative';
-      return '';
+      if (pi.is_cursed || type === 'roll_penalty' || type === 'difficulty_increase') return 'chip-negative';
+      if (type === 'roll_bonus' || type === 'difficulty_reduction') return 'chip-positive';
+      return 'chip-neutral';
     },
   },
 };
@@ -220,22 +238,28 @@ export default {
   margin-bottom: 16px;
 }
 
-/* ---- Item card ---- */
-.item-card {
+/* ---- Parchment card ---- */
+.parchment-card {
   background: linear-gradient(180deg, #3a2a1a, #2a1f14, #1a1209);
   border: 2px solid var(--border-gold, #6b5b3a);
   border-radius: 12px;
   padding: 24px 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(212, 168, 67, 0.08);
   min-height: 280px;
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(212, 168, 67, 0.08);
 }
 
-.item-card.cursed {
+.parchment-card.cursed {
   border-color: rgba(192, 57, 43, 0.7);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), 0 0 15px rgba(192, 57, 43, 0.15);
+}
+
+.parchment-card.used {
+  opacity: 0.5;
 }
 
 .card-ornament {
@@ -245,20 +269,29 @@ export default {
   margin-bottom: 8px;
 }
 
-.item-card.cursed .card-ornament {
+.parchment-card.cursed .card-ornament {
   color: #c0392b;
 }
 
-.card-title {
+.parchment-title {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold, #c9a84c);
   font-size: 1.15rem;
   text-align: center;
   margin-bottom: 6px;
+  line-height: 1.3;
 }
 
-.item-card.cursed .card-title {
+.parchment-card.cursed .parchment-title {
   color: #e07060;
+}
+
+.tag-row {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
 }
 
 .cursed-tag {
@@ -269,11 +302,6 @@ export default {
   border: 1px solid #c0392b;
   border-radius: 3px;
   padding: 1px 8px;
-  margin-bottom: 4px;
-}
-
-.item-card.used {
-  opacity: 0.5;
 }
 
 .type-tag {
@@ -282,7 +310,6 @@ export default {
   letter-spacing: 1px;
   border-radius: 3px;
   padding: 1px 8px;
-  margin-bottom: 4px;
 }
 
 .ongoing-tag {
@@ -300,14 +327,37 @@ export default {
   border: 1px solid var(--text-secondary, #a09080);
 }
 
-.card-divider {
+/* Divider (matches CardSelectionHand) */
+.parchment-divider {
+  position: relative;
   width: 80%;
   height: 1px;
   background: linear-gradient(90deg, transparent, var(--border-gold, #6b5b3a), transparent);
   margin: 12px 0;
 }
 
-.card-desc {
+.parchment-divider.divider-thin {
+  background: linear-gradient(90deg, transparent, rgba(138, 106, 46, 0.4), transparent);
+  margin: 8px 0;
+}
+
+.divider-ornament {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #2a1f14;
+  color: var(--accent-gold, #c9a84c);
+  padding: 0 8px;
+  font-size: 0.7rem;
+}
+
+.divider-ornament.small {
+  font-size: 0.5rem;
+  color: var(--text-secondary, #a09080);
+}
+
+.parchment-desc {
   color: var(--text-primary, #e8d5b0);
   font-style: italic;
   font-size: 0.88rem;
@@ -316,22 +366,35 @@ export default {
   flex: 1;
 }
 
-.card-effect {
-  font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
-  font-weight: 600;
-  padding: 4px 14px;
-  border-radius: 4px;
+/* Stat-chip effect */
+.outcome-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: center;
 }
 
-.card-effect.effect-positive {
+.stat-chip {
+  padding: 3px 12px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: 'Cinzel', serif;
+}
+
+.chip-positive {
   background: rgba(39, 174, 96, 0.15);
   color: #4caf50;
 }
 
-.card-effect.effect-negative {
+.chip-negative {
   background: rgba(192, 57, 43, 0.15);
   color: #e57373;
+}
+
+.chip-neutral {
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold, #c9a84c);
 }
 
 .card-meta {
@@ -410,16 +473,16 @@ export default {
     height: 20px;
   }
 
-  .item-card {
+  .parchment-card {
     padding: 18px 16px;
     min-height: 240px;
   }
 
-  .card-title {
+  .parchment-title {
     font-size: 1.05rem;
   }
 
-  .card-desc {
+  .parchment-desc {
     font-size: 0.82rem;
   }
 }

@@ -47,6 +47,9 @@
               <h3 class="parchment-title">{{ item.card.title }}</h3>
               <p class="parchment-desc">{{ item.card.description }}</p>
               <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
+              <span v-if="item.success_odds != null" class="odds-badge" :class="oddsClass(item.success_odds)">
+                {{ item.success_odds }}% odds
+              </span>
 
               <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
 
@@ -109,6 +112,9 @@
         <h3 class="parchment-title">{{ item.card.title }}</h3>
         <p class="parchment-desc">{{ item.card.description }}</p>
         <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
+        <span v-if="item.success_odds != null" class="odds-badge" :class="oddsClass(item.success_odds)">
+          {{ item.success_odds }}% odds
+        </span>
 
         <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
 
@@ -234,6 +240,11 @@ export default {
     },
     isNegativeSelected(handId) {
       return this.selectedPositive !== null && this.selectedPositive !== handId;
+    },
+    oddsClass(odds) {
+      if (odds >= 70) return 'odds-high';
+      if (odds >= 40) return 'odds-medium';
+      return 'odds-low';
     },
   },
   watch: {
@@ -402,7 +413,35 @@ export default {
   color: var(--accent-gold);
   border-radius: 4px;
   width: fit-content;
-  margin: 0 auto 14px;
+  margin: 0 auto 6px;
+}
+
+.odds-badge {
+  display: block;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 10px;
+  border-radius: 4px;
+  width: fit-content;
+  margin: 0 auto 8px;
+}
+
+.odds-high {
+  background: rgba(39, 174, 96, 0.15);
+  color: #4caf50;
+}
+
+.odds-medium {
+  background: rgba(241, 196, 15, 0.15);
+  color: #f1c40f;
+}
+
+.odds-low {
+  background: rgba(192, 57, 43, 0.15);
+  color: #e57373;
 }
 
 /* Divider */

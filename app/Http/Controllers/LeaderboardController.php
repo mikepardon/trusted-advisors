@@ -100,8 +100,9 @@ class LeaderboardController extends Controller
                             $kingdom->security + $kingdom->religion + $kingdom->food + $kingdom->happiness;
                     }
                 } else {
-                    $userStats[$participant->user_id]['score'] += $game->wealth + $game->influence +
-                        $game->security + $game->religion + $game->food + $game->happiness;
+                    // Use final_score when available (new composite scoring), fallback to stat sum for old games
+                    $userStats[$participant->user_id]['score'] += $game->final_score
+                        ?? ($game->wealth + $game->influence + $game->security + $game->religion + $game->food + $game->happiness);
                 }
 
                 // Wins

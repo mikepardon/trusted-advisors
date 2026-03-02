@@ -116,7 +116,9 @@ export default {
           'Online: Play with friends in real-time.',
           '',
           'In Duel mode, two rival kingdoms',
-          'compete head-to-head.',
+          'compete head-to-head. Pick a card',
+          'to keep, send the other to your rival.',
+          'Roll against both cards at once!',
           'Reach 20 in 3 stats to win!',
         ],
         [

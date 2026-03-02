@@ -945,6 +945,10 @@ class GameCompletionService
             foreach ($stats as $s) $total += $kingdom->{$s};
             return $total > $value;
         }
+        // Use final_score (composite) when available, fallback to stat sum
+        if ($game->final_score !== null) {
+            return $game->final_score > $value;
+        }
         $total = 0;
         foreach ($stats as $s) $total += $game->{$s};
         return $total > $value;
@@ -961,6 +965,10 @@ class GameCompletionService
             $total = 0;
             foreach ($stats as $s) $total += $kingdom->{$s};
             return $total < $value;
+        }
+        // Use final_score (composite) when available, fallback to stat sum
+        if ($game->final_score !== null) {
+            return $game->final_score < $value;
         }
         $total = 0;
         foreach ($stats as $s) $total += $game->{$s};

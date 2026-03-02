@@ -48,6 +48,8 @@ class CharacterController extends Controller
             'wild_ability' => 'required|string|max:50',
             'wild_ability_description' => 'nullable|string',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            'available_cooperative' => 'boolean',
+            'available_duel' => 'boolean',
         ]);
 
         $character = Character::create($validated);
@@ -66,6 +68,8 @@ class CharacterController extends Controller
             'wild_ability' => 'required|string|max:50',
             'wild_ability_description' => 'nullable|string',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            'available_cooperative' => 'boolean',
+            'available_duel' => 'boolean',
         ]);
 
         $character->update($validated);

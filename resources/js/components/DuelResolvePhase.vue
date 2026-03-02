@@ -7,26 +7,26 @@
         v-for="result in playerResults"
         :key="result.player_number"
         class="player-result"
-        :class="{ 'result-success': result.success, 'result-failure': !result.success }"
       >
         <h5 class="result-player">{{ result.character_name }}</h5>
-        <p class="result-card">{{ result.card?.title || 'Card' }}</p>
 
-        <div class="result-roll">
-          <span :class="result.success ? 'roll-pass' : 'roll-fail'">
-            {{ result.total_roll }}
-          </span>
-          <span class="roll-vs">vs</span>
-          <span>{{ result.difficulty }}</span>
+        <div class="result-roll-total">
+          Roll: <strong>{{ result.total_roll }}</strong>
         </div>
 
-        <span class="result-badge" :class="result.success ? 'badge-success' : 'badge-failure'">
-          {{ result.success ? 'SUCCESS' : 'FAILURE' }}
-        </span>
+        <!-- Per-card outcomes -->
+        <div v-for="(cr, idx) in getCardResults(result)" :key="idx" class="card-outcome">
+          <span class="card-outcome-name">{{ cr.card?.title || 'Card ' + (idx + 1) }}</span>
+          <span class="card-outcome-diff">Diff {{ cr.difficulty }}</span>
+          <span class="result-badge" :class="cr.success ? 'badge-success' : 'badge-failure'">
+            {{ cr.success ? 'SUCCESS' : 'FAILURE' }}
+          </span>
+        </div>
 
-        <div v-if="Object.keys(result.effects || {}).length" class="effects-row">
+        <!-- Combined effects -->
+        <div v-if="Object.keys(getCombinedEffects(result)).length" class="effects-row">
           <span
-            v-for="(val, stat) in result.effects"
+            v-for="(val, stat) in getCombinedEffects(result)"
             :key="stat"
             class="effect-badge"
             :class="val > 0 ? 'effect-positive' : 'effect-negative'"
@@ -66,6 +66,27 @@ export default {
       return results;
     },
   },
+  methods: {
+    getCardResults(result) {
+      // New 2-card format
+      if (result.cards) return result.cards;
+      // Legacy single-card format
+      if (result.card) {
+        return [{
+          card: result.card,
+          difficulty: result.difficulty,
+          success: result.success,
+          effects: result.effects || {},
+        }];
+      }
+      return [];
+    },
+    getCombinedEffects(result) {
+      if (result.combined_effects) return result.combined_effects;
+      if (result.effects) return result.effects;
+      return {};
+    },
+  },
 };
 </script>
 
@@ -94,50 +115,50 @@ export default {
   border-radius: 10px;
   padding: 16px;
   text-align: center;
-  border-left: 4px solid;
+  border-left: 4px solid var(--accent-gold);
 }
-
-.result-success { border-left-color: var(--accent-green); }
-.result-failure { border-left-color: var(--accent-red); }
 
 .result-player {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1rem;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
 }
 
-.result-card {
-  color: var(--text-secondary);
-  font-style: italic;
-  font-size: 0.85rem;
+.result-roll-total {
+  font-size: 1rem;
+  color: var(--text-bright);
   margin-bottom: 10px;
 }
 
-.result-roll {
+.card-outcome {
   display: flex;
   align-items: center;
   gap: 8px;
   justify-content: center;
-  margin-bottom: 8px;
-  font-weight: 700;
-  font-size: 1.1rem;
-  color: var(--text-bright);
+  margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
-.roll-pass { color: var(--accent-green); }
-.roll-fail { color: var(--accent-red); }
-.roll-vs { color: var(--text-secondary); font-style: italic; font-weight: 400; font-size: 0.9rem; }
+.card-outcome-name {
+  font-family: 'Cinzel', serif;
+  color: var(--text-primary);
+  font-size: 0.85rem;
+}
+
+.card-outcome-diff {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
 
 .result-badge {
   display: inline-block;
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 1px;
-  padding: 3px 10px;
+  padding: 2px 8px;
   border-radius: 4px;
   font-weight: 700;
-  margin-bottom: 10px;
 }
 
 .badge-success { background: rgba(74, 138, 58, 0.2); color: #4a8a3a; }
@@ -148,6 +169,7 @@ export default {
   gap: 4px;
   flex-wrap: wrap;
   justify-content: center;
+  margin-top: 8px;
 }
 
 .effect-badge {

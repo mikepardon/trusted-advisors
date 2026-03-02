@@ -130,7 +130,7 @@
         <template v-if="gameType === 'duel'">
           <h2 class="section-title">Duel Mode</h2>
           <p class="flavor-text">
-            {{ gameMode === 'single' ? 'Challenge a bot to build rival kingdoms. Draft cards through bluff and choice.' : 'Two advisors compete to build rival kingdoms. Draft cards through bluff and choice. 2 players locked.' }}
+            {{ gameMode === 'single' ? 'Challenge a bot to build rival kingdoms. Pick a card to keep and send the other to your rival.' : 'Two advisors compete to build rival kingdoms. Pick a card to keep and send the other to your rival. 2 players locked.' }}
           </p>
 
           <!-- Bot difficulty selector for single-player duel -->

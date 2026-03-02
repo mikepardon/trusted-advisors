@@ -1919,6 +1919,60 @@ class CardSeeder extends Seeder
                 'negative_flavor' => 'The saboteurs destroy vital equipment before melting into the shadows.',
                 'category' => 'political',
             ],
+
+            // =============================================
+            // SCORE MODIFIER CARDS
+            // =============================================
+            [
+                'title' => 'Grand Tournament',
+                'description' => 'Knights from across the realm gather for a magnificent tourney. Victory would echo through the ages.',
+                'difficulty' => 8,
+                'positive_effects' => ['security' => 2, 'happiness' => 1, 'bonus_score' => 10],
+                'negative_effects' => ['wealth' => -2],
+                'positive_flavor' => 'Your champion wins the tournament! Bards compose songs of glory that will be sung for generations.',
+                'negative_flavor' => 'The tournament ends in disaster as injuries mount and the crowd grows restless.',
+                'category' => 'military',
+            ],
+            [
+                'title' => 'Royal Wedding',
+                'description' => 'A prince seeks a bride from a neighboring kingdom. A successful match could cement your kingdom\'s legacy.',
+                'difficulty' => 6,
+                'positive_effects' => ['influence' => 2, 'happiness' => 1, 'bonus_score' => 8],
+                'negative_effects' => ['influence' => -1],
+                'positive_flavor' => 'The wedding is a triumph! The alliance strengthens your kingdom\'s standing in the realm.',
+                'negative_flavor' => 'Negotiations break down and the rejected kingdom takes offense.',
+                'category' => 'political',
+            ],
+            [
+                'title' => 'Historic Treaty',
+                'description' => 'A once-in-a-generation opportunity to sign a peace treaty with your greatest rival.',
+                'difficulty' => 9,
+                'positive_effects' => ['influence' => 3, 'security' => 1, 'bonus_score' => 15],
+                'negative_effects' => ['security' => -2],
+                'positive_flavor' => 'The treaty is signed! This peace will define your reign and echo through history.',
+                'negative_flavor' => 'The talks collapse, and the rival kingdom sees your attempt as weakness.',
+                'category' => 'political',
+            ],
+            [
+                'title' => 'Failed Harvest Festival',
+                'description' => 'The annual harvest festival goes terribly wrong when storms ruin the celebrations.',
+                'difficulty' => 5,
+                'positive_effects' => ['food' => 2, 'happiness' => 1],
+                'negative_effects' => ['happiness' => -1, 'bonus_score' => -5],
+                'positive_flavor' => 'Despite the storms, your advisors salvage the festival with indoor feasts.',
+                'negative_flavor' => 'The ruined festival becomes a symbol of misfortune, dimming your kingdom\'s reputation.',
+                'category' => 'social',
+            ],
+            [
+                'title' => 'Bard\'s Contest',
+                'description' => 'Bards and minstrels compete to compose the greatest song about your kingdom.',
+                'difficulty' => 4,
+                'positive_effects' => ['happiness' => 2, 'bonus_score' => 5],
+                'negative_effects' => ['happiness' => -1],
+                'positive_flavor' => 'A magnificent ballad is born! The winning song spreads your fame across the land.',
+                'negative_flavor' => 'The contest devolves into a drunken brawl. The only songs written are mocking ones.',
+                'category' => 'social',
+            ],
         ];
 
         foreach ($cards as $i => $card) {

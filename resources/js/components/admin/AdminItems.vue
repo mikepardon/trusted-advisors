@@ -61,6 +61,9 @@
               <option value="reroll">Reroll</option>
               <option value="stat_boost">Stat Boost (Immediate)</option>
               <option value="heal_die">Heal Die (Immediate)</option>
+              <option value="score_bonus">Score Bonus (Immediate)</option>
+              <option value="score_per_round">Score Per Round (Passive)</option>
+              <option value="score_multiplier">Score Multiplier (Passive)</option>
             </select>
           </div>
           <div v-if="form.bonus_type === 'stat_boost'" class="form-group">
@@ -97,6 +100,14 @@
               <option :value="null">Base Game</option>
               <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+          </div>
+
+          <div class="form-group">
+            <label style="color: var(--accent-gold); font-weight: 600;">Availability</label>
+            <div style="display: flex; gap: 16px; margin-top: 4px;">
+              <label><input type="checkbox" v-model="form.available_cooperative" /> Co-op</label>
+              <label><input type="checkbox" v-model="form.available_duel" /> Duel</label>
+            </div>
           </div>
 
           <div v-if="formError" class="form-error">{{ formError }}</div>
@@ -140,6 +151,8 @@ export default {
         is_negative: false,
         is_consumable: false,
         addon_id: null,
+        available_cooperative: true,
+        available_duel: true,
       },
     };
   },
@@ -182,6 +195,8 @@ export default {
         is_negative: false,
         is_consumable: false,
         addon_id: null,
+        available_cooperative: true,
+        available_duel: true,
       };
       this.formError = '';
       this.showModal = true;
@@ -198,6 +213,8 @@ export default {
         is_negative: item.is_negative || false,
         is_consumable: item.is_consumable || false,
         addon_id: item.addon_id || null,
+        available_cooperative: item.available_cooperative ?? true,
+        available_duel: item.available_duel ?? true,
       };
       this.formError = '';
       this.showModal = true;
@@ -211,6 +228,8 @@ export default {
         is_negative: this.form.is_negative,
         is_consumable: this.form.is_consumable,
         addon_id: this.form.addon_id || null,
+        available_cooperative: this.form.available_cooperative,
+        available_duel: this.form.available_duel,
         effect: {
           bonus_type: this.form.bonus_type,
           bonus_value: this.form.bonus_value,

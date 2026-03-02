@@ -1,9 +1,8 @@
 <template>
   <div class="duel-choose">
-    <h4 class="phase-title">Choose Your Card</h4>
+    <h4 class="phase-title">Choose a Card to Keep</h4>
     <p class="phase-note">
-      Tap the revealed card or take a chance on the hidden one.
-      Your opponent gets whichever you don't choose.
+      The other card will be sent to your opponent.
     </p>
 
     <!-- MOBILE: Swiper carousel -->
@@ -19,9 +18,7 @@
           @slideChange="onSlideChange"
         >
           <SwiperSlide v-for="item in cards" :key="item.hand_id">
-            <!-- REVEALED CARD -->
             <div
-              v-if="item.revealed && item.card"
               class="parchment-card"
               :class="{
                 'card-acting': selectedId === item.hand_id,
@@ -30,10 +27,10 @@
               @click="selectAndConfirm(item.hand_id)"
             >
               <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
-                Taking this
+                Keeping this
               </div>
               <div v-else-if="selectedId !== null" class="card-ribbon unattended">
-                Leaving this
+                Sending this
               </div>
 
               <h3 class="parchment-title">{{ item.card.title }}</h3>
@@ -68,33 +65,6 @@
                 </div>
               </div>
             </div>
-
-            <!-- HIDDEN CARD (mystery) -->
-            <div
-              v-else
-              class="mystery-card"
-              :class="{
-                'card-acting': selectedId === item.hand_id,
-                'card-unattended': selectedId !== null && selectedId !== item.hand_id,
-              }"
-              @click="selectAndConfirm(item.hand_id)"
-            >
-              <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
-                Taking this
-              </div>
-              <div v-else-if="selectedId !== null" class="card-ribbon unattended">
-                Leaving this
-              </div>
-
-              <div class="mystery-content">
-                <div class="mystery-icon">?</div>
-                <h3 class="mystery-title">Hidden Card</h3>
-                <p class="mystery-desc">
-                  This card's contents are unknown.
-                  Do you dare take the risk?
-                </p>
-              </div>
-            </div>
           </SwiperSlide>
         </Swiper>
       </div>
@@ -102,84 +72,55 @@
 
     <!-- DESKTOP: Side-by-side -->
     <div v-else class="choose-cards">
-      <template v-for="item in cards" :key="item.hand_id">
-        <!-- REVEALED CARD -->
-        <div
-          v-if="item.revealed && item.card"
-          class="parchment-card"
-          :class="{
-            'card-acting': selectedId === item.hand_id,
-            'card-unattended': selectedId !== null && selectedId !== item.hand_id,
-          }"
-          @click="selectAndConfirm(item.hand_id)"
-        >
-          <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
-            Taking this
-          </div>
-          <div v-else-if="selectedId !== null" class="card-ribbon unattended">
-            Leaving this
-          </div>
+      <div
+        v-for="item in cards"
+        :key="item.hand_id"
+        class="parchment-card"
+        :class="{
+          'card-acting': selectedId === item.hand_id,
+          'card-unattended': selectedId !== null && selectedId !== item.hand_id,
+        }"
+        @click="selectAndConfirm(item.hand_id)"
+      >
+        <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
+          Keeping this
+        </div>
+        <div v-else-if="selectedId !== null" class="card-ribbon unattended">
+          Sending this
+        </div>
 
-          <h3 class="parchment-title">{{ item.card.title }}</h3>
-          <p class="parchment-desc">{{ item.card.description }}</p>
-          <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
+        <h3 class="parchment-title">{{ item.card.title }}</h3>
+        <p class="parchment-desc">{{ item.card.description }}</p>
+        <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
 
-          <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
+        <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
 
-          <div class="outcome-section">
-            <p class="outcome-label">On Success:</p>
-            <div class="outcome-chips">
-              <span
-                v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
-                :key="'p-' + stat"
-                class="stat-chip chip-positive"
-              >
-                {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-              </span>
-            </div>
-          </div>
-
-          <div class="outcome-section">
-            <p class="outcome-label">Always:</p>
-            <div class="outcome-chips">
-              <span
-                v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
-                :key="'n-' + stat"
-                class="stat-chip chip-negative"
-              >
-                {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-              </span>
-            </div>
+        <div class="outcome-section">
+          <p class="outcome-label">On Success:</p>
+          <div class="outcome-chips">
+            <span
+              v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
+              :key="'p-' + stat"
+              class="stat-chip chip-positive"
+            >
+              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+            </span>
           </div>
         </div>
 
-        <!-- HIDDEN CARD (mystery) -->
-        <div
-          v-else
-          class="mystery-card"
-          :class="{
-            'card-acting': selectedId === item.hand_id,
-            'card-unattended': selectedId !== null && selectedId !== item.hand_id,
-          }"
-          @click="selectAndConfirm(item.hand_id)"
-        >
-          <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
-            Taking this
-          </div>
-          <div v-else-if="selectedId !== null" class="card-ribbon unattended">
-            Leaving this
-          </div>
-
-          <div class="mystery-content">
-            <div class="mystery-icon">?</div>
-            <h3 class="mystery-title">Hidden Card</h3>
-            <p class="mystery-desc">
-              This card's contents are unknown.
-              Do you dare take the risk?
-            </p>
+        <div class="outcome-section">
+          <p class="outcome-label">Always:</p>
+          <div class="outcome-chips">
+            <span
+              v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
+              :key="'n-' + stat"
+              class="stat-chip chip-negative"
+            >
+              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+            </span>
           </div>
         </div>
-      </template>
+      </div>
     </div>
   </div>
 </template>
@@ -197,7 +138,7 @@ export default {
   props: {
     cards: { type: Array, default: () => [] },
   },
-  emits: ['choose'],
+  emits: ['select'],
   data() {
     return {
       selectedId: null,
@@ -233,7 +174,7 @@ export default {
       if (this.selectedId !== null) return;
       playSound('clickCard');
       this.selectedId = handId;
-      this.$emit('choose', handId);
+      this.$emit('select', handId);
     },
     filterStatEffects(effects) {
       if (!effects) return {};
@@ -337,71 +278,6 @@ export default {
   opacity: 0.55;
   filter: saturate(0.6);
   transform: scale(0.97);
-}
-
-/* Mystery card */
-.mystery-card {
-  background: linear-gradient(180deg, #1a1a2e, #16213e, #0f3460);
-  border: 2px solid rgba(100, 120, 180, 0.5);
-  border-radius: 12px;
-  padding: 24px 20px;
-  width: 300px;
-  min-height: 280px;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  position: relative;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mystery-card:hover {
-  transform: translateY(-4px) scale(1.01);
-  border-color: rgba(130, 150, 210, 0.7);
-  box-shadow:
-    0 8px 30px rgba(0, 0, 0, 0.6),
-    0 0 15px rgba(100, 120, 180, 0.2);
-}
-
-.mystery-card.card-acting {
-  border-color: var(--accent-gold);
-  box-shadow:
-    0 0 30px rgba(212, 168, 67, 0.35),
-    0 0 60px rgba(212, 168, 67, 0.1);
-}
-
-.mystery-card.card-unattended {
-  opacity: 0.55;
-  filter: saturate(0.6);
-  transform: scale(0.97);
-}
-
-.mystery-content {
-  text-align: center;
-}
-
-.mystery-icon {
-  font-size: 4rem;
-  color: rgba(100, 120, 180, 0.6);
-  font-family: 'Cinzel', serif;
-  font-weight: 900;
-  margin-bottom: 12px;
-  text-shadow: 0 0 20px rgba(100, 120, 180, 0.3);
-}
-
-.mystery-title {
-  font-family: 'Cinzel', serif;
-  color: rgba(150, 170, 220, 0.8);
-  font-size: 1.2rem;
-  margin-bottom: 8px;
-}
-
-.mystery-desc {
-  color: rgba(150, 170, 220, 0.5);
-  font-style: italic;
-  font-size: 0.85rem;
-  line-height: 1.5;
 }
 
 /* Ribbon */
@@ -510,8 +386,7 @@ export default {
 .chip-negative { background: rgba(192, 57, 43, 0.15); color: #e57373; }
 
 @media (max-width: 768px) {
-  .parchment-card,
-  .mystery-card {
+  .parchment-card {
     width: 100%;
     max-width: 320px;
     min-height: auto;
@@ -520,10 +395,6 @@ export default {
 
   .parchment-title {
     font-size: 1.05rem;
-  }
-
-  .mystery-card {
-    min-height: 240px;
   }
 }
 </style>

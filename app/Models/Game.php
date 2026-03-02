@@ -14,6 +14,7 @@ class Game extends Model
         'user_id', 'season_id',
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number',
         'event_order', 'share_token',
+        'bonus_score', 'final_score',
     ];
 
     protected $casts = [
@@ -21,6 +22,8 @@ class Game extends Model
         'offerer_player_number' => 'integer',
         'winner_player_number' => 'integer',
         'event_order' => 'array',
+        'bonus_score' => 'integer',
+        'final_score' => 'integer',
     ];
 
     public function user(): BelongsTo
@@ -182,5 +185,57 @@ class Game extends Model
     public function cardsNeededPerRound(): int
     {
         return $this->num_players * 2;
+    }
+
+    /**
+     * Year multiplier based on total_rounds (12 rounds = 1 year).
+     */
+    public function yearMultiplier(): float
+    {
+        $multipliers = [
+            1 => 1.0,
+            2 => 1.4,
+            3 => 1.7,
+            4 => 1.9,
+            5 => 2.0,
+        ];
+
+        $years = (int) ($this->total_rounds / 12);
+        return $multipliers[$years] ?? 1.0;
+    }
+
+    /**
+     * Base score: sum of 6 kingdom stats.
+     */
+    public function baseScore(): int
+    {
+        return $this->wealth + $this->influence + $this->security
+             + $this->religion + $this->food + $this->happiness;
+    }
+
+    /**
+     * Balance bonus: rewards balanced kingdoms.
+     * max(0, 30 - (max_stat - min_stat) * 3)
+     */
+    public function balanceBonus(): int
+    {
+        $stats = [$this->wealth, $this->influence, $this->security,
+                  $this->religion, $this->food, $this->happiness];
+        $spread = max($stats) - min($stats);
+        return max(0, 30 - $spread * 3);
+    }
+
+    /**
+     * Compute and store the final composite score (cooperative only).
+     */
+    public function computeFinalScore(): int
+    {
+        $base = $this->baseScore();
+        $multiplied = (int) floor($base * $this->yearMultiplier());
+        $balance = $this->balanceBonus();
+        $bonus = $this->bonus_score ?? 0;
+
+        $this->final_score = $multiplied + $balance + $bonus;
+        return $this->final_score;
     }
 }

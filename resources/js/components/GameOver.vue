@@ -122,9 +122,31 @@
       </div>
 
       <div class="total-score">
-        <h3>Total Score</h3>
-        <div class="score">{{ totalScore }}</div>
+        <h3>Final Score</h3>
+        <div class="score">{{ finalScore }}</div>
         <p class="score-rank">{{ scoreRank }}</p>
+        <div v-if="scoreBreakdown" class="score-breakdown">
+          <div class="breakdown-row">
+            <span>Kingdom Total</span>
+            <span>{{ scoreBreakdown.base_score }}</span>
+          </div>
+          <div class="breakdown-row">
+            <span>Year Multiplier</span>
+            <span>&times;{{ scoreBreakdown.year_multiplier }}</span>
+          </div>
+          <div class="breakdown-row">
+            <span>Balance Bonus</span>
+            <span>+{{ scoreBreakdown.balance_bonus }}</span>
+          </div>
+          <div v-if="scoreBreakdown.bonus_score" class="breakdown-row">
+            <span>Bonus Score</span>
+            <span>+{{ scoreBreakdown.bonus_score }}</span>
+          </div>
+          <div class="breakdown-row breakdown-total">
+            <span>Final Score</span>
+            <span>{{ scoreBreakdown.final_score }}</span>
+          </div>
+        </div>
       </div>
 
       <div class="round-summary">
@@ -318,19 +340,40 @@ export default {
       const g = this.gameData.game;
       return g.wealth + g.influence + g.security + g.religion + g.food + g.happiness;
     },
+    scoreBreakdown() {
+      // Use stored breakdown from the game-over response, or compute client-side
+      const stored = this.gameData?._scoreBreakdown;
+      if (stored) return stored;
+      // Compute from game data
+      const g = this.gameData?.game;
+      if (!g) return null;
+      const base = g.wealth + g.influence + g.security + g.religion + g.food + g.happiness;
+      const stats = [g.wealth, g.influence, g.security, g.religion, g.food, g.happiness];
+      const spread = Math.max(...stats) - Math.min(...stats);
+      const balanceBonus = Math.max(0, 30 - spread * 3);
+      const years = Math.floor((g.total_rounds || 24) / 12);
+      const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
+      const yearMult = multipliers[years] || 1.0;
+      const bonusScore = g.bonus_score || 0;
+      const finalScore = g.final_score ?? (Math.floor(base * yearMult) + balanceBonus + bonusScore);
+      return { base_score: base, year_multiplier: yearMult, balance_bonus: balanceBonus, bonus_score: bonusScore, final_score: finalScore };
+    },
+    finalScore() {
+      return this.scoreBreakdown?.final_score ?? this.totalScore;
+    },
     scoreRank() {
       if (!this.isWin) return 'The Kingdom has fallen. Better luck next time.';
-      const s = this.totalScore;
-      if (s >= 150) return 'Legendary - The kingdom enters a new Golden Age!';
-      if (s >= 120) return 'Excellent - Your wisdom will be remembered for centuries.';
-      if (s >= 90) return 'Good - The kingdom stands strong thanks to your guidance.';
+      const s = this.finalScore;
+      if (s >= 200) return 'Legendary - The kingdom enters a new Golden Age!';
+      if (s >= 150) return 'Excellent - Your wisdom will be remembered for centuries.';
+      if (s >= 100) return 'Good - The kingdom stands strong thanks to your guidance.';
       if (s >= 60) return 'Adequate - The kingdom survives, but just barely.';
       return 'Poor - The kingdom limps on, weakened by your counsel.';
     },
     endTitle() {
       if (!this.isWin) return 'The Kingdom Has Fallen';
-      const s = this.totalScore;
-      if (s >= 120) return 'God Save the King!';
+      const s = this.finalScore;
+      if (s >= 150) return 'God Save the King!';
       if (s >= 60) return 'The Kingdom Endures';
       return 'A Narrow Survival';
     },
@@ -346,7 +389,9 @@ export default {
         return 'The campaign has ended in defeat.';
       }
 
-      return 'Your advisors have guided the kingdom through two years of crisis. The realm celebrates, and your deeds are judged.';
+      const years = Math.max(1, Math.floor((g.total_rounds || 24) / 12));
+      const yearWord = years === 1 ? 'one year' : years === 2 ? 'two years' : years === 3 ? 'three years' : years === 4 ? 'four years' : 'five years';
+      return `Your advisors have guided the kingdom through ${yearWord} of crisis. The realm celebrates, and your deeds are judged.`;
     },
     myXp() {
       if (!this.completion?.xp_awards) return null;
@@ -394,6 +439,13 @@ export default {
       if (stored) {
         this.completion = JSON.parse(stored);
         sessionStorage.removeItem(`game_completion_${this.id}`);
+      }
+
+      // Load score breakdown from sessionStorage
+      const storedBreakdown = sessionStorage.getItem(`game_score_breakdown_${this.id}`);
+      if (storedBreakdown) {
+        this.gameData._scoreBreakdown = JSON.parse(storedBreakdown);
+        sessionStorage.removeItem(`game_score_breakdown_${this.id}`);
       }
 
       this.$nextTick(() => {
@@ -634,6 +686,42 @@ export default {
   font-style: italic;
   font-size: 1.1rem;
   margin-top: 5px;
+}
+
+.score-breakdown {
+  margin-top: 12px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(184, 148, 46, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  text-align: left;
+  display: inline-block;
+  min-width: 220px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.breakdown-row span:last-child {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+.breakdown-total {
+  border-top: 1px solid rgba(184, 148, 46, 0.3);
+  margin-top: 4px;
+  padding-top: 6px;
+  font-size: 1rem;
+}
+
+.breakdown-total span:last-child {
+  color: var(--accent-gold);
+  font-weight: 900;
 }
 
 .round-summary {
