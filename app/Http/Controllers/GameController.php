@@ -198,7 +198,7 @@ class GameController extends Controller
 
     public function show(Game $game): JsonResponse
     {
-        $game->load(['players.character', 'players.items.item']);
+        $game->load(['players.character', 'players.user', 'players.items.item']);
 
         $data = [
             'game' => $game,
@@ -2559,6 +2559,12 @@ class GameController extends Controller
         $cardsPerPlayer = $this->getCardsPerPlayer($event);
         $cardsPerRound = $game->num_players * $cardsPerPlayer;
 
+        // If not enough cards left, reshuffle drawn cards back into the deck
+        $remaining = $game->cardDeck()->where('is_drawn', false)->count();
+        if ($remaining < $cardsPerRound) {
+            $this->reshuffleCardDeck($game);
+        }
+
         // Pull next N undrawn cards from the deck
         $deckCards = $game->cardDeck()
             ->where('is_drawn', false)
@@ -2662,6 +2668,13 @@ class GameController extends Controller
     {
         $players = $game->players()->orderBy('player_number')->get();
 
+        $remaining = $game->cardDeck()->where('is_drawn', false)->count();
+
+        // If not enough cards left, reshuffle drawn cards back into the deck
+        if ($remaining < 4) {
+            $this->reshuffleCardDeck($game);
+        }
+
         $deckCards = $game->cardDeck()
             ->where('is_drawn', false)
             ->orderBy('position')
@@ -2686,6 +2699,29 @@ class GameController extends Controller
                     $cardIndex++;
                 }
             }
+        }
+    }
+
+    /**
+     * Reshuffle all drawn cards back into the deck with new random positions.
+     */
+    private function reshuffleCardDeck(Game $game): void
+    {
+        $drawnCards = $game->cardDeck()->where('is_drawn', true)->get();
+
+        if ($drawnCards->isEmpty()) {
+            return;
+        }
+
+        // Get the next position after any remaining undrawn cards
+        $maxPosition = $game->cardDeck()->max('position') ?? 0;
+
+        $shuffled = $drawnCards->shuffle()->values();
+        foreach ($shuffled as $i => $deckCard) {
+            $deckCard->update([
+                'is_drawn' => false,
+                'position' => $maxPosition + $i + 1,
+            ]);
         }
     }
 

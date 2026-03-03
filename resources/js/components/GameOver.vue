@@ -20,9 +20,18 @@
               <span
                 :class="{ 'clickable-name': kingdom.player?.user_id }"
                 @click="kingdom.player?.user_id && (showProfileUserId = kingdom.player.user_id)"
-              >{{ kingdom.player?.character?.name || 'Player' }}</span>
+              >{{ playerDisplayName(kingdom.player) }}</span>
               <span v-if="kingdom.player?.player_number === gameData.game.winner_player_number" class="winner-badge">WINNER</span>
             </h3>
+            <div class="kingdom-sub">
+              <span class="kingdom-character">{{ kingdom.player?.character?.name }}</span>
+              <span v-if="playerNewElo(kingdom.player)" class="kingdom-elo">
+                ELO: {{ playerNewElo(kingdom.player) }}
+                <span v-if="playerEloChange(kingdom.player)" :class="playerEloChange(kingdom.player) > 0 ? 'elo-up' : 'elo-down'">
+                  ({{ playerEloChange(kingdom.player) > 0 ? '+' : '' }}{{ playerEloChange(kingdom.player) }})
+                </span>
+              </span>
+            </div>
             <div class="stats-grid">
               <div v-for="stat in stats" :key="stat.key" class="final-stat">
                 <span class="stat-icon">{{ stat.icon }}</span>
@@ -310,7 +319,8 @@ export default {
       const winner = this.gameData?.game?.winner_player_number;
       if (!winner) return 'The Duel is Over';
       const player = this.gameData?.game?.players?.find(p => p.player_number === winner);
-      return `${player?.character?.name || 'Player ' + winner} Wins!`;
+      const name = player?.user?.name || player?.character?.name || 'Player ' + winner;
+      return `${name} Wins!`;
     },
     duelEndFlavor() {
       const winner = this.gameData?.game?.winner_player_number;
@@ -475,6 +485,20 @@ export default {
     this.loading = false;
   },
   methods: {
+    playerDisplayName(player) {
+      if (player?.user?.name) return player.user.name;
+      return player?.character?.name || 'Player';
+    },
+    playerNewElo(player) {
+      if (!this.completion?.elo_changes || !player?.user_id) return null;
+      const elo = this.completion.elo_changes[player.user_id];
+      return elo?.new ?? null;
+    },
+    playerEloChange(player) {
+      if (!this.completion?.elo_changes || !player?.user_id) return null;
+      const elo = this.completion.elo_changes[player.user_id];
+      return elo?.change ?? null;
+    },
     getValClass(val) {
       if (val <= 3) return 'val-critical';
       if (val <= 7) return 'val-danger';
@@ -1074,6 +1098,35 @@ export default {
   color: var(--accent-gold);
   font-size: 1.1rem;
   margin-bottom: 12px;
+}
+
+.kingdom-sub {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.kingdom-character {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.kingdom-elo {
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.elo-up {
+  color: #4a8a3a;
+  font-weight: 700;
+}
+
+.elo-down {
+  color: #d05040;
+  font-weight: 700;
 }
 
 .winner-badge {
