@@ -78,8 +78,8 @@
             <div class="in-progress-row">
               <span class="in-progress-icon">&#9876;</span>
               <div class="in-progress-text">
-                <span class="in-progress-title">Continue Game</span>
-                <span class="in-progress-sub">View in-progress campaigns</span>
+                <span class="in-progress-title">{{ homeStats.activeGames > 0 ? 'Continue Game' : 'View Previous Games' }}</span>
+                <span class="in-progress-sub">{{ homeStats.activeGames > 0 ? 'View in-progress campaigns' : 'View completed campaigns' }}</span>
               </div>
               <span class="in-progress-arrow">&#8250;</span>
             </div>
@@ -465,7 +465,7 @@ export default {
       addFriendSuccess: '',
       botDifficulty: 'medium',
       // Home screen stats
-      homeStats: { level: 1, elo: 1000, seasonRank: null, unclaimed: 0 },
+      homeStats: { level: 1, elo: 1000, seasonRank: null, unclaimed: 0, activeGames: 0 },
       activeSeason: null,
       showMobileMenu: false,
       // Game length options
@@ -541,10 +541,11 @@ export default {
   methods: {
     async fetchHomeStats() {
       try {
-        const [statsRes, achRes, seasonsRes] = await Promise.allSettled([
+        const [statsRes, achRes, seasonsRes, historyRes] = await Promise.allSettled([
           axios.get('/api/auth/stats'),
           axios.get('/api/achievements'),
           axios.get('/api/seasons'),
+          axios.get('/api/games/history'),
         ]);
 
         if (statsRes.status === 'fulfilled') {
@@ -580,6 +581,10 @@ export default {
               }
             } catch {}
           }
+        }
+
+        if (historyRes.status === 'fulfilled') {
+          this.homeStats.activeGames = (historyRes.value.data.active_games || []).length;
         }
       } catch {}
     },

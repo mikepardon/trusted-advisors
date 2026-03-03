@@ -353,7 +353,8 @@ export default {
       immediate: true,
     },
     isCurrentTurnBot(isBotTurn) {
-      if (isBotTurn) {
+      // For simultaneous rolling, bot rolls when human rolls — don't pre-trigger
+      if (isBotTurn && this.duelPhase !== 'rolling') {
         this.triggerBotTurn();
       }
     },
@@ -412,8 +413,8 @@ export default {
       // If entering rolling phase, load my cards
       if (this.duelPhase === 'rolling' || this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
         this.loadMyRollCards();
-        // Ensure bot is triggered to roll if needed
-        if (this.hasBotPlayer && this.isCurrentTurnBot && !this._opponentTurnPending) {
+        // For sequential rolling, trigger bot with delay; for simultaneous, bot rolls when human rolls
+        if (this.duelPhase !== 'rolling' && this.hasBotPlayer && this.isCurrentTurnBot && !this._opponentTurnPending) {
           this.triggerBotTurn();
         }
       }
@@ -502,8 +503,9 @@ export default {
           this.initiatePassAndPlayHandoff(this.offererNumber);
         } else if (this.hasBotPlayer) {
           await this.loadMyRollCards();
-          // Bot needs to roll — watcher won't fire since isCurrentTurnBot stayed true (choosing → rolling)
-          if (this.isCurrentTurnBot) {
+          // For simultaneous rolling, bot rolls when human rolls (triggerBotRollImmediate)
+          // For sequential, trigger bot turn with delay
+          if (phase !== 'rolling' && this.isCurrentTurnBot) {
             this._opponentTurnPending = false;
             this.triggerBotTurn();
           }
@@ -561,6 +563,11 @@ export default {
           }
           await this.refreshKingdoms();
           if (rollResult.duel_result) this.isGameOver = true;
+
+          // Immediately trigger bot roll in parallel (no delay)
+          if (this.hasBotPlayer && !this.opponentRollData) {
+            this.triggerBotRollImmediate();
+          }
 
           // Always pause for player to review results and optionally use abilities
           this.pendingRerollDecision = true;
@@ -653,9 +660,9 @@ export default {
           this.duelPhase = 'resolving';
           this.$emit('phase-updated', 'resolving');
         } else if (this.hasBotPlayer && !this.opponentRollData) {
-          // Bot hasn't rolled yet — trigger it now
+          // Bot hasn't rolled yet — trigger immediately
           this._opponentTurnPending = false;
-          this.triggerBotTurn();
+          this.triggerBotRollImmediate();
         }
         // If opponent hasn't rolled yet, stay in rolling phase
       } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
@@ -759,6 +766,27 @@ export default {
       this.updateOnlineWaiting();
     },
 
+    async triggerBotRollImmediate() {
+      if (this._opponentTurnPending) return;
+      this._opponentTurnPending = true;
+      try {
+        const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
+        const data = res.data;
+        if (data.player_number !== undefined) {
+          if (data.player_number === this.offererNumber) {
+            this.offererRollData = data;
+          } else {
+            this.chooserRollData = data;
+          }
+          if (data.duel_result) this.isGameOver = true;
+          await this.refreshKingdoms();
+        }
+      } catch (e) {
+        console.error('Bot roll failed:', e);
+      }
+      this._opponentTurnPending = false;
+    },
+
     async triggerBotTurn() {
       if (this._opponentTurnPending) return;
       this._opponentTurnPending = true;
@@ -860,9 +888,7 @@ export default {
     } else if (this.duelPhase === 'rolling') {
       await this.loadMyRollCards();
       this.updateOnlineWaiting();
-      if (this.hasBotPlayer && this.isCurrentTurnBot) {
-        this.triggerBotTurn();
-      }
+      // Bot rolls simultaneously when human rolls (triggerBotRollImmediate in submitRoll)
     } else if (this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
       if (this.isPassAndPlay) {
         const activeNum = this.duelPhase === 'rolling_offerer' ? this.offererNumber : this.chooserNumber;
