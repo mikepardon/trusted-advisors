@@ -153,6 +153,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('sound-assets', [SoundAssetController::class, 'index']);
     Route::post('sound-assets/{key}/upload', [SoundAssetController::class, 'upload']);
     Route::post('bot-simulate', [BotGameController::class, 'simulate']);
+    Route::post('bot-simulate-duel', [BotGameController::class, 'simulateDuel']);
     Route::get('games', [GameManagementController::class, 'index']);
     Route::post('games/{game}/cancel', [GameManagementController::class, 'cancel']);
     Route::get('levels', [DashboardController::class, 'levels']);

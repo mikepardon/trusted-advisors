@@ -3,7 +3,14 @@
     <h2 class="page-title">Bot Game Simulation</h2>
     <p class="page-desc">Run headless bot games to test game balance. Bots pick the best card each round.</p>
 
-    <div class="controls">
+    <!-- Tab Switcher -->
+    <div class="tab-switcher">
+      <button class="tab-btn" :class="{ active: mode === 'cooperative' }" @click="mode = 'cooperative'; results = null; duelResults = null">Cooperative</button>
+      <button class="tab-btn" :class="{ active: mode === 'duel' }" @click="mode = 'duel'; results = null; duelResults = null">Duel</button>
+    </div>
+
+    <!-- Cooperative Controls -->
+    <div v-if="mode === 'cooperative'" class="controls">
       <div class="control-group">
         <label>Games to Run</label>
         <input v-model.number="numGames" type="number" min="1" max="1000" />
@@ -36,7 +43,31 @@
       </button>
     </div>
 
-    <div v-if="results" class="results">
+    <!-- Duel Controls -->
+    <div v-if="mode === 'duel'" class="controls">
+      <div class="control-group">
+        <label>Games to Run</label>
+        <input v-model.number="duelNumGames" type="number" min="1" max="1000" />
+      </div>
+      <div class="control-group">
+        <label>Starting Stats</label>
+        <input v-model.number="duelStartingStats" type="number" min="3" max="15" />
+      </div>
+      <div class="control-group">
+        <label>Bot Difficulty</label>
+        <select v-model="duelBotDifficulty">
+          <option value="easy">Easy</option>
+          <option value="medium">Medium</option>
+          <option value="hard">Hard</option>
+        </select>
+      </div>
+      <button class="btn-primary run-btn" :disabled="running" @click="runDuelSimulation">
+        {{ running ? 'Simulating...' : 'Run Duel Simulation' }}
+      </button>
+    </div>
+
+    <!-- Cooperative Results -->
+    <div v-if="mode === 'cooperative' && results" class="results">
       <!-- Summary -->
       <div class="result-section">
         <h3>Summary</h3>
@@ -134,6 +165,139 @@
         </div>
       </div>
     </div>
+
+    <!-- Duel Results -->
+    <div v-if="mode === 'duel' && duelResults" class="results">
+      <!-- Summary -->
+      <div class="result-section">
+        <h3>Summary</h3>
+        <div class="summary-grid summary-grid-5">
+          <div class="summary-card">
+            <div class="summary-val" :class="duelResults.summary.p1_win_rate > 50 ? 'rate-p1' : ''">{{ duelResults.summary.p1_win_rate }}%</div>
+            <div class="summary-label">P1 Win Rate</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val" :class="duelResults.summary.p2_win_rate > 50 ? 'rate-p2' : ''">{{ duelResults.summary.p2_win_rate }}%</div>
+            <div class="summary-label">P2 Win Rate</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val">{{ duelResults.summary.avg_rounds_played }}</div>
+            <div class="summary-label">Avg Rounds</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val">{{ duelResults.summary.avg_p1_score }}</div>
+            <div class="summary-label">Avg P1 Score</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-val">{{ duelResults.summary.avg_p2_score }}</div>
+            <div class="summary-label">Avg P2 Score</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- End Reason Breakdown -->
+      <div class="result-section">
+        <h3>End Reasons</h3>
+        <div class="end-reasons">
+          <div v-for="(count, reason) in duelResults.end_reasons" :key="reason" class="end-reason-row">
+            <span class="end-reason-name">{{ formatReason(reason) }}</span>
+            <div class="end-reason-bar-bg">
+              <div class="end-reason-bar" :class="'reason-' + reason" :style="{ width: (count / duelResults.summary.total_games * 100) + '%' }"></div>
+            </div>
+            <span class="end-reason-count">{{ count }} ({{ Math.round(count / duelResults.summary.total_games * 100) }}%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Collapse Details -->
+      <div v-if="Object.keys(duelResults.collapse_details).length > 0" class="result-section">
+        <h3>Collapse Details ({{ duelResults.end_reasons.stat_collapse }} collapses)</h3>
+        <div class="collapse-list">
+          <div v-for="(count, reason) in duelResults.collapse_details" :key="reason" class="collapse-row">
+            <span class="collapse-reason">{{ reason }}</span>
+            <span class="collapse-count">{{ count }} ({{ Math.round(count / duelResults.end_reasons.stat_collapse * 100) }}%)</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Domination Details -->
+      <div v-if="duelResults.end_reasons.stat_domination > 0" class="result-section">
+        <h3>Domination Details ({{ duelResults.end_reasons.stat_domination }} dominations)</h3>
+        <div class="collapse-list">
+          <div v-for="(count, label) in duelResults.domination_details" :key="label" class="collapse-row domination-row">
+            <span class="collapse-reason">{{ label }}</span>
+            <span class="collapse-count" style="color: #27ae60;">{{ count }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Round-by-Round Averages (dual columns) -->
+      <div class="result-section">
+        <h3>Round Averages</h3>
+        <div class="round-table-wrap">
+          <table class="round-table">
+            <thead>
+              <tr>
+                <th rowspan="2">Rnd</th>
+                <th rowspan="2">Alive</th>
+                <th colspan="7" class="player-header p1-header">Player 1</th>
+                <th colspan="7" class="player-header p2-header">Player 2</th>
+              </tr>
+              <tr>
+                <th>Win%</th>
+                <th>Wlth</th>
+                <th>Infl</th>
+                <th>Sec</th>
+                <th>Rel</th>
+                <th>Food</th>
+                <th>Hap</th>
+                <th>Win%</th>
+                <th>Wlth</th>
+                <th>Infl</th>
+                <th>Sec</th>
+                <th>Rel</th>
+                <th>Food</th>
+                <th>Hap</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="r in duelResults.round_averages" :key="r.round">
+                <td>{{ r.round }}</td>
+                <td>{{ r.games_alive }}</td>
+                <td>{{ r.p1_success_rate }}%</td>
+                <td :class="getCellClass(r.p1_avg_wealth)">{{ r.p1_avg_wealth }}</td>
+                <td :class="getCellClass(r.p1_avg_influence)">{{ r.p1_avg_influence }}</td>
+                <td :class="getCellClass(r.p1_avg_security)">{{ r.p1_avg_security }}</td>
+                <td :class="getCellClass(r.p1_avg_religion)">{{ r.p1_avg_religion }}</td>
+                <td :class="getCellClass(r.p1_avg_food)">{{ r.p1_avg_food }}</td>
+                <td :class="getCellClass(r.p1_avg_happiness)">{{ r.p1_avg_happiness }}</td>
+                <td class="p2-divider">{{ r.p2_success_rate }}%</td>
+                <td :class="getCellClass(r.p2_avg_wealth)">{{ r.p2_avg_wealth }}</td>
+                <td :class="getCellClass(r.p2_avg_influence)">{{ r.p2_avg_influence }}</td>
+                <td :class="getCellClass(r.p2_avg_security)">{{ r.p2_avg_security }}</td>
+                <td :class="getCellClass(r.p2_avg_religion)">{{ r.p2_avg_religion }}</td>
+                <td :class="getCellClass(r.p2_avg_food)">{{ r.p2_avg_food }}</td>
+                <td :class="getCellClass(r.p2_avg_happiness)">{{ r.p2_avg_happiness }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Score Distribution (end_score games only) -->
+      <div v-if="Object.keys(duelResults.score_distribution).length > 0" class="result-section">
+        <h3>Score Distribution ({{ duelResults.end_reasons.end_score }} tiebreak games)</h3>
+        <div class="dist-bars">
+          <div v-for="(count, bucket) in duelResults.score_distribution" :key="'ds' + bucket" class="dist-row">
+            <span class="dist-label">{{ bucket }}-{{ parseInt(bucket) + 9 }}</span>
+            <div class="dist-bar-bg">
+              <div class="dist-bar" :style="{ width: (count / duelMaxScoreCount * 100) + '%' }"></div>
+            </div>
+            <span class="dist-count">{{ count }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -144,6 +308,8 @@ export default {
   name: 'AdminBotGames',
   data() {
     return {
+      mode: 'cooperative',
+      // Cooperative
       numGames: 100,
       numPlayers: 3,
       totalRounds: 24,
@@ -151,6 +317,11 @@ export default {
       negativeMultiplier: 1.0,
       running: false,
       results: null,
+      // Duel
+      duelNumGames: 100,
+      duelStartingStats: 8,
+      duelBotDifficulty: 'medium',
+      duelResults: null,
     };
   },
   computed: {
@@ -164,6 +335,10 @@ export default {
     maxScoreCount() {
       if (!this.results) return 1;
       return Math.max(1, ...Object.values(this.results.score_distribution));
+    },
+    duelMaxScoreCount() {
+      if (!this.duelResults) return 1;
+      return Math.max(1, ...Object.values(this.duelResults.score_distribution));
     },
   },
   methods: {
@@ -183,6 +358,24 @@ export default {
         alert('Simulation failed: ' + (e.response?.data?.error || e.message));
       }
       this.running = false;
+    },
+    async runDuelSimulation() {
+      this.running = true;
+      this.duelResults = null;
+      try {
+        const res = await axios.post('/api/admin/bot-simulate-duel', {
+          num_games: this.duelNumGames,
+          starting_stats: this.duelStartingStats,
+          bot_difficulty: this.duelBotDifficulty,
+        });
+        this.duelResults = res.data;
+      } catch (e) {
+        alert('Duel simulation failed: ' + (e.response?.data?.error || e.message));
+      }
+      this.running = false;
+    },
+    formatReason(reason) {
+      return reason.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     },
     getBarClass(val) {
       if (val <= 3) return 'bar-critical';
@@ -214,6 +407,45 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   margin-bottom: 24px;
+}
+
+/* Tab Switcher */
+.tab-switcher {
+  display: flex;
+  gap: 0;
+  margin-bottom: 20px;
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  overflow: hidden;
+  width: fit-content;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.tab-btn {
+  padding: 10px 28px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.95rem;
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tab-btn:not(:last-child) {
+  border-right: 1px solid var(--border-gold);
+}
+
+.tab-btn.active {
+  background: var(--accent-gold);
+  color: var(--bg-primary);
+  font-weight: 700;
+}
+
+.tab-btn:hover:not(.active) {
+  background: rgba(138, 106, 46, 0.15);
+  color: var(--text-bright);
 }
 
 .controls {
@@ -280,6 +512,10 @@ export default {
   gap: 12px;
 }
 
+.summary-grid-5 {
+  grid-template-columns: repeat(5, 1fr);
+}
+
 .summary-card {
   background: var(--bg-secondary);
   border: 1px solid var(--border-gold);
@@ -304,6 +540,8 @@ export default {
 .rate-high { color: #e74c3c; }
 .rate-mid { color: var(--accent-gold); }
 .rate-low { color: #27ae60; }
+.rate-p1 { color: #3498db; }
+.rate-p2 { color: #e67e22; }
 
 /* Stat bars */
 .stat-bars {
@@ -366,6 +604,10 @@ export default {
   border-radius: 4px;
 }
 
+.domination-row {
+  background: rgba(39, 174, 96, 0.08);
+}
+
 .collapse-reason {
   text-transform: capitalize;
   color: var(--text-primary);
@@ -374,6 +616,51 @@ export default {
 .collapse-count {
   color: var(--accent-red);
   font-weight: 600;
+}
+
+/* End reasons */
+.end-reasons {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.end-reason-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.end-reason-name {
+  width: 120px;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+
+.end-reason-bar-bg {
+  flex: 1;
+  height: 18px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.end-reason-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.reason-stat_collapse { background: #e74c3c; }
+.reason-stat_domination { background: #27ae60; }
+.reason-end_score { background: var(--accent-gold); }
+
+.end-reason-count {
+  width: 90px;
+  font-size: 0.85rem;
+  color: var(--text-bright);
+  font-weight: 600;
+  text-align: right;
 }
 
 /* Round table */
@@ -397,11 +684,23 @@ export default {
   text-align: center;
 }
 
+.player-header {
+  border-bottom: 1px solid var(--border-gold);
+  padding-bottom: 4px;
+}
+
+.p1-header { color: #3498db; }
+.p2-header { color: #e67e22; }
+
 .round-table td {
   padding: 4px 8px;
   border-bottom: 1px solid rgba(138, 106, 46, 0.15);
   text-align: center;
   color: var(--text-primary);
+}
+
+.p2-divider {
+  border-left: 2px solid var(--border-gold);
 }
 
 .cell-critical { color: #e74c3c; font-weight: 700; }

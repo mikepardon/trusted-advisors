@@ -444,4 +444,349 @@ class BotGameController extends Controller
             'round_averages' => $roundAverages,
         ];
     }
+
+    // =============================================
+    // DUEL SIMULATION
+    // =============================================
+
+    public function simulateDuel(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'num_games' => 'required|integer|min:1|max:1000',
+            'starting_stats' => 'sometimes|integer|min:3|max:15',
+            'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
+        ]);
+
+        $numGames = $validated['num_games'];
+        $startingStats = $validated['starting_stats'] ?? 8;
+        $botDifficulty = $validated['bot_difficulty'] ?? 'medium';
+
+        $this->allCards = Card::all()->toArray();
+        $this->allCharacters = Character::all()->toArray();
+        $this->diceRules = GameRule::getValue('dice_per_player_count', []);
+
+        if (empty($this->allCards) || empty($this->allCharacters)) {
+            return response()->json(['error' => 'No cards or characters in database'], 422);
+        }
+
+        $results = [];
+        for ($i = 0; $i < $numGames; $i++) {
+            $results[] = $this->runDuelGame($startingStats, $botDifficulty);
+        }
+
+        return response()->json($this->aggregateDuelResults($results, $numGames));
+    }
+
+    private function runDuelGame(int $startingStats, string $botDifficulty): array
+    {
+        $statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+
+        // Pick 2 random characters
+        $characters = collect($this->allCharacters)->shuffle()->take(2)->values()->all();
+
+        // Init per-player kingdoms
+        $kingdoms = [
+            1 => array_fill_keys($statKeys, $startingStats),
+            2 => array_fill_keys($statKeys, $startingStats),
+        ];
+
+        // Player state
+        $players = [
+            1 => ['character' => $characters[0], 'lost_dice' => 0],
+            2 => ['character' => $characters[1], 'lost_dice' => 0],
+        ];
+
+        // Shuffle card deck
+        $deck = collect($this->allCards)->shuffle()->values()->all();
+        $deckPos = 0;
+
+        $roundsPlayed = 0;
+        $winner = null;
+        $endReason = null;
+        $roundLog = [];
+
+        for ($round = 1; $round <= 24; $round++) {
+            // Deal 2 cards to each player
+            $hands = [1 => [], 2 => []];
+            foreach ([1, 2] as $pNum) {
+                for ($c = 0; $c < 2; $c++) {
+                    $cardIdx = $deckPos % count($this->allCards);
+                    $hands[$pNum][] = $deck[$cardIdx];
+                    $deckPos++;
+                }
+            }
+
+            // Bot chooses: pick best card for own kingdom, other goes to opponent as negative
+            $keptCards = [1 => null, 2 => null];
+            $sentCards = [1 => null, 2 => null];
+
+            foreach ([1, 2] as $pNum) {
+                if ($botDifficulty === 'easy') {
+                    $keepIdx = random_int(0, 1);
+                } else {
+                    $baseDice = $this->diceRules['2'] ?? 3;
+                    $activeDice = max(1, $baseDice - $players[$pNum]['lost_dice']);
+                    $expectedRoll = $activeDice * 3.5;
+
+                    $score0 = $this->scoreCardChoice($hands[$pNum][0], $kingdoms[$pNum], $expectedRoll, 'positive');
+                    $score1 = $this->scoreCardChoice($hands[$pNum][1], $kingdoms[$pNum], $expectedRoll, 'positive');
+
+                    if ($botDifficulty === 'hard') {
+                        $opponent = $pNum === 1 ? 2 : 1;
+                        // Bonus for sending the more damaging card to opponent
+                        $score0 += $this->scoreDuelNegative($hands[$pNum][1], $kingdoms[$opponent]) * 0.5;
+                        $score1 += $this->scoreDuelNegative($hands[$pNum][0], $kingdoms[$opponent]) * 0.5;
+                    }
+
+                    $keepIdx = $score0 >= $score1 ? 0 : 1;
+                }
+
+                $keptCards[$pNum] = $hands[$pNum][$keepIdx];
+                $sentCards[$pNum] = $hands[$pNum][1 - $keepIdx];
+            }
+
+            // Each player rolls for their kept card, receives opponent's sent card as negative
+            $roundEntry = ['round' => $round, 'p1' => [], 'p2' => []];
+
+            foreach ([1, 2] as $pNum) {
+                $card = $keptCards[$pNum];
+                $negCard = $sentCards[$pNum === 1 ? 2 : 1]; // card sent TO this player by opponent
+                $cardDifficulty = $card['difficulty'] ?? 5;
+
+                // Roll dice
+                $baseDice = $this->diceRules['2'] ?? 3;
+                $activeDice = max(1, $baseDice - $players[$pNum]['lost_dice']);
+                $dice = $players[$pNum]['character']['dice'];
+                $totalRoll = 0;
+
+                for ($d = 0; $d < $activeDice && $d < count($dice); $d++) {
+                    $die = $dice[$d];
+                    $face = $die[random_int(0, 5)];
+                    if ($face === 'WILD') {
+                        $totalRoll += $players[$pNum]['character']['wild_value'];
+                    } else {
+                        $totalRoll += (int) $face;
+                    }
+                }
+
+                $success = $totalRoll >= $cardDifficulty;
+
+                // Positive effects from kept card (only on success)
+                if ($success) {
+                    foreach (($card['positive_effects'] ?? []) as $stat => $change) {
+                        if (!in_array($stat, $statKeys) || !is_numeric($change)) continue;
+                        $kingdoms[$pNum][$stat] = max(0, min(20, $kingdoms[$pNum][$stat] + $change));
+                    }
+                }
+
+                // Negative effects from opponent's sent card (ALWAYS apply)
+                foreach (($negCard['negative_effects'] ?? []) as $stat => $change) {
+                    if ($stat === 'lose_die') {
+                        if ($players[$pNum]['lost_dice'] < 2) {
+                            $players[$pNum]['lost_dice']++;
+                        }
+                        continue;
+                    }
+                    if (!in_array($stat, $statKeys) || !is_numeric($change)) continue;
+                    $kingdoms[$pNum][$stat] = max(0, min(20, $kingdoms[$pNum][$stat] + $change));
+                }
+
+                // Handle recover_die from positive effects
+                if ($success && !empty($card['positive_effects']['recover_die'])) {
+                    $players[$pNum]['lost_dice'] = max(0, $players[$pNum]['lost_dice'] - 1);
+                }
+
+                $roundEntry["p{$pNum}"] = [
+                    'success' => $success,
+                    'roll' => $totalRoll,
+                    'difficulty' => $cardDifficulty,
+                    'stats' => [...$kingdoms[$pNum]],
+                ];
+            }
+
+            $roundsPlayed = $round;
+            $roundLog[] = $roundEntry;
+
+            // Check win/loss conditions after both players resolve
+            foreach ([1, 2] as $pNum) {
+                foreach ($statKeys as $s) {
+                    if ($kingdoms[$pNum][$s] <= 0) {
+                        $winner = $pNum === 1 ? 2 : 1;
+                        $endReason = 'stat_collapse';
+                        break 3;
+                    }
+                }
+                $at20 = 0;
+                foreach ($statKeys as $s) {
+                    if ($kingdoms[$pNum][$s] >= 20) $at20++;
+                }
+                if ($at20 >= 3) {
+                    $winner = $pNum;
+                    $endReason = 'stat_domination';
+                    break 2;
+                }
+            }
+        }
+
+        // If no early end, compare total scores
+        if ($winner === null) {
+            $p1Score = array_sum($kingdoms[1]);
+            $p2Score = array_sum($kingdoms[2]);
+            $winner = $p1Score >= $p2Score ? 1 : 2;
+            $endReason = 'end_score';
+        }
+
+        return [
+            'winner' => $winner,
+            'end_reason' => $endReason,
+            'rounds_played' => $roundsPlayed,
+            'p1_stats' => $kingdoms[1],
+            'p2_stats' => $kingdoms[2],
+            'p1_score' => array_sum($kingdoms[1]),
+            'p2_score' => array_sum($kingdoms[2]),
+            'round_log' => $roundLog,
+            'collapse_stat' => $endReason === 'stat_collapse'
+                ? $this->findCollapsedStat($kingdoms[$winner === 1 ? 2 : 1])
+                : null,
+        ];
+    }
+
+    /**
+     * Score how damaging a card's negative effects are to the opponent.
+     * Higher score = more damage = better for us to send this card.
+     */
+    private function scoreDuelNegative(array $card, array $opponentStats): float
+    {
+        $statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        $score = 0;
+
+        foreach (($card['negative_effects'] ?? []) as $stat => $change) {
+            if (!in_array($stat, $statKeys) || !is_numeric($change)) continue;
+            $val = $opponentStats[$stat] ?? 10;
+            $weight = match (true) {
+                $val <= 2 => 10,
+                $val <= 4 => 6,
+                $val <= 6 => 4,
+                $val <= 8 => 2.5,
+                default => 1,
+            };
+            $score += abs($change) * $weight;
+        }
+
+        if (!empty($card['negative_effects']['lose_die'])) $score += 8;
+
+        return $score;
+    }
+
+    private function findCollapsedStat(array $stats): ?string
+    {
+        foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $s) {
+            if ($stats[$s] <= 0) return $s;
+        }
+        return null;
+    }
+
+    private function aggregateDuelResults(array $results, int $numGames): array
+    {
+        $p1Wins = 0;
+        $p2Wins = 0;
+        $totalRounds = 0;
+        $totalP1Score = 0;
+        $totalP2Score = 0;
+
+        $endReasons = ['stat_collapse' => 0, 'stat_domination' => 0, 'end_score' => 0];
+        $collapseDetails = [];
+        $dominationDetails = ['P1 dominated' => 0, 'P2 dominated' => 0];
+        $scoreDistribution = [];
+
+        $roundStats = [];
+
+        foreach ($results as $r) {
+            if ($r['winner'] === 1) $p1Wins++;
+            else $p2Wins++;
+
+            $totalRounds += $r['rounds_played'];
+            $totalP1Score += $r['p1_score'];
+            $totalP2Score += $r['p2_score'];
+
+            $endReasons[$r['end_reason']]++;
+
+            if ($r['end_reason'] === 'stat_collapse' && $r['collapse_stat']) {
+                $key = $r['collapse_stat'] . ' collapsed';
+                $collapseDetails[$key] = ($collapseDetails[$key] ?? 0) + 1;
+            }
+
+            if ($r['end_reason'] === 'stat_domination') {
+                $key = $r['winner'] === 1 ? 'P1 dominated' : 'P2 dominated';
+                $dominationDetails[$key]++;
+            }
+
+            if ($r['end_reason'] === 'end_score') {
+                $winnerScore = $r['winner'] === 1 ? $r['p1_score'] : $r['p2_score'];
+                $bucket = (int) floor($winnerScore / 10) * 10;
+                $scoreDistribution[$bucket] = ($scoreDistribution[$bucket] ?? 0) + 1;
+            }
+
+            foreach ($r['round_log'] as $entry) {
+                $rnd = $entry['round'];
+                if (!isset($roundStats[$rnd])) {
+                    $roundStats[$rnd] = [
+                        'count' => 0,
+                        'p1_successes' => 0, 'p2_successes' => 0,
+                        'p1_wealth' => 0, 'p1_influence' => 0, 'p1_security' => 0,
+                        'p1_religion' => 0, 'p1_food' => 0, 'p1_happiness' => 0,
+                        'p2_wealth' => 0, 'p2_influence' => 0, 'p2_security' => 0,
+                        'p2_religion' => 0, 'p2_food' => 0, 'p2_happiness' => 0,
+                    ];
+                }
+                $roundStats[$rnd]['count']++;
+                if ($entry['p1']['success']) $roundStats[$rnd]['p1_successes']++;
+                if ($entry['p2']['success']) $roundStats[$rnd]['p2_successes']++;
+
+                foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $s) {
+                    $roundStats[$rnd]["p1_{$s}"] += $entry['p1']['stats'][$s];
+                    $roundStats[$rnd]["p2_{$s}"] += $entry['p2']['stats'][$s];
+                }
+            }
+        }
+
+        // Compute round averages
+        $roundAverages = [];
+        ksort($roundStats);
+        foreach ($roundStats as $rnd => $data) {
+            $count = $data['count'];
+            $entry = [
+                'round' => $rnd,
+                'games_alive' => $count,
+                'p1_success_rate' => round($data['p1_successes'] / $count * 100, 1),
+                'p2_success_rate' => round($data['p2_successes'] / $count * 100, 1),
+            ];
+            foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $s) {
+                $entry["p1_avg_{$s}"] = round($data["p1_{$s}"] / $count, 1);
+                $entry["p2_avg_{$s}"] = round($data["p2_{$s}"] / $count, 1);
+            }
+            $roundAverages[] = $entry;
+        }
+
+        arsort($collapseDetails);
+        ksort($scoreDistribution);
+
+        return [
+            'summary' => [
+                'total_games' => $numGames,
+                'p1_wins' => $p1Wins,
+                'p2_wins' => $p2Wins,
+                'p1_win_rate' => round($p1Wins / $numGames * 100, 1),
+                'p2_win_rate' => round($p2Wins / $numGames * 100, 1),
+                'avg_rounds_played' => round($totalRounds / $numGames, 1),
+                'avg_p1_score' => round($totalP1Score / $numGames, 1),
+                'avg_p2_score' => round($totalP2Score / $numGames, 1),
+            ],
+            'end_reasons' => $endReasons,
+            'collapse_details' => $collapseDetails,
+            'domination_details' => $dominationDetails,
+            'round_averages' => $roundAverages,
+            'score_distribution' => $scoreDistribution,
+        ];
+    }
 }
