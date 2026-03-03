@@ -24,6 +24,7 @@ use App\Http\Controllers\Admin\UnlockableController;
 use App\Http\Controllers\Admin\AddonController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AiGeneratorController;
+use App\Http\Controllers\Admin\CsvController;
 use App\Http\Controllers\Admin\GameManagementController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\NotificationController;
@@ -148,6 +149,7 @@ Route::middleware('auth:web')->group(function () {
     // Referral
     Route::get('/referral/code', [ReferralController::class, 'getCode']);
     Route::get('/referral/stats', [ReferralController::class, 'stats']);
+    Route::post('/referral/apply', [ReferralController::class, 'apply']);
 
     // Rotating events
     Route::get('/rotating-events', [RotatingEventController::class, 'index']);
@@ -222,6 +224,10 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     // Weekly challenges
     Route::post('weekly-challenges/generate', [WeeklyChallengeController::class, 'generateRange']);
     Route::apiResource('weekly-challenges', WeeklyChallengeController::class);
+
+    // CSV export/import
+    Route::get('{type}/export-csv', [CsvController::class, 'export'])->where('type', 'characters|cards|events|items');
+    Route::post('{type}/import-csv', [CsvController::class, 'import'])->where('type', 'characters|cards|events|items');
 
     // AI content generation
     Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);

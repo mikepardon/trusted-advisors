@@ -29,7 +29,7 @@
     <template v-if="tab !== 'rewards'">
       <!-- Filters -->
       <div class="filters-row">
-        <select v-model="metric" @change="fetchData()" class="filter-select">
+        <select v-model="metric" @change="onMetricChange" class="filter-select">
           <option value="wins">Wins</option>
           <option value="score">Score</option>
           <option value="xp">XP</option>
@@ -39,7 +39,7 @@
           <option :value="null">All Seasons</option>
           <option v-for="s in seasons" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
-        <select v-model="gameType" @change="fetchData()" class="filter-select" v-if="metric !== 'elo' && metric !== 'xp'">
+        <select v-model="gameType" @change="fetchData()" class="filter-select" v-if="metric === 'wins'">
           <option :value="null">All Types</option>
           <option value="cooperative">Cooperative</option>
           <option value="duel">Duel</option>
@@ -187,6 +187,18 @@ export default {
     if (this._observer) this._observer.disconnect();
   },
   methods: {
+    onMetricChange() {
+      if (this.metric === 'score') {
+        if (this.activeSeason) {
+          this.seasonId = this.activeSeason.id;
+        }
+        this.gameType = 'cooperative';
+      } else if (this.metric === 'elo' || this.metric === 'xp') {
+        this.seasonId = null;
+        this.gameType = null;
+      }
+      this.fetchData();
+    },
     async fetchData() {
       this.loading = true;
       try {

@@ -155,37 +155,6 @@
         </div>
       </div>
 
-      <!-- Referral Section -->
-      <div v-if="auth.state.user" class="settings-group">
-        <h3 class="group-title">Referral Program</h3>
-        <p class="referral-desc">Invite friends! Earn 20 coins when they reach Level 2.</p>
-
-        <div class="referral-code-row">
-          <div class="referral-code-box">
-            <span v-if="referralCode" class="referral-code">{{ referralCode }}</span>
-            <span v-else class="referral-code dim">Loading...</span>
-          </div>
-          <button class="btn-copy" @click="copyCode" :disabled="!referralCode">
-            {{ copied ? 'Copied!' : 'Copy' }}
-          </button>
-          <button v-if="canShare" class="btn-share" @click="shareCode" :disabled="!referralCode">Share</button>
-        </div>
-
-        <div v-if="referralStats" class="referral-stats">
-          <div class="ref-stat">
-            <span class="ref-stat-value">{{ referralStats.total_referred }}</span>
-            <span class="ref-stat-label">Invited</span>
-          </div>
-          <div class="ref-stat">
-            <span class="ref-stat-value">{{ referralStats.verified_count }}</span>
-            <span class="ref-stat-label">Verified (Lv.2+)</span>
-          </div>
-          <div class="ref-stat">
-            <span class="ref-stat-value">{{ referralStats.total_coins_earned }}</span>
-            <span class="ref-stat-label">Coins Earned</span>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -214,10 +183,6 @@ export default {
         push_admin: true,
         push_challenge: true,
       },
-      referralCode: null,
-      referralStats: null,
-      copied: false,
-      canShare: !!navigator.share,
     };
   },
   async mounted() {
@@ -231,10 +196,6 @@ export default {
       });
     }
 
-    // Load referral data
-    if (this.auth.state.user) {
-      this.fetchReferralData();
-    }
   },
   methods: {
     toggle(key) {
@@ -250,33 +211,6 @@ export default {
       if (this.hintsEnabled) {
         playSound('clickToggle');
       }
-    },
-    async fetchReferralData() {
-      try {
-        const [codeRes, statsRes] = await Promise.allSettled([
-          axios.get('/api/referral/code'),
-          axios.get('/api/referral/stats'),
-        ]);
-        if (codeRes.status === 'fulfilled') this.referralCode = codeRes.value.data.code;
-        if (statsRes.status === 'fulfilled') this.referralStats = statsRes.value.data;
-      } catch {}
-    },
-    async copyCode() {
-      if (!this.referralCode) return;
-      try {
-        await navigator.clipboard.writeText(this.referralCode);
-        this.copied = true;
-        setTimeout(() => { this.copied = false; }, 2000);
-      } catch {}
-    },
-    async shareCode() {
-      if (!this.referralCode || !navigator.share) return;
-      try {
-        await navigator.share({
-          title: 'Join Trusted Advisors!',
-          text: `Use my referral code: ${this.referralCode}`,
-        });
-      } catch {}
     },
     async toggleNotif(key) {
       this.notifPrefs[key] = !this.notifPrefs[key];
@@ -418,91 +352,6 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   white-space: nowrap;
-}
-
-/* Referral section */
-.referral-desc {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-style: italic;
-  margin-bottom: 12px;
-}
-
-.referral-code-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
-
-.referral-code-box {
-  flex: 1;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border-gold);
-  border-radius: 6px;
-  padding: 10px 14px;
-  text-align: center;
-}
-
-.referral-code {
-  font-family: 'Cinzel', serif;
-  font-size: 1.2rem;
-  color: var(--accent-gold);
-  font-weight: 700;
-  letter-spacing: 3px;
-}
-
-.referral-code.dim {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  letter-spacing: 0;
-}
-
-.btn-copy, .btn-share {
-  padding: 10px 16px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.btn-copy {
-  background: rgba(212, 168, 67, 0.15);
-  border: 1px solid rgba(212, 168, 67, 0.3);
-  color: var(--accent-gold);
-}
-
-.btn-share {
-  background: rgba(67, 160, 212, 0.15);
-  border: 1px solid rgba(67, 160, 212, 0.3);
-  color: #60b8e0;
-}
-
-.referral-stats {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-}
-
-.ref-stat {
-  text-align: center;
-}
-
-.ref-stat-value {
-  display: block;
-  font-family: 'Cinzel', serif;
-  font-size: 1.3rem;
-  color: var(--accent-gold);
-  font-weight: 700;
-}
-
-.ref-stat-label {
-  display: block;
-  font-size: 0.7rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 @media (max-width: 768px) {

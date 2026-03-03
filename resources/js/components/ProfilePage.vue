@@ -10,6 +10,60 @@
           <p class="profile-joined">Level {{ gameStats.level || 1 }} Advisor</p>
         </div>
       </div>
+
+      <!-- Referral Section -->
+      <div class="referral-section">
+        <h3 class="referral-title">Referral Program</h3>
+        <p class="referral-desc">Invite friends! Earn 20 coins when they reach Level 2.</p>
+
+        <div class="referral-code-display">
+          <span v-if="referralCode" class="referral-code">{{ referralCode }}</span>
+          <span v-else class="referral-code dim">Loading...</span>
+        </div>
+        <div class="referral-buttons">
+          <button class="btn-referral btn-copy" @click="copyCode" :disabled="!referralCode">
+            {{ copied ? 'Copied!' : 'Copy Code' }}
+          </button>
+          <button v-if="canShare" class="btn-referral btn-share" @click="shareCode" :disabled="!referralCode">Share</button>
+        </div>
+
+        <div v-if="referralStats" class="referral-stats">
+          <div class="ref-stat">
+            <span class="ref-stat-value">{{ referralStats.total_referred }}</span>
+            <span class="ref-stat-label">Invited</span>
+          </div>
+          <div class="ref-stat">
+            <span class="ref-stat-value">{{ referralStats.verified_count }}</span>
+            <span class="ref-stat-label">Verified (Lv.2+)</span>
+          </div>
+          <div class="ref-stat">
+            <span class="ref-stat-value">{{ referralStats.total_coins_earned }}</span>
+            <span class="ref-stat-label">Coins Earned</span>
+          </div>
+        </div>
+
+        <!-- Enter a referral code -->
+        <div v-if="!auth.state.user?.referred_by && !referralApplied" class="referral-enter">
+          <p class="referral-enter-label">Have a referral code?</p>
+          <div class="referral-enter-row">
+            <input
+              v-model="referralInput"
+              type="text"
+              class="referral-input"
+              placeholder="Enter code"
+              maxlength="10"
+              @keyup.enter="applyReferralCode"
+            />
+            <button class="btn-referral btn-apply" @click="applyReferralCode" :disabled="!referralInput.trim() || applyingReferral">
+              {{ applyingReferral ? 'Applying...' : 'Apply' }}
+            </button>
+          </div>
+          <p v-if="referralError" class="referral-error">{{ referralError }}</p>
+        </div>
+        <div v-else-if="referralApplied" class="referral-applied">
+          Referral code applied!
+        </div>
+      </div>
     </div>
 
     <!-- XP & Level -->
@@ -152,6 +206,14 @@ export default {
       charsLoading: true,
       selectedChar: null,
       authServiceUrl: import.meta.env.VITE_AUTH_URL || '',
+      referralCode: null,
+      referralStats: null,
+      copied: false,
+      canShare: !!navigator.share,
+      referralInput: '',
+      applyingReferral: false,
+      referralError: '',
+      referralApplied: false,
     };
   },
   computed: {
@@ -174,11 +236,54 @@ export default {
     this.statsLoading = false;
     this.myCharacters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
     this.charsLoading = false;
+    this.fetchReferralData();
   },
   methods: {
     async handleLogout() {
       await this.auth.logout();
       window.location.reload();
+    },
+    async fetchReferralData() {
+      try {
+        const [codeRes, statsRes] = await Promise.allSettled([
+          axios.get('/api/referral/code'),
+          axios.get('/api/referral/stats'),
+        ]);
+        if (codeRes.status === 'fulfilled') this.referralCode = codeRes.value.data.code;
+        if (statsRes.status === 'fulfilled') this.referralStats = statsRes.value.data;
+      } catch {}
+    },
+    async copyCode() {
+      if (!this.referralCode) return;
+      try {
+        await navigator.clipboard.writeText(this.referralCode);
+        this.copied = true;
+        setTimeout(() => { this.copied = false; }, 2000);
+      } catch {}
+    },
+    async shareCode() {
+      if (!this.referralCode || !navigator.share) return;
+      try {
+        await navigator.share({
+          title: 'Join Trusted Advisors!',
+          text: `Use my referral code: ${this.referralCode}`,
+        });
+      } catch {}
+    },
+    async applyReferralCode() {
+      const code = this.referralInput.trim();
+      if (!code) return;
+      this.applyingReferral = true;
+      this.referralError = '';
+      try {
+        await axios.post('/api/referral/apply', { code });
+        this.referralApplied = true;
+        this.referralInput = '';
+      } catch (e) {
+        this.referralError = e.response?.data?.message || 'Invalid referral code.';
+      } finally {
+        this.applyingReferral = false;
+      }
     },
   },
 };
@@ -545,6 +650,169 @@ export default {
 
 .char-modal-close {
   padding: 8px 28px;
+}
+
+/* Referral Section */
+.referral-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(138, 106, 46, 0.3);
+}
+
+.referral-title {
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-size: 1rem;
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.referral-desc {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-style: italic;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.referral-code-display {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  padding: 10px 14px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.referral-code {
+  font-family: 'Cinzel', serif;
+  font-size: 1.2rem;
+  color: var(--accent-gold);
+  font-weight: 700;
+  letter-spacing: 3px;
+}
+
+.referral-code.dim {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  letter-spacing: 0;
+}
+
+.referral-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.btn-referral {
+  flex: 1;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.btn-copy {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  color: var(--accent-gold);
+}
+
+.btn-share {
+  background: rgba(67, 160, 212, 0.15);
+  border: 1px solid rgba(67, 160, 212, 0.3);
+  color: #60b8e0;
+}
+
+.referral-stats {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.ref-stat {
+  text-align: center;
+}
+
+.ref-stat-value {
+  display: block;
+  font-family: 'Cinzel', serif;
+  font-size: 1.3rem;
+  color: var(--accent-gold);
+  font-weight: 700;
+}
+
+.ref-stat-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.referral-enter {
+  padding-top: 10px;
+  border-top: 1px solid rgba(138, 106, 46, 0.15);
+}
+
+.referral-enter-label {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-style: italic;
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.referral-enter-row {
+  display: flex;
+  gap: 8px;
+}
+
+.referral-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text-bright);
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+.referral-input::placeholder {
+  color: var(--text-secondary);
+  font-style: italic;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.btn-apply {
+  background: rgba(80, 160, 80, 0.15);
+  border: 1px solid rgba(80, 160, 80, 0.3);
+  color: #6abf50;
+}
+
+.referral-error {
+  color: #d05040;
+  font-size: 0.8rem;
+  margin-top: 6px;
+  text-align: center;
+}
+
+.referral-applied {
+  color: #6abf50;
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: center;
+  padding-top: 10px;
+  border-top: 1px solid rgba(138, 106, 46, 0.15);
 }
 
 @media (max-width: 768px) {

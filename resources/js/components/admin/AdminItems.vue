@@ -2,7 +2,19 @@
   <div>
     <div class="page-header">
       <h2 class="page-title">Items</h2>
-      <button class="btn-primary" @click="openCreate">+ New Item</button>
+      <div class="header-buttons">
+        <button class="btn-csv" @click="exportCsv">Export CSV</button>
+        <button class="btn-csv" @click="triggerImport">Import CSV</button>
+        <input type="file" ref="csvInput" accept=".csv" style="display:none" @change="handleImportFile" />
+        <button class="btn-primary" @click="openCreate">+ New Item</button>
+      </div>
+    </div>
+
+    <div v-if="importResult" class="import-result" :class="importResult.errors.length ? 'import-warn' : 'import-ok'">
+      CSV Import: {{ importResult.created }} created, {{ importResult.updated }} updated.
+      <span v-if="importResult.errors.length"> {{ importResult.errors.length }} error(s).</span>
+      <div v-for="(err, i) in importResult.errors" :key="i" class="import-error-line">{{ err }}</div>
+      <button class="import-dismiss" @click="importResult = null">Dismiss</button>
     </div>
 
     <AdminSearchInput v-model="searchQuery" />
@@ -141,6 +153,7 @@ export default {
       editing: null,
       saving: false,
       formError: '',
+      importResult: null,
       form: {
         name: '',
         description: '',
@@ -250,6 +263,28 @@ export default {
         this.formError = e.response?.data?.message || 'Save failed';
       }
       this.saving = false;
+    },
+    exportCsv() {
+      window.location.href = '/api/admin/items/export-csv';
+    },
+    triggerImport() {
+      this.$refs.csvInput.click();
+    },
+    async handleImportFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const formData = new FormData();
+      formData.append('file', file);
+      try {
+        const res = await axios.post('/api/admin/items/import-csv', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        this.importResult = res.data;
+        await this.fetch();
+      } catch (e) {
+        this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
+      }
+      event.target.value = '';
     },
     async confirmDelete(item) {
       if (!confirm(`Delete item "${item.name}"?`)) return;
@@ -385,4 +420,64 @@ export default {
 .form-group input:focus, .form-group textarea:focus, .form-group select:focus { outline: none; border-color: var(--accent-gold); }
 .form-error { color: var(--accent-red); font-size: 0.9rem; margin-bottom: 10px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
+
+.header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.btn-csv {
+  background: rgba(40, 120, 80, 0.2);
+  color: #5ab87a;
+  border: 1px solid rgba(40, 120, 80, 0.4);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+
+.btn-csv:hover {
+  background: rgba(40, 120, 80, 0.35);
+  border-color: rgba(60, 160, 100, 0.6);
+}
+
+.import-result {
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+  position: relative;
+}
+
+.import-ok {
+  background: rgba(39, 174, 96, 0.15);
+  border: 1px solid rgba(39, 174, 96, 0.4);
+  color: #5ab87a;
+}
+
+.import-warn {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(212, 168, 67, 0.4);
+  color: #d4a843;
+}
+
+.import-error-line {
+  font-size: 0.8rem;
+  color: #d05040;
+  margin-top: 4px;
+}
+
+.import-dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 2px 8px;
+}
 </style>

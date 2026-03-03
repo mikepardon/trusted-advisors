@@ -197,6 +197,7 @@ class AuthController extends Controller
                 'max:20',
                 'regex:/^[a-zA-Z0-9]+$/',
             ],
+            'referral_code' => 'nullable|string|max:10',
         ]);
 
         $username = strtolower($validated['username']);
@@ -216,6 +217,17 @@ class AuthController extends Controller
         $user = $request->user();
         $user->name = $username;
         $user->username_chosen = true;
+
+        // Process referral code if provided and user wasn't already referred
+        if (!empty($validated['referral_code']) && !$user->referred_by) {
+            $referrer = User::where('referral_code', strtoupper($validated['referral_code']))
+                ->where('id', '!=', $user->id)
+                ->first();
+            if ($referrer) {
+                $user->referred_by = $referrer->id;
+            }
+        }
+
         $user->save();
 
         return response()->json($user->toArray());

@@ -26,6 +26,17 @@
         <div class="char-count">{{ username.length }}/20</div>
       </div>
 
+      <div class="referral-group">
+        <label class="referral-label">Have a referral code? <span class="optional-tag">(optional)</span></label>
+        <input
+          v-model="referralCode"
+          type="text"
+          class="referral-input"
+          placeholder="Enter referral code"
+          maxlength="10"
+        />
+      </div>
+
       <button
         class="btn-primary confirm-btn"
         :disabled="!canSubmit || submitting"
@@ -50,6 +61,7 @@ export default {
   data() {
     return {
       username: '',
+      referralCode: '',
       available: null,
       checking: false,
       submitting: false,
@@ -114,9 +126,11 @@ export default {
       this.submitting = true;
 
       try {
-        const res = await axios.post('/api/auth/set-username', {
-          username: this.username.trim(),
-        });
+        const payload = { username: this.username.trim() };
+        if (this.referralCode.trim()) {
+          payload.referral_code = this.referralCode.trim();
+        }
+        const res = await axios.post('/api/auth/set-username', payload);
         this.auth.state.user = res.data;
         this.$router.push('/');
       } catch (e) {
@@ -223,6 +237,50 @@ export default {
   top: 14px;
   font-size: 0.75rem;
   color: var(--text-secondary);
+}
+
+.referral-group {
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.referral-label {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+
+.optional-tag {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.referral-input {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  font-family: 'Cinzel', serif;
+  background: var(--bg-primary);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 6px;
+  color: var(--text-primary);
+  outline: none;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.referral-input:focus {
+  border-color: var(--accent-gold);
+}
+
+.referral-input::placeholder {
+  color: var(--text-secondary);
+  opacity: 0.5;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .confirm-btn {
