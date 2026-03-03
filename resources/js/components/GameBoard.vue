@@ -1,6 +1,11 @@
 <template>
   <div v-if="loading" class="loading">Loading game state...</div>
   <div v-else-if="gameData" class="game-board">
+    <!-- Connection status banner -->
+    <div v-if="isOnline && connectionStatus !== 'connected'" class="connection-banner" :class="connectionStatus">
+      <span v-if="connectionStatus === 'connecting'">Reconnecting...</span>
+      <span v-else>Connection lost. Trying to reconnect...</span>
+    </div>
     <!-- ONLINE LOBBY (setup phase) -->
     <template v-if="isOnline && gameData.game.status === 'setup'">
       <OnlineLobby
@@ -229,6 +234,8 @@ export default {
       // Item reveal
       itemRevealQueue: [],
       showItemReveal: false,
+      // Connection monitoring
+      connectionStatus: 'connected',
       // Item discard (when over 2-item limit)
       itemsOverLimit: [],
       // Online mode
@@ -326,12 +333,17 @@ export default {
       this.setupOnlinePlayer();
       this.subscribeToGameChannel();
     }
+    // Reconnection: visibility change
+    document.addEventListener('visibilitychange', this.onVisibilityChange);
+    // Reconnection: Pusher connection monitoring
+    this.setupConnectionMonitoring();
   },
   beforeUnmount() {
     if (this.echoChannel) {
       window.Echo.leave(`game.${this.id}`);
       this.echoChannel = null;
     }
+    document.removeEventListener('visibilitychange', this.onVisibilityChange);
   },
   methods: {
     onGameDataUpdated(data) {
@@ -342,6 +354,42 @@ export default {
         this.gameData.duel_phase = duelPhase;
         if (this.gameData.game) {
           this.gameData.game.duel_phase = duelPhase;
+        }
+      }
+    },
+    onVisibilityChange() {
+      if (document.visibilityState === 'visible' && this.isOnline) {
+        this.fetchGameWithRetry();
+        // Resubscribe if channel lost
+        if (!this.echoChannel) {
+          this.subscribeToGameChannel();
+        }
+      }
+    },
+    setupConnectionMonitoring() {
+      try {
+        const pusher = window.Echo?.connector?.pusher;
+        if (!pusher) return;
+        pusher.connection.bind('state_change', (states) => {
+          this.connectionStatus = states.current;
+          // On reconnect, re-fetch game state
+          if (states.current === 'connected' && states.previous !== 'connected' && this.isOnline) {
+            this.fetchGameWithRetry();
+          }
+        });
+      } catch {
+        // Pusher not available
+      }
+    },
+    async fetchGameWithRetry(attempt = 0) {
+      const maxAttempts = 5;
+      try {
+        const res = await axios.get(`/api/games/${this.id}`);
+        this.gameData = res.data;
+      } catch {
+        if (attempt < maxAttempts && this.isOnline) {
+          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s, 16s
+          setTimeout(() => this.fetchGameWithRetry(attempt + 1), delay);
         }
       }
     },
@@ -756,6 +804,29 @@ export default {
 </script>
 
 <style scoped>
+.connection-banner {
+  text-align: center;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  font-family: 'Cinzel', serif;
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+.connection-banner.connecting {
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+}
+
+.connection-banner.unavailable,
+.connection-banner.disconnected,
+.connection-banner.failed {
+  background: rgba(160, 48, 32, 0.15);
+  color: #d05040;
+  border: 1px solid rgba(160, 48, 32, 0.3);
+}
+
 .loading {
   text-align: center;
   padding: 60px;

@@ -16,6 +16,9 @@
           <div class="list-dates">{{ formatDate(s.starts_at) }} &mdash; {{ formatDate(s.ends_at) }}</div>
         </div>
         <div class="list-actions">
+          <button v-if="s.is_active" class="btn-sm btn-end" @click="endSeason(s)" :disabled="endingSeasonId === s.id">
+            {{ endingSeasonId === s.id ? 'Ending...' : 'End Season' }}
+          </button>
           <button class="btn-sm" @click="openRewards(s)">Rewards</button>
           <button class="btn-sm" @click="openEdit(s)">Edit</button>
           <button class="btn-sm btn-danger" @click="deleteSeason(s)">Del</button>
@@ -164,6 +167,7 @@ export default {
       editingReward: null,
       rewardFormError: '',
       rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' },
+      endingSeasonId: null,
     };
   },
   computed: {
@@ -214,6 +218,18 @@ export default {
       } catch (e) {
         this.formError = e.response?.data?.error || e.response?.data?.message || 'Error';
       }
+    },
+    async endSeason(s) {
+      if (!confirm(`End season "${s.name}" and distribute rewards? This cannot be undone.`)) return;
+      this.endingSeasonId = s.id;
+      try {
+        const res = await axios.post(`/api/admin/seasons/${s.id}/end`);
+        alert(`Season ended! ${res.data.rewards_distributed} rewards distributed.`);
+        this.load();
+      } catch (e) {
+        alert(e.response?.data?.error || 'Failed to end season');
+      }
+      this.endingSeasonId = null;
     },
     async deleteSeason(s) {
       if (!confirm(`Delete "${s.name}"?`)) return;
@@ -309,6 +325,7 @@ export default {
 .list-actions { display: flex; gap: 4px; }
 .btn-sm { background: rgba(212, 168, 67, 0.15); border: 1px solid rgba(138, 106, 46, 0.3); color: var(--accent-gold); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .btn-danger { background: rgba(160, 48, 32, 0.15); color: #d05040; border-color: rgba(160, 48, 32, 0.3); }
+.btn-end { background: rgba(74, 138, 58, 0.15); color: #6abf50; border-color: rgba(74, 138, 58, 0.3); }
 .empty { text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px; }
 
 /* Modal */

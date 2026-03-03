@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessSeasonEndJob;
 use App\Models\Season;
 use App\Models\SeasonReward;
+use App\Services\SeasonRewardService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -86,6 +88,13 @@ class SeasonController extends Controller
     {
         $season->delete();
         return response()->json(null, 204);
+    }
+
+    public function endSeason(Season $season): JsonResponse
+    {
+        ProcessSeasonEndJob::dispatch($season);
+
+        return response()->json(['message' => 'Season end processing has been queued.']);
     }
 
     // Season Rewards CRUD

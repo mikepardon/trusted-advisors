@@ -186,7 +186,8 @@ export default {
     // fetchUser() is already called in app.js router guard; just wait for it
     const check = () => {
       if (!this.auth.state.loading && this.auth.state.user) {
-        this.pollNotifCount();
+        this.fetchNotifCount();
+        this.subscribeNotifChannel();
         initOneSignal().then(() => promptPushPermission());
       } else if (this.auth.state.loading) {
         setTimeout(check, 50);
@@ -197,7 +198,11 @@ export default {
     document.addEventListener('click', this._closeMenuOnClick);
   },
   beforeUnmount() {
-    if (this._notifTimer) clearInterval(this._notifTimer);
+    if (this._notifChannel) {
+      this._notifChannel.stopListening('GameInviteReceived');
+      this._notifChannel.stopListening('FriendRequestReceived');
+      this._notifChannel.stopListening('UserNotificationReceived');
+    }
     document.removeEventListener('click', this._closeMenuOnClick);
   },
   methods: {
@@ -233,7 +238,12 @@ export default {
     async handleLogout() {
       this.showLogoutConfirm = false;
       this.showMenuPopup = false;
-      if (this._notifTimer) clearInterval(this._notifTimer);
+      if (this._notifChannel) {
+        this._notifChannel.stopListening('GameInviteReceived');
+        this._notifChannel.stopListening('FriendRequestReceived');
+        this._notifChannel.stopListening('UserNotificationReceived');
+        this._notifChannel = null;
+      }
       await this.auth.logout();
       this.notifCount = 0;
       if (this.$route.path === '/') {
@@ -242,23 +252,35 @@ export default {
         this.$router.replace('/');
       }
     },
-    async pollNotifCount() {
-      const fetch = async () => {
-        if (!this.auth.state.user) return;
-        try {
-          const [invitesRes, friendsRes] = await Promise.all([
-            axios.get('/api/game-invites/pending'),
-            axios.get('/api/friends'),
-          ]);
-          const invites = invitesRes.data?.length || 0;
-          const friends = friendsRes.data?.pending_received?.length || 0;
-          this.notifCount = invites + friends;
-        } catch {
-          // ignore
-        }
-      };
-      await fetch();
-      this._notifTimer = setInterval(fetch, 30000);
+    async fetchNotifCount() {
+      if (!this.auth.state.user) return;
+      try {
+        const [invitesRes, friendsRes, unreadRes] = await Promise.all([
+          axios.get('/api/game-invites/pending'),
+          axios.get('/api/friends'),
+          axios.get('/api/notifications/unread-count'),
+        ]);
+        const invites = invitesRes.data?.length || 0;
+        const friends = friendsRes.data?.pending_received?.length || 0;
+        const dbUnread = unreadRes.data?.count || 0;
+        this.notifCount = invites + friends + dbUnread;
+      } catch {
+        // ignore
+      }
+    },
+    subscribeNotifChannel() {
+      const userId = this.auth.state.user?.id;
+      if (!userId) return;
+      this._notifChannel = window.Echo.private(`user.${userId}`)
+        .listen('GameInviteReceived', () => {
+          this.notifCount++;
+        })
+        .listen('FriendRequestReceived', () => {
+          this.notifCount++;
+        })
+        .listen('UserNotificationReceived', () => {
+          this.notifCount++;
+        });
     },
   },
 };

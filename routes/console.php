@@ -9,3 +9,5 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 Schedule::command('app:process-expired-turns')->everyMinute();
+Schedule::command('app:process-season-end')->dailyAt('00:05');
+Schedule::command('app:generate-weekly-challenge')->weeklyOn(1, '00:01');

@@ -3171,6 +3171,36 @@ class GameController extends Controller
         ]);
     }
 
+    public function weeklyChallenge(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        $today = Carbon::today();
+        $challenge = \App\Models\WeeklyChallenge::where('week_start', '<=', $today)
+            ->where('week_end', '>=', $today)
+            ->first();
+
+        if (!$challenge) {
+            return response()->json(null);
+        }
+
+        $entry = \App\Models\WeeklyChallengeEntry::where('user_id', $user->id)
+            ->where('weekly_challenge_id', $challenge->id)
+            ->first();
+
+        return response()->json([
+            'id' => $challenge->id,
+            'title' => $challenge->title,
+            'description' => $challenge->description,
+            'reward_xp' => $challenge->reward_xp,
+            'reward_coins' => $challenge->reward_coins,
+            'criteria' => $challenge->criteria,
+            'progress' => $entry?->progress ?? 0,
+            'target' => $challenge->criteria['count'] ?? 1,
+            'completed' => $entry && $entry->completed_at !== null,
+            'week_end' => $challenge->week_end->toDateString(),
+        ]);
+    }
+
     public function seasons(): JsonResponse
     {
         return response()->json(Season::orderByDesc('starts_at')->get());

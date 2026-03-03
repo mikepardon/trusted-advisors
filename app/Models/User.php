@@ -38,6 +38,7 @@ class User extends Authenticatable
         'last_login_at',
         'refresh_token',
         'username_chosen',
+        'notification_preferences',
     ];
 
     /**
@@ -73,6 +74,7 @@ class User extends Authenticatable
             'last_login_at' => 'datetime',
             'banned_at' => 'datetime',
             'username_chosen' => 'boolean',
+            'notification_preferences' => 'array',
         ];
     }
 
@@ -125,6 +127,13 @@ class User extends Authenticatable
     public function coinTransactions(): HasMany
     {
         return $this->hasMany(CoinTransaction::class);
+    }
+
+    public function wantsPushNotification(string $category): bool
+    {
+        $prefs = $this->notification_preferences;
+        if ($prefs === null) return true;
+        return $prefs['push_' . $category] ?? true;
     }
 
     public function recordCoinTransaction(int $amount, string $type, string $source, ?int $referenceId = null, string $description = ''): void

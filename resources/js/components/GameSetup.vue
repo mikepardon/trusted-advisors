@@ -51,26 +51,13 @@
       <!-- Grid: col-8 (content) + col-4 (nav icons) -->
       <div class="home-grid">
         <div class="home-grid-main">
-          <!-- Active Season Card -->
-          <div v-if="activeSeason" class="season-card" @click="$router.push('/season')">
-            <div class="season-card-header">
-              <h3 class="season-card-name">{{ activeSeason.name }}</h3>
-              <h3 v-if="homeStats.seasonRank" class="season-card-rank">#{{ homeStats.seasonRank }}</h3>
-            </div>
-            <div class="season-card-time">{{ seasonTimeLeft }}</div>
-            <div class="season-card-bar">
-              <div class="season-card-fill" :style="{ width: seasonPercent + '%' }"></div>
-            </div>
-            <div class="season-card-meta">
-              <span v-if="activeSeason.topReward" class="season-card-reward">
-                1st: {{ activeSeason.topReward }}
-              </span>
-            </div>
-          </div>
+          <!-- Announcements -->
+          <AnnouncementsBanner />
 
           <!-- Daily Challenge Banner (enhanced) -->
           <div class="daily-enhanced">
             <DailyChallengeBanner />
+            <WeeklyChallengeBanner />
           </div>
 
           <!-- In-Progress Games Button -->
@@ -90,7 +77,7 @@
           <button class="side-icon-btn" @click="showMobileMenu = true" title="Menu">&#9776;</button>
           <button class="side-icon-btn" @click="openNotifications()" title="Alerts">
             &#128276;
-            <span v-if="pendingInvites.length > 0" class="side-badge">{{ pendingInvites.length }}</span>
+            <span v-if="notifCount > 0" class="side-badge">{{ notifCount > 9 ? '9+' : notifCount }}</span>
           </button>
           <button class="side-icon-btn" @click="$router.push('/leaderboard')" title="Ranks">&#127942;</button>
           <button class="side-icon-btn" @click="$router.push('/achievements')" title="Achievements">
@@ -443,7 +430,9 @@
 import axios from 'axios';
 import { useAuth } from '../stores/auth';
 import { playSound } from '../sounds';
+import AnnouncementsBanner from './AnnouncementsBanner.vue';
 import DailyChallengeBanner from './DailyChallengeBanner.vue';
+import WeeklyChallengeBanner from './WeeklyChallengeBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import MatchmakingQueue from './MatchmakingQueue.vue';
 import StoryIntro from './StoryIntro.vue';
@@ -454,7 +443,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { DailyChallengeBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
+  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
   inject: {
     openNotifications: { default: () => () => {} },
     openRules: { default: () => () => {} },
@@ -491,8 +480,8 @@ export default {
       addFriendSuccess: '',
       botDifficulty: 'medium',
       // Home screen stats
-      homeStats: { level: 1, elo: 1000, seasonRank: null, unclaimed: 0, activeGames: 0 },
-      activeSeason: null,
+      homeStats: { level: 1, elo: 1000, unclaimed: 0, activeGames: 0 },
+      notifCount: 0,
       showMobileMenu: false,
       speedMode: 'speed',
       // Game length options
@@ -516,26 +505,6 @@ export default {
       }
       const selectedIds = Object.values(this.playerSelections);
       return this.characters.filter(c => !selectedIds.includes(c.id) && !c.is_locked_for_user);
-    },
-    seasonPercent() {
-      if (!this.activeSeason) return 0;
-      const start = new Date(this.activeSeason.starts_at).getTime();
-      const end = new Date(this.activeSeason.ends_at).getTime();
-      const now = Date.now();
-      if (now >= end) return 100;
-      if (now <= start) return 0;
-      return Math.round(((now - start) / (end - start)) * 100);
-    },
-    seasonTimeLeft() {
-      if (!this.activeSeason) return '';
-      const end = new Date(this.activeSeason.ends_at);
-      const now = new Date();
-      if (now >= end) return 'Ended';
-      const diff = end - now;
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      if (days > 1) return `${days}d left`;
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      return `${hours}h left`;
     },
     lockedCharacters() {
       return this.characters.filter(c => c.is_locked_for_user);
@@ -568,11 +537,11 @@ export default {
   methods: {
     async fetchHomeStats() {
       try {
-        const [statsRes, achRes, seasonsRes, historyRes] = await Promise.allSettled([
+        const [statsRes, achRes, historyRes, unreadRes] = await Promise.allSettled([
           axios.get('/api/auth/stats'),
           axios.get('/api/achievements'),
-          axios.get('/api/seasons'),
           axios.get('/api/games/history'),
+          axios.get('/api/notifications/unread-count'),
         ]);
 
         if (statsRes.status === 'fulfilled') {
@@ -585,34 +554,13 @@ export default {
           this.homeStats.unclaimed = achRes.value.data.filter(a => a.earned && !a.claimed).length;
         }
 
-        if (seasonsRes.status === 'fulfilled') {
-          const seasons = seasonsRes.value.data;
-          const active = seasons.find(s => s.is_active);
-          if (active) {
-            this.activeSeason = active;
-            // Fetch season detail for rank and rewards
-            try {
-              const detailRes = await axios.get(`/api/seasons/${active.id}`);
-              this.homeStats.seasonRank = detailRes.data.user_rank;
-              // Build top reward preview
-              const rewards = detailRes.data.season?.rewards;
-              if (rewards && rewards.length) {
-                const first = rewards.find(r => r.placement === 1);
-                if (first) {
-                  const parts = [];
-                  if (first.reward_xp) parts.push(`${first.reward_xp} XP`);
-                  if (first.reward_coins) parts.push(`${first.reward_coins} coins`);
-                  if (first.reward_character) parts.push(first.reward_character.name);
-                  this.activeSeason.topReward = parts.join(' + ') || null;
-                }
-              }
-            } catch {}
-          }
-        }
-
         if (historyRes.status === 'fulfilled') {
           this.homeStats.activeGames = (historyRes.value.data.active_games || []).length;
         }
+
+        // Notification badge: pending invites + unread DB notifications
+        const dbUnread = unreadRes.status === 'fulfilled' ? (unreadRes.value.data?.count || 0) : 0;
+        this.notifCount = this.pendingInvites.length + dbUnread;
       } catch {}
     },
     async fetchPendingInvites() {
@@ -628,6 +576,13 @@ export default {
       window.Echo.private(`user.${this.auth.state.user.id}`)
         .listen('GameInviteReceived', () => {
           this.fetchPendingInvites();
+          this.notifCount++;
+        })
+        .listen('FriendRequestReceived', () => {
+          this.notifCount++;
+        })
+        .listen('UserNotificationReceived', () => {
+          this.notifCount++;
         })
         .listen('MatchFound', (data) => {
           if (this.step !== 'matchmaking') {
@@ -835,6 +790,7 @@ export default {
       this.currentPickingPlayer = 1;
       this.playerSelections = {};
       this.activeSlideIndex = 0;
+      this.fetchHomeStats();
     },
     async startGame() {
       this.starting = true;
@@ -1736,6 +1692,7 @@ export default {
   letter-spacing: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   flex-shrink: 0;
+  overflow: visible;
 }
 
 .side-icon-btn:hover {
@@ -1897,80 +1854,6 @@ export default {
   font-size: 1.5rem;
   color: var(--text-secondary);
   flex-shrink: 0;
-}
-
-/* Active Season Card */
-.season-card {
-  background: linear-gradient(180deg, #2a1f14, #1a1209);
-  border: 2px solid rgba(138, 106, 46, 0.3);
-  border-radius: 10px;
-  padding: 10px 14px;
-  cursor: pointer;
-  transition: border-color 0.2s;
-  margin-bottom: 6px;
-}
-
-.season-card:hover {
-  border-color: var(--accent-gold);
-}
-
-.season-card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.season-card-name {
-  font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 0.95rem;
-}
-
-.season-card-rank {
-  font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 0.95rem;
-}
-
-.season-card-time {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  margin-bottom: 8px;
-}
-
-.season-card-bar {
-  width: 100%;
-  height: 6px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 6px;
-}
-
-.season-card-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #8a6a2e, #d4a843);
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
-.season-card-meta {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-}
-
-.season-card-meta strong {
-  color: var(--accent-gold);
-}
-
-.season-card-reward {
-  font-size: 0.75rem;
-  color: var(--accent-gold);
-  opacity: 0.8;
 }
 
 .hide-mobile {

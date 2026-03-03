@@ -1,5 +1,13 @@
 <template>
   <div>
+    <!-- Tab switcher -->
+    <div class="tab-bar">
+      <button class="tab-btn" :class="{ active: activeTab === 'daily' }" @click="activeTab = 'daily'">Daily</button>
+      <button class="tab-btn" :class="{ active: activeTab === 'weekly' }" @click="activeTab = 'weekly'; loadWeekly()">Weekly</button>
+    </div>
+
+    <!-- DAILY TAB -->
+    <template v-if="activeTab === 'daily'">
     <div class="page-header">
       <h2 class="page-title">Daily Challenges</h2>
       <div class="page-header-actions">
@@ -144,6 +152,129 @@
         </form>
       </div>
     </div>
+    </template>
+
+    <!-- WEEKLY TAB -->
+    <template v-if="activeTab === 'weekly'">
+    <div class="page-header">
+      <h2 class="page-title">Weekly Challenges</h2>
+      <div class="page-header-actions">
+        <button class="btn-secondary" @click="showWeeklyGenerateModal = true">Generate Range</button>
+        <button class="btn-primary" @click="openWeeklyCreate">+ New Weekly</button>
+      </div>
+    </div>
+
+    <div class="list-panel">
+      <div v-for="w in weeklyChallenges" :key="w.id" class="list-row">
+        <div class="list-info">
+          <div class="list-top">
+            <strong>{{ w.title }}</strong>
+            <span class="date-badge">{{ w.week_start }} &mdash; {{ w.week_end }}</span>
+            <span v-if="w.is_manual" class="manual-badge">Manual</span>
+          </div>
+          <div class="list-sub">{{ w.description }} (+{{ w.reward_xp }} XP, +{{ w.reward_coins }} coins)</div>
+        </div>
+        <div class="list-actions">
+          <button class="btn-sm" @click="openWeeklyEdit(w)">Edit</button>
+          <button class="btn-sm btn-danger" @click="deleteWeekly(w)">Del</button>
+        </div>
+      </div>
+      <div v-if="weeklyChallenges.length === 0" class="empty">No weekly challenges yet.</div>
+    </div>
+
+    <!-- Weekly Modal -->
+    <div v-if="showWeeklyModal" class="modal-overlay" @click.self="showWeeklyModal = false">
+      <div class="modal-content">
+        <h3>{{ editingWeekly ? 'Edit Weekly Challenge' : 'New Weekly Challenge' }}</h3>
+        <form @submit.prevent="saveWeekly">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Week Start</label>
+              <input v-model="weeklyForm.week_start" type="date" required />
+            </div>
+            <div class="form-group">
+              <label>Week End</label>
+              <input v-model="weeklyForm.week_end" type="date" required />
+            </div>
+            <div class="form-group">
+              <label>Title</label>
+              <input v-model="weeklyForm.title" required />
+            </div>
+            <div class="form-group full">
+              <label>Description</label>
+              <input v-model="weeklyForm.description" required />
+            </div>
+            <div class="form-group">
+              <label>Criteria Type</label>
+              <select v-model="weeklyForm.criteria_type">
+                <option value="play_games">Play Games</option>
+                <option value="win_games">Win Games</option>
+                <option value="win_duel_games">Win Duel Games</option>
+                <option value="unique_characters_week">Unique Characters</option>
+                <option value="stat_threshold_count">Stat Threshold Count</option>
+              </select>
+            </div>
+            <div class="form-group" v-if="weeklyForm.criteria_type === 'play_games' || weeklyForm.criteria_type === 'win_games'">
+              <label>Mode</label>
+              <select v-model="weeklyForm.criteria_mode">
+                <option value="any">Any</option>
+                <option value="single">Solo</option>
+                <option value="pass_and_play">Local</option>
+                <option value="online">Online</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Target Count</label>
+              <input v-model.number="weeklyForm.criteria_count" type="number" min="1" />
+            </div>
+            <div class="form-group" v-if="weeklyForm.criteria_type === 'stat_threshold_count'">
+              <label>Stat Value</label>
+              <input v-model.number="weeklyForm.criteria_value" type="number" min="1" max="20" />
+            </div>
+            <div class="form-group">
+              <label>Reward XP</label>
+              <input v-model.number="weeklyForm.reward_xp" type="number" min="0" />
+            </div>
+            <div class="form-group">
+              <label>Reward Coins</label>
+              <input v-model.number="weeklyForm.reward_coins" type="number" min="0" />
+            </div>
+          </div>
+          <div v-if="weeklyFormError" class="form-error">{{ weeklyFormError }}</div>
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary">{{ editingWeekly ? 'Update' : 'Create' }}</button>
+            <button type="button" @click="showWeeklyModal = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Weekly Generate Range Modal -->
+    <div v-if="showWeeklyGenerateModal" class="modal-overlay" @click.self="showWeeklyGenerateModal = false">
+      <div class="modal-content">
+        <h3>Generate Weekly Challenges</h3>
+        <p class="gen-desc">Auto-generate one challenge per week from the template pool. Existing weeks are skipped.</p>
+        <form @submit.prevent="generateWeeklyRange">
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Start Date</label>
+              <input v-model="weeklyGenForm.start_date" type="date" required />
+            </div>
+            <div class="form-group">
+              <label>End Date</label>
+              <input v-model="weeklyGenForm.end_date" type="date" required />
+            </div>
+          </div>
+          <div v-if="weeklyGenResult" class="gen-result">{{ weeklyGenResult }}</div>
+          <div v-if="weeklyGenError" class="form-error">{{ weeklyGenError }}</div>
+          <div class="modal-actions">
+            <button type="submit" class="btn-primary" :disabled="weeklyGenerating">{{ weeklyGenerating ? 'Generating...' : 'Generate' }}</button>
+            <button type="button" @click="showWeeklyGenerateModal = false">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+    </template>
   </div>
 </template>
 
@@ -154,6 +285,7 @@ export default {
   name: 'AdminChallenges',
   data() {
     return {
+      activeTab: 'daily',
       challenges: [],
       addons: [],
       showModal: false,
@@ -172,6 +304,22 @@ export default {
       genForm: { start_date: '', end_date: '' },
       genResult: '',
       genError: '',
+      // Weekly
+      weeklyChallenges: [],
+      showWeeklyModal: false,
+      editingWeekly: null,
+      weeklyFormError: '',
+      weeklyForm: {
+        week_start: '', week_end: '', title: '', description: '',
+        criteria_type: 'play_games', criteria_mode: 'any',
+        criteria_count: 3, criteria_value: 18,
+        reward_xp: 400, reward_coins: 75,
+      },
+      showWeeklyGenerateModal: false,
+      weeklyGenerating: false,
+      weeklyGenForm: { start_date: '', end_date: '' },
+      weeklyGenResult: '',
+      weeklyGenError: '',
     };
   },
   async mounted() { await Promise.all([this.load(), this.fetchAddons()]); },
@@ -271,11 +419,107 @@ export default {
       }
       this.generating = false;
     },
+    // Weekly challenge methods
+    async loadWeekly() {
+      if (this.weeklyChallenges.length) return; // already loaded
+      try {
+        const res = await axios.get('/api/admin/weekly-challenges');
+        this.weeklyChallenges = res.data;
+      } catch {}
+    },
+    buildWeeklyCriteria() {
+      const t = this.weeklyForm.criteria_type;
+      const base = { type: t, count: this.weeklyForm.criteria_count };
+      if (t === 'play_games' || t === 'win_games') {
+        base.mode = this.weeklyForm.criteria_mode;
+      }
+      if (t === 'stat_threshold_count') {
+        base.stat = 'any';
+        base.value = this.weeklyForm.criteria_value;
+      }
+      return base;
+    },
+    openWeeklyCreate() {
+      this.editingWeekly = null;
+      this.weeklyForm = {
+        week_start: '', week_end: '', title: '', description: '',
+        criteria_type: 'play_games', criteria_mode: 'any',
+        criteria_count: 3, criteria_value: 18,
+        reward_xp: 400, reward_coins: 75,
+      };
+      this.weeklyFormError = '';
+      this.showWeeklyModal = true;
+    },
+    openWeeklyEdit(w) {
+      this.editingWeekly = w.id;
+      const cr = w.criteria || {};
+      this.weeklyForm = {
+        week_start: w.week_start,
+        week_end: w.week_end,
+        title: w.title,
+        description: w.description,
+        criteria_type: cr.type || 'play_games',
+        criteria_mode: cr.mode || 'any',
+        criteria_count: cr.count || 3,
+        criteria_value: cr.value || 18,
+        reward_xp: w.reward_xp,
+        reward_coins: w.reward_coins,
+      };
+      this.weeklyFormError = '';
+      this.showWeeklyModal = true;
+    },
+    async saveWeekly() {
+      this.weeklyFormError = '';
+      const data = {
+        week_start: this.weeklyForm.week_start,
+        week_end: this.weeklyForm.week_end,
+        title: this.weeklyForm.title,
+        description: this.weeklyForm.description,
+        criteria: this.buildWeeklyCriteria(),
+        reward_xp: this.weeklyForm.reward_xp,
+        reward_coins: this.weeklyForm.reward_coins,
+      };
+      try {
+        if (this.editingWeekly) {
+          await axios.put(`/api/admin/weekly-challenges/${this.editingWeekly}`, data);
+        } else {
+          await axios.post('/api/admin/weekly-challenges', data);
+        }
+        this.showWeeklyModal = false;
+        const res = await axios.get('/api/admin/weekly-challenges');
+        this.weeklyChallenges = res.data;
+      } catch (e) {
+        this.weeklyFormError = e.response?.data?.error || e.response?.data?.message || 'Error';
+      }
+    },
+    async deleteWeekly(w) {
+      if (!confirm(`Delete "${w.title}"?`)) return;
+      await axios.delete(`/api/admin/weekly-challenges/${w.id}`);
+      this.weeklyChallenges = this.weeklyChallenges.filter(c => c.id !== w.id);
+    },
+    async generateWeeklyRange() {
+      this.weeklyGenerating = true;
+      this.weeklyGenResult = '';
+      this.weeklyGenError = '';
+      try {
+        const res = await axios.post('/api/admin/weekly-challenges/generate', this.weeklyGenForm);
+        this.weeklyGenResult = res.data.message;
+        const reloadRes = await axios.get('/api/admin/weekly-challenges');
+        this.weeklyChallenges = reloadRes.data;
+      } catch (e) {
+        this.weeklyGenError = e.response?.data?.message || 'Error generating weekly challenges';
+      }
+      this.weeklyGenerating = false;
+    },
   },
 };
 </script>
 
 <style scoped>
+.tab-bar { display: flex; gap: 4px; margin-bottom: 20px; }
+.tab-btn { background: rgba(138, 106, 46, 0.1); border: 1px solid rgba(138, 106, 46, 0.3); color: var(--text-secondary); padding: 6px 18px; border-radius: 6px; cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.85rem; transition: all 0.2s; }
+.tab-btn.active { background: rgba(212, 168, 67, 0.2); border-color: var(--accent-gold); color: var(--accent-gold); }
+.tab-btn:hover { color: var(--accent-gold); }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-title { font-family: 'Cinzel', serif; color: var(--accent-gold); font-size: 1.5rem; }
 .list-panel { display: flex; flex-direction: column; gap: 6px; }

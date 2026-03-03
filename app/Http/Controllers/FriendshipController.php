@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\FriendRequestReceived;
 use App\Models\Friendship;
 use App\Models\User;
 use App\Services\OneSignalService;
@@ -107,6 +108,8 @@ class FriendshipController extends Controller
             'receiver_id' => $receiver->id,
         ]);
 
+        broadcast(new FriendRequestReceived($receiver->id, $request->user()->name));
+
         // Send push notification to the receiver (non-blocking — friendship still works without it)
         try {
             app(OneSignalService::class)->sendToUser(
@@ -133,6 +136,22 @@ class FriendshipController extends Controller
         }
 
         $friendship->update(['status' => 'accepted']);
+
+        // Notify sender that their request was accepted
+        try {
+            $sender = User::find($friendship->sender_id);
+            if ($sender) {
+                app(OneSignalService::class)->notifyUser(
+                    $sender,
+                    'social',
+                    'Friend Request Accepted',
+                    $request->user()->name . ' accepted your friend request!',
+                    ['type' => 'friend_accepted'],
+                );
+            }
+        } catch (\Throwable) {
+            // Notification failure should never prevent accept from succeeding
+        }
 
         return response()->json($friendship);
     }

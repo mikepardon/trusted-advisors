@@ -3,6 +3,7 @@
     <div class="notif-drawer" :class="{ 'drawer-visible': visible }">
       <div class="drawer-header">
         <h3 class="drawer-title">Notifications</h3>
+        <button v-if="dbNotifications.length" class="mark-read-btn" @click="markAllRead">Mark all read</button>
         <button class="drawer-close" @click="$emit('close')">&times;</button>
       </div>
 
@@ -41,16 +42,51 @@
           </div>
         </div>
 
+        <!-- DB Notifications (Rewards & Announcements) -->
+        <div v-if="dbNotifications.length" class="notif-section">
+          <h4 class="notif-section-title">Rewards &amp; Announcements</h4>
+          <div v-for="notif in dbNotifications" :key="'db-' + notif.id" class="notif-item notif-db" :class="{ unread: !notif.read_at }">
+            <div class="notif-icon-col">
+              <span v-if="notif.type === 'season_reward'" class="notif-type-icon">&#127942;</span>
+              <span v-else-if="notif.type === 'admin_gift'" class="notif-type-icon">&#127873;</span>
+              <span v-else class="notif-type-icon">&#128276;</span>
+            </div>
+            <div class="notif-body" @click="openDetail(notif)">
+              <div class="notif-db-title">{{ notif.title }}</div>
+              <div class="notif-db-message">{{ notif.message }}</div>
+              <div class="notif-db-meta">
+                <span v-if="!notif.claimed_at && hasRewards(notif)" class="notif-claim-tag">Claimable</span>
+                <span v-else-if="notif.claimed_at" class="notif-claimed-tag">Claimed</span>
+                <span class="notif-time">{{ timeAgo(notif.created_at) }}</span>
+              </div>
+            </div>
+            <button
+              v-if="!hasRewards(notif) || notif.claimed_at"
+              class="notif-dismiss"
+              @click.stop="dismissNotif(notif)"
+              title="Dismiss"
+            >&times;</button>
+          </div>
+        </div>
       </div>
     </div>
+
+    <NotificationDetailModal
+      v-if="selectedNotif"
+      :notification="selectedNotif"
+      @close="selectedNotif = null"
+      @claimed="onClaimed"
+    />
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import NotificationDetailModal from './NotificationDetailModal.vue';
 
 export default {
   name: 'NotificationsDrawer',
+  components: { NotificationDetailModal },
   props: {
     open: { type: Boolean, default: false },
   },
@@ -61,14 +97,17 @@ export default {
       visible: false,
       gameInvites: [],
       friendRequests: [],
+      dbNotifications: [],
+      selectedNotif: null,
     };
   },
   computed: {
     allEmpty() {
-      return !this.gameInvites.length && !this.friendRequests.length;
+      return !this.gameInvites.length && !this.friendRequests.length && !this.dbNotifications.length;
     },
     totalCount() {
-      return this.gameInvites.length + this.friendRequests.length;
+      const unreadDb = this.dbNotifications.filter(n => !n.read_at).length;
+      return this.gameInvites.length + this.friendRequests.length + unreadDb;
     },
   },
   watch: {
@@ -85,19 +124,65 @@ export default {
     },
   },
   methods: {
+    hasRewards(notif) {
+      const d = notif.data;
+      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id);
+    },
     async fetchAll() {
       this.loading = true;
       try {
-        const [invitesRes, friendsRes] = await Promise.all([
+        const [invitesRes, friendsRes, notifsRes] = await Promise.all([
           axios.get('/api/game-invites/pending'),
           axios.get('/api/friends'),
+          axios.get('/api/notifications'),
         ]);
         this.gameInvites = (invitesRes.data || []).map(i => ({ ...i, busy: false }));
         this.friendRequests = (friendsRes.data.pending_received || []).map(r => ({ ...r, busy: false }));
+        this.dbNotifications = notifsRes.data?.data || [];
       } catch {
         // silently fail
       }
       this.loading = false;
+    },
+    openDetail(notif) {
+      this.selectedNotif = notif;
+      // Mark as read
+      if (!notif.read_at) {
+        axios.post(`/api/notifications/${notif.id}/read`).then(() => {
+          notif.read_at = new Date().toISOString();
+        }).catch(() => {});
+      }
+    },
+    onClaimed(notifId) {
+      const notif = this.dbNotifications.find(n => n.id === notifId);
+      if (notif) {
+        notif.claimed_at = new Date().toISOString();
+        notif.read_at = notif.read_at || new Date().toISOString();
+      }
+      this.selectedNotif = null;
+    },
+    async dismissNotif(notif) {
+      try {
+        await axios.delete(`/api/notifications/${notif.id}`);
+        this.dbNotifications = this.dbNotifications.filter(n => n.id !== notif.id);
+      } catch {}
+    },
+    async markAllRead() {
+      try {
+        await axios.post('/api/notifications/mark-all-read');
+        this.dbNotifications.forEach(n => { n.read_at = n.read_at || new Date().toISOString(); });
+      } catch {}
+    },
+    timeAgo(dateStr) {
+      if (!dateStr) return '';
+      const diff = Date.now() - new Date(dateStr).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins}m ago`;
+      const hrs = Math.floor(mins / 60);
+      if (hrs < 24) return `${hrs}h ago`;
+      const days = Math.floor(hrs / 24);
+      return `${days}d ago`;
     },
     async acceptGameInvite(invite) {
       invite.busy = true;
@@ -153,7 +238,7 @@ export default {
 }
 
 .notif-drawer {
-  width: 320px;
+  width: 340px;
   max-width: 85vw;
   height: 100%;
   background: var(--bg-secondary);
@@ -174,12 +259,29 @@ export default {
   justify-content: space-between;
   padding: 14px 18px 10px;
   border-bottom: 1px solid rgba(138, 106, 46, 0.3);
+  gap: 8px;
 }
 
 .drawer-title {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1.1rem;
+}
+
+.mark-read-btn {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.mark-read-btn:hover {
+  color: var(--accent-gold);
+  transform: none;
+  box-shadow: none;
 }
 
 .drawer-close {
@@ -245,6 +347,10 @@ export default {
   margin-bottom: 0;
 }
 
+.notif-item.unread {
+  border-left: 3px solid var(--accent-gold);
+}
+
 .notif-text {
   flex: 1;
   color: var(--text-primary);
@@ -300,4 +406,97 @@ export default {
   cursor: not-allowed;
 }
 
+/* DB notifications styling */
+.notif-db {
+  cursor: pointer;
+  padding: 8px 10px;
+  align-items: flex-start;
+}
+
+.notif-db:hover {
+  background: rgba(212, 168, 67, 0.06);
+}
+
+.notif-icon-col {
+  flex-shrink: 0;
+}
+
+.notif-type-icon {
+  font-size: 1.3rem;
+}
+
+.notif-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notif-db-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.85rem;
+  margin-bottom: 2px;
+}
+
+.notif-db-message {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notif-db-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.notif-claim-tag {
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notif-claimed-tag {
+  font-size: 0.6rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(74, 138, 58, 0.2);
+  color: #6abf50;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notif-time {
+  font-size: 0.65rem;
+  color: var(--text-secondary);
+  opacity: 0.7;
+}
+
+.notif-dismiss {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+
+.notif-dismiss:hover {
+  color: var(--accent-red);
+  opacity: 1;
+  transform: none;
+  box-shadow: none;
+}
 </style>

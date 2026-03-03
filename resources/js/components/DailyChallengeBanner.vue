@@ -1,15 +1,15 @@
 <template>
-  <div v-if="challenge && challenge.title" class="daily-banner" :class="{ completed: challenge.completed }" @click="showDetail = !showDetail">
+  <div v-if="challenge && challenge.title && !challenge.completed" class="daily-banner">
     <div class="banner-row">
       <div class="banner-text">
-        <span class="banner-title">{{ challenge.title }}</span>
-        <span v-if="challenge.completed" class="banner-status">Completed!</span>
-        <span v-else class="banner-reward">+{{ challenge.reward_xp }} XP</span>
+        <span class="banner-label">Daily</span>
+        <div class="banner-info">
+          <span class="banner-title">{{ challenge.title }}</span>
+          <p class="banner-desc">{{ challenge.description }}</p>
+        </div>
       </div>
     </div>
-    <div v-if="showDetail" class="banner-detail">
-      <p>{{ challenge.description }}</p>
-    </div>
+    <span class="banner-reward">+{{ challenge.reward_xp }} XP</span>
   </div>
 </template>
 
@@ -21,7 +21,6 @@ export default {
   data() {
     return {
       challenge: null,
-      showDetail: false,
     };
   },
   async mounted() {
@@ -41,28 +40,39 @@ export default {
   border: 1px solid rgba(212, 168, 67, 0.25);
   border-radius: 8px;
   padding: 10px 14px;
-  cursor: pointer;
-  transition: all 0.2s;
   margin-bottom: 12px;
-}
-
-.daily-banner.completed {
-  border-color: rgba(74, 138, 58, 0.4);
-  background: linear-gradient(90deg, rgba(74, 138, 58, 0.08), rgba(74, 138, 58, 0.02));
 }
 
 .banner-row {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 10px;
 }
 
 .banner-text {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: 8px;
   flex: 1;
+}
+
+.banner-label {
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(212, 168, 67, 0.8);
+  background: rgba(212, 168, 67, 0.12);
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 600;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.banner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .banner-title {
@@ -71,30 +81,21 @@ export default {
   font-size: 0.9rem;
 }
 
-.banner-status {
-  font-size: 0.75rem;
-  color: #6abf50;
-  font-weight: 600;
+.banner-desc {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.3;
 }
 
 .banner-reward {
+  display: flex;
+  justify-content: center;
   font-size: 0.75rem;
   color: var(--text-secondary);
   background: rgba(212, 168, 67, 0.15);
   padding: 1px 6px;
   border-radius: 3px;
-}
-
-.banner-detail {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(138, 106, 46, 0.15);
-}
-
-.banner-detail p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  line-height: 1.4;
+  margin-top: 6px;
 }
 </style>

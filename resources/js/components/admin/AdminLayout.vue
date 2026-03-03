@@ -64,6 +64,12 @@
 
       <div class="nav-section">
         <span class="nav-group-label">Management</span>
+        <router-link to="/admin/announcements" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128227;</span> Announcements
+        </router-link>
+        <router-link to="/admin/gifts" class="nav-item" active-class="active">
+          <span class="nav-icon">&#127873;</span> Gifts
+        </router-link>
         <router-link to="/admin/users" class="nav-item" active-class="active">
           <span class="nav-icon">&#128100;</span> Users
         </router-link>

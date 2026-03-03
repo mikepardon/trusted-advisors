@@ -17,6 +17,14 @@ class OneSignalService
         $this->apiKey = config('services.onesignal.rest_api_key', '');
     }
 
+    public function notifyUser(User $user, string $category, string $heading, string $message, array $data = []): void
+    {
+        if (!$user->wantsPushNotification($category)) {
+            return;
+        }
+        $this->sendToUser($user, $heading, $message, $data);
+    }
+
     public function sendToUser(User $user, string $heading, string $message, array $data = []): void
     {
         if (!$this->appId || !$this->apiKey) {

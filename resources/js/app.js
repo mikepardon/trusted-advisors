@@ -32,6 +32,8 @@ import AdminGames from './components/admin/AdminGames.vue';
 import AdminXp from './components/admin/AdminXp.vue';
 import AdminCoins from './components/admin/AdminCoins.vue';
 import AdminAddons from './components/admin/AdminAddons.vue';
+import AdminGifts from './components/admin/AdminGifts.vue';
+import AdminAnnouncements from './components/admin/AdminAnnouncements.vue';
 import AdminUsers from './components/admin/AdminUsers.vue';
 import ShopPage from './components/ShopPage.vue';
 import SettingsPage from './components/SettingsPage.vue';
@@ -76,6 +78,8 @@ const routes = [
             { path: 'achievements', component: AdminAchievements },
             { path: 'unlockables', component: AdminUnlockables },
             { path: 'challenges', component: AdminChallenges },
+            { path: 'gifts', component: AdminGifts },
+            { path: 'announcements', component: AdminAnnouncements },
             { path: 'users', component: AdminUsers },
         ],
     },

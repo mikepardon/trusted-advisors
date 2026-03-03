@@ -66,21 +66,134 @@
           </button>
         </div>
       </div>
+
+      <div class="settings-group">
+        <h3 class="group-title">Notifications</h3>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Game Updates</span>
+            <span class="setting-desc">Turn reminders, game invites</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: notifPrefs.push_game }"
+            @click="toggleNotif('push_game')"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Social</span>
+            <span class="setting-desc">Friend requests and accepts</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: notifPrefs.push_social }"
+            @click="toggleNotif('push_social')"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Achievements</span>
+            <span class="setting-desc">Unlocks and level ups</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: notifPrefs.push_achievement }"
+            @click="toggleNotif('push_achievement')"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Seasons</span>
+            <span class="setting-desc">Season end rewards</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: notifPrefs.push_season }"
+            @click="toggleNotif('push_season')"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Challenges</span>
+            <span class="setting-desc">Daily and weekly challenges</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: notifPrefs.push_challenge }"
+            @click="toggleNotif('push_challenge')"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">Admin Announcements</span>
+            <span class="setting-desc">Gifts and announcements from admins</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: notifPrefs.push_admin }"
+            @click="toggleNotif('push_admin')"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
+import axios from 'axios';
 import { getSoundSettings, saveSoundSettings, playSound } from '../sounds';
 import { getHintsSetting, setHintsSetting } from '../hints';
+import { useAuth } from '../stores/auth';
 
 export default {
   name: 'SettingsPage',
+  setup() {
+    const auth = useAuth();
+    return { auth };
+  },
   data() {
     return {
       settings: getSoundSettings(),
       hintsEnabled: getHintsSetting(),
+      notifPrefs: {
+        push_game: true,
+        push_social: true,
+        push_achievement: true,
+        push_season: true,
+        push_admin: true,
+        push_challenge: true,
+      },
     };
+  },
+  mounted() {
+    // Load notification preferences from user data
+    const prefs = this.auth.state.user?.notification_preferences;
+    if (prefs) {
+      Object.keys(this.notifPrefs).forEach(key => {
+        if (key in prefs) {
+          this.notifPrefs[key] = prefs[key];
+        }
+      });
+    }
   },
   methods: {
     toggle(key) {
@@ -95,6 +208,22 @@ export default {
       setHintsSetting(this.hintsEnabled);
       if (this.hintsEnabled) {
         playSound('clickToggle');
+      }
+    },
+    async toggleNotif(key) {
+      this.notifPrefs[key] = !this.notifPrefs[key];
+      if (this.notifPrefs[key]) {
+        playSound('clickToggle');
+      }
+      try {
+        await axios.put('/api/notifications/preferences', { preferences: { ...this.notifPrefs } });
+        // Update local user data
+        if (this.auth.state.user) {
+          this.auth.state.user.notification_preferences = { ...this.notifPrefs };
+        }
+      } catch {
+        // Revert on failure
+        this.notifPrefs[key] = !this.notifPrefs[key];
       }
     },
   },

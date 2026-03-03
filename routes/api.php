@@ -25,7 +25,12 @@ use App\Http\Controllers\Admin\AddonController;
 use App\Http\Controllers\Admin\AdminUserController;
 use App\Http\Controllers\Admin\AiGeneratorController;
 use App\Http\Controllers\Admin\GameManagementController;
+use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\WebhookController;
+use App\Http\Controllers\Admin\AdminGiftController;
+use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
+use App\Http\Controllers\Admin\WeeklyChallengeController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -110,8 +115,18 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/achievements/claim-all', [GameController::class, 'claimAllAchievements']);
     Route::post('/achievements/{achievement}/claim', [GameController::class, 'claimAchievement']);
     Route::get('/daily-challenge', [GameController::class, 'dailyChallenge']);
+    Route::get('/weekly-challenge', [GameController::class, 'weeklyChallenge']);
     Route::get('/seasons', [GameController::class, 'seasons']);
     Route::get('/seasons/{season}', [GameController::class, 'seasonDetail']);
+
+    // Notifications
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead']);
+    Route::put('/notifications/preferences', [NotificationController::class, 'updatePreferences']);
+    Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
+    Route::post('/notifications/{notification}/claim', [NotificationController::class, 'claim']);
+    Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 
     Route::get('/my-characters', [GameController::class, 'myCharacters']);
     Route::get('/users/{user}/profile', [UserProfileController::class, 'show']);
@@ -120,6 +135,10 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/shop', [CoinShopController::class, 'index']);
     Route::post('/shop/{unlockable}/purchase', [CoinShopController::class, 'purchase']);
     Route::get('/coin-transactions', [CoinShopController::class, 'transactions']);
+
+    // Announcements
+    Route::get('/announcements', [AnnouncementController::class, 'index']);
+    Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss']);
 
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);
@@ -167,6 +186,20 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::post('users/{user}/ban', [AdminUserController::class, 'ban']);
     Route::get('users/{user}/login-logs', [AdminUserController::class, 'loginLogs']);
     Route::post('users/{user}/impersonate', [AdminUserController::class, 'impersonate']);
+
+    // Season end
+    Route::post('seasons/{season}/end', [SeasonController::class, 'endSeason']);
+
+    // Admin gifts
+    Route::get('gifts', [AdminGiftController::class, 'index']);
+    Route::post('gifts', [AdminGiftController::class, 'store']);
+
+    // Announcements
+    Route::apiResource('announcements', AdminAnnouncementController::class);
+
+    // Weekly challenges
+    Route::post('weekly-challenges/generate', [WeeklyChallengeController::class, 'generateRange']);
+    Route::apiResource('weekly-challenges', WeeklyChallengeController::class);
 
     // AI content generation
     Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);

@@ -14,6 +14,8 @@ use App\Models\User;
 use App\Models\UserAchievement;
 use App\Models\UserEloHistory;
 use App\Models\UserUnlockable;
+use App\Models\WeeklyChallenge;
+use App\Models\WeeklyChallengeEntry;
 use Carbon\Carbon;
 
 class GameCompletionService
@@ -33,6 +35,7 @@ class GameCompletionService
             'elo_changes' => [],
             'achievements_unlocked' => [],
             'challenge_completed' => null,
+            'weekly_challenge_completed' => null,
         ];
 
         // Gather all users who participated
@@ -41,6 +44,8 @@ class GameCompletionService
 
         foreach ($users as $user) {
             if (!$user) continue;
+
+            $oneSignal = app(OneSignalService::class);
 
             // XP
             $xpResult = $this->awardXp($user, $game, $players);
@@ -53,6 +58,10 @@ class GameCompletionService
             ];
             if ($xpResult['leveled_up']) {
                 $summary['level_ups'][$user->id] = $xpResult['new_level'];
+                // Push: Level up
+                try {
+                    $oneSignal->notifyUser($user, 'achievement', 'Level Up!', "You reached Level {$xpResult['new_level']}!");
+                } catch (\Throwable) {}
             }
             if (!empty($xpResult['new_unlocks'])) {
                 $summary['new_unlocks'][$user->id] = $xpResult['new_unlocks'];
@@ -66,12 +75,32 @@ class GameCompletionService
             $newAchievements = $this->checkAchievements($user, $game);
             if (!empty($newAchievements)) {
                 $summary['achievements_unlocked'][$user->id] = $newAchievements;
+                // Push: Achievement unlocked
+                foreach ($newAchievements as $ach) {
+                    try {
+                        $oneSignal->notifyUser($user, 'achievement', 'Achievement Unlocked!', "{$ach['name']}: {$ach['description']}");
+                    } catch (\Throwable) {}
+                }
             }
 
             // Daily challenge
             $challengeResult = $this->checkDailyChallenge($user, $game);
             if ($challengeResult) {
                 $summary['challenge_completed'] = $challengeResult;
+                // Push: Daily challenge complete
+                try {
+                    $oneSignal->notifyUser($user, 'challenge', 'Challenge Complete!', "{$challengeResult['title']} — +{$challengeResult['reward_xp']} XP");
+                } catch (\Throwable) {}
+            }
+
+            // Weekly challenge
+            $weeklyResult = $this->checkWeeklyChallenge($user, $game);
+            if ($weeklyResult) {
+                $summary['weekly_challenge_completed'] = $weeklyResult;
+                // Push: Weekly challenge complete
+                try {
+                    $oneSignal->notifyUser($user, 'challenge', 'Weekly Challenge Complete!', "{$weeklyResult['title']} — +{$weeklyResult['reward_xp']} XP, +{$weeklyResult['reward_coins']} coins");
+                } catch (\Throwable) {}
             }
         }
 
@@ -1072,6 +1101,152 @@ class GameCompletionService
                     if ($game->{$s} < $value) return false;
                 }
                 return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private function checkWeeklyChallenge(User $user, Game $game): ?array
+    {
+        $today = Carbon::today();
+        $challenge = WeeklyChallenge::where('week_start', '<=', $today)
+            ->where('week_end', '>=', $today)
+            ->first();
+
+        if (!$challenge) return null;
+
+        $entry = WeeklyChallengeEntry::where('user_id', $user->id)
+            ->where('weekly_challenge_id', $challenge->id)
+            ->first();
+
+        if ($entry && $entry->completed_at) return null;
+
+        $criteria = $challenge->criteria;
+        $type = $criteria['type'] ?? null;
+        $target = $criteria['count'] ?? 1;
+
+        // Evaluate whether this game contributes to the challenge
+        $contributes = $this->evaluateWeeklyCriteria($user, $game, $criteria);
+        if (!$contributes) return null;
+
+        // Create or update entry
+        if (!$entry) {
+            $entry = WeeklyChallengeEntry::create([
+                'user_id' => $user->id,
+                'weekly_challenge_id' => $challenge->id,
+                'game_id' => $game->id,
+                'progress' => 1,
+            ]);
+        } else {
+            $entry->progress++;
+            $entry->game_id = $game->id;
+            $entry->save();
+        }
+
+        // Check if target met
+        if ($entry->progress < $target) return null;
+
+        // Mark completed
+        $entry->update(['completed_at' => now()]);
+
+        // Award rewards
+        $user->xp += $challenge->reward_xp;
+        $user->coins += $challenge->reward_coins;
+        $user->level = User::calculateLevel($user->xp);
+        $user->save();
+
+        if ($challenge->reward_coins > 0) {
+            $user->recordCoinTransaction($challenge->reward_coins, 'earn', 'weekly_challenge', $challenge->id, $challenge->title);
+        }
+
+        return [
+            'challenge_id' => $challenge->id,
+            'title' => $challenge->title,
+            'reward_xp' => $challenge->reward_xp,
+            'reward_coins' => $challenge->reward_coins,
+        ];
+    }
+
+    private function evaluateWeeklyCriteria(User $user, Game $game, array $criteria): bool
+    {
+        $type = $criteria['type'] ?? null;
+
+        switch ($type) {
+            case 'play_games':
+                $mode = $criteria['mode'] ?? 'any';
+                return $mode === 'any' || $game->game_mode === $mode;
+
+            case 'win_games':
+                $mode = $criteria['mode'] ?? 'any';
+                $modeMatch = $mode === 'any' || $game->game_mode === $mode;
+                $isWin = $game->isDuel()
+                    ? GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->where('player_number', $game->winner_player_number)->exists()
+                    : $game->win;
+                return $modeMatch && $isWin;
+
+            case 'win_duel_games':
+                if ($game->game_type !== 'duel') return false;
+                return GamePlayer::where('game_id', $game->id)
+                    ->where('user_id', $user->id)
+                    ->where('player_number', $game->winner_player_number)
+                    ->exists();
+
+            case 'unique_characters_week':
+                // Always contributes; actual count is checked via progress tracking
+                // Here we check if this game used a new character this week
+                $challenge = WeeklyChallenge::where('week_start', '<=', Carbon::today())
+                    ->where('week_end', '>=', Carbon::today())
+                    ->first();
+                if (!$challenge) return false;
+
+                $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                if (!$player || !$player->character_id) return false;
+
+                // Count unique characters used this week
+                $weekStart = $challenge->week_start;
+                $weekEnd = $challenge->week_end;
+                $gamesThisWeek = Game::where('status', 'completed')
+                    ->whereBetween('updated_at', [$weekStart, $weekEnd->copy()->addDay()])
+                    ->pluck('id');
+
+                $uniqueChars = GamePlayer::where('user_id', $user->id)
+                    ->whereIn('game_id', $gamesThisWeek)
+                    ->whereNotNull('character_id')
+                    ->distinct('character_id')
+                    ->count('character_id');
+
+                // We track via progress, but only contribute if this is a new character
+                $previousChars = GamePlayer::where('user_id', $user->id)
+                    ->whereIn('game_id', $gamesThisWeek)
+                    ->where('game_id', '!=', $game->id)
+                    ->whereNotNull('character_id')
+                    ->pluck('character_id')
+                    ->unique();
+
+                return !$previousChars->contains($player->character_id);
+
+            case 'stat_threshold_count':
+                $stat = $criteria['stat'] ?? 'any';
+                $value = $criteria['value'] ?? 18;
+                $stats = $stat === 'any'
+                    ? ['wealth', 'influence', 'security', 'religion', 'food', 'happiness']
+                    : [$stat];
+
+                if ($game->isDuel()) {
+                    $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
+                    if (!$player) return false;
+                    $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
+                    if (!$kingdom) return false;
+                    foreach ($stats as $s) {
+                        if ($kingdom->{$s} >= $value) return true;
+                    }
+                    return false;
+                }
+                foreach ($stats as $s) {
+                    if ($game->{$s} >= $value) return true;
+                }
+                return false;
 
             default:
                 return false;
