@@ -18,6 +18,86 @@
       <button class="import-dismiss" @click="importResult = null">Dismiss</button>
     </div>
 
+    <!-- Balance Stats Panel -->
+    <div class="balance-panel">
+      <div class="balance-header" @click="showBalanceStats = !showBalanceStats">
+        <h3 class="balance-title">Balance Stats</h3>
+        <button type="button" class="balance-toggle">{{ showBalanceStats ? 'Hide' : 'Show' }}</button>
+      </div>
+      <div v-if="showBalanceStats && cardBalanceStats" class="balance-body">
+        <div class="balance-summary">
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Total Cards</span>
+            <span class="balance-stat-value">{{ cardBalanceStats.count }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Avg Difficulty</span>
+            <span class="balance-stat-value">{{ cardBalanceStats.avgDiff.toFixed(1) }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-easy">Easy (&le;5)</span>
+            <span class="balance-stat-value">{{ cardBalanceStats.diffDist.easy }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-medium">Medium (6-8)</span>
+            <span class="balance-stat-value">{{ cardBalanceStats.diffDist.medium }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-hard">Hard (9+)</span>
+            <span class="balance-stat-value">{{ cardBalanceStats.diffDist.hard }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Avg +Stats/Card</span>
+            <span class="balance-stat-value balance-pos">{{ cardBalanceStats.avgPosPerCard.toFixed(2) }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Avg -Stats/Card</span>
+            <span class="balance-stat-value balance-neg">{{ cardBalanceStats.avgNegPerCard.toFixed(2) }}</span>
+          </div>
+        </div>
+        <div class="balance-section-row">
+          <div class="balance-section">
+            <h4 class="balance-section-title">Category Distribution</h4>
+            <div class="balance-dist-row">
+              <span v-for="(count, cat) in cardBalanceStats.catDist" :key="cat" class="balance-dist-badge">
+                {{ cat }}: {{ count }}
+              </span>
+            </div>
+          </div>
+          <div class="balance-section">
+            <h4 class="balance-section-title">Special Effects</h4>
+            <div class="balance-dist-row">
+              <span v-for="(count, key) in cardBalanceStats.specialCounts" :key="key" class="balance-dist-badge" :class="count > 0 ? '' : 'balance-dist-zero'">
+                {{ key.replace(/_/g, ' ') }}: {{ count }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <table class="admin-table balance-table">
+          <thead>
+            <tr>
+              <th>Stat</th>
+              <th>Total +</th>
+              <th>Total -</th>
+              <th>Net</th>
+              <th>Avg +/Card</th>
+              <th>Avg -/Card</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(data, stat) in cardBalanceStats.perStat" :key="stat">
+              <td class="name-col" style="text-transform: capitalize;">{{ stat }}</td>
+              <td class="balance-pos">{{ data.totalPos }}</td>
+              <td class="balance-neg">{{ data.totalNeg }}</td>
+              <td :class="data.net > 0 ? 'balance-pos' : data.net < 0 ? 'balance-neg' : ''">{{ data.net > 0 ? '+' : '' }}{{ data.net }}</td>
+              <td class="balance-pos">{{ data.avgPos.toFixed(2) }}</td>
+              <td class="balance-neg">{{ data.avgNeg.toFixed(2) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <AdminSearchInput v-model="searchQuery" />
 
     <div v-if="loading" class="loading">Loading...</div>
@@ -252,6 +332,7 @@ export default {
       aiGenerating: false,
       aiError: '',
       importResult: null,
+      showBalanceStats: false,
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -303,6 +384,74 @@ export default {
         if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
         return String(av).localeCompare(String(bv)) * dir;
       });
+    },
+    cardBalanceStats() {
+      if (!this.cards.length) return null;
+      const statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+      const specialKeys = ['draw_item', 'recover_die', 'lose_die', 'discard_item', 'remove_curse'];
+
+      // Difficulty
+      const avgDiff = this.cards.reduce((s, c) => s + (c.difficulty || 0), 0) / this.cards.length;
+      const diffDist = { easy: 0, medium: 0, hard: 0 };
+      this.cards.forEach(c => {
+        if (c.difficulty <= 5) diffDist.easy++;
+        else if (c.difficulty <= 8) diffDist.medium++;
+        else diffDist.hard++;
+      });
+
+      // Category distribution
+      const catDist = {};
+      this.cards.forEach(c => {
+        const cat = c.category || 'none';
+        catDist[cat] = (catDist[cat] || 0) + 1;
+      });
+
+      // Per-stat totals
+      const perStat = {};
+      statKeys.forEach(key => {
+        let totalPos = 0, totalNeg = 0;
+        this.cards.forEach(c => {
+          totalPos += (c.positive_effects && c.positive_effects[key]) || 0;
+          totalNeg += (c.negative_effects && c.negative_effects[key]) || 0;
+        });
+        perStat[key] = {
+          totalPos,
+          totalNeg,
+          net: totalPos + totalNeg,
+          avgPos: totalPos / this.cards.length,
+          avgNeg: totalNeg / this.cards.length,
+        };
+      });
+
+      // Special effect counts
+      const specialCounts = {};
+      specialKeys.forEach(key => {
+        let count = 0;
+        this.cards.forEach(c => {
+          if ((c.positive_effects && c.positive_effects[key]) || (c.negative_effects && c.negative_effects[key])) count++;
+        });
+        specialCounts[key] = count;
+      });
+
+      // Avg positive/negative per card
+      let totalPosSum = 0, totalNegSum = 0;
+      this.cards.forEach(c => {
+        statKeys.forEach(key => {
+          totalPosSum += (c.positive_effects && c.positive_effects[key]) || 0;
+          totalNegSum += (c.negative_effects && c.negative_effects[key]) || 0;
+        });
+      });
+
+      return {
+        count: this.cards.length,
+        avgDiff: avgDiff,
+        diffDist,
+        catDist,
+        perStat,
+        specialCounts,
+        avgPosPerCard: totalPosSum / this.cards.length,
+        avgNegPerCard: totalNegSum / this.cards.length,
+      };
     },
   },
   async mounted() {
@@ -844,5 +993,125 @@ export default {
   cursor: pointer;
   font-size: 0.8rem;
   padding: 2px 8px;
+}
+/* Balance Stats Panel */
+.balance-panel {
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+
+.balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.balance-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+}
+
+.balance-toggle {
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.balance-toggle:hover {
+  background: rgba(212, 168, 67, 0.25);
+}
+
+.balance-body {
+  margin-top: 14px;
+}
+
+.balance-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-stat-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balance-stat-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.balance-stat-value {
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.balance-easy { color: #27ae60; }
+.balance-medium { color: #d4a843; }
+.balance-hard { color: #c0392b; }
+.balance-pos { color: #27ae60; }
+.balance-neg { color: #c0392b; }
+
+.balance-section-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-section {
+  flex: 1;
+  min-width: 200px;
+}
+
+.balance-section-title {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.balance-dist-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.balance-dist-badge {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  text-transform: capitalize;
+}
+
+.balance-dist-zero {
+  opacity: 0.4;
+}
+
+.balance-table {
+  font-size: 0.85rem;
 }
 </style>

@@ -17,6 +17,64 @@
       <button class="import-dismiss" @click="importResult = null">Dismiss</button>
     </div>
 
+    <!-- Balance Stats Panel -->
+    <div class="balance-panel">
+      <div class="balance-header" @click="showBalanceStats = !showBalanceStats">
+        <h3 class="balance-title">Balance Stats</h3>
+        <button type="button" class="balance-toggle">{{ showBalanceStats ? 'Hide' : 'Show' }}</button>
+      </div>
+      <div v-if="showBalanceStats && itemBalanceStats" class="balance-body">
+        <div class="balance-summary">
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Total Items</span>
+            <span class="balance-stat-value">{{ itemBalanceStats.count }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-pos-label">Positive</span>
+            <span class="balance-stat-value">{{ itemBalanceStats.positiveCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-neg-label">Negative</span>
+            <span class="balance-stat-value">{{ itemBalanceStats.negativeCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Consumable</span>
+            <span class="balance-stat-value">{{ itemBalanceStats.consumableCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Permanent</span>
+            <span class="balance-stat-value">{{ itemBalanceStats.permanentCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Avg + Bonus</span>
+            <span class="balance-stat-value balance-pos">{{ itemBalanceStats.avgPosBonus.toFixed(2) }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Avg - Bonus</span>
+            <span class="balance-stat-value balance-neg">{{ itemBalanceStats.avgNegBonus.toFixed(2) }}</span>
+          </div>
+        </div>
+        <div class="balance-section-row">
+          <div class="balance-section">
+            <h4 class="balance-section-title">Effect Type Distribution</h4>
+            <div class="balance-dist-row">
+              <span v-for="(count, type) in itemBalanceStats.effectTypeDist" :key="type" class="balance-dist-badge">
+                {{ type }}: {{ count }}
+              </span>
+            </div>
+          </div>
+          <div class="balance-section">
+            <h4 class="balance-section-title">Bonus Type Distribution</h4>
+            <div class="balance-dist-row">
+              <span v-for="(count, type) in itemBalanceStats.bonusTypeDist" :key="type" class="balance-dist-badge">
+                {{ type.replace(/_/g, ' ') }}: {{ count }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <AdminSearchInput v-model="searchQuery" />
 
     <div v-if="loading" class="loading">Loading...</div>
@@ -154,6 +212,7 @@ export default {
       saving: false,
       formError: '',
       importResult: null,
+      showBalanceStats: false,
       form: {
         name: '',
         description: '',
@@ -178,6 +237,49 @@ export default {
         (item.description || '').toLowerCase().includes(q) ||
         (item.effect_type || '').toLowerCase().includes(q)
       );
+    },
+    itemBalanceStats() {
+      if (!this.items.length) return null;
+
+      // Positive vs negative count
+      const positiveCount = this.items.filter(i => !i.is_negative).length;
+      const negativeCount = this.items.filter(i => i.is_negative).length;
+
+      // Consumable vs permanent
+      const consumableCount = this.items.filter(i => i.is_consumable).length;
+      const permanentCount = this.items.filter(i => !i.is_consumable).length;
+
+      // Avg bonus value (separate for positive and negative items)
+      const posItems = this.items.filter(i => !i.is_negative && i.effect?.bonus_value != null);
+      const negItems = this.items.filter(i => i.is_negative && i.effect?.bonus_value != null);
+      const avgPosBonus = posItems.length ? posItems.reduce((s, i) => s + Math.abs(i.effect.bonus_value), 0) / posItems.length : 0;
+      const avgNegBonus = negItems.length ? negItems.reduce((s, i) => s + Math.abs(i.effect.bonus_value), 0) / negItems.length : 0;
+
+      // Bonus type distribution
+      const bonusTypeDist = {};
+      this.items.forEach(i => {
+        const bt = i.effect?.bonus_type || 'unknown';
+        bonusTypeDist[bt] = (bonusTypeDist[bt] || 0) + 1;
+      });
+
+      // Effect type distribution
+      const effectTypeDist = {};
+      this.items.forEach(i => {
+        const et = i.effect_type || 'unknown';
+        effectTypeDist[et] = (effectTypeDist[et] || 0) + 1;
+      });
+
+      return {
+        count: this.items.length,
+        positiveCount,
+        negativeCount,
+        consumableCount,
+        permanentCount,
+        avgPosBonus,
+        avgNegBonus,
+        bonusTypeDist,
+        effectTypeDist,
+      };
     },
   },
   async mounted() {
@@ -479,5 +581,117 @@ export default {
   cursor: pointer;
   font-size: 0.8rem;
   padding: 2px 8px;
+}
+
+/* Balance Stats Panel */
+.balance-panel {
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+
+.balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.balance-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+}
+
+.balance-toggle {
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.balance-toggle:hover {
+  background: rgba(212, 168, 67, 0.25);
+}
+
+.balance-body {
+  margin-top: 14px;
+}
+
+.balance-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-stat-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balance-stat-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.balance-stat-value {
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.balance-pos-label { color: #27ae60; }
+.balance-neg-label { color: #c0392b; }
+.balance-pos { color: #27ae60; }
+.balance-neg { color: #c0392b; }
+
+.balance-section-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-section {
+  flex: 1;
+  min-width: 200px;
+}
+
+.balance-section-title {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.balance-dist-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.balance-dist-badge {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  text-transform: capitalize;
 }
 </style>

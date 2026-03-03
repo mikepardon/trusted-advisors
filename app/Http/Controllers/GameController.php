@@ -2543,7 +2543,7 @@ class GameController extends Controller
             ->where(function ($q) use ($userId, $participantGameIds) {
                 $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
             })
-            ->where('status', 'completed')
+            ->whereIn('status', ['completed', 'cancelled'])
             ->orderByDesc('updated_at');
 
         // Filters
@@ -2575,7 +2575,9 @@ class GameController extends Controller
 
             // Determine outcome
             $outcome = 'loss';
-            if ($game->isDuel()) {
+            if ($game->status === 'cancelled') {
+                $outcome = 'cancelled';
+            } elseif ($game->isDuel()) {
                 if (!$game->winner_player_number) {
                     $outcome = 'draw';
                 } elseif ($game->winner_player_number === $myPlayerNumber) {
@@ -3550,13 +3552,13 @@ class GameController extends Controller
             return response()->json(['error' => 'You are not part of this game.'], 403);
         }
 
-        if ($game->status === 'completed') {
-            return response()->json(['error' => 'Game is already completed.'], 422);
+        if (in_array($game->status, ['completed', 'cancelled'])) {
+            return response()->json(['error' => 'Game is already finished.'], 422);
         }
 
         $game->update([
-            'status' => 'completed',
-            'win' => false,
+            'status' => 'cancelled',
+            'cancelled_at' => now(),
         ]);
 
         return response()->json(['message' => 'Game cancelled.']);

@@ -23,6 +23,7 @@ class DashboardController extends Controller
         $completedGames = Game::where('status', 'completed')->count();
         $activeGames = Game::where('status', 'active')->count();
         $setupGames = Game::where('status', 'setup')->count();
+        $cancelledGames = Game::where('status', 'cancelled')->count();
         $wins = Game::where('status', 'completed')->where('win', true)->count();
         $losses = Game::where('status', 'completed')->where('win', false)->count();
 
@@ -46,6 +47,7 @@ class DashboardController extends Controller
             'completed_games' => $completedGames,
             'active_games' => $activeGames,
             'setup_games' => $setupGames,
+            'cancelled_games' => $cancelledGames,
             'wins' => $wins,
             'losses' => $losses,
             'games_by_mode' => $gamesByMode,

@@ -467,7 +467,7 @@ export default {
         console.error('Timeout report failed:', e);
         try {
           const res = await axios.get(`/api/games/${this.gameId}`);
-          if (res.data.game?.status === 'completed') {
+          if (res.data.game?.status === 'completed' || res.data.game?.status === 'cancelled') {
             this.timeoutMessage = 'Time expired. The game has ended.';
             this.showTimeoutOverlay = true;
             setTimeout(() => {

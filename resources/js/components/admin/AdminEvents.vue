@@ -18,6 +18,66 @@
       <button class="import-dismiss" @click="importResult = null">Dismiss</button>
     </div>
 
+    <!-- Balance Stats Panel -->
+    <div class="balance-panel">
+      <div class="balance-header" @click="showBalanceStats = !showBalanceStats">
+        <h3 class="balance-title">Balance Stats</h3>
+        <button type="button" class="balance-toggle">{{ showBalanceStats ? 'Hide' : 'Show' }}</button>
+      </div>
+      <div v-if="showBalanceStats && eventBalanceStats" class="balance-body">
+        <div class="balance-summary">
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Total Events</span>
+            <span class="balance-stat-value">{{ eventBalanceStats.count }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-pos-label">Positive</span>
+            <span class="balance-stat-value">{{ eventBalanceStats.positiveCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label balance-neg-label">Negative</span>
+            <span class="balance-stat-value">{{ eventBalanceStats.negativeCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Mixed</span>
+            <span class="balance-stat-value">{{ eventBalanceStats.mixedCount }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Neutral</span>
+            <span class="balance-stat-value">{{ eventBalanceStats.neutralCount }}</span>
+          </div>
+        </div>
+        <div class="balance-section-row">
+          <div class="balance-section">
+            <h4 class="balance-section-title">Mechanic Distribution</h4>
+            <div class="balance-dist-row">
+              <span v-for="(count, mech) in eventBalanceStats.mechanicDist" :key="mech" class="balance-dist-badge">
+                {{ mech.replace(/_/g, ' ') }}: {{ count }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <table class="admin-table balance-table">
+          <thead>
+            <tr>
+              <th>Stat</th>
+              <th>Total Modifier</th>
+              <th>Events w/ Stat</th>
+              <th>Avg Modifier</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="(data, stat) in eventBalanceStats.perStat" :key="stat">
+              <td class="name-col" style="text-transform: capitalize;">{{ stat }}</td>
+              <td :class="data.total > 0 ? 'balance-pos' : data.total < 0 ? 'balance-neg' : ''">{{ data.total > 0 ? '+' : '' }}{{ data.total }}</td>
+              <td>{{ data.count }}</td>
+              <td :class="data.avg > 0 ? 'balance-pos' : data.avg < 0 ? 'balance-neg' : ''">{{ data.avg > 0 ? '+' : '' }}{{ data.avg.toFixed(2) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <AdminSearchInput v-model="searchQuery" />
 
     <div v-if="loading" class="loading">Loading...</div>
@@ -180,6 +240,7 @@ export default {
       aiGenerating: false,
       aiError: '',
       importResult: null,
+      showBalanceStats: false,
       stats: [
         { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
         { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
@@ -199,6 +260,57 @@ export default {
         (ev.title || '').toLowerCase().includes(q) ||
         (ev.effect || '').toLowerCase().includes(q)
       );
+    },
+    eventBalanceStats() {
+      if (!this.events.length) return null;
+      const statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+
+      // Per-stat modifier totals and averages
+      const perStat = {};
+      statKeys.forEach(key => {
+        let total = 0;
+        let count = 0;
+        this.events.forEach(ev => {
+          if (ev.stat_modifiers && ev.stat_modifiers[key] !== undefined) {
+            total += ev.stat_modifiers[key];
+            count++;
+          }
+        });
+        perStat[key] = { total, count, avg: count > 0 ? total / count : 0 };
+      });
+
+      // Mechanic distribution
+      const mechanicDist = {};
+      this.events.forEach(ev => {
+        const m = ev.mechanic || 'none';
+        mechanicDist[m] = (mechanicDist[m] || 0) + 1;
+      });
+
+      // Positive vs negative events
+      let positiveCount = 0, negativeCount = 0, mixedCount = 0, neutralCount = 0;
+      this.events.forEach(ev => {
+        if (!ev.stat_modifiers || Object.keys(ev.stat_modifiers).length === 0) {
+          neutralCount++;
+          return;
+        }
+        const values = Object.values(ev.stat_modifiers);
+        const hasPos = values.some(v => v > 0);
+        const hasNeg = values.some(v => v < 0);
+        if (hasPos && hasNeg) mixedCount++;
+        else if (hasPos) positiveCount++;
+        else if (hasNeg) negativeCount++;
+        else neutralCount++;
+      });
+
+      return {
+        count: this.events.length,
+        perStat,
+        mechanicDist,
+        positiveCount,
+        negativeCount,
+        mixedCount,
+        neutralCount,
+      };
     },
   },
   async mounted() {
@@ -599,5 +711,125 @@ export default {
   cursor: pointer;
   font-size: 0.8rem;
   padding: 2px 8px;
+}
+/* Balance Stats Panel */
+.balance-panel {
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 18px 22px;
+  margin-bottom: 24px;
+}
+
+.balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.balance-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+}
+
+.balance-toggle {
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.balance-toggle:hover {
+  background: rgba(212, 168, 67, 0.25);
+}
+
+.balance-body {
+  margin-top: 14px;
+}
+
+.balance-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-stat-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balance-stat-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.balance-stat-value {
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.balance-pos-label { color: #27ae60; }
+.balance-neg-label { color: #c0392b; }
+.balance-pos { color: #27ae60; }
+.balance-neg { color: #c0392b; }
+
+.balance-section-row {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-section {
+  flex: 1;
+  min-width: 200px;
+}
+
+.balance-section-title {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.balance-dist-row {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.balance-dist-badge {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+  text-transform: capitalize;
+}
+
+.balance-table {
+  font-size: 0.85rem;
+}
+
+.name-col {
+  color: var(--text-bright);
+  font-weight: 600;
 }
 </style>

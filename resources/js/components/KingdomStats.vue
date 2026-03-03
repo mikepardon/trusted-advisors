@@ -78,7 +78,7 @@ export default {
   },
   computed: {
     showLiveScore() {
-      return this.game.game_type !== 'duel' && this.game.status !== 'completed';
+      return this.game.game_type !== 'duel' && this.game.status !== 'completed' && this.game.status !== 'cancelled';
     },
     liveScore() {
       const g = this.game;

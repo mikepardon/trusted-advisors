@@ -399,7 +399,7 @@ export default {
         const res = await axios.get(`/api/games/${this.id}`);
         this.gameData = res.data;
 
-        if (this.gameData.game.status === 'completed') {
+        if (this.gameData.game.status === 'completed' || this.gameData.game.status === 'cancelled') {
           this.$router.replace(`/game/${this.id}/over`);
           return;
         }

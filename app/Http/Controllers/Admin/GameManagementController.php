@@ -35,13 +35,13 @@ class GameManagementController extends Controller
 
     public function cancel(Game $game): JsonResponse
     {
-        if ($game->status === 'completed') {
-            return response()->json(['error' => 'Game is already completed.'], 422);
+        if (in_array($game->status, ['completed', 'cancelled'])) {
+            return response()->json(['error' => 'Game is already finished.'], 422);
         }
 
         $game->update([
-            'status' => 'completed',
-            'win' => false,
+            'status' => 'cancelled',
+            'cancelled_at' => now(),
         ]);
 
         return response()->json(['message' => 'Game cancelled.']);

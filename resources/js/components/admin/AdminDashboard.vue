@@ -20,7 +20,7 @@
 
       <!-- Game Stats -->
       <h3 class="section-title">Games</h3>
-      <div class="stats-grid cols-4">
+      <div class="stats-grid cols-5">
         <div class="stat-card">
           <div class="stat-count">{{ stats.completed_games }}</div>
           <div class="stat-label">Completed</div>
@@ -32,6 +32,10 @@
         <div class="stat-card">
           <div class="stat-count">{{ stats.setup_games }}</div>
           <div class="stat-label">In Setup</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-count">{{ stats.cancelled_games || 0 }}</div>
+          <div class="stat-label">Cancelled</div>
         </div>
         <div class="stat-card">
           <div class="stat-count">{{ winRate }}%</div>
@@ -255,6 +259,7 @@ export default {
 .cols-2 { grid-template-columns: repeat(2, 1fr); }
 .cols-3 { grid-template-columns: repeat(3, 1fr); }
 .cols-4 { grid-template-columns: repeat(4, 1fr); }
+.cols-5 { grid-template-columns: repeat(5, 1fr); }
 
 .stat-card {
   background: var(--bg-secondary);
@@ -318,6 +323,7 @@ export default {
 }
 
 @media (max-width: 768px) {
+  .cols-5 { grid-template-columns: repeat(2, 1fr); }
   .cols-4 { grid-template-columns: repeat(2, 1fr); }
   .cols-3 { grid-template-columns: repeat(3, 1fr); }
   .stat-count { font-size: 1.6rem; }

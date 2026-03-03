@@ -15,7 +15,7 @@ class Game extends Model
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number', 'timed_out_player_number',
         'event_order', 'share_token',
         'bonus_score', 'final_score',
-        'turn_time_limit', 'turn_started_at',
+        'turn_time_limit', 'turn_started_at', 'cancelled_at',
     ];
 
     protected $casts = [
@@ -28,6 +28,7 @@ class Game extends Model
         'final_score' => 'integer',
         'turn_time_limit' => 'integer',
         'turn_started_at' => 'datetime',
+        'cancelled_at' => 'datetime',
     ];
 
     public function user(): BelongsTo

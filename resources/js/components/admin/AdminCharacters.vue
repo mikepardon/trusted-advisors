@@ -39,6 +39,62 @@
       <p v-if="rulesSaved" class="rules-saved">Saved!</p>
     </div>
 
+    <!-- Balance Stats Panel -->
+    <div class="rules-panel balance-panel">
+      <div class="balance-header" @click="showBalanceStats = !showBalanceStats">
+        <h3 class="rules-title">Balance Stats</h3>
+        <button type="button" class="balance-toggle">{{ showBalanceStats ? 'Hide' : 'Show' }}</button>
+      </div>
+      <div v-if="showBalanceStats && characterBalanceStats" class="balance-body">
+        <div class="balance-summary">
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Overall Avg Roll</span>
+            <span class="balance-stat-value">{{ characterBalanceStats.overallAvg.toFixed(2) }}</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Highest Roller</span>
+            <span class="balance-stat-value">{{ characterBalanceStats.highest.name }} ({{ characterBalanceStats.highest.totalAvg.toFixed(2) }})</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Lowest Roller</span>
+            <span class="balance-stat-value">{{ characterBalanceStats.lowest.name }} ({{ characterBalanceStats.lowest.totalAvg.toFixed(2) }})</span>
+          </div>
+          <div class="balance-stat-card">
+            <span class="balance-stat-label">Avg Wild Value</span>
+            <span class="balance-stat-value">{{ characterBalanceStats.avgWild.toFixed(2) }}</span>
+          </div>
+        </div>
+        <div class="balance-wild-dist">
+          <span class="balance-dist-label">Wild Value Distribution:</span>
+          <span v-for="(count, val) in characterBalanceStats.wildDist" :key="val" class="balance-dist-badge">
+            {{ val }}: {{ count }}
+          </span>
+        </div>
+        <table class="admin-table balance-table">
+          <thead>
+            <tr>
+              <th>Character</th>
+              <th>Die 1 Avg</th>
+              <th>Die 2 Avg</th>
+              <th>Die 3 Avg</th>
+              <th>Total Avg</th>
+              <th>Wild</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="c in characterBalanceStats.sorted" :key="c.name">
+              <td class="name-col">{{ c.name }}</td>
+              <td>{{ c.dieAvgs[0]?.toFixed(2) || '-' }}</td>
+              <td>{{ c.dieAvgs[1]?.toFixed(2) || '-' }}</td>
+              <td>{{ c.dieAvgs[2]?.toFixed(2) || '-' }}</td>
+              <td class="balance-total">{{ c.totalAvg.toFixed(2) }}</td>
+              <td>{{ c.wildValue }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <AdminSearchInput v-model="searchQuery" />
 
     <div v-if="loading" class="loading">Loading...</div>
@@ -231,6 +287,7 @@ export default {
       aiGenerating: false,
       aiError: '',
       importResult: null,
+      showBalanceStats: false,
     };
   },
   computed: {
@@ -252,6 +309,29 @@ export default {
         if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
         return String(av).localeCompare(String(bv)) * dir;
       });
+    },
+    characterBalanceStats() {
+      if (!this.characters.length) return null;
+      const charStats = this.characters.map(c => {
+        const dieAvgs = (c.dice || []).map(die => {
+          if (!die || !die.length) return 0;
+          const values = die.map(f => f === 'WILD' ? c.wild_value : Number(f));
+          return values.reduce((s, v) => s + v, 0) / values.length;
+        });
+        const totalAvg = dieAvgs.reduce((s, v) => s + v, 0);
+        return { name: c.name, dieAvgs, totalAvg, wildValue: c.wild_value };
+      });
+      const sorted = [...charStats].sort((a, b) => b.totalAvg - a.totalAvg);
+      const overallAvg = charStats.reduce((s, c) => s + c.totalAvg, 0) / charStats.length;
+      const highest = sorted[0];
+      const lowest = sorted[sorted.length - 1];
+      const wildDist = {};
+      this.characters.forEach(c => {
+        const wv = c.wild_value;
+        wildDist[wv] = (wildDist[wv] || 0) + 1;
+      });
+      const avgWild = this.characters.reduce((s, c) => s + c.wild_value, 0) / this.characters.length;
+      return { sorted, overallAvg, highest, lowest, wildDist, avgWild };
     },
   },
   async mounted() {
@@ -873,5 +953,98 @@ export default {
   cursor: pointer;
   font-size: 0.8rem;
   padding: 2px 8px;
+}
+
+/* Balance Stats Panel */
+.balance-panel {
+  margin-bottom: 24px;
+}
+
+.balance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.balance-toggle {
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+}
+
+.balance-toggle:hover {
+  background: rgba(212, 168, 67, 0.25);
+}
+
+.balance-body {
+  margin-top: 14px;
+}
+
+.balance-summary {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.balance-stat-card {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 6px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.balance-stat-label {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.balance-stat-value {
+  color: var(--accent-gold);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+.balance-wild-dist {
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.balance-dist-label {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.balance-dist-badge {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: var(--accent-gold);
+}
+
+.balance-table {
+  font-size: 0.85rem;
+}
+
+.balance-total {
+  color: var(--accent-gold);
+  font-weight: 700;
 }
 </style>

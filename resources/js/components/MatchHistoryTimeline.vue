@@ -45,8 +45,8 @@
               </span>
             </div>
             <div class="match-meta">
-              <span class="match-score">{{ match.score }}</span>
-              <span v-if="match.duration_minutes" class="match-duration">{{ match.duration_minutes }}m</span>
+              <span class="match-score"><span class="meta-label">Total Score</span>{{ match.score }}</span>
+              <span v-if="match.duration_minutes" class="match-duration"><span class="meta-label">Duration</span>{{ formatDuration(match.duration_minutes) }}</span>
             </div>
           </div>
         </div>
@@ -97,6 +97,13 @@ export default {
     if (this.observer) this.observer.disconnect();
   },
   methods: {
+    formatDuration(minutes) {
+      const m = Math.floor(minutes);
+      const s = Math.round((minutes - m) * 60);
+      if (m === 0) return `${s}s`;
+      if (s === 0) return `${m}m`;
+      return `${m}m ${s}s`;
+    },
     async fetchPage() {
       if (this.loading) return;
       this.loading = true;
@@ -149,7 +156,7 @@ export default {
       return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
     },
     outcomeLabel(outcome) {
-      const labels = { win: 'Victory', loss: 'Defeat', draw: 'Draw' };
+      const labels = { win: 'Victory', loss: 'Defeat', draw: 'Draw', cancelled: 'Cancelled' };
       return labels[outcome] || outcome;
     },
     modeLabel(mode) {
@@ -276,6 +283,15 @@ export default {
   color: var(--text-secondary);
 }
 
+.meta-label {
+  display: block;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  opacity: 0.7;
+  margin-bottom: 1px;
+}
+
 /* Badges */
 .outcome-badge {
   display: inline-block;
@@ -287,6 +303,7 @@ export default {
 .outcome-win { background: rgba(74, 138, 58, 0.2); color: #6abf50; border: 1px solid rgba(74, 138, 58, 0.4); }
 .outcome-loss { background: rgba(160, 48, 32, 0.2); color: #d05040; border: 1px solid rgba(160, 48, 32, 0.4); }
 .outcome-draw { background: rgba(180, 160, 60, 0.2); color: #c0b040; border: 1px solid rgba(180, 160, 60, 0.4); }
+.outcome-cancelled { background: rgba(120, 120, 120, 0.2); color: #999; border: 1px solid rgba(120, 120, 120, 0.4); }
 
 .type-badge-sm, .mode-badge-sm, .event-badge-sm {
   display: inline-block;
