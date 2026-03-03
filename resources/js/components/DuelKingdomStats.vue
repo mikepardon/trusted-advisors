@@ -7,6 +7,7 @@
       :class="{ 'kingdom-yours': kingdom.player_number === myPlayerNumber }"
     >
       <h3 class="kingdom-name kingdom-name-clickable" @click="$emit('show-character', kingdom.player_number)">{{ kingdom.character_name }}</h3>
+      <h5 v-if="kingdom.username" class="kingdom-username" :class="{ 'kingdom-name-clickable': kingdom.username !== 'Bot' }" @click="kingdom.username !== 'Bot' && $emit('show-character', kingdom.player_number)">{{ kingdom.username }}</h5>
       <div class="kingdom-stats">
         <div v-for="stat in stats" :key="stat.key" class="stat-row">
           <span class="stat-icon">{{ stat.icon }}</span>
@@ -65,11 +66,14 @@ export default {
     kingdoms() {
       return this.playerKingdoms.map(k => {
         const pn = k.player?.player_number ?? k.player_number;
+        const isRealBot = k.player?.is_bot && !k.player?.user;
         const name = k.player?.character?.name ?? 'Player';
+        const username = isRealBot ? 'Bot' : (k.player?.user?.name || null);
         return {
           ...k,
           player_number: pn,
           character_name: pn === this.myPlayerNumber && this.isSinglePlayerDuel ? `${name} (YOU)` : name,
+          username: username,
         };
       }).sort((a, b) => {
         if (a.player_number === this.myPlayerNumber) return -1;
@@ -190,10 +194,20 @@ export default {
   text-decoration: underline;
 }
 
+.kingdom-username {
+  font-family: inherit;
+  color: var(--text-secondary);
+  font-size: 0.55rem;
+  text-align: center;
+  margin: -4px 0 4px;
+  opacity: 0.7;
+  font-weight: 400;
+}
+
 .kingdom-stats {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 0;
   flex: 1;
 }
 
@@ -272,7 +286,7 @@ export default {
 
 .kingdom-total {
   text-align: center;
-  margin-top: 6px;
+  margin-top: 0;
   font-size: 0.75rem;
   color: var(--text-secondary);
 }

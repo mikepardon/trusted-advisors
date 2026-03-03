@@ -2,40 +2,7 @@
   <div class="duel-roll">
     <h4 class="phase-title">{{ playerName }}'s Challenge</h4>
 
-    <!-- Show assigned cards (1 or 2) -->
-    <div v-if="displayCards.length" class="roll-cards">
-      <div v-for="(c, idx) in displayCards" :key="idx" class="roll-card">
-        <h3 class="card-title">{{ c.title }}</h3>
-        <p class="card-desc">{{ c.description }}</p>
-        <span class="card-difficulty">Difficulty {{ c.difficulty }}</span>
-      </div>
-    </div>
-
-    <!-- Ability activation (before roll) — only for NON-reroll abilities -->
-    <div v-if="canRoll && !hasRolled && !isRolling && ability && abilityUses > 0 && !isRerollAbility" class="ability-section">
-      <button
-        v-if="!abilityActivated"
-        class="btn-ability"
-        :disabled="activatingAbility"
-        @click="$emit('use-ability')"
-      >
-        &#9733; {{ ability.name }}: {{ ability.description }}
-        <span class="ability-uses-badge">({{ abilityUses }} use{{ abilityUses > 1 ? 's' : '' }} left)</span>
-      </button>
-      <div v-else class="ability-activated">
-        &#9733; {{ ability.name }} activated!
-      </div>
-    </div>
-
-    <!-- Shadow peek (if shadow ability was used) -->
-    <div v-if="peekedCards && peekedCards.length" class="peek-section">
-      <p class="peek-title">&#128065; Glimpse of the Future:</p>
-      <div v-for="(pc, i) in peekedCards" :key="i" class="peek-card">
-        {{ pc.title }} (Difficulty {{ pc.difficulty }})
-      </div>
-    </div>
-
-    <!-- Dice rolling area -->
+    <!-- Dice rolling area (at top) -->
     <div class="dice-area">
       <div class="dice-row">
         <template v-if="hasRolled">
@@ -68,7 +35,7 @@
       </p>
     </div>
 
-    <!-- Roll results per card -->
+    <!-- Roll total banner (after dice, before cards) -->
     <template v-if="hasRolled">
       <div v-if="rollData.ability_effects && rollData.ability_effects.length" class="wild-section">
         <div v-for="(desc, i) in rollData.ability_effects" :key="i" class="wild-trigger">
@@ -84,16 +51,44 @@
           {{ rollData.total_roll >= totalDifficulty ? 'SUCCESS' : 'FAILURE' }}
         </span>
       </div>
+    </template>
 
-      <!-- Per-card results -->
-      <div v-for="(cr, idx) in cardResults" :key="idx" class="card-result">
-        <div class="card-result-header">
-          <span class="card-result-name">{{ cr.card?.title || 'Card ' + (idx + 1) }}</span>
-          <span class="card-result-diff">Difficulty {{ cr.difficulty }}</span>
-        </div>
-        <div v-if="Object.keys(cr.effects || {}).length" class="effects-row">
+    <!-- Ability activation (before roll) — only for NON-reroll abilities -->
+    <div v-if="canRoll && !hasRolled && !isRolling && ability && abilityUses > 0 && !isRerollAbility" class="ability-section">
+      <button
+        v-if="!abilityActivated"
+        class="btn-ability"
+        :disabled="activatingAbility"
+        @click="$emit('use-ability')"
+      >
+        &#9733; {{ ability.name }}: {{ ability.description }}
+        <span class="ability-uses-badge">({{ abilityUses }} use{{ abilityUses > 1 ? 's' : '' }} left)</span>
+      </button>
+      <div v-else class="ability-activated">
+        &#9733; {{ ability.name }} activated!
+      </div>
+    </div>
+
+    <!-- Shadow peek (if shadow ability was used) -->
+    <div v-if="peekedCards && peekedCards.length" class="peek-section">
+      <p class="peek-title">&#128065; Glimpse of the Future:</p>
+      <div v-for="(pc, i) in peekedCards" :key="i" class="peek-card">
+        {{ pc.title }} (Difficulty {{ pc.difficulty }})
+      </div>
+    </div>
+
+    <!-- Show assigned cards (1 or 2) -->
+    <div v-if="displayCards.length" class="roll-cards">
+      <div v-for="(c, idx) in displayCards" :key="idx" class="roll-card">
+        <h3 class="card-title">{{ c.title }}</h3>
+        <p v-if="!hasRolled" class="card-desc">{{ c.description }}</p>
+        <p v-else class="card-desc" :class="cardResultMap[idx]?.success ? 'outcome-success' : 'outcome-failure'">
+          {{ cardResultMap[idx]?.success ? (c.positive_flavor || c.description) : (c.negative_flavor || c.description) }}
+        </p>
+        <span class="card-difficulty">Difficulty {{ c.difficulty }}</span>
+        <div v-if="hasRolled && cardEffectsMap[idx]" class="effects-row card-effects">
           <span
-            v-for="(val, stat) in cr.effects"
+            v-for="(val, stat) in cardEffectsMap[idx]"
             :key="stat"
             class="effect-badge"
             :class="val > 0 ? 'effect-positive' : 'effect-negative'"
@@ -102,7 +97,10 @@
           </span>
         </div>
       </div>
+    </div>
 
+    <!-- Post-roll actions -->
+    <template v-if="hasRolled">
       <!-- Combined effects summary -->
       <div v-if="Object.keys(combinedEffects).length" class="combined-effects">
         <p class="combined-label">Combined Effects:</p>
@@ -141,7 +139,7 @@
       </div>
 
       <!-- Continue button (when no reroll available or already rerolled) -->
-      <div v-else-if="canRoll && needsContinue" class="reroll-section">
+      <div v-else-if="needsContinue" class="reroll-section">
         <button class="btn-continue" @click="$emit('continue')">
           Continue
         </button>
@@ -186,7 +184,7 @@ export default {
       return ['rally', 'gamble'].includes(this.ability.name);
     },
     showRerollOption() {
-      return this.hasRolled && this.canRoll && this.isRerollAbility
+      return this.hasRolled && this.isRerollAbility
         && this.abilityUses > 0 && !this.abilityActivated && !this.rollData?.rerolled;
     },
     rerollLabel() {
@@ -200,6 +198,11 @@ export default {
         return this.cards.map(c => c.card || c);
       }
       if (this.card) return [this.card];
+      // Fall back to cards from rollData (for opponent view)
+      if (this.rollData?.cards) {
+        return this.rollData.cards.map(cr => cr.card).filter(Boolean);
+      }
+      if (this.rollData?.card) return [this.rollData.card];
       return [];
     },
     cardResults() {
@@ -218,6 +221,24 @@ export default {
     totalDifficulty() {
       if (!this.cardResults.length) return 0;
       return this.cardResults.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
+    },
+    cardResultMap() {
+      if (!this.hasRolled || !this.cardResults.length) return {};
+      const map = {};
+      this.cardResults.forEach((cr, idx) => {
+        map[idx] = cr;
+      });
+      return map;
+    },
+    cardEffectsMap() {
+      if (!this.hasRolled || !this.cardResults.length) return {};
+      const map = {};
+      this.cardResults.forEach((cr, idx) => {
+        if (cr.effects && Object.keys(cr.effects).length) {
+          map[idx] = cr.effects;
+        }
+      });
+      return map;
     },
     combinedEffects() {
       if (!this.rollData) return {};
@@ -290,16 +311,16 @@ export default {
 .duel-roll {
   background: var(--bg-secondary);
   border-radius: 10px;
-  padding: 18px;
-  margin-bottom: 15px;
+  padding: 14px;
+  margin-bottom: 12px;
   border-left: 4px solid var(--accent-gold);
 }
 
 .phase-title {
   font-family: 'Cinzel', serif;
   color: var(--text-bright);
-  font-size: 1.1rem;
-  margin-bottom: 12px;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
   text-align: center;
 }
 
@@ -314,7 +335,7 @@ export default {
 .roll-card {
   background: rgba(0, 0, 0, 0.15);
   border-radius: 8px;
-  padding: 12px;
+  padding: 10px;
   text-align: center;
   flex: 1;
   min-width: 140px;
@@ -324,14 +345,14 @@ export default {
 .card-title {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
-  font-size: 1rem;
+  font-size: 0.9rem;
   margin-bottom: 4px;
 }
 
 .card-desc {
   color: var(--text-secondary);
   font-style: italic;
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   margin-bottom: 6px;
 }
 
@@ -346,6 +367,20 @@ export default {
   border-radius: 4px;
 }
 
+.outcome-success {
+  color: #4a8a3a;
+  font-style: italic;
+}
+
+.outcome-failure {
+  color: #c0392b;
+  font-style: italic;
+}
+
+.card-effects {
+  margin-top: 6px;
+}
+
 .dice-area {
   text-align: center;
   margin-bottom: 12px;
@@ -356,7 +391,6 @@ export default {
   gap: 8px;
   justify-content: center;
   margin-bottom: 12px;
-  min-height: 40px;
 }
 
 .face-badge {
@@ -415,12 +449,12 @@ export default {
 
 .roll-total-banner {
   text-align: center;
-  font-size: 1.15rem;
+  font-size: 1rem;
   color: var(--text-bright);
-  padding: 10px 12px;
+  padding: 8px 10px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -440,33 +474,6 @@ export default {
 
 .roll-result-badge {
   margin-left: 4px;
-}
-
-.card-result {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 6px;
-  padding: 10px;
-  margin-bottom: 8px;
-}
-
-.card-result-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-bottom: 6px;
-}
-
-.card-result-name {
-  font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 0.9rem;
-}
-
-.card-result-diff {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
 }
 
 .result-badge {

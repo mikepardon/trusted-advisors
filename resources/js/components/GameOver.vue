@@ -575,20 +575,49 @@ export default {
         });
         const newGameId = res.data.id;
 
-        // For online games, invite the other players
-        if (game.game_mode === 'online' && game.players) {
-          const currentUserId = this.auth.state.user?.id;
-          const opponents = game.players.filter(p => p.user_id && p.user_id !== currentUserId);
-          for (const opp of opponents) {
-            try {
-              await axios.post(`/api/games/${newGameId}/invite`, { user_id: opp.user_id });
-            } catch {
-              // Invite may fail if user blocked, etc. - continue
+        if (game.game_mode === 'online') {
+          // For online games, invite the other players and go to lobby
+          if (game.players) {
+            const currentUserId = this.auth.state.user?.id;
+            const opponents = game.players.filter(p => p.user_id && p.user_id !== currentUserId);
+            for (const opp of opponents) {
+              try {
+                await axios.post(`/api/games/${newGameId}/invite`, { user_id: opp.user_id });
+              } catch {
+                // Invite may fail if user blocked, etc. - continue
+              }
             }
           }
-        }
+          this.$router.push(`/game/${newGameId}`);
+        } else {
+          // For single/pass_and_play: reuse same characters and start immediately
+          const currentUserId = this.auth.state.user?.id;
+          const myPlayer = game.players?.find(p => p.user_id === currentUserId) || game.players?.[0];
+          const botPlayer = game.players?.find(p => p.is_bot);
 
-        this.$router.push(`/game/${newGameId}`);
+          let characterIds;
+          if (game.game_type === 'duel' && game.game_mode === 'single') {
+            // Single-player duel: only send the human's character
+            characterIds = [myPlayer?.character_id].filter(Boolean);
+          } else {
+            // Cooperative or pass-and-play: send all non-bot characters in order
+            characterIds = (game.players || [])
+              .filter(p => !p.is_bot)
+              .sort((a, b) => a.player_number - b.player_number)
+              .map(p => p.character_id)
+              .filter(Boolean);
+          }
+
+          if (characterIds.length) {
+            const startPayload = { characters: characterIds };
+            if (botPlayer?.bot_difficulty) {
+              startPayload.bot_difficulty = botPlayer.bot_difficulty;
+            }
+            await axios.post(`/api/games/${newGameId}/start`, startPayload);
+          }
+
+          this.$router.push(`/game/${newGameId}`);
+        }
       } catch {
         alert('Failed to create rematch.');
       }

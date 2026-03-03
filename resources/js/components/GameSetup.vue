@@ -46,19 +46,32 @@
 
     <!-- STEP 0: Mode selection -->
     <Transition name="fade" mode="out-in">
-    <div v-if="step === 'mode'" key="mode">
+    <div v-if="step === 'mode'" key="mode" class="home-page">
 
       <!-- Grid: col-8 (content) + col-4 (nav icons) -->
       <div class="home-grid">
         <div class="home-grid-main">
+          <!-- Active Season Card -->
+          <div v-if="activeSeason" class="season-card" @click="$router.push('/season')">
+            <div class="season-card-header">
+              <h3 class="season-card-name">{{ activeSeason.name }}</h3>
+              <h3 v-if="homeStats.seasonRank" class="season-card-rank">#{{ homeStats.seasonRank }}</h3>
+            </div>
+            <div class="season-card-time">{{ seasonTimeLeft }}</div>
+            <div class="season-card-bar">
+              <div class="season-card-fill" :style="{ width: seasonPercent + '%' }"></div>
+            </div>
+            <div class="season-card-meta">
+              <span v-if="activeSeason.topReward" class="season-card-reward">
+                1st: {{ activeSeason.topReward }}
+              </span>
+            </div>
+          </div>
+
           <!-- Daily Challenge Banner (enhanced) -->
           <div class="daily-enhanced">
             <DailyChallengeBanner />
           </div>
-
-          <HintBubble hint-id="home-duel-mode">
-            Try <strong>Duel mode</strong> for competitive 1v1 battles! Choose it after selecting a play mode.
-          </HintBubble>
 
           <!-- In-Progress Games Button -->
           <div class="card-panel in-progress-card" @click="$router.push('/campaigns')">
@@ -94,38 +107,18 @@
           @click="playSound('clickCard'); gameMode = 'online'; selectMode()"
         >
           <h3 class="mode-title">Online</h3>
-          <p class="mode-desc">Play with friends over the network</p>
         </div>
         <div
           class="mode-card mode-card-half"
           @click="playSound('clickCard'); gameMode = 'single'; selectMode()"
         >
           <h3 class="mode-title">Single Player</h3>
-          <p class="mode-desc">Guide the realm alone with one advisor</p>
         </div>
         <div
-          class="mode-card mode-card-full"
+          class="mode-card"
           @click="playSound('clickCard'); gameMode = 'pass_and_play'; selectMode()"
         >
           <h3 class="mode-title">Pass and Play</h3>
-          <p class="mode-desc">Take turns on the same device (2-6 advisors)</p>
-        </div>
-      </div>
-
-      <!-- Active Season Card -->
-      <div v-if="activeSeason" class="season-card" @click="$router.push('/season')">
-        <div class="season-card-header">
-          <h3 class="season-card-name">{{ activeSeason.name }}</h3>
-          <h3 v-if="homeStats.seasonRank" class="season-card-rank">#{{ homeStats.seasonRank }}</h3>
-        </div>
-        <div class="season-card-time">{{ seasonTimeLeft }}</div>
-        <div class="season-card-bar">
-          <div class="season-card-fill" :style="{ width: seasonPercent + '%' }"></div>
-        </div>
-        <div class="season-card-meta">
-          <span v-if="activeSeason.topReward" class="season-card-reward">
-            1st: {{ activeSeason.topReward }}
-          </span>
         </div>
       </div>
 
@@ -427,7 +420,6 @@ import { playSound } from '../sounds';
 import DailyChallengeBanner from './DailyChallengeBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import MatchmakingQueue from './MatchmakingQueue.vue';
-import HintBubble from './HintBubble.vue';
 import StoryIntro from './StoryIntro.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
@@ -436,7 +428,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { DailyChallengeBanner, HintBubble, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
+  components: { DailyChallengeBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
   inject: {
     openNotifications: { default: () => () => {} },
     openRules: { default: () => () => {} },
@@ -851,6 +843,8 @@ export default {
   max-width: 800px;
   margin: 0 auto;
   height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .story-step {
@@ -893,12 +887,19 @@ export default {
   font-size: 1.1rem;
 }
 
+/* Home page layout — fills height, pushes mode cards to bottom */
+.home-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
 /* Mode cards */
 .mode-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
-  margin-bottom: 20px;
+  gap: 10px;
   justify-content: space-between;
 }
 
@@ -906,18 +907,16 @@ export default {
   background: linear-gradient(180deg, #2a1f14, #1a1209);
   border: 2px solid rgba(138, 106, 46, 0.3);
   border-radius: 10px;
-  padding: 18px 20px;
+  padding: 12px 14px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
   box-sizing: border-box;
+  width: 100%;
+  text-align: center;
 }
 
 .mode-card-half {
   width: 48%;
-}
-
-.mode-card-full {
-  width: 100%;
 }
 
 .mode-card:hover {
@@ -928,13 +927,7 @@ export default {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1.1rem;
-  margin-bottom: 4px;
-}
-
-.mode-desc {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  font-style: italic;
+  margin-bottom: 0;
 }
 
 /* Pending invites */
@@ -1766,7 +1759,7 @@ export default {
 .in-progress-card {
   cursor: pointer;
   transition: border-color 0.2s;
-  padding: 14px 18px;
+  padding: 10px 14px;
 }
 
 .in-progress-card:hover {
@@ -1815,9 +1808,10 @@ export default {
   background: linear-gradient(180deg, #2a1f14, #1a1209);
   border: 2px solid rgba(138, 106, 46, 0.3);
   border-radius: 10px;
-  padding: 14px 18px;
+  padding: 10px 14px;
   cursor: pointer;
   transition: border-color 0.2s;
+  margin-bottom: 6px;
 }
 
 .season-card:hover {
@@ -1911,12 +1905,7 @@ export default {
   }
 
   .mode-card {
-    padding: 12px 16px;
-  }
-
-  .mode-desc {
-    font-size: 0.8rem;
-    margin-top: 2px;
+    padding: 10px 14px;
   }
 
   .player-buttons button {

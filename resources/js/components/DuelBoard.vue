@@ -21,32 +21,6 @@
     <!-- Player Items -->
     <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="true" />
 
-    <!-- Compact item/dice icons -->
-    <div class="duel-bar-icons">
-      <button
-        v-if="currentPlayerItems.length"
-        class="bar-icon-btn"
-        title="View Inventory"
-        @click="$refs.playerItems?.openOverlay()"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
-          <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
-          <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-        </svg>
-        <span class="bar-icon-badge">{{ currentPlayerItems.length }}</span>
-      </button>
-      <span class="bar-dice-count" title="Active Dice">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
-          <rect x="3" y="3" width="18" height="18" rx="3"/>
-          <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
-          <circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
-          <circle cx="12" cy="12" r="1" fill="currentColor"/>
-          <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
-          <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
-        </svg>
-        <span class="dice-num">{{ diceCount }}</span>
-      </span>
-    </div>
 
     <!-- Event Reveal Overlay -->
     <EventReveal
@@ -438,6 +412,10 @@ export default {
       // If entering rolling phase, load my cards
       if (this.duelPhase === 'rolling' || this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
         this.loadMyRollCards();
+        // Ensure bot is triggered to roll if needed
+        if (this.hasBotPlayer && this.isCurrentTurnBot && !this._opponentTurnPending) {
+          this.triggerBotTurn();
+        }
       }
 
       this.checkEventReveal();
@@ -674,9 +652,12 @@ export default {
         if (this.offererRollData && this.chooserRollData) {
           this.duelPhase = 'resolving';
           this.$emit('phase-updated', 'resolving');
+        } else if (this.hasBotPlayer && !this.opponentRollData) {
+          // Bot hasn't rolled yet — trigger it now
+          this._opponentTurnPending = false;
+          this.triggerBotTurn();
         }
         // If opponent hasn't rolled yet, stay in rolling phase
-        // Bot should already be triggered via isCurrentTurnBot watcher
       } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
         // Reset ability state for chooser's turn
         this.abilityActivated = false;
@@ -879,6 +860,9 @@ export default {
     } else if (this.duelPhase === 'rolling') {
       await this.loadMyRollCards();
       this.updateOnlineWaiting();
+      if (this.hasBotPlayer && this.isCurrentTurnBot) {
+        this.triggerBotTurn();
+      }
     } else if (this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
       if (this.isPassAndPlay) {
         const activeNum = this.duelPhase === 'rolling_offerer' ? this.offererNumber : this.chooserNumber;
@@ -948,72 +932,22 @@ export default {
   font-size: 1.1rem;
 }
 
-.duel-bar-icons {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.bar-icon-btn {
-  position: relative;
-  background: none;
-  border: 1px solid var(--border-gold, #6b5b3a);
-  border-radius: 6px;
-  color: var(--accent-gold, #c9a84c);
-  cursor: pointer;
-  padding: 3px 6px;
-  display: flex;
-  align-items: center;
-  transition: all 0.2s;
-}
-
-.bar-icon-btn:hover {
-  border-color: var(--accent-gold, #c9a84c);
-  background: rgba(212, 168, 67, 0.1);
-}
-
-.bar-icon-svg {
-  width: 18px;
-  height: 18px;
-}
-
-.bar-icon-badge {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--accent-gold, #c9a84c);
-  margin-left: 3px;
-}
-
-.bar-dice-count {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--text-secondary, #a09080);
-  font-size: 0.85rem;
-}
-
-.dice-num {
-  font-family: 'Cinzel', serif;
-  font-weight: 700;
-  color: var(--text-bright, #f0e6d2);
-}
 
 /* Roll Tab Nav */
 .duel-roll-tabs {
   display: flex;
   gap: 6px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   justify-content: center;
 }
 
 .roll-tab {
   flex: 1;
   max-width: 180px;
-  padding: 8px 16px;
+  padding: 5px 12px;
   border-radius: 6px;
-  font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
+  font-family: 'Crimson Text',serif;
+  font-size: 0.7rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;

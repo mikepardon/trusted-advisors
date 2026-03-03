@@ -203,7 +203,7 @@ export default {
 
 <style scoped>
 .duel-choose {
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 .phase-title {
@@ -219,7 +219,7 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 0.9rem;
-  margin-bottom: 20px;
+  margin-bottom: 0;
 }
 
 /* Desktop side-by-side */
@@ -234,11 +234,11 @@ export default {
 .swiper-hand {
   max-width: 340px;
   margin: 0 auto;
-  padding: 10px 0;
+  padding: 0;
 }
 
 .swiper-hand :deep(.swiper-slide) {
-  padding: 40px 20px 10px;
+  padding: 20px 20px 10px;
 }
 
 /* Parchment card */
@@ -390,7 +390,7 @@ export default {
     width: 100%;
     max-width: 320px;
     min-height: auto;
-    padding: 18px 16px;
+    padding: 6px 10px;
   }
 
   .parchment-title {

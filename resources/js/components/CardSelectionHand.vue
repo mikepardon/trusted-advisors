@@ -306,7 +306,7 @@ export default {
 }
 
 .swiper-hand .swiper-slide {
-    padding: 40px 20px 10px;
+    padding: 10px 20px 10px;
 }
 
 /* Parchment card */

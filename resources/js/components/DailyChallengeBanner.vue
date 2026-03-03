@@ -1,7 +1,6 @@
 <template>
   <div v-if="challenge && challenge.title" class="daily-banner" :class="{ completed: challenge.completed }" @click="showDetail = !showDetail">
     <div class="banner-row">
-      <span class="banner-icon">{{ challenge.completed ? '\u2705' : '\u{1F4CB}' }}</span>
       <div class="banner-text">
         <span class="banner-title">{{ challenge.title }}</span>
         <span v-if="challenge.completed" class="banner-status">Completed!</span>
@@ -58,13 +57,10 @@ export default {
   gap: 10px;
 }
 
-.banner-icon {
-  font-size: 1.3rem;
-}
-
 .banner-text {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   flex: 1;
 }

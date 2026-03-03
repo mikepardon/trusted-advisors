@@ -220,7 +220,6 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 0.9rem;
-  margin-bottom: 20px;
 }
 
 /* Desktop side-by-side */

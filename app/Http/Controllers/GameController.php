@@ -211,7 +211,7 @@ class GameController extends Controller
         if ($game->isDuel()) {
             $data['offerer_player_number'] = $game->offerer_player_number;
             $data['duel_phase'] = $game->duel_phase;
-            $data['player_kingdoms'] = $game->playerKingdoms()->with('player.character')->get();
+            $data['player_kingdoms'] = $game->playerKingdoms()->with(['player.character', 'player.user'])->get();
         }
 
         // For online games in setup, include lobby data
@@ -1727,18 +1727,23 @@ class GameController extends Controller
         $chooser = $game->getChooser();
 
         if ($game->duel_phase === 'rolling') {
-            // Simultaneous rolling — determine player from auth
+            // Simultaneous rolling — determine player from auth or player_number param (for bots)
+            $playerNumber = $request->input('player_number');
             $user = $request->user();
-            if (!$user) {
-                return response()->json(['error' => 'Authentication required'], 403);
-            }
 
-            if ($user->id === $offerer->user_id) {
-                $rollingPlayer = $offerer;
-            } elseif ($user->id === $chooser->user_id) {
-                $rollingPlayer = $chooser;
+            if ($playerNumber) {
+                // Bot or explicit player number — find by player_number
+                $rollingPlayer = ($offerer->player_number == $playerNumber) ? $offerer : $chooser;
+            } elseif ($user) {
+                if ($user->id === $offerer->user_id) {
+                    $rollingPlayer = $offerer;
+                } elseif ($user->id === $chooser->user_id) {
+                    $rollingPlayer = $chooser;
+                } else {
+                    return response()->json(['error' => 'You are not in this game'], 403);
+                }
             } else {
-                return response()->json(['error' => 'You are not in this game'], 403);
+                return response()->json(['error' => 'Authentication required'], 403);
             }
 
             // Check if this player already rolled this round
