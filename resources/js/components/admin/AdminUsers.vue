@@ -50,6 +50,12 @@
               <button
                 v-if="!user.is_admin"
                 class="action-btn"
+                @click="impersonateUser(user)"
+                title="Login as this user"
+              >&#128100;</button>
+              <button
+                v-if="!user.is_admin"
+                class="action-btn"
                 :class="{ 'btn-unban': user.banned_at }"
                 @click="toggleBan(user)"
                 :title="user.banned_at ? 'Unban' : 'Ban'"
@@ -166,6 +172,15 @@ export default {
         this.loginLogs = logsRes.data;
       } catch (e) {
         console.error('Failed to fetch user details:', e);
+      }
+    },
+    async impersonateUser(user) {
+      if (!confirm(`Login as ${user.name}? You will be redirected to the app as this user.`)) return;
+      try {
+        await axios.post(`/api/admin/users/${user.id}/impersonate`);
+        window.location.href = '/';
+      } catch (e) {
+        alert('Failed: ' + (e.response?.data?.error || e.message));
       }
     },
     async toggleBan(user) {

@@ -156,7 +156,9 @@ class GameController extends Controller
         }
 
         // Duel mode requires exactly 2 players (single player will get a bot as player 2)
+        // Duel mode is always 24 rounds
         if ($gameType === 'duel') {
+            $validated['total_rounds'] = 24;
             if ($validated['game_mode'] === 'single') {
                 $validated['num_players'] = 2; // Bot will be player 2
             }
@@ -212,6 +214,12 @@ class GameController extends Controller
             $data['offerer_player_number'] = $game->offerer_player_number;
             $data['duel_phase'] = $game->duel_phase;
             $data['player_kingdoms'] = $game->playerKingdoms()->with(['player.character', 'player.user'])->get();
+
+            if ($game->turn_time_limit) {
+                $data['turn_time_limit'] = $game->turn_time_limit;
+                $data['turn_started_at'] = $game->turn_started_at?->toIso8601String();
+                $data['turn_time_remaining'] = $game->turnTimeRemaining();
+            }
         }
 
         // For online games in setup, include lobby data
@@ -298,9 +306,9 @@ class GameController extends Controller
             }
         }
 
-        // Duel mode: size deck as 2 cards per round (no events)
+        // Duel mode: 4 cards per round (2 per player, no events)
         if ($game->isDuel()) {
-            $totalCardsNeeded = 2 * $game->total_rounds;
+            $totalCardsNeeded = 4 * $game->total_rounds;
         } else {
             // Use worst-case cards per round (3 per player for altered_deal events)
             $maxCardsPerRound = $game->num_players * 3;
@@ -425,6 +433,10 @@ class GameController extends Controller
         }
 
         if ($game->isOnline()) {
+            // Start turn timer for online duels
+            if ($game->isDuel() && $game->turn_time_limit) {
+                $game->update(['turn_started_at' => now()]);
+            }
             broadcast(new GameStarted($game->id));
         }
 
@@ -1452,6 +1464,9 @@ class GameController extends Controller
         $game->round_phase = 'selecting';
         $game->duel_phase = 'choosing';
         $game->offerer_player_number = $game->offerer_player_number === 1 ? 2 : 1;
+        if ($game->isOnline() && $game->turn_time_limit) {
+            $game->turn_started_at = now();
+        }
         $game->save();
 
         // Reset ability flags for new round
@@ -1675,7 +1690,11 @@ class GameController extends Controller
         // Determine rolling phase — simultaneous for all except pass-and-play
         $isPassAndPlay = $game->game_mode === 'pass_and_play';
         $rollingPhase = $isPassAndPlay ? 'rolling_offerer' : 'rolling';
-        $game->update(['duel_phase' => $rollingPhase]);
+        $updateData = ['duel_phase' => $rollingPhase];
+        if ($game->isOnline() && $game->turn_time_limit) {
+            $updateData['turn_started_at'] = now();
+        }
+        $game->update($updateData);
 
         // Reload hands with updated assignments
         $updatedHands = $game->playerHands()
@@ -1948,7 +1967,11 @@ class GameController extends Controller
                 ]);
             }
         } elseif ($game->duel_phase === 'rolling_offerer') {
-            $game->update(['duel_phase' => 'rolling_chooser']);
+            $updateData = ['duel_phase' => 'rolling_chooser'];
+            if ($game->isOnline() && $game->turn_time_limit) {
+                $updateData['turn_started_at'] = now();
+            }
+            $game->update($updateData);
         } else {
             $game->update([
                 'duel_phase' => 'resolving',
@@ -2374,14 +2397,14 @@ class GameController extends Controller
 
         // Bot needs to select a card in choosing phase
         if ($phase === 'choosing') {
-            // Verify the bot actually has cards dealt for this round
+            // Safety: if bot has no cards (e.g. deck was exhausted), deal them now
             $botHands = GamePlayerHand::where('game_id', $game->id)
                 ->where('game_player_id', $bot->id)
                 ->where('round_number', $game->current_round)
                 ->count();
 
             if ($botHands === 0) {
-                return response()->json(['error' => 'Bot has no cards for this round yet'], 422);
+                $this->dealDuelCardsForRound($game);
             }
 
             $handId = $botService->decideDuelSelect($game, $bot);

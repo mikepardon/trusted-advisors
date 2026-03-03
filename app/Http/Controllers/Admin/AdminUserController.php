@@ -9,6 +9,7 @@ use App\Models\User;
 use App\Models\UserAchievement;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class AdminUserController extends Controller
@@ -118,5 +119,40 @@ class AdminUserController extends Controller
             });
 
         return response()->json($logs);
+    }
+
+    public function impersonate(Request $request, User $user): JsonResponse
+    {
+        if ($user->is_admin) {
+            return response()->json(['error' => 'Cannot impersonate an admin user'], 422);
+        }
+
+        if ($user->banned_at) {
+            return response()->json(['error' => 'Cannot impersonate a banned user'], 422);
+        }
+
+        $request->session()->put('impersonator_id', $request->user()->id);
+        Auth::login($user);
+
+        return response()->json(['message' => 'Now impersonating ' . $user->name]);
+    }
+
+    public function stopImpersonating(Request $request): JsonResponse
+    {
+        $impersonatorId = $request->session()->get('impersonator_id');
+
+        if (!$impersonatorId) {
+            return response()->json(['error' => 'Not currently impersonating'], 422);
+        }
+
+        $admin = User::find($impersonatorId);
+        if (!$admin) {
+            return response()->json(['error' => 'Original admin not found'], 422);
+        }
+
+        $request->session()->forget('impersonator_id');
+        Auth::login($admin);
+
+        return response()->json(['message' => 'Stopped impersonating, welcome back ' . $admin->name]);
     }
 }

@@ -55,6 +55,7 @@ Route::get('/replays/{token}', [ReplayController::class, 'showPublic']);
 
 // Auth required
 Route::middleware('auth:web')->group(function () {
+    Route::post('/impersonate/stop', [AdminUserController::class, 'stopImpersonating']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
     Route::post('/auth/push-subscribe', [AuthController::class, 'registerPushId']);
     Route::get('/auth/stats', [AuthController::class, 'stats']);
@@ -159,6 +160,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('users/{user}', [AdminUserController::class, 'show']);
     Route::post('users/{user}/ban', [AdminUserController::class, 'ban']);
     Route::get('users/{user}/login-logs', [AdminUserController::class, 'loginLogs']);
+    Route::post('users/{user}/impersonate', [AdminUserController::class, 'impersonate']);
 
     // AI content generation
     Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);

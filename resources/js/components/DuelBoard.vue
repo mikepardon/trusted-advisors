@@ -1,5 +1,10 @@
 <template>
   <div class="duel-board">
+    <!-- Turn Timer -->
+    <div v-if="formattedTimeRemaining" class="turn-timer" :class="{ urgent: timerUrgent }">
+      {{ formattedTimeRemaining }}
+    </div>
+
     <!-- Kingdom Stats -->
     <DuelKingdomStats
       :playerKingdoms="playerKingdoms"
@@ -228,6 +233,10 @@ export default {
       // Character info modal
       showCharacterModal: false,
       selectedCharacterData: null,
+      // Turn timer
+      turnTimeLimit: null,
+      turnTimeRemaining: null,
+      turnTimerInterval: null,
     };
   },
   computed: {
@@ -342,6 +351,21 @@ export default {
       if (phase === 'rolling_chooser' && this.chooserNumber === botNum) return true;
       return false;
     },
+    formattedTimeRemaining() {
+      if (this.turnTimeRemaining == null) return null;
+      const total = this.turnTimeRemaining;
+      if (total <= 0) return '0:00';
+      const hours = Math.floor(total / 3600);
+      const mins = Math.floor((total % 3600) / 60);
+      const secs = total % 60;
+      if (hours > 0) {
+        return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+      }
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    },
+    timerUrgent() {
+      return this.turnTimeRemaining != null && this.turnTimeRemaining <= 30;
+    },
   },
   watch: {
     gameData: {
@@ -372,6 +396,18 @@ export default {
       this.showCharacterModal = true;
     },
 
+    startTurnTimer() {
+      if (this.turnTimerInterval) clearInterval(this.turnTimerInterval);
+      this.turnTimerInterval = setInterval(() => {
+        if (this.turnTimeRemaining != null && this.turnTimeRemaining > 0) {
+          this.turnTimeRemaining--;
+        } else {
+          clearInterval(this.turnTimerInterval);
+          this.turnTimerInterval = null;
+        }
+      }, 1000);
+    },
+
     checkEventReveal() {
       const round = this.gameData?.current_round || this.gameData?.game?.current_round || 0;
       const event = this.currentEvent;
@@ -388,6 +424,15 @@ export default {
       this.duelPhase = data.duel_phase || data.game?.duel_phase;
       this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
       this.playerKingdoms = data.player_kingdoms || [];
+
+      // Sync turn timer
+      if (data.turn_time_limit) {
+        this.turnTimeLimit = data.turn_time_limit;
+        if (data.turn_time_remaining != null) {
+          this.turnTimeRemaining = data.turn_time_remaining;
+          this.startTurnTimer();
+        }
+      }
 
       // Determine my player number
       if (this.isOnline || this.isSinglePlayerDuel) {
@@ -902,6 +947,11 @@ export default {
       }
     }
   },
+  beforeUnmount() {
+    if (this.turnTimerInterval) {
+      clearInterval(this.turnTimerInterval);
+    }
+  },
 };
 </script>
 
@@ -1015,5 +1065,32 @@ export default {
 @keyframes tabPulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 0.8; }
+}
+
+/* Turn timer */
+.turn-timer {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  padding: 4px 10px;
+  z-index: 10;
+}
+
+.turn-timer.urgent {
+  color: #e74c3c;
+  border-color: #e74c3c;
+  animation: timerPulse 1s ease-in-out infinite;
+}
+
+@keyframes timerPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
 }
 </style>

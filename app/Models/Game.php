@@ -15,6 +15,7 @@ class Game extends Model
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number',
         'event_order', 'share_token',
         'bonus_score', 'final_score',
+        'turn_time_limit', 'turn_started_at',
     ];
 
     protected $casts = [
@@ -24,6 +25,8 @@ class Game extends Model
         'event_order' => 'array',
         'bonus_score' => 'integer',
         'final_score' => 'integer',
+        'turn_time_limit' => 'integer',
+        'turn_started_at' => 'datetime',
     ];
 
     public function user(): BelongsTo
@@ -123,6 +126,16 @@ class Game extends Model
         $this->save();
 
         return $this->share_token;
+    }
+
+    public function turnTimeRemaining(): ?int
+    {
+        if (!$this->turn_time_limit || !$this->turn_started_at) {
+            return null;
+        }
+
+        $elapsed = (int) $this->turn_started_at->diffInSeconds(now());
+        return max(0, $this->turn_time_limit - $elapsed);
     }
 
     public function isOnline(): bool

@@ -1,5 +1,10 @@
 <template>
   <div id="game-app" :class="{ 'is-admin': isAdmin }">
+    <!-- Impersonation banner -->
+    <div v-if="auth.state.user?.is_impersonating" class="impersonation-banner" @click="stopImpersonating">
+      Impersonating {{ auth.state.user.name }} &mdash; Click to stop
+    </div>
+
     <SplashScreen v-if="showSplash" @done="splashDone" />
 
     <!-- Full header for non-game, non-admin pages -->
@@ -216,6 +221,14 @@ export default {
     },
     menuSound() {
       playSound('clickMenu');
+    },
+    async stopImpersonating() {
+      try {
+        await axios.post('/api/impersonate/stop');
+        window.location.href = '/admin';
+      } catch {
+        alert('Failed to stop impersonating');
+      }
     },
     async handleLogout() {
       this.showLogoutConfirm = false;
@@ -846,5 +859,24 @@ button:disabled {
 .toast-fade-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-10px);
+}
+
+/* Impersonation banner */
+.impersonation-banner {
+  background: #c0392b;
+  color: #fff;
+  text-align: center;
+  padding: 8px 16px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  flex-shrink: 0;
+  z-index: 9999;
+}
+
+.impersonation-banner:hover {
+  background: #e74c3c;
 }
 </style>

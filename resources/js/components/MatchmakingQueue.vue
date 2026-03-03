@@ -35,6 +35,7 @@ export default {
   name: 'MatchmakingQueue',
   props: {
     totalRounds: { type: Number, required: true },
+    speedMode: { type: String, default: 'speed' },
   },
   emits: ['matched', 'cancelled'],
   setup() {
@@ -66,6 +67,7 @@ export default {
     try {
       const res = await axios.post('/api/matchmaking/join', {
         total_rounds: this.totalRounds,
+        speed_mode: this.speedMode,
       });
       this.entry = res.data;
 

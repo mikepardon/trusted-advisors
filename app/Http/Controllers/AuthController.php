@@ -133,13 +133,24 @@ class AuthController extends Controller
         return response()->json(['message' => 'Logged out']);
     }
 
-    public function me(): JsonResponse
+    public function me(Request $request): JsonResponse
     {
         $user = Auth::user();
 
-        return $user
-            ? response()->json($user)
-            : response()->json(null, 204);
+        if (!$user) {
+            return response()->json(null, 204);
+        }
+
+        $data = $user->toArray();
+
+        $impersonatorId = $request->session()->get('impersonator_id');
+        if ($impersonatorId) {
+            $impersonator = User::find($impersonatorId);
+            $data['is_impersonating'] = true;
+            $data['impersonator_name'] = $impersonator?->name ?? 'Admin';
+        }
+
+        return response()->json($data);
     }
 
     public function registerPushId(Request $request): JsonResponse

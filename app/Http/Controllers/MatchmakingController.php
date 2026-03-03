@@ -16,10 +16,15 @@ class MatchmakingController extends Controller
     public function join(Request $request): JsonResponse
     {
         $request->validate([
-            'total_rounds' => 'required|integer|in:12,24,36,48,60',
+            'total_rounds' => 'sometimes|integer|in:12,24,36,48,60',
+            'speed_mode' => 'sometimes|string|in:speed,daily',
         ]);
 
         $user = $request->user();
+
+        // Duel matchmaking always uses 24 rounds
+        $totalRounds = 24;
+        $speedMode = $request->input('speed_mode', 'speed');
 
         // Check if already searching
         $existing = MatchmakingEntry::where('user_id', $user->id)
@@ -33,7 +38,8 @@ class MatchmakingController extends Controller
         $entry = MatchmakingEntry::create([
             'user_id' => $user->id,
             'elo_rating' => $user->elo_rating ?? 1200,
-            'total_rounds' => $request->total_rounds,
+            'total_rounds' => $totalRounds,
+            'speed_mode' => $speedMode,
             'bot_timeout' => rand(41, 58),
         ]);
 
@@ -126,6 +132,7 @@ class MatchmakingController extends Controller
         return MatchmakingEntry::where('status', 'searching')
             ->where('id', '!=', $entry->id)
             ->where('total_rounds', $entry->total_rounds)
+            ->where('speed_mode', $entry->speed_mode)
             ->where(function ($query) use ($entry) {
                 // Both players' ranges must overlap
                 $query->whereRaw('elo_rating BETWEEN ? AND ?', [
@@ -151,6 +158,7 @@ class MatchmakingController extends Controller
         }
 
         DB::transaction(function () use ($entry, $bot) {
+            $turnTimeLimit = $entry->speed_mode === 'daily' ? 86400 : 120;
             $game = Game::create([
                 'status' => 'setup',
                 'game_mode' => 'online',
@@ -159,6 +167,7 @@ class MatchmakingController extends Controller
                 'total_rounds' => $entry->total_rounds,
                 'current_round' => 0,
                 'user_id' => $entry->user_id,
+                'turn_time_limit' => $turnTimeLimit,
             ]);
 
             GamePlayer::create([
@@ -183,6 +192,7 @@ class MatchmakingController extends Controller
     private function createMatch(MatchmakingEntry $entry1, MatchmakingEntry $entry2): Game
     {
         return DB::transaction(function () use ($entry1, $entry2) {
+            $turnTimeLimit = $entry1->speed_mode === 'daily' ? 86400 : 120;
             $game = Game::create([
                 'status' => 'setup',
                 'game_mode' => 'online',
@@ -191,6 +201,7 @@ class MatchmakingController extends Controller
                 'total_rounds' => $entry1->total_rounds,
                 'current_round' => 0,
                 'user_id' => $entry1->user_id,
+                'turn_time_limit' => $turnTimeLimit,
             ]);
 
             GamePlayer::create([
