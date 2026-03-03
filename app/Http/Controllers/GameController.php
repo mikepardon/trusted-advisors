@@ -143,6 +143,7 @@ class GameController extends Controller
             'total_rounds' => 'sometimes|integer|in:12,24,36,48,60',
             'game_type' => 'sometimes|string|in:cooperative,duel',
             'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
+            'rotating_event_id' => 'nullable|integer|exists:rotating_events,id',
         ]);
 
         $gameType = $validated['game_type'] ?? 'cooperative';
@@ -167,11 +168,22 @@ class GameController extends Controller
             }
         }
 
-        // Assign active season if applicable
+        // Handle rotating event
+        $rotatingEventId = $validated['rotating_event_id'] ?? null;
+        if ($rotatingEventId) {
+            $rotatingEvent = \App\Models\RotatingEvent::currentlyActive()->find($rotatingEventId);
+            if (!$rotatingEvent) {
+                return response()->json(['error' => 'Event is not currently active'], 422);
+            }
+        }
+
+        // Assign active season if applicable (skip for event games)
         $seasonId = null;
-        $activeSeason = Season::active()->first();
-        if ($activeSeason && now()->between($activeSeason->starts_at, $activeSeason->ends_at)) {
-            $seasonId = $activeSeason->id;
+        if (!$rotatingEventId) {
+            $activeSeason = Season::active()->first();
+            if ($activeSeason && now()->between($activeSeason->starts_at, $activeSeason->ends_at)) {
+                $seasonId = $activeSeason->id;
+            }
         }
 
         $game = Game::create([
@@ -182,6 +194,7 @@ class GameController extends Controller
             'total_rounds' => $validated['total_rounds'] ?? 24,
             'user_id' => $request->user()?->id,
             'season_id' => $seasonId,
+            'rotating_event_id' => $rotatingEventId,
         ]);
 
         // Online mode: auto-add host as player 1
@@ -2518,6 +2531,97 @@ class GameController extends Controller
         return response()->json([
             'active_games' => $activeGames,
             'completed_games' => $completedGames,
+        ]);
+    }
+
+    public function timeline(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+        $participantGameIds = GamePlayer::where('user_id', $userId)->pluck('game_id');
+
+        $query = Game::with(['players.character', 'players.user', 'playerKingdoms', 'rotatingEvent'])
+            ->where(function ($q) use ($userId, $participantGameIds) {
+                $q->where('user_id', $userId)->orWhereIn('id', $participantGameIds);
+            })
+            ->where('status', 'completed')
+            ->orderByDesc('updated_at');
+
+        // Filters
+        if ($request->filled('game_type')) {
+            $query->where('game_type', $request->input('game_type'));
+        }
+        if ($request->filled('game_mode')) {
+            $query->where('game_mode', $request->input('game_mode'));
+        }
+        if ($request->filled('date_from')) {
+            $query->where('updated_at', '>=', $request->input('date_from'));
+        }
+        if ($request->filled('date_to')) {
+            $query->where('updated_at', '<=', $request->input('date_to') . ' 23:59:59');
+        }
+
+        $paginated = $query->paginate(20);
+
+        $items = collect($paginated->items())->map(function ($game) use ($userId) {
+            $myPlayer = $game->players->firstWhere('user_id', $userId);
+            $myPlayerNumber = $myPlayer?->player_number;
+
+            if ($game->isDuel() && $game->playerKingdoms->isNotEmpty()) {
+                $myKingdom = $game->playerKingdoms->firstWhere('game_player_id', $myPlayer?->id);
+                $score = $myKingdom ? $myKingdom->totalScore() : 0;
+            } else {
+                $score = $game->final_score ?? ($game->wealth + $game->influence + $game->security + $game->religion + $game->food + $game->happiness);
+            }
+
+            // Determine outcome
+            $outcome = 'loss';
+            if ($game->isDuel()) {
+                if (!$game->winner_player_number) {
+                    $outcome = 'draw';
+                } elseif ($game->winner_player_number === $myPlayerNumber) {
+                    $outcome = 'win';
+                }
+            } else {
+                $outcome = $game->win ? 'win' : 'loss';
+            }
+
+            $duration = null;
+            if ($game->created_at && $game->updated_at) {
+                $duration = $game->created_at->diffInMinutes($game->updated_at);
+            }
+
+            return [
+                'id' => $game->id,
+                'outcome' => $outcome,
+                'game_mode' => $game->game_mode,
+                'game_type' => $game->game_type ?? 'cooperative',
+                'score' => $score,
+                'winner_player_number' => $game->winner_player_number,
+                'my_player_number' => $myPlayerNumber,
+                'num_players' => $game->num_players,
+                'current_round' => $game->current_round,
+                'total_rounds' => $game->total_rounds,
+                'duration_minutes' => $duration,
+                'played_at' => $game->updated_at->toIso8601String(),
+                'share_token' => $game->share_token,
+                'rotating_event' => $game->rotatingEvent ? [
+                    'id' => $game->rotatingEvent->id,
+                    'name' => $game->rotatingEvent->name,
+                ] : null,
+                'players' => $game->players->map(fn ($p) => [
+                    'character_name' => $p->character?->name,
+                    'character_image' => $p->character?->image_url,
+                    'username' => $p->user?->name,
+                    'player_number' => $p->player_number,
+                ])->values(),
+            ];
+        });
+
+        return response()->json([
+            'data' => $items,
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+            'total' => $paginated->total(),
         ]);
     }
 

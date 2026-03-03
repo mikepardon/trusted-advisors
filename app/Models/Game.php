@@ -11,7 +11,7 @@ class Game extends Model
     protected $fillable = [
         'status', 'game_mode', 'num_players', 'current_round', 'total_rounds', 'round_phase', 'win',
         'wealth', 'influence', 'security', 'religion', 'food', 'happiness',
-        'user_id', 'season_id',
+        'user_id', 'season_id', 'rotating_event_id',
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number', 'timed_out_player_number',
         'event_order', 'share_token',
         'bonus_score', 'final_score',
@@ -38,6 +38,11 @@ class Game extends Model
     public function season(): BelongsTo
     {
         return $this->belongsTo(Season::class);
+    }
+
+    public function rotatingEvent(): BelongsTo
+    {
+        return $this->belongsTo(RotatingEvent::class);
     }
 
     public function players(): HasMany

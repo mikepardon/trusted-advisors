@@ -14,8 +14,12 @@ use App\Models\User;
 use App\Models\UserAchievement;
 use App\Models\UserEloHistory;
 use App\Models\UserUnlockable;
+use App\Models\ReferralReward;
+use App\Models\RotatingEventEntry;
 use App\Models\WeeklyChallenge;
 use App\Models\WeeklyChallengeEntry;
+use App\Models\UserNotification;
+use App\Events\UserNotificationReceived;
 use Carbon\Carbon;
 
 class GameCompletionService
@@ -67,6 +71,11 @@ class GameCompletionService
                 $summary['new_unlocks'][$user->id] = $xpResult['new_unlocks'];
             }
 
+            // Referral reward: if user just reached level 2 and was referred
+            if ($xpResult['leveled_up'] && $user->level >= 2 && $xpResult['old_level'] < 2 && $user->referred_by) {
+                $this->processReferralReward($user);
+            }
+
             // Coins
             $coinResult = $this->awardCoins($user, $game, $players);
             $summary['coin_awards'][$user->id] = $coinResult;
@@ -107,6 +116,11 @@ class GameCompletionService
         // ELO (online duel only)
         if ($game->isOnline() && $game->isDuel()) {
             $summary['elo_changes'] = $this->updateElo($game, $players);
+        }
+
+        // Rotating event entry
+        if ($game->rotating_event_id) {
+            $summary['rotating_event'] = $this->processRotatingEvent($game, $users);
         }
 
         return $summary;
@@ -1251,5 +1265,91 @@ class GameCompletionService
             default:
                 return false;
         }
+    }
+
+    private function processRotatingEvent(Game $game, $users): array
+    {
+        $event = $game->rotatingEvent;
+        if (!$event) return [];
+
+        $entries = [];
+
+        foreach ($users as $user) {
+            if (!$user) continue;
+
+            // Calculate score based on game type
+            if ($game->isDuel()) {
+                $player = $game->players->firstWhere('user_id', $user->id);
+                $kingdom = $player ? $game->playerKingdoms->firstWhere('game_player_id', $player->id) : null;
+                $score = $kingdom ? $kingdom->totalScore() : 0;
+            } else {
+                $score = $game->final_score ?? $game->baseScore();
+            }
+
+            RotatingEventEntry::create([
+                'rotating_event_id' => $event->id,
+                'user_id' => $user->id,
+                'game_id' => $game->id,
+                'score' => $score,
+            ]);
+
+            // Award event reward coins
+            if ($event->reward_coins > 0) {
+                $user->coins += $event->reward_coins;
+                $user->save();
+                $user->recordCoinTransaction($event->reward_coins, 'earn', 'rotating_event', $event->id, "Event: {$event->name}");
+            }
+
+            $entries[] = [
+                'user_id' => $user->id,
+                'score' => $score,
+                'reward_coins' => $event->reward_coins,
+            ];
+        }
+
+        return [
+            'event_id' => $event->id,
+            'event_name' => $event->name,
+            'entries' => $entries,
+        ];
+    }
+
+    private function processReferralReward(User $user): void
+    {
+        $referrer = User::find($user->referred_by);
+        if (!$referrer) return;
+
+        // Prevent duplicate rewards
+        if (ReferralReward::where('referrer_id', $referrer->id)->where('referred_id', $user->id)->exists()) {
+            return;
+        }
+
+        $coins = 20;
+
+        ReferralReward::create([
+            'referrer_id' => $referrer->id,
+            'referred_id' => $user->id,
+            'coins_awarded' => $coins,
+        ]);
+
+        $referrer->coins += $coins;
+        $referrer->save();
+        $referrer->recordCoinTransaction($coins, 'earn', 'referral', $user->id, "Referral reward: {$user->name} reached level 2");
+
+        // Send notification to referrer
+        try {
+            $notification = UserNotification::create([
+                'user_id' => $referrer->id,
+                'type' => 'referral_reward',
+                'title' => 'Referral Reward!',
+                'message' => "{$user->name} reached Level 2! You earned {$coins} coins.",
+                'data' => [
+                    'referred_user_id' => $user->id,
+                    'referred_user_name' => $user->name,
+                    'coins_awarded' => $coins,
+                ],
+            ]);
+            broadcast(new UserNotificationReceived($notification))->toOthers();
+        } catch (\Throwable) {}
     }
 }

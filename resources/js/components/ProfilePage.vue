@@ -116,13 +116,19 @@
       </div>
     </div>
 
+    <!-- Detailed Stats Link -->
+    <div class="card-panel" style="text-align: center;">
+      <router-link to="/stats" class="btn-primary stats-link">View Detailed Stats</router-link>
+    </div>
+
     <!-- Account Management -->
     <div class="card-panel">
       <h2 class="section-title">Account</h2>
-      <div class="account-link-wrap">
+      <div class="account-actions">
         <a :href="authServiceUrl + '/settings'" target="_blank" rel="noopener" class="btn-primary account-link">
           Manage Account
         </a>
+        <button class="btn-logout" @click="handleLogout">Logout</button>
       </div>
     </div>
   </div>
@@ -169,7 +175,12 @@ export default {
     this.myCharacters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
     this.charsLoading = false;
   },
-  methods: {},
+  methods: {
+    async handleLogout() {
+      await this.auth.logout();
+      window.location.reload();
+    },
+  },
 };
 </script>
 
@@ -335,9 +346,19 @@ export default {
 .stat-win .stat-number { color: #6abf50; }
 .stat-loss .stat-number { color: #d05040; }
 
-/* Account link */
-.account-link-wrap {
-  text-align: center;
+/* Account actions */
+.account-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-link {
+  display: inline-block;
+  padding: 10px 28px;
+  font-size: 0.95rem;
+  text-decoration: none;
 }
 
 .account-link {
@@ -345,6 +366,24 @@ export default {
   padding: 10px 28px;
   font-size: 0.95rem;
   text-decoration: none;
+}
+
+.btn-logout {
+  padding: 10px 28px;
+  font-size: 0.95rem;
+  background: rgba(160, 48, 32, 0.15);
+  border: 1px solid rgba(160, 48, 32, 0.4);
+  border-radius: 6px;
+  color: #d05040;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-logout:hover {
+  background: rgba(160, 48, 32, 0.3);
+  color: #e06050;
 }
 
 /* My Advisors */

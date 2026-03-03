@@ -67,6 +67,9 @@
         <router-link to="/admin/announcements" class="nav-item" active-class="active">
           <span class="nav-icon">&#128227;</span> Announcements
         </router-link>
+        <router-link to="/admin/rotating-events" class="nav-item" active-class="active">
+          <span class="nav-icon">&#9889;</span> Rotating Events
+        </router-link>
         <router-link to="/admin/gifts" class="nav-item" active-class="active">
           <span class="nav-icon">&#127873;</span> Gifts
         </router-link>

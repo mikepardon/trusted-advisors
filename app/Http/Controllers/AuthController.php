@@ -18,6 +18,7 @@ class AuthController extends Controller
         $validated = $request->validate([
             'code' => 'required|string',
             'code_verifier' => 'required|string',
+            'referral_code' => 'nullable|string|max:10',
         ]);
 
         $authConfig = config('services.mpgames_auth');
@@ -79,6 +80,18 @@ class AuthController extends Controller
         // Register email with OneSignal for new users
         if ($user->wasRecentlyCreated) {
             app(OneSignalService::class)->registerEmail($user);
+
+            // Process referral code
+            $referralCode = $validated['referral_code'] ?? $request->input('referral_code');
+            if ($referralCode) {
+                $referrer = User::where('referral_code', strtoupper($referralCode))
+                    ->where('id', '!=', $user->id)
+                    ->first();
+                if ($referrer) {
+                    $user->referred_by = $referrer->id;
+                    $user->save();
+                }
+            }
         }
 
         // Check if user is banned

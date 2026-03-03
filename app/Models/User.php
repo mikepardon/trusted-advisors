@@ -4,9 +4,11 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 
 class User extends Authenticatable
 {
@@ -39,6 +41,8 @@ class User extends Authenticatable
         'refresh_token',
         'username_chosen',
         'notification_preferences',
+        'referral_code',
+        'referred_by',
     ];
 
     /**
@@ -92,6 +96,32 @@ class User extends Authenticatable
         // Total cumulative XP needed to reach this level
         // Level 1 = 0 (start here), Level 2 = 100, Level 3 = 300, Level 4 = 600...
         return (int) (100 * ($level - 1) * $level / 2);
+    }
+
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'referred_by');
+    }
+
+    public function referrals(): HasMany
+    {
+        return $this->hasMany(User::class, 'referred_by');
+    }
+
+    public function generateReferralCode(): string
+    {
+        if ($this->referral_code) {
+            return $this->referral_code;
+        }
+
+        do {
+            $code = strtoupper(Str::random(8));
+        } while (static::where('referral_code', $code)->exists());
+
+        $this->referral_code = $code;
+        $this->save();
+
+        return $code;
     }
 
     public function games(): HasMany

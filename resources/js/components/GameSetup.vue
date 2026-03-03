@@ -39,8 +39,6 @@
         <button class="mobile-menu-item" @click="showMobileMenu = false; openTutorial()">Tutorial</button>
         <router-link to="/settings" class="mobile-menu-item" @click="showMobileMenu = false">Settings</router-link>
         <router-link v-if="auth.state.user?.is_admin" to="/admin" class="mobile-menu-item" @click="showMobileMenu = false">Admin</router-link>
-        <div class="mobile-menu-divider"></div>
-        <button class="mobile-menu-item mobile-menu-logout" @click="handleMobileLogout">Logout</button>
       </div>
     </div>
 
@@ -51,6 +49,9 @@
       <!-- Grid: col-8 (content) + col-4 (nav icons) -->
       <div class="home-grid">
         <div class="home-grid-main">
+          <!-- Rotating Events -->
+          <RotatingEventBanner />
+
           <!-- Announcements -->
           <AnnouncementsBanner />
 
@@ -433,6 +434,7 @@ import { playSound } from '../sounds';
 import AnnouncementsBanner from './AnnouncementsBanner.vue';
 import DailyChallengeBanner from './DailyChallengeBanner.vue';
 import WeeklyChallengeBanner from './WeeklyChallengeBanner.vue';
+import RotatingEventBanner from './RotatingEventBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import MatchmakingQueue from './MatchmakingQueue.vue';
 import StoryIntro from './StoryIntro.vue';
@@ -443,7 +445,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
+  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, RotatingEventBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
   inject: {
     openNotifications: { default: () => () => {} },
     openRules: { default: () => () => {} },
@@ -777,11 +779,6 @@ export default {
           this.step = 'story';
         }
       }
-    },
-    async handleMobileLogout() {
-      this.showMobileMenu = false;
-      await this.auth.logout();
-      window.location.reload();
     },
     resetToHome() {
       this.step = 'mode';
@@ -1761,21 +1758,6 @@ export default {
   color: var(--accent-gold);
   transform: none;
   box-shadow: none;
-}
-
-.mobile-menu-divider {
-  height: 1px;
-  background: rgba(138, 106, 46, 0.3);
-  margin: 4px 0;
-}
-
-.mobile-menu-logout {
-  color: var(--accent-red);
-}
-
-.mobile-menu-logout:hover {
-  background: rgba(160, 48, 32, 0.15);
-  color: #d05040;
 }
 
 /* Enhanced Daily Challenge */

@@ -30,7 +30,11 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\Admin\AdminGiftController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
+use App\Http\Controllers\Admin\RotatingEventController as AdminRotatingEventController;
 use App\Http\Controllers\Admin\WeeklyChallengeController;
+use App\Http\Controllers\ReferralController;
+use App\Http\Controllers\RotatingEventController;
+use App\Http\Controllers\StatsController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -68,6 +72,7 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/auth/stats', [AuthController::class, 'stats']);
 
     Route::get('/games/history', [GameController::class, 'history']);
+    Route::get('/games/timeline', [GameController::class, 'timeline']);
     Route::post('/games', [GameController::class, 'store']);
     Route::get('/games/{game}', [GameController::class, 'show']);
     Route::post('/games/{game}/start', [GameController::class, 'start']);
@@ -140,6 +145,20 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/announcements', [AnnouncementController::class, 'index']);
     Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss']);
 
+    // Referral
+    Route::get('/referral/code', [ReferralController::class, 'getCode']);
+    Route::get('/referral/stats', [ReferralController::class, 'stats']);
+
+    // Rotating events
+    Route::get('/rotating-events', [RotatingEventController::class, 'index']);
+    Route::get('/rotating-events/{rotatingEvent}', [RotatingEventController::class, 'show']);
+    Route::get('/rotating-events/{rotatingEvent}/leaderboard', [RotatingEventController::class, 'leaderboard']);
+
+    // Stats dashboard
+    Route::get('/stats/overview', [StatsController::class, 'overview']);
+    Route::get('/stats/history', [StatsController::class, 'history']);
+    Route::get('/stats/characters', [StatsController::class, 'characters']);
+
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);
     Route::post('/friends/{friendship}/accept', [FriendshipController::class, 'accept']);
@@ -196,6 +215,9 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
 
     // Announcements
     Route::apiResource('announcements', AdminAnnouncementController::class);
+
+    // Rotating events
+    Route::apiResource('rotating-events', AdminRotatingEventController::class);
 
     // Weekly challenges
     Route::post('weekly-challenges/generate', [WeeklyChallengeController::class, 'generateRange']);

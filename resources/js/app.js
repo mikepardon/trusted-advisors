@@ -37,6 +37,9 @@ import AdminAnnouncements from './components/admin/AdminAnnouncements.vue';
 import AdminUsers from './components/admin/AdminUsers.vue';
 import ShopPage from './components/ShopPage.vue';
 import SettingsPage from './components/SettingsPage.vue';
+import StatsPage from './components/StatsPage.vue';
+import RotatingEventPage from './components/RotatingEventPage.vue';
+import AdminRotatingEvents from './components/admin/AdminRotatingEvents.vue';
 import AuthCallback from './components/AuthCallback.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
 import { fetchSoundUrls } from './sounds';
@@ -53,6 +56,8 @@ const routes = [
     { path: '/season', component: SeasonPage, meta: { auth: true } },
     { path: '/characters', component: CharactersPage, meta: { auth: true } },
     { path: '/shop', component: ShopPage, meta: { auth: true } },
+    { path: '/stats', component: StatsPage, meta: { auth: true } },
+    { path: '/events/:id', component: RotatingEventPage, props: true, meta: { auth: true } },
     { path: '/settings', component: SettingsPage },
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
     { path: '/game/:id/over', component: GameOver, props: true, meta: { auth: true } },
@@ -80,6 +85,7 @@ const routes = [
             { path: 'challenges', component: AdminChallenges },
             { path: 'gifts', component: AdminGifts },
             { path: 'announcements', component: AdminAnnouncements },
+            { path: 'rotating-events', component: AdminRotatingEvents },
             { path: 'users', component: AdminUsers },
         ],
     },

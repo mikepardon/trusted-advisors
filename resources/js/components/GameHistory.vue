@@ -8,7 +8,7 @@
 
     <div v-if="loading" class="history-loading">Loading...</div>
 
-    <div v-else-if="activeGames.length === 0 && games.length === 0" class="history-empty">
+    <div v-else-if="activeGames.length === 0 && !hasCompleted" class="history-empty">
       <p>No campaigns yet. Start a new game from the Home page!</p>
     </div>
 
@@ -54,42 +54,10 @@
         </div>
       </div>
 
-      <!-- COMPLETED GAMES — compact table -->
-      <div v-if="games.length > 0" class="completed-section">
+      <!-- COMPLETED GAMES — Timeline -->
+      <div class="completed-section">
         <h3 class="sub-title">Completed</h3>
-        <div class="completed-list">
-          <div
-            v-for="game in games"
-            :key="game.id"
-            class="completed-row"
-            @click="$router.push('/game/' + game.id + '/over')"
-          >
-            <div class="completed-main">
-              <span :class="['outcome-badge', isWin(game) ? 'outcome-win' : 'outcome-loss']">
-                {{ outcomeLabel(game) }}
-              </span>
-              <div class="completed-badges">
-                <span class="type-badge-sm" :class="'type-' + (game.game_type || 'cooperative')">
-                  {{ typeLabel(game.game_type) }}
-                </span>
-                <span :class="['mode-badge-sm', 'mode-' + (game.game_mode || 'single')]">
-                  {{ modeLabel(game.game_mode) }}
-                </span>
-              </div>
-            </div>
-            <div class="completed-details">
-              <div class="detail-item">
-                <span class="detail-label">Score</span>
-                <span class="detail-value">{{ game.score }}</span>
-              </div>
-              <div class="detail-item">
-                <span class="detail-label">Players</span>
-                <span class="detail-value">{{ playerNames(game) }}</span>
-              </div>
-              <button class="replay-btn" @click.stop="$router.push('/game/' + game.id + '/replay')">Replay</button>
-            </div>
-          </div>
-        </div>
+        <MatchHistoryTimeline />
       </div>
     </template>
 
@@ -109,16 +77,18 @@
 import axios from 'axios';
 import ConfirmModal from './ConfirmModal.vue';
 import HintBubble from './HintBubble.vue';
+import MatchHistoryTimeline from './MatchHistoryTimeline.vue';
 
 export default {
   name: 'GameHistory',
-  components: { ConfirmModal, HintBubble },
+  components: { ConfirmModal, HintBubble, MatchHistoryTimeline },
   data() {
     return {
       games: [],
       activeGames: [],
       loading: true,
       cancelTarget: null,
+      hasCompleted: false,
     };
   },
   async mounted() {
@@ -131,6 +101,7 @@ export default {
         const res = await axios.get('/api/games/history');
         this.games = res.data.completed_games || [];
         this.activeGames = res.data.active_games || [];
+        this.hasCompleted = this.games.length > 0;
       } catch {
         // silently fail
       }
