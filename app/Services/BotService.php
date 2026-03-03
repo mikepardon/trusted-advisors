@@ -21,6 +21,10 @@ class BotService
             ->with('card')
             ->get();
 
+        if ($hands->isEmpty()) {
+            throw new \RuntimeException("Bot player #{$bot->id} has no cards for round {$game->current_round}");
+        }
+
         if ($hands->count() < 2) {
             return $hands->first()->id;
         }

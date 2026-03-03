@@ -171,13 +171,6 @@
     </template>
     </template>
 
-    <!-- In-game alerts -->
-    <TransitionGroup name="alert-slide" tag="div" class="game-alerts">
-      <div v-for="alert in gameAlerts" :key="alert.id" class="game-alert" :class="'alert-' + alert.type">
-        <span class="alert-icon">&#9876;</span>
-        <span class="alert-text">{{ alert.message }}</span>
-      </div>
-    </TransitionGroup>
   </div>
 </template>
 
@@ -243,7 +236,6 @@ export default {
       waitingForOthers: false,
       echoChannel: null,
       // In-game alerts
-      gameAlerts: [],
     };
   },
   computed: {
@@ -659,9 +651,6 @@ export default {
             sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(data.completion));
           }
           this.$router.replace(`/game/${this.id}/over`);
-        })
-        .listen('GameAlertSent', (data) => {
-          this.showGameAlert(data);
         });
     },
     async startOnlineGame() {
@@ -696,17 +685,6 @@ export default {
     },
     onItemDiscarded(updatedOverLimit) {
       this.itemsOverLimit = updatedOverLimit || [];
-    },
-    showGameAlert(data) {
-      // Only show alerts intended for this player (or alerts without a specific target)
-      if (data.player_number && this.myPlayerNumber && data.player_number !== this.myPlayerNumber) {
-        return;
-      }
-      const id = Date.now() + Math.random();
-      this.gameAlerts.push({ id, message: data.message, type: data.type || 'info' });
-      setTimeout(() => {
-        this.gameAlerts = this.gameAlerts.filter(a => a.id !== id);
-      }, 4000);
     },
     checkEventReveal() {
       const round = this.gameData?.current_round || 0;
@@ -943,58 +921,4 @@ export default {
   }
 }
 
-/* In-game alerts */
-.game-alerts {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  z-index: 9990;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  pointer-events: none;
-  max-width: 320px;
-}
-
-.game-alert {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 16px;
-  background: linear-gradient(180deg, #2a1f14, #1a1209);
-  border: 1px solid var(--border-gold);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-  pointer-events: auto;
-}
-
-.alert-icon {
-  font-size: 1.1rem;
-  color: var(--accent-gold);
-  flex-shrink: 0;
-}
-
-.alert-text {
-  font-family: 'Crimson Text', serif;
-  font-size: 0.9rem;
-  color: var(--text-bright);
-}
-
-.alert-slide-enter-active {
-  transition: all 0.3s ease-out;
-}
-
-.alert-slide-leave-active {
-  transition: all 0.4s ease-in;
-}
-
-.alert-slide-enter-from {
-  opacity: 0;
-  transform: translateX(60px);
-}
-
-.alert-slide-leave-to {
-  opacity: 0;
-  transform: translateX(60px);
-}
 </style>

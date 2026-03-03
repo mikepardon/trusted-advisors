@@ -2374,6 +2374,16 @@ class GameController extends Controller
 
         // Bot needs to select a card in choosing phase
         if ($phase === 'choosing') {
+            // Verify the bot actually has cards dealt for this round
+            $botHands = GamePlayerHand::where('game_id', $game->id)
+                ->where('game_player_id', $bot->id)
+                ->where('round_number', $game->current_round)
+                ->count();
+
+            if ($botHands === 0) {
+                return response()->json(['error' => 'Bot has no cards for this round yet'], 422);
+            }
+
             $handId = $botService->decideDuelSelect($game, $bot);
 
             $fakeRequest = Request::create('', 'POST', ['kept_hand_id' => $handId]);

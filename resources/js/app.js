@@ -1,6 +1,7 @@
 import './bootstrap';
 import { createApp } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
+import * as Sentry from '@sentry/vue';
 import App from './App.vue';
 import { useAuth } from './stores/auth';
 import GameSetup from './components/GameSetup.vue';
@@ -107,5 +108,18 @@ router.beforeEach(async (to, from, next) => {
 fetchSoundUrls();
 
 const app = createApp(App);
+
+Sentry.init({
+    app,
+    dsn: 'https://f3c11bce67d48dd95f896b7abc09b667@o4510966117826560.ingest.de.sentry.io/4510966121627728',
+    integrations: [
+        Sentry.browserTracingIntegration({ router }),
+        Sentry.replayIntegration(),
+    ],
+    tracesSampleRate: 1.0,
+    replaysSessionSampleRate: 0,
+    replaysOnErrorSampleRate: 1.0,
+});
+
 app.use(router);
 app.mount('#app');

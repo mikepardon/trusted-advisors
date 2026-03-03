@@ -252,8 +252,6 @@ export default {
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
-
 :root {
   --bg-primary: #0d0a06;
   --bg-secondary: #1a1209;
