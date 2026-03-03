@@ -40,7 +40,11 @@ export default {
 
     try {
       await this.auth.handleCallback(code, state);
-      this.$router.push('/');
+      if (this.auth.state.user?.needs_username) {
+        this.$router.push('/choose-username');
+      } else {
+        this.$router.push('/');
+      }
     } catch (e) {
       this.error = e.response?.data?.message || e.message || 'Authentication failed.';
       setTimeout(() => this.$router.push('/'), 3000);

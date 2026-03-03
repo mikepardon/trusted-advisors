@@ -64,11 +64,14 @@ class AuthController extends Controller
                 $user->auth_id = $authUser['id'];
                 $user->email = strtolower($authUser['email']);
                 $user->email_verified_at = now();
+                $user->username_chosen = false;
             }
         }
 
-        // Sync profile fields from auth service
-        $user->name = strtolower($authUser['username']);
+        // Only overwrite name from OAuth if user hasn't chosen their own
+        if (!$user->username_chosen) {
+            $user->name = strtolower($authUser['username']);
+        }
         $user->avatar_url = $authUser['avatar_url'] ?? null;
         $user->refresh_token = $tokens['refresh_token'] ?? null;
         $user->save();
@@ -120,6 +123,9 @@ class AuthController extends Controller
             $response['streak_xp_awarded'] = $streakXp;
             $response['login_streak'] = $user->login_streak;
         }
+        if (!$user->username_chosen) {
+            $response['needs_username'] = true;
+        }
 
         return response()->json($response);
     }
@@ -143,6 +149,10 @@ class AuthController extends Controller
 
         $data = $user->toArray();
 
+        if (!$user->username_chosen) {
+            $data['needs_username'] = true;
+        }
+
         $impersonatorId = $request->session()->get('impersonator_id');
         if ($impersonatorId) {
             $impersonator = User::find($impersonatorId);
@@ -162,6 +172,50 @@ class AuthController extends Controller
         $request->user()->update(['onesignal_player_id' => $validated['player_id']]);
 
         return response()->json(['message' => 'Push subscription registered']);
+    }
+
+    public function setUsername(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'username' => [
+                'required',
+                'string',
+                'min:3',
+                'max:20',
+                'regex:/^[a-zA-Z0-9]+$/',
+            ],
+        ]);
+
+        $username = strtolower($validated['username']);
+
+        // Case-insensitive uniqueness check
+        $taken = User::whereRaw('LOWER(name) = ?', [$username])
+            ->where('id', '!=', $request->user()->id)
+            ->exists();
+
+        if ($taken) {
+            return response()->json([
+                'message' => 'The username is already taken.',
+                'errors' => ['username' => ['The username is already taken.']],
+            ], 422);
+        }
+
+        $user = $request->user();
+        $user->name = $username;
+        $user->username_chosen = true;
+        $user->save();
+
+        return response()->json($user->toArray());
+    }
+
+    public function checkUsername(Request $request, string $username): JsonResponse
+    {
+        $username = strtolower($username);
+        $available = !User::whereRaw('LOWER(name) = ?', [$username])
+            ->where('id', '!=', $request->user()->id)
+            ->exists();
+
+        return response()->json(['available' => $available]);
     }
 
     public function stats(Request $request): JsonResponse

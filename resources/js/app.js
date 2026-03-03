@@ -36,11 +36,13 @@ import AdminUsers from './components/admin/AdminUsers.vue';
 import ShopPage from './components/ShopPage.vue';
 import SettingsPage from './components/SettingsPage.vue';
 import AuthCallback from './components/AuthCallback.vue';
+import ChooseUsername from './components/ChooseUsername.vue';
 import { fetchSoundUrls } from './sounds';
 
 const routes = [
     { path: '/', component: GameSetup },
     { path: '/auth/callback', component: AuthCallback },
+    { path: '/choose-username', component: ChooseUsername, meta: { auth: true } },
     { path: '/campaigns', component: GameHistory, meta: { auth: true } },
     { path: '/friends', component: FriendsList, meta: { auth: true } },
     { path: '/profile', component: ProfilePage, meta: { auth: true } },
@@ -100,6 +102,8 @@ router.beforeEach(async (to, from, next) => {
         next('/');
     } else if (requiresAdmin && !auth.state.user?.is_admin) {
         next('/');
+    } else if (auth.state.user?.needs_username && to.path !== '/choose-username') {
+        next('/choose-username');
     } else {
         next();
     }

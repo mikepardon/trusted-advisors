@@ -57,6 +57,8 @@ Route::get('/replays/{token}', [ReplayController::class, 'showPublic']);
 Route::middleware('auth:web')->group(function () {
     Route::post('/impersonate/stop', [AdminUserController::class, 'stopImpersonating']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
+    Route::post('/auth/set-username', [AuthController::class, 'setUsername']);
+    Route::get('/auth/check-username/{username}', [AuthController::class, 'checkUsername']);
     Route::post('/auth/push-subscribe', [AuthController::class, 'registerPushId']);
     Route::get('/auth/stats', [AuthController::class, 'stats']);
 

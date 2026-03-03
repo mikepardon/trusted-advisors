@@ -37,6 +37,7 @@ class User extends Authenticatable
         'timeout_count',
         'last_login_at',
         'refresh_token',
+        'username_chosen',
     ];
 
     /**
@@ -71,6 +72,7 @@ class User extends Authenticatable
             'timeout_count' => 'integer',
             'last_login_at' => 'datetime',
             'banned_at' => 'datetime',
+            'username_chosen' => 'boolean',
         ];
     }
 
