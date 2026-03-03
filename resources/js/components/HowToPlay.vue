@@ -89,6 +89,15 @@
         </div>
 
         <div class="htp-section">
+          <h3>Difficulty Scaling</h3>
+          <p>
+            Card difficulty <strong>increases over time</strong> in Classic mode.
+            Every 6 months, all card difficulties rise by +1, making survival
+            progressively harder as the campaign goes on.
+          </p>
+        </div>
+
+        <div class="htp-section">
           <h3>Win &amp; Lose</h3>
           <p>
             You have <strong>6 stats</strong> representing the health of your civilization:
@@ -129,18 +138,35 @@
           <p>
             In <span class="hl-wild">Duel</span> mode, two rival kingdoms compete head-to-head.
             Each player has their own kingdom stats, all starting at 8.
-            Outsmart your opponent by choosing the right cards to keep and send.
+            Outsmart your opponent by choosing the right cards to keep &mdash; the card
+            you don't want gets sent to your rival.
           </p>
         </div>
 
         <div class="htp-section">
-          <h3>Card Drafting</h3>
+          <h3>Each Month</h3>
           <ol>
-            <li><strong>Offer Phase</strong> &mdash; The offerer draws 2 cards and reveals one face-up. The other stays hidden.</li>
-            <li><strong>Choose Phase</strong> &mdash; The chooser picks either the revealed card or the hidden card. The offerer gets the other.</li>
-            <li><strong>Roll Phase</strong> &mdash; Each player rolls independently against both their cards (kept + received).</li>
-            <li><strong>Resolve Phase</strong> &mdash; Negative effects <em>always</em> apply to both players. Positive effects only apply on a successful roll.</li>
+            <li>
+              <strong>Select Cards</strong> &mdash; Both players are dealt 2 cards each.
+              You pick <strong>1 card to keep</strong>; the other is automatically
+              sent to your opponent. Both players choose simultaneously.
+            </li>
+            <li>
+              <strong>Roll</strong> &mdash; Each player rolls their dice against the
+              <strong>combined difficulty</strong> of both cards they hold (the one they kept
+              + the one sent to them by their opponent).
+            </li>
+            <li>
+              <strong>Resolve</strong> &mdash; <span class="hl-neg">Negative effects</span>
+              from both cards <em>always</em> apply, regardless of the roll.
+              <span class="hl-pos">Positive effects</span> from both cards only apply
+              if you beat the combined difficulty.
+            </li>
           </ol>
+          <p>
+            Card difficulty does <strong>not</strong> scale up over time in Duel mode &mdash;
+            it stays flat for the whole game, unlike Classic.
+          </p>
         </div>
 
         <div class="htp-section">
@@ -153,20 +179,33 @@
         </div>
 
         <div class="htp-section">
-          <h3>Items &amp; Events</h3>
+          <h3>Items</h3>
           <p>
-            Items and events work the same as Classic mode. Some items and events are
-            exclusive to one mode &mdash; score-based items only appear in Classic games.
+            Items work the same as Classic mode &mdash; earn them through card effects,
+            hold up to 2 at a time, and benefit from passive bonuses like roll power or
+            reduced difficulty.
+          </p>
+          <p>
+            <strong>Events do not appear in Duel mode.</strong> The focus is purely on
+            card drafting and dice rolls.
           </p>
         </div>
 
         <div class="htp-section">
           <h3>Win &amp; Lose</h3>
           <ul>
-            <li><span class="hl-pos">Win</span> by reaching <strong>20 in 3 stats</strong>.</li>
-            <li><span class="hl-neg">Lose</span> if <strong>any stat hits 0</strong>.</li>
-            <li>If the game runs out of rounds, the player with the higher total stat score wins.</li>
+            <li><span class="hl-pos">Win</span> by reaching <strong>20 in 3 stats</strong> &mdash; your kingdom dominates.</li>
+            <li><span class="hl-neg">Lose</span> if <strong>any stat hits 0</strong> &mdash; your kingdom collapses.</li>
+            <li>If all 24 months pass with no collapse or domination, the player with the <strong>higher total stat score</strong> wins.</li>
           </ul>
+        </div>
+
+        <div class="htp-section">
+          <h3>Online Timers</h3>
+          <p>
+            Online duels have a <strong>2-minute turn timer</strong>. If you run out of time,
+            you forfeit the game and your opponent wins. Timeouts count against your record.
+          </p>
         </div>
 
         <div class="htp-section">
@@ -174,16 +213,17 @@
           <ul>
             <li><strong>Solo vs Bot</strong> &mdash; Challenge an AI opponent.</li>
             <li><strong>Local (Pass &amp; Play)</strong> &mdash; Two players on one device, with a handoff screen between turns.</li>
-            <li><strong>Online</strong> &mdash; Challenge friends or find opponents in real-time.</li>
+            <li><strong>Online</strong> &mdash; Challenge friends or find opponents via matchmaking. Affects your ELO rating.</li>
           </ul>
         </div>
 
         <div class="htp-section">
           <h3>Strategy Tips</h3>
           <ul>
-            <li>When offering, reveal the card that benefits you either way.</li>
-            <li>When choosing, weigh the risk of the hidden card vs. the known one.</li>
-            <li>Target your opponent's weakest stats with negative effects.</li>
+            <li>Keep cards with strong positive effects and low difficulty.</li>
+            <li>Send cards with harsh negative effects to your opponent.</li>
+            <li>Watch the combined difficulty &mdash; keeping two high-difficulty cards makes success unlikely.</li>
+            <li>Target your opponent's weakest stats with the cards you send.</li>
             <li>Race to 20 in 3 stats while keeping your lowest stat safe from 0.</li>
             <li>Online duels affect your <strong>ELO rating</strong> &mdash; play to win!</li>
           </ul>

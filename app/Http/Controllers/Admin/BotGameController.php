@@ -506,7 +506,7 @@ class BotGameController extends Controller
         $roundLog = [];
 
         for ($round = 1; $round <= 24; $round++) {
-            // Deal 2 cards to each player
+            // Deal 2 cards to each player (mirrors real duel: each player gets 2, picks 1 to keep, sends 1)
             $hands = [1 => [], 2 => []];
             foreach ([1, 2] as $pNum) {
                 for ($c = 0; $c < 2; $c++) {
@@ -516,9 +516,11 @@ class BotGameController extends Controller
                 }
             }
 
-            // Bot chooses: pick best card for own kingdom, other goes to opponent as negative
+            // === CARD DRAFT (mirrors real duel flow) ===
+            // Each bot picks 1 card to keep, sends the other to opponent.
+            // After draft, each player holds 2 cards: their kept card + the card sent TO them.
             $keptCards = [1 => null, 2 => null];
-            $sentCards = [1 => null, 2 => null];
+            $sentCards = [1 => null, 2 => null]; // card sent BY this player
 
             foreach ([1, 2] as $pNum) {
                 if ($botDifficulty === 'easy') {
@@ -545,15 +547,27 @@ class BotGameController extends Controller
                 $sentCards[$pNum] = $hands[$pNum][1 - $keepIdx];
             }
 
-            // Each player rolls for their kept card, receives opponent's sent card as negative
+            // After draft: each player holds their kept card + the card sent TO them by opponent
+            // playerCards[pNum] = [kept card, received card from opponent]
+            $playerCards = [
+                1 => [$keptCards[1], $sentCards[2]], // P1 keeps their pick + receives what P2 sent
+                2 => [$keptCards[2], $sentCards[1]], // P2 keeps their pick + receives what P1 sent
+            ];
+
+            // === ROLLING (mirrors real duel: one roll vs combined difficulty of both cards) ===
             $roundEntry = ['round' => $round, 'p1' => [], 'p2' => []];
 
             foreach ([1, 2] as $pNum) {
-                $card = $keptCards[$pNum];
-                $negCard = $sentCards[$pNum === 1 ? 2 : 1]; // card sent TO this player by opponent
-                $cardDifficulty = $card['difficulty'] ?? 5;
+                $cards = $playerCards[$pNum];
 
-                // Roll dice
+                // Combined difficulty of both cards (no scaling in duel mode)
+                $combinedDifficulty = 0;
+                foreach ($cards as $card) {
+                    $combinedDifficulty += max(1, $card['difficulty'] ?? 5);
+                }
+                $combinedDifficulty = max(1, $combinedDifficulty);
+
+                // Roll dice once
                 $baseDice = $this->diceRules['2'] ?? 3;
                 $activeDice = max(1, $baseDice - $players[$pNum]['lost_dice']);
                 $dice = $players[$pNum]['character']['dice'];
@@ -569,37 +583,39 @@ class BotGameController extends Controller
                     }
                 }
 
-                $success = $totalRoll >= $cardDifficulty;
+                $success = $totalRoll >= $combinedDifficulty;
 
-                // Positive effects from kept card (only on success)
-                if ($success) {
-                    foreach (($card['positive_effects'] ?? []) as $stat => $change) {
+                // Apply effects from BOTH cards (mirrors real duel logic)
+                foreach ($cards as $card) {
+                    // Negative effects ALWAYS apply
+                    foreach (($card['negative_effects'] ?? []) as $stat => $change) {
+                        if ($stat === 'lose_die') {
+                            if ($players[$pNum]['lost_dice'] < 2) {
+                                $players[$pNum]['lost_dice']++;
+                            }
+                            continue;
+                        }
                         if (!in_array($stat, $statKeys) || !is_numeric($change)) continue;
                         $kingdoms[$pNum][$stat] = max(0, min(20, $kingdoms[$pNum][$stat] + $change));
                     }
-                }
 
-                // Negative effects from opponent's sent card (ALWAYS apply)
-                foreach (($negCard['negative_effects'] ?? []) as $stat => $change) {
-                    if ($stat === 'lose_die') {
-                        if ($players[$pNum]['lost_dice'] < 2) {
-                            $players[$pNum]['lost_dice']++;
+                    // Positive effects only on success
+                    if ($success) {
+                        foreach (($card['positive_effects'] ?? []) as $stat => $change) {
+                            if ($stat === 'recover_die') {
+                                $players[$pNum]['lost_dice'] = max(0, $players[$pNum]['lost_dice'] - 1);
+                                continue;
+                            }
+                            if (!in_array($stat, $statKeys) || !is_numeric($change)) continue;
+                            $kingdoms[$pNum][$stat] = max(0, min(20, $kingdoms[$pNum][$stat] + $change));
                         }
-                        continue;
                     }
-                    if (!in_array($stat, $statKeys) || !is_numeric($change)) continue;
-                    $kingdoms[$pNum][$stat] = max(0, min(20, $kingdoms[$pNum][$stat] + $change));
-                }
-
-                // Handle recover_die from positive effects
-                if ($success && !empty($card['positive_effects']['recover_die'])) {
-                    $players[$pNum]['lost_dice'] = max(0, $players[$pNum]['lost_dice'] - 1);
                 }
 
                 $roundEntry["p{$pNum}"] = [
                     'success' => $success,
                     'roll' => $totalRoll,
-                    'difficulty' => $cardDifficulty,
+                    'difficulty' => $combinedDifficulty,
                     'stats' => [...$kingdoms[$pNum]],
                 ];
             }

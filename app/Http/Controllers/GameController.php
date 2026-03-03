@@ -1554,8 +1554,8 @@ class GameController extends Controller
         // Calculate active dice count for duel (base 3, no event reduction)
         $diceCount = max(1, 3 - $player->lost_dice);
 
-        // Difficulty scaling
-        $scaling = $this->getDifficultyScaling($game);
+        // No difficulty scaling in duel mode (co-op only)
+        $scaling = 0;
 
         // Gather this player's dice faces for odds calculation
         $player->load(['character', 'items.item']);
@@ -1872,7 +1872,9 @@ class GameController extends Controller
         $cardResults = [];
         $combinedEffects = [];
         $statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-        $scaling = $this->getDifficultyScaling($game);
+
+        // No difficulty scaling in duel mode (co-op only)
+        $scaling = 0;
 
         // Calculate combined difficulty from all cards
         $totalDifficulty = 0;
