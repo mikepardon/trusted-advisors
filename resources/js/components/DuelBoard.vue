@@ -42,8 +42,17 @@
       @ready="onHandoffReady"
     />
 
+    <!-- TIMEOUT OVERLAY -->
+    <div v-if="showTimeoutOverlay" class="waiting-overlay timeout-overlay">
+      <div class="waiting-content">
+        <div class="waiting-ornament timeout-icon">&#9201;</div>
+        <h2 class="waiting-title timeout-title">Time's Up!</h2>
+        <p class="waiting-sub">{{ timeoutMessage }}</p>
+      </div>
+    </div>
+
     <!-- WAITING OVERLAY (online, not your turn) -->
-    <div v-if="showWaiting" class="waiting-overlay">
+    <div v-if="showWaiting && !showTimeoutOverlay" class="waiting-overlay">
       <div class="waiting-content">
         <div class="waiting-ornament">&#9876;</div>
         <h2 class="waiting-title">{{ waitingMessage }}</h2>
@@ -237,6 +246,10 @@ export default {
       turnTimeLimit: null,
       turnTimeRemaining: null,
       turnTimerInterval: null,
+      // Timeout overlay
+      showTimeoutOverlay: false,
+      timeoutMessage: '',
+      reportingTimeout: false,
     };
   },
   computed: {
@@ -401,11 +414,73 @@ export default {
       this.turnTimerInterval = setInterval(() => {
         if (this.turnTimeRemaining != null && this.turnTimeRemaining > 0) {
           this.turnTimeRemaining--;
+          if (this.turnTimeRemaining <= 0) {
+            clearInterval(this.turnTimerInterval);
+            this.turnTimerInterval = null;
+            this.handleTimerExpired();
+          }
         } else {
           clearInterval(this.turnTimerInterval);
           this.turnTimerInterval = null;
         }
       }, 1000);
+    },
+
+    async handleTimerExpired() {
+      if (this.reportingTimeout || this.showTimeoutOverlay) return;
+      this.reportingTimeout = true;
+
+      try {
+        const res = await axios.post(`/api/games/${this.gameId}/report-timeout`);
+        const data = res.data;
+
+        if (data.game_over) {
+          // Determine message based on who timed out
+          const myNum = this.activePlayerNumber;
+          const timedOutNum = data.timed_out_player_number;
+
+          if (timedOutNum === 0) {
+            this.timeoutMessage = 'Both players ran out of time. The game ends in a draw.';
+          } else if (timedOutNum === myNum) {
+            this.timeoutMessage = 'You ran out of time. Your opponent wins by forfeit.';
+          } else {
+            this.timeoutMessage = 'Your opponent ran out of time. You win by forfeit!';
+          }
+
+          this.showTimeoutOverlay = true;
+
+          // Store completion and timeout data for game over screen
+          if (data.completion) {
+            sessionStorage.setItem(`game_completion_${this.gameId}`, JSON.stringify(data.completion));
+          }
+          if (data.timed_out_player_number != null) {
+            sessionStorage.setItem(`game_timeout_${this.gameId}`, JSON.stringify(data.timed_out_player_number));
+          }
+
+          // Redirect to game over after a short delay
+          setTimeout(() => {
+            this.$router.replace(`/game/${this.gameId}/over`);
+          }, 3000);
+        }
+      } catch (e) {
+        // If the endpoint fails (e.g. game already ended by scheduler), check game status
+        console.error('Timeout report failed:', e);
+        try {
+          const res = await axios.get(`/api/games/${this.gameId}`);
+          if (res.data.game?.status === 'completed') {
+            this.timeoutMessage = 'Time expired. The game has ended.';
+            this.showTimeoutOverlay = true;
+            setTimeout(() => {
+              this.$router.replace(`/game/${this.gameId}/over`);
+            }, 2000);
+          }
+        } catch {
+          // Last resort: redirect anyway
+          this.$router.replace(`/game/${this.gameId}/over`);
+        }
+      }
+
+      this.reportingTimeout = false;
     },
 
     checkEventReveal() {
@@ -425,8 +500,8 @@ export default {
       this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
       this.playerKingdoms = data.player_kingdoms || [];
 
-      // Sync turn timer
-      if (data.turn_time_limit) {
+      // Sync turn timer (don't restart if timeout already reported)
+      if (data.turn_time_limit && !this.showTimeoutOverlay && !this.reportingTimeout) {
         this.turnTimeLimit = data.turn_time_limit;
         if (data.turn_time_remaining != null) {
           this.turnTimeRemaining = data.turn_time_remaining;
@@ -1008,6 +1083,22 @@ export default {
   font-size: 1.1rem;
 }
 
+/* Timeout overlay */
+.timeout-overlay {
+  z-index: 950;
+}
+
+.timeout-icon {
+  color: #e74c3c;
+  font-size: 4rem;
+  opacity: 1;
+  animation: none;
+}
+
+.timeout-title {
+  color: #e74c3c;
+  font-size: 1.8rem;
+}
 
 /* Roll Tab Nav */
 .duel-roll-tabs {

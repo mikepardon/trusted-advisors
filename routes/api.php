@@ -84,6 +84,9 @@ Route::middleware('auth:web')->group(function () {
     // Item management
     Route::post('/games/{game}/discard-item', [GameController::class, 'discardItem']);
 
+    // Timeout reporting
+    Route::post('/games/{game}/report-timeout', [GameController::class, 'reportTimeout']);
+
     // Cancel game
     Route::post('/games/{game}/cancel', [GameController::class, 'cancelGame']);
 
