@@ -178,6 +178,11 @@ Route::middleware('auth:web')->group(function () {
 // Admin CRUD routes
 Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('dashboard-stats', [DashboardController::class, 'stats']);
+
+    // CSV export/import (must be before apiResource to avoid {id} catch)
+    Route::get('{type}/export-csv', [CsvController::class, 'export'])->where('type', 'characters|cards|events|items');
+    Route::post('{type}/import-csv', [CsvController::class, 'import'])->where('type', 'characters|cards|events|items');
+
     Route::apiResource('characters', CharacterController::class);
     Route::apiResource('cards', CardController::class);
     Route::apiResource('events', EventController::class);
@@ -224,10 +229,6 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     // Weekly challenges
     Route::post('weekly-challenges/generate', [WeeklyChallengeController::class, 'generateRange']);
     Route::apiResource('weekly-challenges', WeeklyChallengeController::class);
-
-    // CSV export/import
-    Route::get('{type}/export-csv', [CsvController::class, 'export'])->where('type', 'characters|cards|events|items');
-    Route::post('{type}/import-csv', [CsvController::class, 'import'])->where('type', 'characters|cards|events|items');
 
     // AI content generation
     Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);
