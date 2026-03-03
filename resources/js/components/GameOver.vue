@@ -21,7 +21,9 @@
                 :class="{ 'clickable-name': kingdom.player?.user_id }"
                 @click="kingdom.player?.user_id && (showProfileUserId = kingdom.player.user_id)"
               >{{ playerDisplayName(kingdom.player) }}</span>
-              <span v-if="kingdom.player?.player_number === gameData.game.winner_player_number" class="winner-badge">WINNER</span>
+              <span v-if="isBothTimeout" class="draw-badge">DRAW</span>
+              <span v-else-if="kingdom.player?.player_number === gameData.game.winner_player_number" class="winner-badge">WINNER</span>
+              <span v-else-if="isTimeout && kingdom.player?.player_number === timedOutPlayerNumber" class="timeout-badge">TIMED OUT</span>
             </h3>
             <div class="kingdom-sub">
               <span class="kingdom-character">{{ kingdom.player?.character?.name }}</span>
@@ -286,6 +288,7 @@ export default {
       rematchLoading: false,
       shareCopied: false,
       showProfileUserId: null,
+      timedOutPlayerNumber: null,
       xpBarPercent: 0,
       xpBarLevel: 0,
       xpBarDisplayXp: 0,
@@ -312,10 +315,38 @@ export default {
     },
     isDuelWinner() {
       if (!this.isDuel) return false;
-      // In pass-and-play, "you" is player 1 by convention; in online, check auth
-      return true; // Both players see the results
+      if (this.isBothTimeout) return false;
+      if (this.didITimeout) return false;
+      if (this.isTimeout && !this.didITimeout) return true;
+      const winner = this.gameData?.game?.winner_player_number;
+      if (!winner || !this.myPlayerNumber) return true;
+      return winner === this.myPlayerNumber;
+    },
+    isTimeout() {
+      return this.timedOutPlayerNumber != null && this.timedOutPlayerNumber !== null;
+    },
+    isBothTimeout() {
+      return this.timedOutPlayerNumber === 0;
+    },
+    myPlayerNumber() {
+      const userId = this.auth.state.user?.id;
+      const myPlayer = this.gameData?.game?.players?.find(p => p.user_id === userId);
+      return myPlayer?.player_number || null;
+    },
+    didITimeout() {
+      if (!this.isTimeout || !this.myPlayerNumber) return false;
+      if (this.isBothTimeout) return true;
+      return this.timedOutPlayerNumber === this.myPlayerNumber;
     },
     duelEndTitle() {
+      if (this.isBothTimeout) return 'Draw — Both Timed Out';
+      if (this.isTimeout) {
+        if (this.didITimeout) return 'You Timed Out!';
+        const winner = this.gameData?.game?.winner_player_number;
+        const player = this.gameData?.game?.players?.find(p => p.player_number === winner);
+        const name = player?.user?.name || player?.character?.name || 'Player ' + winner;
+        return `${name} Wins!`;
+      }
       const winner = this.gameData?.game?.winner_player_number;
       if (!winner) return 'The Duel is Over';
       const player = this.gameData?.game?.players?.find(p => p.player_number === winner);
@@ -323,6 +354,15 @@ export default {
       return `${name} Wins!`;
     },
     duelEndFlavor() {
+      if (this.isBothTimeout) {
+        return 'Neither ruler could act in time. The kingdoms stand in uneasy stalemate.';
+      }
+      if (this.isTimeout) {
+        if (this.didITimeout) {
+          return 'You ran out of time. Your opponent claims victory by forfeit.';
+        }
+        return 'Your opponent ran out of time. Victory is yours by forfeit!';
+      }
       const winner = this.gameData?.game?.winner_player_number;
       if (!winner) return 'The campaign has ended.';
       const loser = winner === 1 ? 2 : 1;
@@ -449,6 +489,17 @@ export default {
       if (stored) {
         this.completion = JSON.parse(stored);
         sessionStorage.removeItem(`game_completion_${this.id}`);
+      }
+
+      // Load timeout data from sessionStorage or game API
+      const storedTimeout = sessionStorage.getItem(`game_timeout_${this.id}`);
+      if (storedTimeout) {
+        this.timedOutPlayerNumber = JSON.parse(storedTimeout);
+        sessionStorage.removeItem(`game_timeout_${this.id}`);
+      } else if (this.gameData?.timed_out_player_number != null) {
+        this.timedOutPlayerNumber = this.gameData.timed_out_player_number;
+      } else if (this.gameData?.game?.timed_out_player_number != null) {
+        this.timedOutPlayerNumber = this.gameData.game.timed_out_player_number;
       }
 
       // Load score breakdown from sessionStorage
@@ -1133,6 +1184,30 @@ export default {
   display: inline-block;
   background: linear-gradient(180deg, #b8942e, #8a6a14);
   color: #1a1209;
+  font-size: 0.6rem;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-left: 8px;
+  vertical-align: middle;
+  letter-spacing: 1px;
+}
+
+.timeout-badge {
+  display: inline-block;
+  background: linear-gradient(180deg, #a03020, #7a2018);
+  color: #fdd;
+  font-size: 0.6rem;
+  padding: 2px 8px;
+  border-radius: 3px;
+  margin-left: 8px;
+  vertical-align: middle;
+  letter-spacing: 1px;
+}
+
+.draw-badge {
+  display: inline-block;
+  background: rgba(150, 150, 150, 0.3);
+  color: var(--text-secondary);
   font-size: 0.6rem;
   padding: 2px 8px;
   border-radius: 3px;

@@ -812,7 +812,7 @@ export default {
     },
 
     async triggerBotRollImmediate() {
-      if (this._opponentTurnPending) return;
+      if (!this.hasBotPlayer || this._opponentTurnPending) return;
       this._opponentTurnPending = true;
       try {
         const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
@@ -833,7 +833,7 @@ export default {
     },
 
     async triggerBotTurn() {
-      if (this._opponentTurnPending) return;
+      if (!this.hasBotPlayer || this._opponentTurnPending) return;
       this._opponentTurnPending = true;
 
       const delay = this.isOnline

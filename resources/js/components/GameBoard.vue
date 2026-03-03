@@ -650,6 +650,9 @@ export default {
           if (data.completion) {
             sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(data.completion));
           }
+          if (data.timed_out_player_number != null) {
+            sessionStorage.setItem(`game_timeout_${this.id}`, JSON.stringify(data.timed_out_player_number));
+          }
           this.$router.replace(`/game/${this.id}/over`);
         });
     },

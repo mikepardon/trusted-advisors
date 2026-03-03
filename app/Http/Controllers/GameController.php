@@ -215,6 +215,10 @@ class GameController extends Controller
             $data['duel_phase'] = $game->duel_phase;
             $data['player_kingdoms'] = $game->playerKingdoms()->with(['player.character', 'player.user'])->get();
 
+            if ($game->timed_out_player_number !== null) {
+                $data['timed_out_player_number'] = $game->timed_out_player_number;
+            }
+
             if ($game->turn_time_limit) {
                 $data['turn_time_limit'] = $game->turn_time_limit;
                 $data['turn_started_at'] = $game->turn_started_at?->toIso8601String();

@@ -34,6 +34,7 @@ class User extends Authenticatable
         'coins',
         'login_streak',
         'max_login_streak',
+        'timeout_count',
         'last_login_at',
         'refresh_token',
     ];
@@ -67,6 +68,7 @@ class User extends Authenticatable
             'coins' => 'integer',
             'login_streak' => 'integer',
             'max_login_streak' => 'integer',
+            'timeout_count' => 'integer',
             'last_login_at' => 'datetime',
             'banned_at' => 'datetime',
         ];

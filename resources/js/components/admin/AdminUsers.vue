@@ -24,6 +24,7 @@
             <th>Level</th>
             <th>ELO</th>
             <th>Coins</th>
+            <th>Timeouts</th>
             <th>Status</th>
             <th>Last Login</th>
             <th>Actions</th>
@@ -40,6 +41,7 @@
             <td>{{ user.level }}</td>
             <td>{{ user.elo_rating }}</td>
             <td>{{ user.coins }}</td>
+            <td :class="{ 'text-warn': user.timeout_count > 0 }">{{ user.timeout_count || 0 }}</td>
             <td>
               <span v-if="user.banned_at" class="status-banned">Banned</span>
               <span v-else class="status-active">Active</span>
@@ -89,6 +91,7 @@
           <div class="stat-item"><span class="stat-label">Games Won</span><span class="stat-val">{{ selectedUser.games_won }}</span></div>
           <div class="stat-item"><span class="stat-label">Achievements</span><span class="stat-val">{{ selectedUser.achievement_count }}</span></div>
           <div class="stat-item"><span class="stat-label">Login Streak</span><span class="stat-val">{{ selectedUser.login_streak }} (max: {{ selectedUser.max_login_streak }})</span></div>
+          <div class="stat-item"><span class="stat-label">Timeouts</span><span class="stat-val" :class="{ 'text-warn': selectedUser.timeout_count > 0 }">{{ selectedUser.timeout_count || 0 }}</span></div>
           <div class="stat-item"><span class="stat-label">Joined</span><span class="stat-val">{{ formatDate(selectedUser.created_at) }}</span></div>
           <div class="stat-item"><span class="stat-label">Status</span><span class="stat-val" :class="{ 'text-banned': selectedUser.banned_at }">{{ selectedUser.banned_at ? 'Banned ' + formatDate(selectedUser.banned_at) : 'Active' }}</span></div>
         </div>
@@ -430,6 +433,11 @@ export default {
 
 .text-banned {
   color: var(--accent-red) !important;
+}
+
+.text-warn {
+  color: #e67e22 !important;
+  font-weight: 600;
 }
 
 .logs-title {
