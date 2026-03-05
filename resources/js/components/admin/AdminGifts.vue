@@ -19,6 +19,7 @@
             <span v-if="g.reward_coins"> {{ g.reward_coins }} coins</span>
             <span v-if="g.reward_character"> {{ g.reward_character?.name }}</span>
             <span v-if="g.reward_dice_theme"> {{ g.reward_dice_theme?.name }} (dice)</span>
+            <span v-if="g.reward_kingdom_style"> {{ g.reward_kingdom_style?.name }} (kingdom)</span>
             &mdash; Sent to {{ g.recipient_count }} users
             <span v-if="g.creator"> by {{ g.creator.name }}</span>
           </div>
@@ -64,6 +65,13 @@
               <option v-for="d in diceThemes" :key="d.id" :value="d.id">{{ d.name }}</option>
             </select>
           </div>
+          <div class="form-group">
+            <label>Reward Kingdom Style</label>
+            <select v-model="form.reward_kingdom_style_id">
+              <option :value="null">None</option>
+              <option v-for="ks in kingdomStyles" :key="ks.id" :value="ks.id">{{ ks.name }}</option>
+            </select>
+          </div>
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <!-- Confirmation step -->
@@ -96,15 +104,16 @@ export default {
       gifts: [],
       characters: [],
       diceThemes: [],
+      kingdomStyles: [],
       showModal: false,
       showConfirm: false,
       sending: false,
       formError: '',
-      form: { title: '', note: '', reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null },
+      form: { title: '', note: '', reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null },
     };
   },
   async mounted() {
-    await Promise.all([this.load(), this.fetchCharacters(), this.fetchDiceThemes()]);
+    await Promise.all([this.load(), this.fetchCharacters(), this.fetchDiceThemes(), this.fetchKingdomStyles()]);
   },
   methods: {
     async load() {
@@ -123,13 +132,19 @@ export default {
         this.diceThemes = res.data;
       } catch {}
     },
+    async fetchKingdomStyles() {
+      try {
+        const res = await axios.get('/api/admin/kingdom-styles');
+        this.kingdomStyles = res.data;
+      } catch {}
+    },
     confirmSend() {
       this.formError = '';
       if (!this.form.title) {
         this.formError = 'Title is required.';
         return;
       }
-      if (this.form.reward_xp === 0 && this.form.reward_coins === 0 && !this.form.reward_character_id && !this.form.reward_dice_theme_id) {
+      if (this.form.reward_xp === 0 && this.form.reward_coins === 0 && !this.form.reward_character_id && !this.form.reward_dice_theme_id && !this.form.reward_kingdom_style_id) {
         this.formError = 'At least one reward must be specified.';
         return;
       }
@@ -142,7 +157,7 @@ export default {
         await axios.post('/api/admin/gifts', this.form);
         this.showModal = false;
         this.showConfirm = false;
-        this.form = { title: '', note: '', reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null };
+        this.form = { title: '', note: '', reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null };
         this.load();
       } catch (e) {
         this.formError = e.response?.data?.error || 'Failed to send gift';

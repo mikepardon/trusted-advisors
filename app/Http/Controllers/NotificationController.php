@@ -113,6 +113,20 @@ class NotificationController extends Controller
             );
         }
 
+        // Grant kingdom style unlockable
+        $kingdomStyleId = $data['reward_kingdom_style_id'] ?? null;
+        if ($kingdomStyleId) {
+            $unlockable = \App\Models\Unlockable::firstOrCreate(
+                ['type' => 'kingdom_style', 'entity_id' => $kingdomStyleId],
+                ['unlock_method' => 'gift', 'unlock_value' => 0],
+            );
+
+            UserUnlockable::firstOrCreate(
+                ['user_id' => $user->id, 'unlockable_id' => $unlockable->id],
+                ['unlocked_at' => now()],
+            );
+        }
+
         // Mark as claimed and read
         $notification->update([
             'claimed_at' => now(),

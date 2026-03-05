@@ -7,12 +7,8 @@
 
 
 
-    <!-- Continue button (above kingdom stats for visibility) -->
-    <div v-if="showContinueAboveStats" class="continue-above-stats">
-        <button class="btn-continue-top" @click="handleContinueAfterRoll">
-            Continue
-        </button>
-    </div>
+    <!-- Event Banner -->
+    <EventBanner :event="currentEvent" />
 
     <!-- Kingdom Stats -->
     <DuelKingdomStats
@@ -91,6 +87,11 @@
 
     <!-- === SIMULTANEOUS ROLLING === -->
     <template v-if="duelPhase === 'rolling' && !showHandoff && !showWaiting">
+      <!-- Continue button (between kingdom stats and roll tabs) -->
+      <div v-if="showContinueAboveStats" class="continue-above-stats">
+        <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
+      </div>
+
       <!-- Roll Tabs -->
       <div class="duel-roll-tabs">
         <button class="roll-tab" :class="myTabClass" @click="rollTab = 'mine'">You</button>
@@ -146,6 +147,9 @@
 
     <!-- === ROLLING OFFERER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_offerer' && !showHandoff && !showWaiting">
+      <div v-if="showContinueAboveStats" class="continue-above-stats">
+        <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
+      </div>
       <DuelRollPhase
         :cards="myCards"
         :playerName="offererName"
@@ -173,6 +177,9 @@
 
     <!-- === ROLLING CHOOSER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_chooser' && !showHandoff && !showWaiting">
+      <div v-if="showContinueAboveStats" class="continue-above-stats">
+        <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
+      </div>
       <!-- Show offerer's completed roll -->
       <DuelRollPhase
         v-if="offererRollData"
@@ -220,6 +227,7 @@ import DuelRollPhase from './DuelRollPhase.vue';
 import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
 import PlayerItems from './PlayerItems.vue';
 import EventReveal from './EventReveal.vue';
+import EventBanner from './EventBanner.vue';
 import CharacterInfoModal from './CharacterInfoModal.vue';
 import { isDddiceAvailable } from '../dddiceService';
 import { useAuth } from '../stores/auth';
@@ -227,7 +235,7 @@ import { useToast } from '../stores/toast';
 
 export default {
   name: 'DuelBoard',
-  components: { DuelKingdomStats, DuelChoosePhase, DuelRollPhase, TurnHandoffOverlay, PlayerItems, EventReveal, CharacterInfoModal },
+  components: { DuelKingdomStats, DuelChoosePhase, DuelRollPhase, TurnHandoffOverlay, PlayerItems, EventReveal, EventBanner, CharacterInfoModal },
   setup() {
     const auth = useAuth();
     const toast = useToast();
@@ -722,11 +730,11 @@ export default {
           await this.loadMyRollCards();
           this.initiatePassAndPlayHandoff(this.offererNumber);
         } else if (this.hasBotPlayer) {
+          this._opponentTurnPending = false;
           await this.loadMyRollCards();
           // For simultaneous rolling, bot rolls when human rolls (triggerBotRollImmediate)
           // For sequential, trigger bot turn with delay
           if (phase !== 'rolling' && this.isCurrentTurnBot) {
-            this._opponentTurnPending = false;
             this.triggerBotTurn();
           }
         } else {
@@ -1145,6 +1153,7 @@ export default {
       } catch (err) {
         console.warn('[dddice] Online opponent dice animation failed, continuing:', err);
       }
+      this.$refs.kingdomStats?.clearDice(pn);
 
       // Now show results and adjust stats
       if (pn === this.offererNumber) {
@@ -1210,6 +1219,7 @@ export default {
           } catch (err) {
             console.warn('[dddice] Bot roll animation failed, continuing:', err);
           }
+          this.$refs.kingdomStats?.clearDice(data.player_number);
 
           // Now show results and adjust stats
           if (data.player_number === this.offererNumber) {
@@ -1273,6 +1283,7 @@ export default {
           } catch (err) {
             console.warn('[dddice] Bot turn animation failed, continuing:', err);
           }
+          this.$refs.kingdomStats?.clearDice(data.player_number);
 
           // Now show results and adjust stats
           if (data.player_number === this.offererNumber) {

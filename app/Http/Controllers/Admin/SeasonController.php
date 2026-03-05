@@ -101,7 +101,7 @@ class SeasonController extends Controller
 
     public function rewards(Season $season): JsonResponse
     {
-        $rewards = $season->rewards()->with(['rewardCharacter', 'rewardDiceTheme'])->orderBy('placement')->get();
+        $rewards = $season->rewards()->with(['rewardCharacter', 'rewardDiceTheme', 'rewardKingdomStyle'])->orderBy('placement')->get();
         return response()->json($rewards);
     }
 
@@ -114,12 +114,13 @@ class SeasonController extends Controller
             'reward_coins' => 'integer|min:0',
             'reward_character_id' => 'nullable|exists:characters,id',
             'reward_dice_theme_id' => 'nullable|exists:dice_themes,id',
+            'reward_kingdom_style_id' => 'nullable|exists:kingdom_styles,id',
             'reward_title' => 'nullable|string|max:255',
         ]);
 
         $validated['season_id'] = $season->id;
         $reward = SeasonReward::create($validated);
-        $reward->load(['rewardCharacter', 'rewardDiceTheme']);
+        $reward->load(['rewardCharacter', 'rewardDiceTheme', 'rewardKingdomStyle']);
 
         return response()->json($reward, 201);
     }
@@ -137,11 +138,12 @@ class SeasonController extends Controller
             'reward_coins' => 'integer|min:0',
             'reward_character_id' => 'nullable|exists:characters,id',
             'reward_dice_theme_id' => 'nullable|exists:dice_themes,id',
+            'reward_kingdom_style_id' => 'nullable|exists:kingdom_styles,id',
             'reward_title' => 'nullable|string|max:255',
         ]);
 
         $reward->update($validated);
-        $reward->load(['rewardCharacter', 'rewardDiceTheme']);
+        $reward->load(['rewardCharacter', 'rewardDiceTheme', 'rewardKingdomStyle']);
 
         return response()->json($reward);
     }

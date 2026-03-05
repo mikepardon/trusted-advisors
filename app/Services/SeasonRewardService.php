@@ -56,6 +56,7 @@ class SeasonRewardService
                         'reward_coins' => $reward->reward_coins ?? 0,
                         'reward_character_id' => $reward->reward_character_id,
                         'reward_dice_theme_id' => $reward->reward_dice_theme_id,
+                        'reward_kingdom_style_id' => $reward->reward_kingdom_style_id,
                         'reward_title' => $reward->reward_title,
                     ],
                 ]);

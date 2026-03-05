@@ -35,6 +35,10 @@
             <span class="reward-icon">&#127922;</span>
             <span>Dice Theme</span>
           </div>
+          <div v-if="notification.data?.reward_kingdom_style_id" class="reward-item">
+            <span class="reward-icon">&#127984;</span>
+            <span>Kingdom Style</span>
+          </div>
         </div>
       </div>
 
@@ -79,7 +83,7 @@ export default {
   computed: {
     hasRewards() {
       const d = this.notification.data;
-      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id || d.reward_dice_theme_id);
+      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id || d.reward_dice_theme_id || d.reward_kingdom_style_id);
     },
   },
   methods: {

@@ -43,6 +43,7 @@ class SendAdminGiftToUsers implements ShouldQueue
                             'reward_coins' => $this->validated['reward_coins'] ?? 0,
                             'reward_character_id' => $this->validated['reward_character_id'] ?? null,
                             'reward_dice_theme_id' => $this->validated['reward_dice_theme_id'] ?? null,
+                            'reward_kingdom_style_id' => $this->validated['reward_kingdom_style_id'] ?? null,
                         ],
                     ]);
 

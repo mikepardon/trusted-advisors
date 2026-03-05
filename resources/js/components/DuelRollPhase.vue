@@ -76,6 +76,7 @@
           {{ cardResultMap[idx]?.success ? (c.positive_flavor || c.description) : (c.negative_flavor || c.description) }}
         </p>
         <span class="card-difficulty">Difficulty {{ c.difficulty }}</span>
+        <!-- Post-roll: show actual applied effects -->
         <div v-if="hasRolled && cardEffectsMap[idx]" class="effects-row card-effects">
           <span
             v-for="(val, stat) in cardEffectsMap[idx]"
@@ -86,6 +87,29 @@
             {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
           </span>
         </div>
+        <!-- Pre-roll: show potential positive & negative effects -->
+        <template v-if="!hasRolled">
+          <div v-if="c.positive_effects && Object.keys(c.positive_effects).length" class="effects-row card-effects">
+            <span class="effects-label">On Success:</span>
+            <span
+              v-for="(val, stat) in c.positive_effects"
+              :key="'pos-'+stat"
+              class="effect-badge effect-positive"
+            >
+              {{ stat }}: +{{ val }}
+            </span>
+          </div>
+          <div v-if="c.negative_effects && Object.keys(c.negative_effects).length" class="effects-row card-effects">
+            <span class="effects-label">Always:</span>
+            <span
+              v-for="(val, stat) in c.negative_effects"
+              :key="'neg-'+stat"
+              class="effect-badge effect-negative"
+            >
+              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+            </span>
+          </div>
+        </template>
       </div>
     </div>
 
@@ -397,6 +421,14 @@ export default {
 
 .effect-positive { background: rgba(74, 138, 58, 0.15); color: #4a8a3a; }
 .effect-negative { background: rgba(160, 48, 32, 0.15); color: #c0392b; }
+
+.effects-label {
+  font-size: 0.68rem;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
 
 .combined-effects {
   margin-top: 8px;

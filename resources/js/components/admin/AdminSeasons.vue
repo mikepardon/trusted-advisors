@@ -73,6 +73,7 @@
                   <th>Coins</th>
                   <th>Character</th>
                   <th>Dice</th>
+                  <th>Kingdom</th>
                   <th>Title</th>
                   <th></th>
                 </tr>
@@ -84,6 +85,7 @@
                   <td>{{ r.reward_coins }}</td>
                   <td>{{ r.reward_character?.name || '-' }}</td>
                   <td>{{ r.reward_dice_theme?.name || '-' }}</td>
+                  <td>{{ r.reward_kingdom_style?.name || '-' }}</td>
                   <td>{{ r.reward_title || '-' }}</td>
                   <td>
                     <button class="btn-sm" @click="editReward(r)">Edit</button>
@@ -140,6 +142,13 @@
               </select>
             </div>
             <div class="form-group">
+              <label>Kingdom Style</label>
+              <select v-model="rewardForm.reward_kingdom_style_id">
+                <option :value="null">None</option>
+                <option v-for="ks in allKingdomStyles" :key="ks.id" :value="ks.id">{{ ks.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label>Title</label>
               <input v-model="rewardForm.reward_title" type="text" placeholder="e.g. Season Champion" />
             </div>
@@ -176,9 +185,10 @@ export default {
       rewards: [],
       allCharacters: [],
       allDiceThemes: [],
+      allKingdomStyles: [],
       editingReward: null,
       rewardFormError: '',
-      rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_title: '' },
+      rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null, reward_title: '' },
       endingSeasonId: null,
     };
   },
@@ -252,19 +262,21 @@ export default {
       this.rewardsSeason = s;
       this.resetRewardForm();
       this.showRewardsModal = true;
-      const [rewardsRes, charsRes, diceRes] = await Promise.all([
+      const [rewardsRes, charsRes, diceRes, ksRes] = await Promise.all([
         axios.get(`/api/admin/seasons/${s.id}/rewards`),
         axios.get('/api/characters'),
         axios.get('/api/admin/dice-themes'),
+        axios.get('/api/admin/kingdom-styles'),
       ]);
       this.rewards = rewardsRes.data;
       this.allCharacters = charsRes.data;
       this.allDiceThemes = diceRes.data;
+      this.allKingdomStyles = ksRes.data;
     },
     resetRewardForm() {
       this.editingReward = null;
       this.rewardFormError = '';
-      this.rewardForm = { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_title: '' };
+      this.rewardForm = { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null, reward_title: '' };
     },
     editReward(r) {
       this.editingReward = r.id;
@@ -276,6 +288,7 @@ export default {
         reward_coins: r.reward_coins,
         reward_character_id: r.reward_character_id,
         reward_dice_theme_id: r.reward_dice_theme_id || null,
+        reward_kingdom_style_id: r.reward_kingdom_style_id || null,
         reward_title: r.reward_title || '',
       };
     },
