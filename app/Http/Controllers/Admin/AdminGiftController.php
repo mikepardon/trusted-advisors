@@ -41,8 +41,8 @@ class AdminGiftController extends Controller
             'recipient_count' => 0,
         ]);
 
-        SendAdminGiftToUsers::dispatch($gift, $validated);
+        SendAdminGiftToUsers::dispatchSync($gift, $validated);
 
-        return response()->json($gift->load('creator:id,name', 'rewardCharacter:id,name', 'rewardDiceTheme:id,name,slug'), 201);
+        return response()->json($gift->fresh()->load('creator:id,name', 'rewardCharacter:id,name', 'rewardDiceTheme:id,name,slug'), 201);
     }
 }
