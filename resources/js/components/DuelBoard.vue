@@ -1102,6 +1102,18 @@ export default {
       const rollData = data.roll_data;
       const pn = rollData.player_number;
 
+      // Skip if this is our own roll — already handled by submitRoll/applyRollResult
+      if (pn === this.activePlayerNumber) {
+        // Still update phase from broadcast
+        const newPhase = data.duel_phase;
+        if (newPhase && newPhase !== this.duelPhase) {
+          this.duelPhase = newPhase;
+        }
+        this.showWaiting = false;
+        this.updateOnlineWaiting();
+        return;
+      }
+
       // Set difficulty BEFORE animation so "Required: X" shows during roll
       if (rollData.cards?.length && !this.playerDifficulties[pn]) {
         const diff = rollData.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
