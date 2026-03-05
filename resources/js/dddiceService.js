@@ -185,13 +185,13 @@ class DddiceInstance {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         // console.log('[dddice] Roll timed out after 8s');
-        this.instance.off(ThreeDDiceRollEvent.RollFinished);
+        this.instance?.off(ThreeDDiceRollEvent.RollFinished);
         resolve();
       }, 8000);
 
       this.instance.on(ThreeDDiceRollEvent.RollFinished, () => {
         clearTimeout(timeout);
-        this.instance.off(ThreeDDiceRollEvent.RollFinished);
+        this.instance?.off(ThreeDDiceRollEvent.RollFinished);
         // console.log('[dddice] Roll finished');
         resolve();
       });
@@ -201,7 +201,7 @@ class DddiceInstance {
       } catch (err) {
         console.warn('[dddice] executeRoll failed:', err);
         clearTimeout(timeout);
-        this.instance.off(ThreeDDiceRollEvent.RollFinished);
+        this.instance?.off(ThreeDDiceRollEvent.RollFinished);
         resolve();
       }
     });

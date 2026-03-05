@@ -560,13 +560,10 @@ export default {
             this.$router.replace(`/game/${this.gameId}/over`);
           }, 3000);
         } else if (data.auto_played) {
-          // Turn was auto-played — refresh game state
-          // The broadcast events (DuelRollComplete, DuelChoiceMade) will update the UI
-          this.reportingTimeout = false;
-          this.turnTimeRemaining = this.turnTimeLimit;
-          this.startTurnTimer();
-          // Refresh full game state to sync
+          // Turn was auto-played — refresh game state to get new timer
+          // Don't reset reportingTimeout until refresh completes to prevent double-fire
           this.$emit('refresh');
+          return; // reportingTimeout stays true until syncFromGameData resets timer
         }
       } catch (e) {
         console.error('Timeout report failed:', e);
@@ -578,9 +575,9 @@ export default {
             setTimeout(() => {
               this.$router.replace(`/game/${this.gameId}/over`);
             }, 2000);
+            return;
           } else {
             // Game still active — re-sync timer and refresh
-            this.reportingTimeout = false;
             const remaining = res.data.turn_time_remaining ?? res.data.game?.turn_time_remaining;
             if (remaining != null) {
               this.turnTimeRemaining = remaining;
@@ -591,6 +588,7 @@ export default {
         } catch {
           // Last resort: redirect anyway
           this.$router.replace(`/game/${this.gameId}/over`);
+          return;
         }
       }
 
@@ -614,11 +612,12 @@ export default {
       this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
       this.playerKingdoms = data.player_kingdoms || [];
 
-      // Sync turn timer (don't restart if timeout already reported)
-      if (data.turn_time_limit && !this.showTimeoutOverlay && !this.reportingTimeout) {
+      // Sync turn timer (don't restart if game-over timeout overlay is showing)
+      if (data.turn_time_limit && !this.showTimeoutOverlay) {
         this.turnTimeLimit = data.turn_time_limit;
         if (data.turn_time_remaining != null) {
           this.turnTimeRemaining = data.turn_time_remaining;
+          this.reportingTimeout = false; // Release guard — fresh timer from server
           this.startTurnTimer();
         }
       }
