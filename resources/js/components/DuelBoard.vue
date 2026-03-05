@@ -500,6 +500,12 @@ export default {
 
     startTurnTimer() {
       if (this.turnTimerInterval) clearInterval(this.turnTimerInterval);
+      // If already expired, trigger immediately
+      if (this.turnTimeRemaining != null && this.turnTimeRemaining <= 0) {
+        this.turnTimeRemaining = 0;
+        this.handleTimerExpired();
+        return;
+      }
       this.turnTimerInterval = setInterval(() => {
         if (this.turnTimeRemaining != null && this.turnTimeRemaining > 0) {
           this.turnTimeRemaining--;
@@ -511,6 +517,7 @@ export default {
         } else {
           clearInterval(this.turnTimerInterval);
           this.turnTimerInterval = null;
+          this.handleTimerExpired();
         }
       }, 1000);
     },
@@ -572,8 +579,13 @@ export default {
               this.$router.replace(`/game/${this.gameId}/over`);
             }, 2000);
           } else {
-            // Game still active — just refresh
+            // Game still active — re-sync timer and refresh
             this.reportingTimeout = false;
+            const remaining = res.data.turn_time_remaining ?? res.data.game?.turn_time_remaining;
+            if (remaining != null) {
+              this.turnTimeRemaining = remaining;
+              this.startTurnTimer();
+            }
             this.$emit('refresh');
           }
         } catch {
@@ -1118,6 +1130,10 @@ export default {
       this.loadMyRollCards();
       this.showWaiting = false;
       this.updateOnlineWaiting();
+      // Phase changed — re-sync timer from server
+      if (this.isOnline && this.turnTimeLimit) {
+        this.$emit('refresh');
+      }
     },
 
     async handleDuelRollComplete(data) {
