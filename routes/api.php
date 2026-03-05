@@ -119,6 +119,7 @@ Route::middleware('auth:web')->group(function () {
 
     // Timeout check (nudges server to forfeit if timer expired)
     Route::post('/games/{game}/check-timeout', [GameController::class, 'checkTimeout']);
+    Route::post('/games/{game}/report-timeout', [GameController::class, 'checkTimeout']); // legacy alias
 
     // Cancel game
     Route::post('/games/{game}/cancel', [GameController::class, 'cancelGame']);
