@@ -41,8 +41,12 @@ export async function promptPushPermission() {
 
     window.OneSignalDeferred = window.OneSignalDeferred || [];
     window.OneSignalDeferred.push(async function (OneSignal) {
-        await OneSignal.Notifications.requestPermission();
-        await registerPlayerId();
+        try {
+            await OneSignal.Notifications.requestPermission();
+            await registerPlayerId();
+        } catch {
+            // Permission blocked by browser — nothing to do
+        }
     });
 }
 
