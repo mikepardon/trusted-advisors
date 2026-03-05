@@ -511,12 +511,16 @@ export default {
       if (this.reportingTimeout || this.showTimeoutOverlay) return;
       this.reportingTimeout = true;
 
+      // Random delay 3-10 seconds before auto-playing the timed-out player's turn
+      const delay = 3000 + Math.floor(Math.random() * 7000);
+      await new Promise(resolve => setTimeout(resolve, delay));
+
       try {
         const res = await axios.post(`/api/games/${this.gameId}/report-timeout`);
         const data = res.data;
 
         if (data.game_over) {
-          // Determine message based on who timed out
+          // Fallback: game ended (shouldn't normally happen now)
           const myNum = this.activePlayerNumber;
           const timedOutNum = data.timed_out_player_number;
 
@@ -530,7 +534,6 @@ export default {
 
           this.showTimeoutOverlay = true;
 
-          // Store completion and timeout data for game over screen
           if (data.completion) {
             sessionStorage.setItem(`game_completion_${this.gameId}`, JSON.stringify(data.completion));
           }
@@ -538,13 +541,19 @@ export default {
             sessionStorage.setItem(`game_timeout_${this.gameId}`, JSON.stringify(data.timed_out_player_number));
           }
 
-          // Redirect to game over after a short delay
           setTimeout(() => {
             this.$router.replace(`/game/${this.gameId}/over`);
           }, 3000);
+        } else if (data.auto_played) {
+          // Turn was auto-played — refresh game state
+          // The broadcast events (DuelRollComplete, DuelChoiceMade) will update the UI
+          this.reportingTimeout = false;
+          this.turnTimeRemaining = this.turnTimeLimit;
+          this.startTurnTimer();
+          // Refresh full game state to sync
+          this.$emit('refresh');
         }
       } catch (e) {
-        // If the endpoint fails (e.g. game already ended by scheduler), check game status
         console.error('Timeout report failed:', e);
         try {
           const res = await axios.get(`/api/games/${this.gameId}`);
@@ -554,6 +563,10 @@ export default {
             setTimeout(() => {
               this.$router.replace(`/game/${this.gameId}/over`);
             }, 2000);
+          } else {
+            // Game still active — just refresh
+            this.reportingTimeout = false;
+            this.$emit('refresh');
           }
         } catch {
           // Last resort: redirect anyway

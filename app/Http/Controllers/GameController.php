@@ -3479,7 +3479,7 @@ class GameController extends Controller
 
     /**
      * Called by frontend when the turn timer hits 0.
-     * Verifies server-side that the turn is actually expired, then ends the game.
+     * Auto-plays the timed-out player's turn instead of ending the game.
      */
     public function reportTimeout(Request $request, Game $game): JsonResponse
     {
@@ -3508,7 +3508,7 @@ class GameController extends Controller
             return response()->json(['error' => 'Turn has not expired yet.'], 422);
         }
 
-        // Determine who timed out using the same logic as ProcessExpiredTurns
+        // Determine who timed out
         $timedOutPlayerNumbers = $this->determineTimedOutPlayers($game);
 
         if (empty($timedOutPlayerNumbers)) {
@@ -3517,71 +3517,50 @@ class GameController extends Controller
 
         $players = $game->players()->with('user')->orderBy('player_number')->get();
 
-        if (count($timedOutPlayerNumbers) >= 2) {
-            // Both timed out — draw
-            $game->update([
-                'status' => 'completed',
-                'round_phase' => 'complete',
-                'winner_player_number' => null,
-                'timed_out_player_number' => 0,
-                'turn_started_at' => null,
-            ]);
+        // Auto-play each timed-out player's turn
+        foreach ($timedOutPlayerNumbers as $timedOutNumber) {
+            $timedOutPlayer = $players->firstWhere('player_number', $timedOutNumber);
+            if (!$timedOutPlayer) continue;
 
-            foreach ($players as $player) {
-                if ($player->user) {
-                    $player->user->increment('timeout_count');
+            $timedOutUser = $timedOutPlayer->user ?? User::find($timedOutPlayer->user_id);
+
+            $phase = $game->fresh()->duel_phase;
+
+            if ($phase === 'choosing') {
+                // Auto-select: pick a random card
+                $hands = GamePlayerHand::where('game_id', $game->id)
+                    ->where('game_player_id', $timedOutPlayer->id)
+                    ->where('round_number', $game->current_round)
+                    ->whereNull('offered_to_player_id')
+                    ->get();
+
+                if ($hands->isNotEmpty()) {
+                    $keptHand = $hands->random();
+                    $fakeRequest = Request::create('', 'POST', ['kept_hand_id' => $keptHand->id]);
+                    $fakeRequest->setUserResolver(fn () => $timedOutUser);
+                    $this->duelSelect($game->fresh(), $fakeRequest);
                 }
+            } elseif (in_array($phase, ['rolling', 'rolling_offerer', 'rolling_chooser'])) {
+                // Auto-roll for the timed-out player
+                $fakeRequest = Request::create('', 'POST', ['player_number' => $timedOutNumber]);
+                $fakeRequest->setUserResolver(fn () => $timedOutUser);
+                $this->duelRoll($game->fresh(), $fakeRequest);
             }
-
-            $completionSummary = app(GameCompletionService::class)->processCompletion($game);
-            $kingdoms = $game->playerKingdoms()->with('player')->get();
-
-            $gameOverData = [
-                'game_over' => true,
-                'winner_player_number' => null,
-                'timed_out_player_number' => 0,
-                'reason' => 'Both players ran out of time. The game ends in a draw!',
-                'game' => $game->fresh(),
-                'player_kingdoms' => $kingdoms,
-                'completion' => $completionSummary,
-            ];
-
-            broadcast(new DuelGameOver($game->id, $gameOverData));
-            return response()->json($gameOverData);
         }
 
-        // One player timed out
-        $timedOutNumber = $timedOutPlayerNumbers[0];
-        $winnerNumber = $timedOutNumber === 1 ? 2 : 1;
+        // Return updated game state
+        $game->refresh();
 
-        $game->update([
-            'status' => 'completed',
-            'round_phase' => 'complete',
-            'winner_player_number' => $winnerNumber,
-            'timed_out_player_number' => $timedOutNumber,
-            'turn_started_at' => null,
-        ]);
-
-        $timedOutPlayer = $players->firstWhere('player_number', $timedOutNumber);
-        if ($timedOutPlayer?->user) {
-            $timedOutPlayer->user->increment('timeout_count');
+        // Reset turn timer for the new phase
+        if ($game->status === 'active' && $game->turn_time_limit) {
+            $game->update(['turn_started_at' => now()]);
         }
 
-        $completionSummary = app(GameCompletionService::class)->processCompletion($game);
-        $kingdoms = $game->playerKingdoms()->with('player')->get();
-
-        $gameOverData = [
-            'game_over' => true,
-            'winner_player_number' => $winnerNumber,
-            'timed_out_player_number' => $timedOutNumber,
-            'reason' => 'Player ' . $timedOutNumber . ' ran out of time. Player ' . $winnerNumber . ' wins by forfeit!',
+        return response()->json([
+            'auto_played' => true,
+            'duel_phase' => $game->duel_phase,
             'game' => $game->fresh(),
-            'player_kingdoms' => $kingdoms,
-            'completion' => $completionSummary,
-        ];
-
-        broadcast(new DuelGameOver($game->id, $gameOverData));
-        return response()->json($gameOverData);
+        ]);
     }
 
     /**
