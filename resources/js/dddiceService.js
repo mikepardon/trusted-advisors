@@ -51,7 +51,7 @@ class DddiceInstance {
   async init(canvas, config = {}) {
     if (this._initPromise) return this._initPromise;
     if (!isAvailable()) {
-      console.log('[dddice] Not available (WebGL or disabled)');
+      // console.log('[dddice] Not available (WebGL or disabled)');
       return false;
     }
     this._initPromise = this._doInit(canvas, config);
@@ -82,7 +82,7 @@ class DddiceInstance {
       await this._loadTheme(DEFAULT_THEME);
 
       this._ready = true;
-      console.log('[dddice] Instance initialized successfully');
+      // console.log('[dddice] Instance initialized successfully');
       return true;
     } catch (e) {
       console.warn('[dddice] Instance init failed:', e);
@@ -98,7 +98,7 @@ class DddiceInstance {
       const themeRes = await this.api.theme.get(themeId);
       this.instance.loadTheme(themeRes.data, false);
       this._loadedThemes.add(themeId);
-      console.log('[dddice] Loaded theme:', themeId);
+      // console.log('[dddice] Loaded theme:', themeId);
       return true;
     } catch (e) {
       console.warn('[dddice] Failed to load theme:', themeId, e);
@@ -117,7 +117,7 @@ class DddiceInstance {
    */
   async roll(diceSpecs) {
     if (!this.isReady()) {
-      console.log('[dddice] Not ready, skipping roll');
+      // console.log('[dddice] Not ready, skipping roll');
       return;
     }
 
@@ -180,11 +180,11 @@ class DddiceInstance {
       updated_at: new Date().toISOString(),
     };
 
-    console.log('[dddice] Rolling with predetermined values:', values.map(v => v.value));
+    // console.log('[dddice] Rolling with predetermined values:', values.map(v => v.value));
 
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
-        console.log('[dddice] Roll timed out after 8s');
+        // console.log('[dddice] Roll timed out after 8s');
         this.instance.off(ThreeDDiceRollEvent.RollFinished);
         resolve();
       }, 8000);
@@ -192,7 +192,7 @@ class DddiceInstance {
       this.instance.on(ThreeDDiceRollEvent.RollFinished, () => {
         clearTimeout(timeout);
         this.instance.off(ThreeDDiceRollEvent.RollFinished);
-        console.log('[dddice] Roll finished');
+        // console.log('[dddice] Roll finished');
         resolve();
       });
 
@@ -261,7 +261,7 @@ class DddiceService extends DddiceInstance {
   async init(canvas) {
     if (this._initPromise) return this._initPromise;
     if (!this.isAvailable()) {
-      console.log('[dddice] Not available (WebGL or disabled)');
+      // console.log('[dddice] Not available (WebGL or disabled)');
       return false;
     }
     this._initPromise = this._doInit(canvas, {});

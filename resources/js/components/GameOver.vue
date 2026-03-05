@@ -188,7 +188,7 @@
 
       <div class="summary">
         <p v-if="isWin">
-          After two years of counsel,
+          After {{ monthsToYears(gameData.game.total_rounds || 24) }} of counsel,
           your wisdom has guided the kingdom through its darkest hours.
           The Kingdom endures thanks to your leadership!
         </p>
@@ -546,6 +546,14 @@ export default {
     this.loading = false;
   },
   methods: {
+    monthsToYears(months) {
+      const years = Math.floor(months / 12);
+      const rem = months % 12;
+      if (years === 0) return `${months} months`;
+      const yearWord = years === 1 ? '1 year' : `${years} years`;
+      if (rem === 0) return yearWord;
+      return `${yearWord} and ${rem} month${rem !== 1 ? 's' : ''}`;
+    },
     playerDisplayName(player) {
       if (player?.user?.name) return player.user.name;
       return player?.character?.name || 'Player';
