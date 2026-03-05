@@ -464,14 +464,19 @@ class GameController extends Controller
             $cards = $cards->concat($allCards->shuffle());
         }
         $cards = $cards->take($totalCardsNeeded);
+        $deckRows = [];
+        $now = now();
         foreach ($cards as $i => $card) {
-            GameCardDeck::create([
+            $deckRows[] = [
                 'game_id' => $game->id,
                 'card_id' => $card->id,
                 'position' => $i,
                 'is_drawn' => false,
-            ]);
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
         }
+        GameCardDeck::insert($deckRows);
 
         // Duel mode: skip item deck
         if (!$game->isDuel()) {
@@ -487,14 +492,18 @@ class GameController extends Controller
                 $itemPool = $itemPool->concat($allItems->shuffle());
             }
             $itemPool = $itemPool->take($itemsNeeded);
+            $itemRows = [];
             foreach ($itemPool as $i => $item) {
-                GameItemDeck::create([
+                $itemRows[] = [
                     'game_id' => $game->id,
                     'item_id' => $item->id,
                     'position' => $i,
                     'is_drawn' => false,
-                ]);
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
             }
+            GameItemDeck::insert($itemRows);
         }
 
         // Shuffle event order per game so every game is unique
