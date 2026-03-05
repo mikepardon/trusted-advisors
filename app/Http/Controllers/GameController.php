@@ -30,7 +30,9 @@ use App\Models\Unlockable;
 use App\Models\UserAchievement;
 use App\Models\User;
 use App\Models\UserUnlockable;
+use App\Jobs\ForfeitExpiredTurn;
 use App\Services\BotService;
+use App\Services\DuelForfeitService;
 use App\Services\GameCompletionService;
 use App\Services\OneSignalService;
 use Carbon\Carbon;
@@ -543,6 +545,8 @@ class GameController extends Controller
             // Start turn timer for online duels
             if ($game->isDuel() && $game->turn_time_limit) {
                 $game->update(['turn_started_at' => now()]);
+                ForfeitExpiredTurn::dispatch($game->id, now()->toIso8601String())
+                    ->delay(now()->addSeconds($game->turn_time_limit));
             }
             broadcast(new GameStarted($game->id));
         }
@@ -1516,6 +1520,11 @@ class GameController extends Controller
         }
         $game->save();
 
+        if ($game->isOnline() && $game->turn_time_limit) {
+            ForfeitExpiredTurn::dispatch($game->id, $game->turn_started_at->toIso8601String())
+                ->delay(now()->addSeconds($game->turn_time_limit));
+        }
+
         // Reset ability and item decision flags for new round
         $game->players()->update(['ability_active_this_round' => false, 'item_decided' => false]);
 
@@ -1744,6 +1753,11 @@ class GameController extends Controller
             $updateData['turn_started_at'] = now();
         }
         $game->update($updateData);
+
+        if ($game->isOnline() && $game->turn_time_limit) {
+            ForfeitExpiredTurn::dispatch($game->id, $game->turn_started_at->toIso8601String())
+                ->delay(now()->addSeconds($game->turn_time_limit));
+        }
 
         // Reload hands with updated assignments
         $updatedHands = $game->playerHands()
@@ -2053,6 +2067,11 @@ class GameController extends Controller
                 $updateData['turn_started_at'] = now();
             }
             $game->update($updateData);
+
+            if ($game->isOnline() && $game->turn_time_limit) {
+                ForfeitExpiredTurn::dispatch($game->id, $game->turn_started_at->toIso8601String())
+                    ->delay(now()->addSeconds($game->turn_time_limit));
+            }
         } else {
             $game->update([
                 'duel_phase' => 'resolving',
@@ -3481,128 +3500,32 @@ class GameController extends Controller
 
     /**
      * Called by frontend when the turn timer hits 0.
-     * Auto-plays the timed-out player's turn instead of ending the game.
+     * Nudges the server to forfeit the game if the timer has expired.
      */
-    public function reportTimeout(Request $request, Game $game): JsonResponse
+    public function checkTimeout(Request $request, Game $game): JsonResponse
     {
         $userId = $request->user()->id;
 
-        // Verify user is a participant
         $isParticipant = $game->players()->where('user_id', $userId)->exists();
         if (!$isParticipant) {
             return response()->json(['error' => 'You are not part of this game.'], 403);
         }
 
-        // Must be an active duel with a turn timer
         if ($game->status !== 'active') {
-            return response()->json(['error' => 'Game is not active.'], 422);
+            return response()->json(['processed' => false, 'status' => $game->status]);
         }
-        if ($game->game_type !== 'duel') {
-            return response()->json(['error' => 'Not a duel game.'], 422);
-        }
+
         if (!$game->turn_time_limit || !$game->turn_started_at) {
-            return response()->json(['error' => 'No turn timer set.'], 422);
+            return response()->json(['processed' => false, 'status' => 'no_timer']);
         }
 
-        // Verify server-side that the turn has actually expired (with small grace buffer)
-        $remaining = $game->turnTimeRemaining();
-        if ($remaining > 5) {
-            return response()->json(['error' => 'Turn has not expired yet.'], 422);
-        }
-
-        // Determine who timed out
-        $timedOutPlayerNumbers = $this->determineTimedOutPlayers($game);
-
-        if (empty($timedOutPlayerNumbers)) {
-            return response()->json(['error' => 'Could not determine timed out player.'], 422);
-        }
-
-        $players = $game->players()->with('user')->orderBy('player_number')->get();
-
-        // Auto-play each timed-out player's turn
-        foreach ($timedOutPlayerNumbers as $timedOutNumber) {
-            $timedOutPlayer = $players->firstWhere('player_number', $timedOutNumber);
-            if (!$timedOutPlayer) continue;
-
-            $timedOutUser = $timedOutPlayer->user ?? User::find($timedOutPlayer->user_id);
-
-            $phase = $game->fresh()->duel_phase;
-
-            if ($phase === 'choosing') {
-                // Auto-select: pick a random card
-                $hands = GamePlayerHand::where('game_id', $game->id)
-                    ->where('game_player_id', $timedOutPlayer->id)
-                    ->where('round_number', $game->current_round)
-                    ->whereNull('offered_to_player_id')
-                    ->get();
-
-                if ($hands->isNotEmpty()) {
-                    $keptHand = $hands->random();
-                    $fakeRequest = Request::create('', 'POST', ['kept_hand_id' => $keptHand->id]);
-                    $fakeRequest->setUserResolver(fn () => $timedOutUser);
-                    $this->duelSelect($game->fresh(), $fakeRequest);
-                }
-            } elseif (in_array($phase, ['rolling', 'rolling_offerer', 'rolling_chooser'])) {
-                // Auto-roll for the timed-out player
-                $fakeRequest = Request::create('', 'POST', ['player_number' => $timedOutNumber]);
-                $fakeRequest->setUserResolver(fn () => $timedOutUser);
-                $this->duelRoll($game->fresh(), $fakeRequest);
-            }
-        }
-
-        // Return updated game state
-        $game->refresh();
-
-        // Reset turn timer for the new phase
-        if ($game->status === 'active' && $game->turn_time_limit) {
-            $game->update(['turn_started_at' => now()]);
-        }
+        $forfeitService = app(DuelForfeitService::class);
+        $processed = $forfeitService->handleTimeoutIfExpired($game);
 
         return response()->json([
-            'auto_played' => true,
-            'duel_phase' => $game->duel_phase,
-            'game' => $game->fresh(),
+            'processed' => $processed,
+            'status' => $processed ? 'forfeited' : 'active',
         ]);
-    }
-
-    /**
-     * Determine which players have timed out based on the current duel phase.
-     */
-    private function determineTimedOutPlayers(Game $game): array
-    {
-        $phase = $game->duel_phase;
-        $timedOut = [];
-
-        if ($phase === 'choosing') {
-            $players = $game->players()->orderBy('player_number')->get();
-            foreach ($players as $player) {
-                $hasSubmitted = GamePlayerHand::where('game_id', $game->id)
-                    ->where('game_player_id', $player->id)
-                    ->where('round_number', $game->current_round)
-                    ->whereNotNull('offered_to_player_id')
-                    ->exists();
-                if (!$hasSubmitted) {
-                    $timedOut[] = $player->player_number;
-                }
-            }
-        } elseif ($phase === 'rolling') {
-            $players = $game->players()->orderBy('player_number')->get();
-            foreach ($players as $player) {
-                $hasRolled = GameRoundResult::where('game_id', $game->id)
-                    ->where('round_number', $game->current_round)
-                    ->where('game_player_id', $player->id)
-                    ->exists();
-                if (!$hasRolled) {
-                    $timedOut[] = $player->player_number;
-                }
-            }
-        } elseif ($phase === 'rolling_offerer') {
-            $timedOut[] = $game->offerer_player_number;
-        } elseif ($phase === 'rolling_chooser') {
-            $timedOut[] = $game->offerer_player_number === 1 ? 2 : 1;
-        }
-
-        return $timedOut;
     }
 
     public function cancelGame(Request $request, Game $game): JsonResponse

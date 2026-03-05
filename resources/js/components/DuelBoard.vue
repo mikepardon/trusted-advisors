@@ -526,73 +526,40 @@ export default {
       if (this.reportingTimeout || this.showTimeoutOverlay) return;
       this.reportingTimeout = true;
 
-      // Random delay 3-10 seconds before auto-playing the timed-out player's turn
-      const delay = 3000 + Math.floor(Math.random() * 7000);
-      await new Promise(resolve => setTimeout(resolve, delay));
+      // Show overlay immediately
+      this.timeoutMessage = 'Waiting for server...';
+      this.showTimeoutOverlay = true;
 
+      // Nudge the server to forfeit if expired
       try {
-        const res = await axios.post(`/api/games/${this.gameId}/report-timeout`);
-        const data = res.data;
-
-        if (data.game_over) {
-          // Fallback: game ended (shouldn't normally happen now)
-          const myNum = this.activePlayerNumber;
-          const timedOutNum = data.timed_out_player_number;
-
-          if (timedOutNum === 0) {
-            this.timeoutMessage = 'Both players ran out of time. The game ends in a draw.';
-          } else if (timedOutNum === myNum) {
-            this.timeoutMessage = 'You ran out of time. Your opponent wins by forfeit.';
-          } else {
-            this.timeoutMessage = 'Your opponent ran out of time. You win by forfeit!';
-          }
-
-          this.showTimeoutOverlay = true;
-
-          if (data.completion) {
-            sessionStorage.setItem(`game_completion_${this.gameId}`, JSON.stringify(data.completion));
-          }
-          if (data.timed_out_player_number != null) {
-            sessionStorage.setItem(`game_timeout_${this.gameId}`, JSON.stringify(data.timed_out_player_number));
-          }
-
-          setTimeout(() => {
-            this.$router.replace(`/game/${this.gameId}/over`);
-          }, 3000);
-        } else if (data.auto_played) {
-          // Turn was auto-played — refresh game state to get new timer
-          // Don't reset reportingTimeout until refresh completes to prevent double-fire
-          this.$emit('refresh');
-          return; // reportingTimeout stays true until syncFromGameData resets timer
-        }
+        await axios.post(`/api/games/${this.gameId}/check-timeout`);
       } catch (e) {
-        console.error('Timeout report failed:', e);
+        console.error('Timeout check failed:', e);
+      }
+
+      // The server will broadcast DuelGameOver, which GameBoard.vue handles
+      // and redirects to the game-over screen. Safety poll after 5s in case
+      // the broadcast doesn't arrive (e.g. WebSocket disconnect).
+      this._timeoutSafetyTimer = setTimeout(async () => {
         try {
           const res = await axios.get(`/api/games/${this.gameId}`);
           if (res.data.game?.status === 'completed' || res.data.game?.status === 'cancelled') {
-            this.timeoutMessage = 'Time expired. The game has ended.';
-            this.showTimeoutOverlay = true;
-            setTimeout(() => {
-              this.$router.replace(`/game/${this.gameId}/over`);
-            }, 2000);
-            return;
+            this.$router.replace(`/game/${this.gameId}/over`);
           } else {
-            // Game still active — re-sync timer and refresh
+            // Game still active (opponent acted just in time) — re-sync
+            this.showTimeoutOverlay = false;
+            this.reportingTimeout = false;
             const remaining = res.data.turn_time_remaining ?? res.data.game?.turn_time_remaining;
-            if (remaining != null) {
+            if (remaining != null && remaining > 0) {
               this.turnTimeRemaining = remaining;
               this.startTurnTimer();
             }
             this.$emit('refresh');
           }
         } catch {
-          // Last resort: redirect anyway
           this.$router.replace(`/game/${this.gameId}/over`);
-          return;
         }
-      }
-
-      this.reportingTimeout = false;
+      }, 5000);
     },
 
     checkEventReveal() {
@@ -1401,6 +1368,9 @@ export default {
   beforeUnmount() {
     if (this.turnTimerInterval) {
       clearInterval(this.turnTimerInterval);
+    }
+    if (this._timeoutSafetyTimer) {
+      clearTimeout(this._timeoutSafetyTimer);
     }
   },
 };

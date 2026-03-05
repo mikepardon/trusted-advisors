@@ -117,8 +117,8 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/skip-item', [GameController::class, 'skipItem']);
     Route::post('/games/{game}/discard-item', [GameController::class, 'discardItem']);
 
-    // Timeout reporting
-    Route::post('/games/{game}/report-timeout', [GameController::class, 'reportTimeout']);
+    // Timeout check (nudges server to forfeit if timer expired)
+    Route::post('/games/{game}/check-timeout', [GameController::class, 'checkTimeout']);
 
     // Cancel game
     Route::post('/games/{game}/cancel', [GameController::class, 'cancelGame']);
