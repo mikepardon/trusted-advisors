@@ -40,14 +40,14 @@
 
       <div class="modal-actions">
         <button
-          v-if="!notification.claimed_at && hasRewards"
+          v-if="hasRewards && !claimSuccess"
           class="btn-primary claim-btn"
           :disabled="claiming"
           @click="claim"
         >
-          {{ claiming ? 'Claiming...' : 'Claim Reward' }}
+          {{ claiming ? 'Claiming...' : (notification.claimed_at ? 'Re-claim Reward' : 'Claim Reward') }}
         </button>
-        <span v-else-if="notification.claimed_at" class="claimed-badge">Claimed</span>
+        <span v-else-if="notification.claimed_at || claimSuccess" class="claimed-badge">Claimed</span>
       </div>
 
       <div v-if="claimError" class="claim-error">{{ claimError }}</div>
@@ -72,6 +72,7 @@ export default {
   data() {
     return {
       claiming: false,
+      claimSuccess: false,
       claimError: '',
     };
   },
@@ -93,6 +94,7 @@ export default {
           this.auth.state.user.level = res.data.user.level;
           this.auth.state.user.coins = res.data.user.coins;
         }
+        this.claimSuccess = true;
         this.$emit('claimed', this.notification.id);
       } catch (e) {
         this.claimError = e.response?.data?.error || 'Failed to claim reward';

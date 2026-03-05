@@ -34,6 +34,12 @@ class DiceController extends Controller
 
         $activeSlug = $user->active_dice_theme_slug;
 
+        // Default to dice theme ID 1 if user hasn't selected one
+        if (!$activeSlug) {
+            $defaultTheme = $allThemes->firstWhere('id', 1);
+            $activeSlug = $defaultTheme?->slug;
+        }
+
         return response()->json($allThemes->map(function ($theme) use ($activeSlug) {
             return [
                 'id' => $theme->id,

@@ -56,34 +56,35 @@ class NotificationController extends Controller
             return response()->json(['error' => 'Not authorized'], 403);
         }
 
-        if ($notification->claimed_at) {
-            return response()->json(['error' => 'Already claimed'], 422);
-        }
-
         $user = $request->user();
         $data = $notification->data ?? [];
+        $alreadyClaimed = (bool) $notification->claimed_at;
 
-        // Grant XP
-        $rewardXp = $data['reward_xp'] ?? 0;
-        if ($rewardXp > 0) {
-            $user->xp += $rewardXp;
-            $user->level = \App\Models\User::calculateLevel($user->xp);
+        // XP and coins are only granted once
+        if (!$alreadyClaimed) {
+            // Grant XP
+            $rewardXp = $data['reward_xp'] ?? 0;
+            if ($rewardXp > 0) {
+                $user->xp += $rewardXp;
+                $user->level = \App\Models\User::calculateLevel($user->xp);
+            }
+
+            // Grant coins
+            $rewardCoins = $data['reward_coins'] ?? 0;
+            if ($rewardCoins > 0) {
+                $user->coins += $rewardCoins;
+            }
+
+            $user->save();
+
+            // Record coin transaction
+            if ($rewardCoins > 0) {
+                $source = $notification->type === 'season_reward' ? 'season_reward' : 'admin_gift';
+                $user->recordCoinTransaction($rewardCoins, 'earn', $source, $notification->id, $notification->title);
+            }
         }
 
-        // Grant coins
-        $rewardCoins = $data['reward_coins'] ?? 0;
-        if ($rewardCoins > 0) {
-            $user->coins += $rewardCoins;
-        }
-
-        $user->save();
-
-        // Record coin transaction
-        if ($rewardCoins > 0) {
-            $source = $notification->type === 'season_reward' ? 'season_reward' : 'admin_gift';
-            $user->recordCoinTransaction($rewardCoins, 'earn', $source, $notification->id, $notification->title);
-        }
-
+        // Unlockable grants are idempotent — always attempt them
         // Grant character unlockable
         $characterId = $data['reward_character_id'] ?? null;
         if ($characterId) {
