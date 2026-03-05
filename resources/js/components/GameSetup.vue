@@ -234,7 +234,7 @@
               >
                 <span class="speed-icon">&#9889;</span>
                 <span class="speed-title">Speed Game</span>
-                <span class="speed-desc">2 min per turn</span>
+                <span class="speed-desc">45 sec per turn</span>
               </div>
               <div
                 class="speed-card"
