@@ -203,7 +203,7 @@
         <div class="htp-section">
           <h3>Online Timers</h3>
           <p>
-            Online duels have a <strong>2-minute turn timer</strong>. If you run out of time,
+            Online duels have a <strong>45-second turn timer</strong>. If you run out of time,
             you forfeit the game and your opponent wins. Timeouts count against your record.
           </p>
         </div>
