@@ -232,7 +232,7 @@ class Game extends Model
     }
 
     /**
-     * Year multiplier based on total_rounds (12 rounds = 1 year).
+     * Year multiplier based on the current round reached (12 rounds = 1 year).
      */
     public function yearMultiplier(): float
     {
@@ -244,8 +244,24 @@ class Game extends Model
             5 => 2.0,
         ];
 
-        $years = (int) ($this->total_rounds / 12);
-        return $multipliers[$years] ?? 1.0;
+        $years = max(1, (int) ceil($this->current_round / 12));
+        return $multipliers[$years] ?? 2.0;
+    }
+
+    /**
+     * Number of full years (12 rounds) completed.
+     */
+    public function yearsCompleted(): int
+    {
+        return (int) floor($this->current_round / 12);
+    }
+
+    /**
+     * Year bonus: +50 points per completed year.
+     */
+    public function yearBonus(): int
+    {
+        return $this->yearsCompleted() * 50;
     }
 
     /**
@@ -277,9 +293,10 @@ class Game extends Model
         $base = $this->baseScore();
         $multiplied = (int) floor($base * $this->yearMultiplier());
         $balance = $this->balanceBonus();
+        $yearBonus = $this->yearBonus();
         $bonus = $this->bonus_score ?? 0;
 
-        $this->final_score = $multiplied + $balance + $bonus;
+        $this->final_score = $multiplied + $balance + $yearBonus + $bonus;
         return $this->final_score;
     }
 }

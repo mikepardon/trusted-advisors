@@ -40,9 +40,9 @@ export default {
 <style scoped>
 .dice-overlay {
   position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset: 10px;
+  width: calc(100% - 20px);
+  height: calc(100% - 20px);
   pointer-events: none;
   z-index: 850;
 }

@@ -102,8 +102,14 @@ export default {
         if (cv.bg_color) style['--ks-bg-color'] = cv.bg_color;
         if (cv.name_accent) style['--ks-name-accent'] = cv.name_accent;
         if (cv.total_accent) style['--ks-total-accent'] = cv.total_accent;
-        if (cv.bar_safe) style['--ks-bar-safe'] = cv.bar_safe;
-        if (cv.bar_caution) style['--ks-bar-caution'] = cv.bar_caution;
+        if (cv.bar_safe) {
+          style['--ks-bar-safe'] = cv.bar_safe;
+          style['--ks-bar-safe-stroke'] = this.extractSolidColor(cv.bar_safe, '#27ae60');
+        }
+        if (cv.bar_caution) {
+          style['--ks-bar-caution'] = cv.bar_caution;
+          style['--ks-bar-caution-stroke'] = this.extractSolidColor(cv.bar_caution, '#d4a843');
+        }
         if (cv.stat_color) style['--ks-stat-color'] = cv.stat_color;
         if (cv.text_color) style['--ks-text-color'] = cv.text_color;
       }
@@ -199,6 +205,17 @@ export default {
       const circumference = 2 * Math.PI * 20; // ~125.66
       const pct = Math.min(value, 20) / 20;
       return circumference * (1 - pct);
+    },
+    extractSolidColor(value, fallback) {
+      if (!value || typeof value !== 'string') return fallback;
+      // If it's not a gradient, return as-is (it's already a solid color)
+      if (!value.includes('gradient')) return value;
+      // Extract the first color from a gradient string
+      const hexMatch = value.match(/#[0-9a-fA-F]{3,8}/);
+      if (hexMatch) return hexMatch[0];
+      const rgbMatch = value.match(/rgba?\([^)]+\)/);
+      if (rgbMatch) return rgbMatch[0];
+      return fallback;
     },
   },
 };
@@ -378,8 +395,8 @@ export default {
 
 .radial-fill.bar-critical { stroke: #e74c3c; }
 .radial-fill.bar-danger-low { stroke: #e67e22; }
-.radial-fill.bar-caution-low { stroke: var(--ks-bar-caution, #d4a843); }
-.radial-fill.bar-safe { stroke: var(--ks-bar-safe, #27ae60); }
+.radial-fill.bar-caution-low { stroke: var(--ks-bar-caution-stroke, var(--ks-bar-caution, #d4a843)); }
+.radial-fill.bar-safe { stroke: var(--ks-bar-safe-stroke, var(--ks-bar-safe, #27ae60)); }
 
 .radial-fill.bar-flash-up { stroke: #4caf50 !important; }
 .radial-fill.bar-flash-down { stroke: #e74c3c !important; }

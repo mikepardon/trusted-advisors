@@ -149,6 +149,10 @@
             <span>Balance Bonus</span>
             <span>+{{ scoreBreakdown.balance_bonus }}</span>
           </div>
+          <div v-if="scoreBreakdown.year_bonus" class="breakdown-row">
+            <span>Year Bonus</span>
+            <span>+{{ scoreBreakdown.year_bonus }}</span>
+          </div>
           <div v-if="scoreBreakdown.bonus_score" class="breakdown-row">
             <span>Bonus Score</span>
             <span>+{{ scoreBreakdown.bonus_score }}</span>
@@ -404,12 +408,14 @@ export default {
       const stats = [g.wealth, g.influence, g.security, g.religion, g.food, g.happiness];
       const spread = Math.max(...stats) - Math.min(...stats);
       const balanceBonus = Math.max(0, 30 - spread * 3);
-      const years = Math.floor((g.total_rounds || 24) / 12);
+      const years = Math.max(1, Math.ceil((g.current_round || 1) / 12));
       const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
-      const yearMult = multipliers[years] || 1.0;
+      const yearMult = multipliers[years] || 2.0;
+      const yearsCompleted = Math.floor((g.current_round || 0) / 12);
+      const yearBonus = yearsCompleted * 50;
       const bonusScore = g.bonus_score || 0;
-      const finalScore = g.final_score ?? (Math.floor(base * yearMult) + balanceBonus + bonusScore);
-      return { base_score: base, year_multiplier: yearMult, balance_bonus: balanceBonus, bonus_score: bonusScore, final_score: finalScore };
+      const finalScore = g.final_score ?? (Math.floor(base * yearMult) + balanceBonus + yearBonus + bonusScore);
+      return { base_score: base, year_multiplier: yearMult, balance_bonus: balanceBonus, year_bonus: yearBonus, bonus_score: bonusScore, final_score: finalScore };
     },
     finalScore() {
       return this.scoreBreakdown?.final_score ?? this.totalScore;
