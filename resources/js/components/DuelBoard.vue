@@ -444,7 +444,7 @@ export default {
       };
     },
     isCurrentTurnBot() {
-      if (!this.hasBotPlayer) return false;
+      if (this.isOnline || !this.hasBotPlayer) return false;
       const botNum = this.botPlayer.player_number;
       const phase = this.duelPhase;
       if (phase === 'choosing') return true; // Bot always needs to select in choosing phase
@@ -1208,7 +1208,7 @@ export default {
     },
 
     async triggerBotRollImmediate() {
-      if (!this.hasBotPlayer || this._opponentTurnPending) return;
+      if (this.isOnline || !this.hasBotPlayer || this._opponentTurnPending) return;
       this._opponentTurnPending = true;
       try {
         const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
@@ -1255,7 +1255,7 @@ export default {
     },
 
     async triggerBotTurn() {
-      if (!this.hasBotPlayer || this._opponentTurnPending) return;
+      if (this.isOnline || !this.hasBotPlayer || this._opponentTurnPending) return;
       this._opponentTurnPending = true;
 
       const delay = this.isOnline

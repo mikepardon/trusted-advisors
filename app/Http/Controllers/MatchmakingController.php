@@ -158,7 +158,7 @@ class MatchmakingController extends Controller
         }
 
         DB::transaction(function () use ($entry, $bot) {
-            $turnTimeLimit = $entry->speed_mode === 'daily' ? 86400 : 120;
+            $turnTimeLimit = $entry->speed_mode === 'daily' ? 86400 : 45;
             $game = Game::create([
                 'status' => 'setup',
                 'game_mode' => 'online',
@@ -192,7 +192,7 @@ class MatchmakingController extends Controller
     private function createMatch(MatchmakingEntry $entry1, MatchmakingEntry $entry2): Game
     {
         return DB::transaction(function () use ($entry1, $entry2) {
-            $turnTimeLimit = $entry1->speed_mode === 'daily' ? 86400 : 120;
+            $turnTimeLimit = $entry1->speed_mode === 'daily' ? 86400 : 45;
             $game = Game::create([
                 'status' => 'setup',
                 'game_mode' => 'online',
