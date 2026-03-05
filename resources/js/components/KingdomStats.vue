@@ -1,5 +1,10 @@
 <template>
-  <div class="kingdom-stats">
+  <div
+    class="kingdom-stats"
+    :data-kingdom-style="kingdomStyleSlug"
+    :data-ks-anim="kingdomAnim"
+    :style="kingdomRootStyle"
+  >
     <h3 class="stats-title">Kingdom Status</h3>
     <div class="stats-grid">
       <div v-for="stat in stats" :key="stat.key" class="stat-item">
@@ -53,10 +58,14 @@
 </template>
 
 <script>
+import '../styles/kingdom-styles.css';
+
 export default {
   name: 'KingdomStats',
   props: {
     game: { type: Object, required: true },
+    kingdomStyleSlug: { type: String, default: 'classic' },
+    kingdomStyleData: { type: Object, default: null },
   },
   data() {
     return {
@@ -77,6 +86,35 @@ export default {
     };
   },
   computed: {
+    kingdomAnim() {
+      return this.kingdomStyleData?.css_vars?.border_anim || 'none';
+    },
+    kingdomRootStyle() {
+      const style = {};
+      const data = this.kingdomStyleData;
+      // Apply css_vars from DB as inline custom properties (overrides static CSS)
+      if (data?.css_vars) {
+        const cv = data.css_vars;
+        if (cv.border_color) style['--ks-border-color'] = cv.border_color;
+        if (cv.border_glow) style['--ks-border-glow'] = cv.border_glow;
+        if (cv.border_color_rgb) style['--ks-border-color-rgb'] = cv.border_color_rgb;
+        if (cv.bg_tint) style['--ks-bg-tint'] = cv.bg_tint;
+        if (cv.bg_color) style['--ks-bg-color'] = cv.bg_color;
+        if (cv.name_accent) style['--ks-name-accent'] = cv.name_accent;
+        if (cv.total_accent) style['--ks-total-accent'] = cv.total_accent;
+        if (cv.bar_safe) style['--ks-bar-safe'] = cv.bar_safe;
+        if (cv.bar_caution) style['--ks-bar-caution'] = cv.bar_caution;
+        if (cv.stat_color) style['--ks-stat-color'] = cv.stat_color;
+        if (cv.text_color) style['--ks-text-color'] = cv.text_color;
+      }
+      // Apply background image
+      if (data?.background_image_url) {
+        style.backgroundImage = `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url(${data.background_image_url})`;
+        style.backgroundSize = 'cover';
+        style.backgroundPosition = 'center';
+      }
+      return style;
+    },
     showLiveScore() {
       return this.game.game_type !== 'duel' && this.game.status !== 'completed' && this.game.status !== 'cancelled';
     },
@@ -168,16 +206,18 @@ export default {
 
 <style scoped>
 .kingdom-stats {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--ks-border-color, var(--border-gold));
   border-radius: 8px;
+  box-shadow: var(--ks-border-glow, none);
+  background-color: var(--ks-bg-color, var(--ks-bg-tint, var(--bg-secondary)));
   padding: 15px;
   margin-bottom: 20px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease, background-color 0.3s ease;
 }
 
 .stats-title {
   font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
+  color: var(--ks-name-accent, var(--accent-gold));
   text-align: center;
   margin-bottom: 12px;
   font-size: 1.1rem;
@@ -207,7 +247,7 @@ export default {
 
 .stat-name {
   flex: 1;
-  color: var(--text-secondary);
+  color: var(--ks-text-color, var(--text-secondary));
   font-family: 'Cinzel', serif;
   font-size: 0.75rem;
 }
@@ -216,7 +256,7 @@ export default {
   font-weight: 700;
 }
 
-.val-safe { color: var(--text-bright); }
+.val-safe { color: var(--ks-stat-color, var(--text-bright)); }
 .val-danger { color: #e67e22; }
 .val-critical { color: #e74c3c; font-size: 1.1em; }
 
@@ -278,8 +318,8 @@ export default {
 
 .bar-critical { background: #e74c3c; }
 .bar-danger-low { background: #e67e22; }
-.bar-caution-low { background: #d4a843; }
-.bar-safe { background: #27ae60; }
+.bar-caution-low { background: var(--ks-bar-caution, #d4a843); }
+.bar-safe { background: var(--ks-bar-safe, #27ae60); }
 
 .bar-flash-up {
   background: #4caf50 !important;
@@ -338,8 +378,8 @@ export default {
 
 .radial-fill.bar-critical { stroke: #e74c3c; }
 .radial-fill.bar-danger-low { stroke: #e67e22; }
-.radial-fill.bar-caution-low { stroke: #d4a843; }
-.radial-fill.bar-safe { stroke: #27ae60; }
+.radial-fill.bar-caution-low { stroke: var(--ks-bar-caution, #d4a843); }
+.radial-fill.bar-safe { stroke: var(--ks-bar-safe, #27ae60); }
 
 .radial-fill.bar-flash-up { stroke: #4caf50 !important; }
 .radial-fill.bar-flash-down { stroke: #e74c3c !important; }

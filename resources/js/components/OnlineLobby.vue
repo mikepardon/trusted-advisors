@@ -138,6 +138,7 @@
 <script>
 import axios from 'axios';
 import { useAuth } from '../stores/auth';
+import { useToast } from '../stores/toast';
 import { playSound } from '../sounds';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
@@ -155,7 +156,8 @@ export default {
   emits: ['start-game', 'lobby-updated'],
   setup() {
     const auth = useAuth();
-    return { auth, playSound };
+    const toast = useToast();
+    return { auth, playSound, toast };
   },
   data() {
     return {
@@ -246,7 +248,7 @@ export default {
         await axios.post(`/api/games/${this.gameId}/invite`, { user_id: userId });
         await this.fetchLobby();
       } catch (e) {
-        alert(e.response?.data?.error || 'Failed to invite');
+        this.toast.error(e.response?.data?.error || 'Failed to invite');
       }
       this.inviting = false;
     },
@@ -280,7 +282,7 @@ export default {
         if (msg.toLowerCase().includes('already taken') || msg.toLowerCase().includes('already selected')) {
           await this.fetchLobby();
         } else {
-          alert(msg);
+          this.toast.error(msg);
         }
       }
       this.selectingCharacter = false;

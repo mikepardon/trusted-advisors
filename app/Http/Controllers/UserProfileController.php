@@ -35,6 +35,20 @@ class UserProfileController extends Controller
             ->get()
             ->map(fn ($ua) => $ua->achievement);
 
+        // Resolve active dice theme name
+        $diceThemeName = null;
+        if ($user->active_dice_theme_slug) {
+            $diceTheme = \App\Models\DiceTheme::where('slug', $user->active_dice_theme_slug)->first();
+            $diceThemeName = $diceTheme?->name;
+        }
+
+        // Resolve active kingdom style name
+        $kingdomStyleName = null;
+        if ($user->active_kingdom_style_slug) {
+            $kingdomStyle = \App\Models\KingdomStyle::where('slug', $user->active_kingdom_style_slug)->first();
+            $kingdomStyleName = $kingdomStyle?->name;
+        }
+
         $profile = [
             'id' => $user->id,
             'name' => $user->name,
@@ -48,6 +62,8 @@ class UserProfileController extends Controller
             'total_losses' => $totalLosses,
             'duel_wins' => $duelWins,
             'recent_achievements' => $recentAchievements,
+            'active_dice_theme' => $diceThemeName,
+            'active_kingdom_style' => $kingdomStyleName,
         ];
 
         // Check if friends

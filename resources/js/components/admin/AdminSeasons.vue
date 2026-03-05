@@ -72,6 +72,7 @@
                   <th>XP</th>
                   <th>Coins</th>
                   <th>Character</th>
+                  <th>Dice</th>
                   <th>Title</th>
                   <th></th>
                 </tr>
@@ -82,6 +83,7 @@
                   <td>{{ r.reward_xp }}</td>
                   <td>{{ r.reward_coins }}</td>
                   <td>{{ r.reward_character?.name || '-' }}</td>
+                  <td>{{ r.reward_dice_theme?.name || '-' }}</td>
                   <td>{{ r.reward_title || '-' }}</td>
                   <td>
                     <button class="btn-sm" @click="editReward(r)">Edit</button>
@@ -131,6 +133,13 @@
               </select>
             </div>
             <div class="form-group">
+              <label>Dice Theme</label>
+              <select v-model="rewardForm.reward_dice_theme_id">
+                <option :value="null">None</option>
+                <option v-for="d in allDiceThemes" :key="d.id" :value="d.id">{{ d.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label>Title</label>
               <input v-model="rewardForm.reward_title" type="text" placeholder="e.g. Season Champion" />
             </div>
@@ -149,9 +158,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminSeasons',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       seasons: [],
@@ -164,9 +175,10 @@ export default {
       rewardsSeason: null,
       rewards: [],
       allCharacters: [],
+      allDiceThemes: [],
       editingReward: null,
       rewardFormError: '',
-      rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' },
+      rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_title: '' },
       endingSeasonId: null,
     };
   },
@@ -224,10 +236,10 @@ export default {
       this.endingSeasonId = s.id;
       try {
         const res = await axios.post(`/api/admin/seasons/${s.id}/end`);
-        alert(`Season ended! ${res.data.rewards_distributed} rewards distributed.`);
+        this.toast.success(`Season ended! ${res.data.rewards_distributed} rewards distributed.`);
         this.load();
       } catch (e) {
-        alert(e.response?.data?.error || 'Failed to end season');
+        this.toast.error(e.response?.data?.error || 'Failed to end season');
       }
       this.endingSeasonId = null;
     },
@@ -240,17 +252,19 @@ export default {
       this.rewardsSeason = s;
       this.resetRewardForm();
       this.showRewardsModal = true;
-      const [rewardsRes, charsRes] = await Promise.all([
+      const [rewardsRes, charsRes, diceRes] = await Promise.all([
         axios.get(`/api/admin/seasons/${s.id}/rewards`),
         axios.get('/api/characters'),
+        axios.get('/api/admin/dice-themes'),
       ]);
       this.rewards = rewardsRes.data;
       this.allCharacters = charsRes.data;
+      this.allDiceThemes = diceRes.data;
     },
     resetRewardForm() {
       this.editingReward = null;
       this.rewardFormError = '';
-      this.rewardForm = { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_title: '' };
+      this.rewardForm = { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_title: '' };
     },
     editReward(r) {
       this.editingReward = r.id;
@@ -261,6 +275,7 @@ export default {
         reward_xp: r.reward_xp,
         reward_coins: r.reward_coins,
         reward_character_id: r.reward_character_id,
+        reward_dice_theme_id: r.reward_dice_theme_id || null,
         reward_title: r.reward_title || '',
       };
     },

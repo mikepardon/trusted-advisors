@@ -14,7 +14,18 @@
     <!-- Home Top Bar (mobile header replacement) -->
     <div v-if="step === 'mode'" class="home-top-bar">
       <div class="home-top-left" @click="$router.push('/profile')">
-        <div class="home-avatar">{{ auth.state.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+        <div class="home-avatar-ring-wrap">
+          <svg class="home-xp-ring" viewBox="0 0 44 44">
+            <circle class="home-xp-ring-bg" cx="22" cy="22" r="20" />
+            <circle
+              class="home-xp-ring-progress"
+              cx="22" cy="22" r="20"
+              :stroke-dasharray="xpRingCircumference"
+              :stroke-dashoffset="xpRingOffset"
+            />
+          </svg>
+          <div class="home-avatar">{{ auth.state.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+        </div>
         <div class="home-user-info">
           <span class="home-username">{{ auth.state.user.name }}</span>
           <span class="home-level">Lv.{{ homeStats.level || 1 }}</span>
@@ -23,7 +34,7 @@
       <div class="home-top-right">
         <div class="home-elo" @click="$router.push('/leaderboard')">
           <span class="elo-trophy">&#127942;</span>
-          <span class="elo-value">{{ homeStats.elo || 1000 }}</span>
+          <span class="elo-value">{{ auth.state.user?.elo_rating || 1000 }}</span>
         </div>
         <div class="home-coins" @click="$router.push('/shop')">
           <span>&#129689;</span>
@@ -75,6 +86,7 @@
         </div>
 
         <div class="home-grid-side">
+          <button v-if="auth.state.user?.payments_enabled && !auth.state.user?.is_premium" class="side-icon-btn side-premium-btn" @click="$router.push('/premium')" title="Go Premium">&#9733;</button>
           <button class="side-icon-btn" @click="showMobileMenu = true" title="Menu">&#9776;</button>
           <button class="side-icon-btn" @click="openNotifications()" title="Alerts">
             &#128276;
@@ -107,6 +119,13 @@
           @click="playSound('clickCard'); gameMode = 'pass_and_play'; selectMode()"
         >
           <h3 class="mode-title">Pass and Play</h3>
+        </div>
+        <div
+          v-if="auth.state.user?.tournaments_enabled"
+          class="mode-card"
+          @click="playSound('clickCard'); $router.push('/tournaments')"
+        >
+          <h3 class="mode-title">&#127942; Tournaments</h3>
         </div>
       </div>
 
@@ -309,12 +328,80 @@
           </div>
         </div>
 
+        <!-- Custom Game (premium only) -->
+        <div v-if="auth.state.user?.is_premium" class="custom-game-section">
+          <label class="custom-toggle">
+            <input type="checkbox" v-model="isCustomGame" @change="onCustomToggle" />
+            <span class="custom-toggle-label">Custom Game</span>
+          </label>
+
+          <p v-if="isCustomGame" class="custom-warning">Custom games do not count towards leaderboards, achievements, or XP.</p>
+
+          <div v-if="isCustomGame" class="custom-options">
+            <div class="custom-option">
+              <label>Starting Stats: {{ customStartingStats }}</label>
+              <input type="range" v-model.number="customStartingStats" min="1" max="20" class="custom-slider" />
+            </div>
+
+            <div class="custom-option">
+              <label class="hr-label">House Rules</label>
+              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.no_negative_effects" /> No Negative Effects</label>
+              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.double_positive_effects" /> Double Positive Effects</label>
+              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.random_starting_stats" /> Random Starting Stats</label>
+              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.hardcore_mode" /> Hardcore (lose at stat &le; 3)</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Private lobby (premium only, online) -->
+        <div v-if="gameMode === 'online' && auth.state.user?.is_premium" class="private-section">
+          <label class="custom-toggle">
+            <input type="checkbox" v-model="isPrivateGame" />
+            <span class="custom-toggle-label">Private Game</span>
+          </label>
+          <input v-if="isPrivateGame" v-model="lobbyPassword" type="text" class="lobby-password-input" placeholder="Set password..." />
+        </div>
+
+        <!-- Lobby browser (online, before creating) -->
+        <div v-if="gameMode === 'online' && !showLobbyBrowser" class="lobby-browse-link">
+          <button class="browse-btn" @click="fetchLobbies">Browse Open Lobbies</button>
+        </div>
+
+        <div v-if="showLobbyBrowser" class="lobby-browser">
+          <h3 class="lobby-title">Open Lobbies</h3>
+          <div v-if="lobbiesLoading" class="lobby-loading">Loading...</div>
+          <div v-else-if="lobbies.length === 0" class="lobby-empty">No open lobbies.</div>
+          <div v-else class="lobby-list">
+            <div v-for="lobby in lobbies" :key="lobby.id" class="lobby-row">
+              <div class="lobby-info">
+                <span class="lobby-host">{{ lobby.host_name }}</span>
+                <span class="lobby-meta">{{ lobby.game_type }} &bull; {{ lobby.current_players }}/{{ lobby.num_players }}</span>
+              </div>
+              <span v-if="lobby.is_private" class="lobby-lock">&#128274;</span>
+              <button class="lobby-join-btn" @click="joinLobby(lobby)">Join</button>
+            </div>
+          </div>
+          <button class="browse-close" @click="showLobbyBrowser = false">Close</button>
+        </div>
+
+        <!-- Lobby password modal -->
+        <div v-if="lobbyPasswordModal" class="modal-overlay" @click.self="lobbyPasswordModal = null">
+          <div class="modal-box">
+            <h3>Enter Lobby Password</h3>
+            <input v-model="lobbyJoinPassword" type="text" class="lobby-password-input" placeholder="Password..." @keyup.enter="doJoinLobby" />
+            <div class="modal-actions">
+              <button class="modal-cancel" @click="lobbyPasswordModal = null">Cancel</button>
+              <button class="modal-confirm" @click="doJoinLobby">Join</button>
+            </div>
+          </div>
+        </div>
+
         <div class="step-nav">
           <button class="back-btn" @click="playSound('clickNav'); goBack()">&#8592; Back</button>
           <button
             class="btn-primary start-btn"
             @click="playSound('clickButton'); gatherAdvisors()"
-            :disabled="loading || (gameMode === 'online' && gameType !== 'duel' && selectedFriendIds.length === 0)"
+            :disabled="loading || (gameMode === 'online' && gameType !== 'duel' && selectedFriendIds.length === 0) || (isPrivateGame && !lobbyPassword.trim())"
           >
             {{ loading ? 'Creating...' : (gameMode === 'online' && gameType === 'duel' ? 'Find Opponent' : 'Gather Advisors') }}
           </button>
@@ -430,6 +517,7 @@
 <script>
 import axios from 'axios';
 import { useAuth } from '../stores/auth';
+import { useToast } from '../stores/toast';
 import { playSound } from '../sounds';
 import AnnouncementsBanner from './AnnouncementsBanner.vue';
 import DailyChallengeBanner from './DailyChallengeBanner.vue';
@@ -453,7 +541,8 @@ export default {
   },
   setup() {
     const auth = useAuth();
-    return { auth, playSound };
+    const toast = useToast();
+    return { auth, toast, playSound };
   },
   data() {
     return {
@@ -486,6 +575,24 @@ export default {
       notifCount: 0,
       showMobileMenu: false,
       speedMode: 'speed',
+      // Custom game
+      isCustomGame: false,
+      customStartingStats: 8,
+      houseRules: {
+        no_negative_effects: false,
+        double_positive_effects: false,
+        random_starting_stats: false,
+        hardcore_mode: false,
+      },
+      // Private lobby
+      isPrivateGame: false,
+      lobbyPassword: '',
+      // Lobby browser
+      showLobbyBrowser: false,
+      lobbies: [],
+      lobbiesLoading: false,
+      lobbyPasswordModal: null,
+      lobbyJoinPassword: '',
       // Game length options
       gameLengthOptions: [
         { label: '1 Year', rounds: 12 },
@@ -499,6 +606,23 @@ export default {
   computed: {
     swiperModules() {
       return [EffectCards];
+    },
+    xpProgress() {
+      const user = this.auth.state.user;
+      if (!user) return 0;
+      const level = user.level ?? 1;
+      const xp = user.xp ?? 0;
+      const currentLevelXp = 100 * (level - 1) * level / 2;
+      const nextLevelXp = 100 * level * (level + 1) / 2;
+      const range = nextLevelXp - currentLevelXp;
+      if (range <= 0) return 1;
+      return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
+    },
+    xpRingCircumference() {
+      return 2 * Math.PI * 20;
+    },
+    xpRingOffset() {
+      return this.xpRingCircumference * (1 - this.xpProgress);
     },
     availableCharacters() {
       if (this.gameType === 'duel') {
@@ -597,7 +721,7 @@ export default {
         const res = await axios.post(`/api/game-invites/${invite.id}/accept`);
         this.$router.push(`/game/${res.data.game_id}`);
       } catch (e) {
-        alert(e.response?.data?.error || 'Failed to accept invite');
+        this.toast.error(e.response?.data?.error || 'Failed to accept invite');
       }
     },
     async declineInvite(invite) {
@@ -605,7 +729,7 @@ export default {
         await axios.post(`/api/game-invites/${invite.id}/decline`);
         this.pendingInvites = this.pendingInvites.filter(i => i.id !== invite.id);
       } catch (e) {
-        alert(e.response?.data?.error || 'Failed to decline invite');
+        this.toast.error(e.response?.data?.error || 'Failed to decline invite');
       }
     },
     selectMode() {
@@ -668,6 +792,51 @@ export default {
     onMatchFound(gameId) {
       this.$router.push(`/game/${gameId}`);
     },
+    onCustomToggle() {
+      // Reset when toggling off
+      if (!this.isCustomGame) {
+        this.customStartingStats = 8;
+        this.houseRules = { no_negative_effects: false, double_positive_effects: false, random_starting_stats: false, hardcore_mode: false };
+      }
+    },
+    async fetchLobbies() {
+      this.showLobbyBrowser = true;
+      this.lobbiesLoading = true;
+      try {
+        const res = await axios.get('/api/games/lobbies');
+        this.lobbies = res.data;
+      } catch {
+        this.lobbies = [];
+      }
+      this.lobbiesLoading = false;
+    },
+    joinLobby(lobby) {
+      if (lobby.is_private) {
+        this.lobbyPasswordModal = lobby;
+        this.lobbyJoinPassword = '';
+      } else {
+        this.doJoinLobbyDirect(lobby.id);
+      }
+    },
+    async doJoinLobby() {
+      const id = this.lobbyPasswordModal?.id;
+      if (!id) return;
+      try {
+        const res = await axios.post(`/api/games/${id}/join`, { password: this.lobbyJoinPassword });
+        this.lobbyPasswordModal = null;
+        this.$router.push(`/game/${res.data.game_id}`);
+      } catch (e) {
+        this.toast.error(e.response?.data?.error || 'Failed to join lobby.');
+      }
+    },
+    async doJoinLobbyDirect(id) {
+      try {
+        const res = await axios.post(`/api/games/${id}/join`);
+        this.$router.push(`/game/${res.data.game_id}`);
+      } catch (e) {
+        this.toast.error(e.response?.data?.error || 'Failed to join lobby.');
+      }
+    },
     async gatherAdvisors() {
       this.loading = true;
       try {
@@ -680,12 +849,22 @@ export default {
         if (this.gameMode === 'online') {
           // Online cooperative: numPlayers = selected friends + yourself
           this.numPlayers = this.selectedFriendIds.length + 1;
-          const gameRes = await axios.post('/api/games', {
+          const onlinePayload = {
             game_mode: this.gameMode,
             game_type: this.gameType,
             num_players: this.numPlayers,
             total_rounds: this.totalRounds,
-          });
+          };
+          if (this.isCustomGame) {
+            onlinePayload.is_custom = true;
+            onlinePayload.starting_stats = this.customStartingStats;
+            onlinePayload.house_rules = { ...this.houseRules };
+          }
+          if (this.isPrivateGame) {
+            onlinePayload.is_private = true;
+            onlinePayload.lobby_password = this.lobbyPassword;
+          }
+          const gameRes = await axios.post('/api/games', onlinePayload);
           this.gameId = gameRes.data.id;
           // Auto-invite selected friends
           for (const friendUserId of this.selectedFriendIds) {
@@ -707,6 +886,11 @@ export default {
         if (this.gameMode === 'single' && this.gameType === 'duel') {
           gamePayload.bot_difficulty = this.botDifficulty;
         }
+        if (this.isCustomGame) {
+          gamePayload.is_custom = true;
+          gamePayload.starting_stats = this.customStartingStats;
+          gamePayload.house_rules = { ...this.houseRules };
+        }
         const [gameRes, charsRes] = await Promise.all([
           axios.post('/api/games', gamePayload),
           axios.get('/api/characters'),
@@ -715,7 +899,7 @@ export default {
         this.characters = charsRes.data;
         this.step = 'story';
       } catch (e) {
-        alert('Failed to create game: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Failed to create game: ' + (e.response?.data?.message || e.message));
       }
       this.loading = false;
     },
@@ -804,7 +988,7 @@ export default {
         await axios.post(`/api/games/${this.gameId}/start`, startPayload);
         this.$router.push(`/game/${this.gameId}`);
       } catch (e) {
-        alert('Failed to start: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed to start: ' + (e.response?.data?.error || e.message));
       }
       this.starting = false;
     },
@@ -1250,18 +1434,21 @@ export default {
 
 .step-nav {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
   gap: 14px;
   margin-top: 25px;
+}
+
+.step-nav > button {
+  flex: 1;
 }
 
 .back-btn {
   background: none;
   border: 1px solid rgba(138, 106, 46, 0.4);
   color: var(--text-secondary);
-  font-size: 0.9rem;
-  padding: 10px 20px;
+  font-size: 1rem;
+  padding: 12px 20px;
   cursor: pointer;
   letter-spacing: 0;
 }
@@ -1281,7 +1468,7 @@ export default {
 
 .start-btn {
   font-size: 1.2rem;
-  padding: 12px 40px;
+  padding: 12px 20px;
 }
 
 /* Carousel panel */
@@ -1560,14 +1747,24 @@ export default {
   cursor: pointer;
 }
 
+.home-avatar-ring-wrap {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
 .home-avatar {
-  width: 42px;
-  height: 42px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
   background: linear-gradient(135deg, var(--accent-gold), #8a6a14);
   color: var(--wood-dark);
   font-family: 'Cinzel', serif;
-  font-size: 1.2rem;
+  font-size: 1.1rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -1575,6 +1772,30 @@ export default {
   border: 2px solid var(--border-gold);
   box-shadow: 0 2px 8px rgba(212, 168, 67, 0.3);
   flex-shrink: 0;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.home-xp-ring {
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
+}
+
+.home-xp-ring-bg {
+  fill: none;
+  stroke: rgba(138, 106, 46, 0.25);
+  stroke-width: 2.5;
+}
+
+.home-xp-ring-progress {
+  fill: none;
+  stroke: var(--accent-gold);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.6s ease;
 }
 
 .home-user-info {
@@ -1698,6 +1919,18 @@ export default {
   background: rgba(42, 31, 20, 0.95);
   transform: none;
   box-shadow: 0 2px 12px rgba(212, 168, 67, 0.2);
+}
+
+.side-premium-btn {
+  background: linear-gradient(135deg, rgba(212, 168, 67, 0.3), rgba(180, 120, 30, 0.2));
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+  box-shadow: 0 0 10px rgba(212, 168, 67, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.side-premium-btn:hover {
+  background: linear-gradient(135deg, rgba(212, 168, 67, 0.45), rgba(180, 120, 30, 0.3));
+  box-shadow: 0 0 16px rgba(212, 168, 67, 0.4), 0 2px 12px rgba(212, 168, 67, 0.2);
 }
 
 .side-badge {
@@ -1966,14 +2199,306 @@ export default {
     font-size: 0.8rem;
   }
 
+  .custom-options {
+    padding: 10px;
+  }
+
+  .home-avatar-ring-wrap {
+    width: 40px;
+    height: 40px;
+  }
+
   .home-avatar {
-    width: 36px;
-    height: 36px;
-    font-size: 1rem;
+    width: 34px;
+    height: 34px;
+    font-size: 0.95rem;
+  }
+
+  .home-xp-ring {
+    width: 40px;
+    height: 40px;
   }
 
   .home-username {
     font-size: 0.85rem;
   }
+}
+
+/* Custom Game Section */
+.custom-game-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(138, 106, 46, 0.2);
+}
+
+.custom-warning {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: rgba(200, 160, 40, 0.12);
+  border: 1px solid rgba(200, 160, 40, 0.3);
+  border-radius: 6px;
+  color: #c0a030;
+  font-size: 0.8rem;
+  text-align: center;
+}
+
+.custom-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+
+.custom-toggle input[type="checkbox"] {
+  accent-color: var(--accent-gold);
+  width: 18px;
+  height: 18px;
+}
+
+.custom-toggle-label {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.custom-options {
+  padding: 12px 16px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(138, 106, 46, 0.15);
+  border-radius: 8px;
+}
+
+.custom-option {
+  margin-bottom: 14px;
+}
+
+.custom-option label {
+  display: block;
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-size: 0.8rem;
+  margin-bottom: 6px;
+}
+
+.custom-slider {
+  width: 100%;
+  accent-color: var(--accent-gold);
+}
+
+.hr-label {
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+}
+
+.hr-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  margin-bottom: 6px;
+  cursor: pointer;
+}
+
+.hr-toggle input[type="checkbox"] {
+  accent-color: var(--accent-gold);
+}
+
+/* Private Game */
+.private-section {
+  margin-top: 14px;
+}
+
+.lobby-password-input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-family: 'Crimson Text', Georgia, serif;
+  font-size: 1rem;
+  padding: 8px 12px;
+  outline: none;
+  margin-top: 6px;
+  box-sizing: border-box;
+}
+
+.lobby-password-input:focus {
+  border-color: var(--accent-gold);
+}
+
+/* Lobby Browser */
+.lobby-browse-link {
+  text-align: center;
+  margin-top: 14px;
+}
+
+.browse-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  padding: 6px 18px;
+  border-radius: 6px;
+  border: 1px solid rgba(67, 160, 212, 0.4);
+  background: rgba(67, 160, 212, 0.1);
+  color: #60b8e0;
+  cursor: pointer;
+}
+
+.browse-btn:hover {
+  background: rgba(67, 160, 212, 0.25);
+}
+
+.lobby-browser {
+  margin-top: 14px;
+  padding: 14px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 8px;
+}
+
+.lobby-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.lobby-loading, .lobby-empty {
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 12px 0;
+  font-size: 0.85rem;
+}
+
+.lobby-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.lobby-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 6px;
+}
+
+.lobby-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lobby-host {
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-size: 0.85rem;
+}
+
+.lobby-meta {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.lobby-lock {
+  font-size: 0.8rem;
+}
+
+.lobby-join-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 0.7rem;
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid var(--accent-gold);
+  background: rgba(212, 168, 67, 0.15);
+  color: var(--accent-gold);
+  cursor: pointer;
+}
+
+.lobby-join-btn:hover {
+  background: rgba(212, 168, 67, 0.3);
+}
+
+.browse-close {
+  display: block;
+  margin: 10px auto 0;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  padding: 4px 14px;
+  border-radius: 4px;
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+/* Lobby password modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-box {
+  background: var(--bg-secondary);
+  border: 1px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 20px 24px;
+  max-width: 320px;
+  width: 90%;
+  text-align: center;
+}
+
+.modal-box h3 {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  margin: 0 0 10px;
+  font-size: 1.1rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+.modal-cancel,
+.modal-confirm {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  padding: 6px 18px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.modal-cancel {
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.modal-confirm {
+  border: 1px solid var(--accent-gold);
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+}
+
+.modal-confirm:hover {
+  background: rgba(212, 168, 67, 0.35);
 }
 </style>

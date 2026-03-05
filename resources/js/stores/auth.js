@@ -90,11 +90,12 @@ async function logout() {
     state.user = null;
 }
 
-function updateUserStats({ xp, level, coins }) {
+function updateUserStats({ xp, level, coins, is_premium }) {
     if (state.user) {
         if (xp !== undefined) state.user.xp = xp;
         if (level !== undefined) state.user.level = level;
         if (coins !== undefined) state.user.coins = coins;
+        if (is_premium !== undefined) state.user.is_premium = is_premium;
     }
 }
 

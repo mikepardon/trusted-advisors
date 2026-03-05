@@ -32,13 +32,8 @@
           @click="$router.push('/')"
         />
         <div v-if="auth.state.user" class="header-right-icons">
+          <span class="header-elo" @click="navSound(); $router.push('/leaderboard')">&#127942; {{ auth.state.user.elo_rating ?? 1000 }}</span>
           <span class="header-coins" @click="navSound(); $router.push('/shop')">&#129689; {{ auth.state.user.coins ?? 0 }}</span>
-          <button class="header-bell" @click="navSound(); showNotifications = true">
-            <span class="notif-icon-wrap">
-              &#128276;
-              <span v-if="notifCount > 0" class="notif-badge">{{ notifCount > 9 ? '9+' : notifCount }}</span>
-            </span>
-          </button>
         </div>
       </div>
     </header>
@@ -53,9 +48,9 @@
         <span class="nav-icon">&#128722;</span>
         <span class="nav-label">Shop</span>
       </router-link>
-      <router-link to="/characters" class="nav-item" :class="{ active: $route.path === '/characters' }" @click="navSound">
+      <router-link to="/collection" class="nav-item" :class="{ active: $route.path === '/collection' }" @click="navSound">
         <span class="nav-icon">&#127183;</span>
-        <span class="nav-label">Cards</span>
+        <span class="nav-label">Collection</span>
       </router-link>
       <button class="nav-item" :class="{ active: $route.path === '/' }" @click="goHome">
         <span class="nav-icon">&#9876;</span>
@@ -87,6 +82,7 @@
     </transition>
 
     <Tutorial v-if="showTutorial" @close="showTutorial = false" />
+    <ToastContainer />
 
     <ConfirmModal
       :visible="showLogoutConfirm"
@@ -106,17 +102,20 @@ import ConfirmModal from './components/ConfirmModal.vue';
 import HowToPlay from './components/HowToPlay.vue';
 import NotificationsDrawer from './components/NotificationsDrawer.vue';
 import SplashScreen from './components/SplashScreen.vue';
+import ToastContainer from './components/ToastContainer.vue';
 import Tutorial from './components/Tutorial.vue';
 import { useAuth } from './stores/auth';
+import { useToast } from './stores/toast';
 import { playSound } from './sounds';
 import { initOneSignal, promptPushPermission } from './onesignal';
 
 export default {
   name: 'App',
-  components: { ConfirmModal, HowToPlay, NotificationsDrawer, SplashScreen, Tutorial },
+  components: { ConfirmModal, HowToPlay, NotificationsDrawer, SplashScreen, ToastContainer, Tutorial },
   setup() {
     const auth = useAuth();
-    return { auth };
+    const toast = useToast();
+    return { auth, toast };
   },
   provide() {
     return {
@@ -202,6 +201,7 @@ export default {
       this._notifChannel.stopListening('GameInviteReceived');
       this._notifChannel.stopListening('FriendRequestReceived');
       this._notifChannel.stopListening('UserNotificationReceived');
+      this._notifChannel.stopListening('PremiumStatusChanged');
     }
     document.removeEventListener('click', this._closeMenuOnClick);
   },
@@ -232,7 +232,7 @@ export default {
         await axios.post('/api/impersonate/stop');
         window.location.href = '/admin';
       } catch {
-        alert('Failed to stop impersonating');
+        this.toast.error('Failed to stop impersonating');
       }
     },
     async handleLogout() {
@@ -242,6 +242,7 @@ export default {
         this._notifChannel.stopListening('GameInviteReceived');
         this._notifChannel.stopListening('FriendRequestReceived');
         this._notifChannel.stopListening('UserNotificationReceived');
+        this._notifChannel.stopListening('PremiumStatusChanged');
         this._notifChannel = null;
       }
       await this.auth.logout();
@@ -280,6 +281,9 @@ export default {
         })
         .listen('UserNotificationReceived', () => {
           this.notifCount++;
+        })
+        .listen('PremiumStatusChanged', (data) => {
+          this.auth.updateUserStats({ is_premium: data.is_premium });
         });
     },
   },
@@ -446,6 +450,7 @@ body {
   flex-shrink: 0;
 }
 
+.header-elo,
 .header-coins {
   display: flex;
   align-items: center;
@@ -462,6 +467,7 @@ body {
   white-space: nowrap;
 }
 
+.header-elo:hover,
 .header-coins:hover {
   background: rgba(212, 168, 67, 0.2);
   border-color: var(--accent-gold);

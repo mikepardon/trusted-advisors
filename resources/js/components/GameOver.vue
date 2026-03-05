@@ -3,7 +3,7 @@
   <div v-else-if="gameData" class="game-over">
     <!-- DUEL END SCREEN -->
     <template v-if="isDuel">
-      <div class="card-panel result-panel">
+      <div class="card-panel result-panel" :class="resultAnimationClass">
         <h2 class="game-over-title" :class="isDuelWinner ? 'title-win' : 'title-loss'">
           {{ duelEndTitle }}
         </h2>
@@ -268,6 +268,8 @@
 import axios from 'axios';
 import { playSound } from '../sounds';
 import { useAuth } from '../stores/auth';
+import { useToast } from '../stores/toast';
+import { checkAndPromptReview } from '../services/appReviewService';
 import PlayerProfile from './PlayerProfile.vue';
 
 export default {
@@ -278,7 +280,8 @@ export default {
   },
   setup() {
     const auth = useAuth();
-    return { auth };
+    const toast = useToast();
+    return { auth, toast };
   },
   data() {
     return {
@@ -443,6 +446,11 @@ export default {
       const yearWord = years === 1 ? 'one year' : years === 2 ? 'two years' : years === 3 ? 'three years' : years === 4 ? 'four years' : 'five years';
       return `Your advisors have guided the kingdom through ${yearWord} of crisis. The realm celebrates, and your deeds are judged.`;
     },
+    resultAnimationClass() {
+      if (!this.isDuel) return '';
+      if (this.isBothTimeout) return 'result-loss';
+      return this.isDuelWinner ? 'result-win' : 'result-loss';
+    },
     myXp() {
       if (!this.completion?.xp_awards) return null;
       const vals = Object.values(this.completion.xp_awards);
@@ -529,9 +537,11 @@ export default {
             coins: newCoins,
           });
         }
+        // Prompt for app review after a short delay
+        setTimeout(() => checkAndPromptReview(), 3000);
       });
     } catch (e) {
-      alert('Failed to load results');
+      this.toast.error('Failed to load results');
     }
     this.loading = false;
   },
@@ -635,7 +645,7 @@ export default {
         this.shareCopied = true;
         setTimeout(() => { this.shareCopied = false; }, 2000);
       } catch {
-        alert('Failed to generate share link');
+        this.toast.error('Failed to generate share link');
       }
     },
     async rematch() {
@@ -694,7 +704,7 @@ export default {
           this.$router.push(`/game/${newGameId}`);
         }
       } catch {
-        alert('Failed to create rematch.');
+        this.toast.error('Failed to create rematch.');
       }
       this.rematchLoading = false;
     },
@@ -1225,6 +1235,84 @@ export default {
 .kingdom-score strong {
   color: var(--accent-gold);
   font-size: 1.3rem;
+}
+
+/* === Victory / Defeat Animations === */
+.result-win {
+  position: relative;
+  animation: winEntrance 0.8s ease-out;
+}
+
+.result-win .game-over-title {
+  animation: titleWinGlow 1s ease-out 0.3s both;
+}
+
+.result-win::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: linear-gradient(135deg, #c9a227, #e8c468, #d4a843, #f0d060, #c9a227);
+  background-size: 400% 400%;
+  animation: goldShimmer 3s ease infinite;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.result-loss {
+  position: relative;
+  animation: lossEntrance 0.8s ease-out;
+}
+
+.result-loss .game-over-title {
+  animation: titleLossFade 1s ease-out 0.3s both;
+}
+
+.result-loss::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  border: 2px solid rgba(192, 57, 43, 0.5);
+  animation: lossPulse 2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+@keyframes winEntrance {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.03); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+@keyframes goldShimmer {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes titleWinGlow {
+  0% { transform: scale(0.8); opacity: 0; text-shadow: none; }
+  100% { transform: scale(1); opacity: 1; text-shadow: 0 0 20px rgba(212, 168, 67, 0.6), 0 0 40px rgba(212, 168, 67, 0.3); }
+}
+
+@keyframes lossEntrance {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes lossPulse {
+  0%, 100% { border-color: rgba(192, 57, 43, 0.3); }
+  50% { border-color: rgba(192, 57, 43, 0.7); }
+}
+
+@keyframes titleLossFade {
+  0% { opacity: 0; transform: scale(0.95); }
+  100% { opacity: 0.85; transform: scale(1); }
 }
 
 /* ---- Mobile compact ---- */

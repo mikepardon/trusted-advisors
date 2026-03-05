@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class GamePlayerItem extends Model
 {
-    protected $fillable = ['game_player_id', 'item_id', 'is_used', 'acquired_round', 'is_cursed'];
+    protected $fillable = ['game_player_id', 'item_id', 'is_used', 'used_round', 'acquired_round', 'is_cursed'];
 
     protected $casts = [
         'is_used' => 'boolean',

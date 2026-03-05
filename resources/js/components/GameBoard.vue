@@ -19,6 +19,9 @@
     </template>
 
     <template v-else>
+    <!-- 3D Dice Overlay (cooperative only — duel uses per-player canvases) -->
+    <DiceOverlay v-if="!isDuel" ref="diceOverlay" />
+
     <!-- DUEL MODE -->
     <template v-if="isDuel">
     <div class="time-bar">
@@ -59,7 +62,7 @@
       <div class="time-bar-right">
         <div class="time-bar-icons">
           <button
-            v-if="currentPlayerItems.length"
+            v-if="usableItems.length"
             class="bar-icon-btn"
             title="View Inventory"
             @click="$refs.playerItems?.openOverlay()"
@@ -68,7 +71,7 @@
               <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
               <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
             </svg>
-            <span class="bar-icon-badge">{{ currentPlayerItems.length }}</span>
+            <span class="bar-icon-badge">{{ usableItems.length }}</span>
           </button>
           <span class="bar-dice-count" title="Active Dice">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
@@ -93,11 +96,18 @@
       </div>
     </div>
 
-    <!-- Kingdom Stats -->
-    <KingdomStats :game="displayGame" />
+    <!-- Quick action button above stats for easy access (multi-player only) -->
+    <div v-if="gameData.round_phase === 'selecting' && gameData.all_assigned && allItemsDecided && !isSinglePlayer" class="action-btn-top-wrap">
+      <button class="btn-primary" :disabled="resolving" @click="resolveRound">
+        {{ resolving ? 'Rolling...' : 'Roll Dice' }}
+      </button>
+    </div>
 
-    <!-- Player Items -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="true" />
+    <!-- Kingdom Stats -->
+    <KingdomStats :game="displayGame" :kingdomStyleSlug="myKingdomStyleSlug" :kingdomStyleData="myKingdomStyleData" />
+
+    <!-- Player Items (overlay only, button in top bar) -->
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
 
     <!-- Event Banner -->
     <EventBanner :event="gameData.current_event" />
@@ -142,6 +152,7 @@
 
       <template v-else>
         <CardSelectionHand
+          v-if="!isSinglePlayer || !currentPlayerHasAssigned"
           :cards="currentHand"
           :hasAssigned="currentPlayerHasAssigned"
           :loading="handLoading"
@@ -149,10 +160,38 @@
         />
       </template>
 
-      <div v-if="gameData.all_assigned && isOnline" class="resolve-prompt">
-        <p>The council has made their decisions!</p>
+      <!-- Item Usage Phase (after all assigned, before rolling) -->
+      <div v-if="gameData.all_assigned && !allItemsDecided" class="item-phase">
+        <template v-if="showItemPrompt">
+          <div class="item-prompt-card">
+            <p class="item-prompt-title">{{ currentPlayerName }}'s Preparation</p>
+            <p class="item-prompt-text" v-if="!itemDeciding">Do you want to use an item before the roll?</p>
+            <div v-if="!itemDeciding" class="item-prompt-buttons">
+              <button class="btn-primary" @click="itemDeciding = true">Yes, choose an item</button>
+              <button class="btn-secondary" :disabled="usingItem" @click="skipItem">No, skip</button>
+            </div>
+            <div v-else class="item-selection">
+              <p class="item-select-label">Choose an item to use:</p>
+              <div v-for="pi in usableItems" :key="pi.id" class="item-use-card" @click="useItem(pi.id)">
+                <span class="item-use-name">{{ pi.item?.name }}</span>
+                <span class="item-use-effect">{{ itemEffectLabel(pi.item) }}</span>
+              </div>
+              <button class="btn-secondary" @click="itemDeciding = false">Cancel</button>
+            </div>
+          </div>
+        </template>
+        <template v-else-if="isOnline">
+          <div class="resolve-prompt">
+            <p>Waiting for all players to decide on items...</p>
+          </div>
+        </template>
+      </div>
+
+      <!-- Roll Dice Button (multi-player only — single player auto-resolves) -->
+      <div v-if="gameData.all_assigned && allItemsDecided && !isSinglePlayer" class="resolve-prompt">
+        <p>The council is ready!</p>
         <button class="btn-primary" :disabled="resolving" @click="resolveRound">
-          {{ resolving ? 'Resolving...' : 'See What Happens' }}
+          {{ resolving ? 'Rolling...' : 'Roll Dice' }}
         </button>
       </div>
     </template>
@@ -169,6 +208,7 @@
         :specialEffects="specialEffects"
         :gameOver="isGameOver"
         :canAdvance="!isOnline || isHost"
+        :players="gameData.game?.players"
         @phase-complete="onPhaseComplete"
         @next-round="advanceRound"
       />
@@ -193,14 +233,17 @@ import PlayerItems from './PlayerItems.vue';
 import EventReveal from './EventReveal.vue';
 import ItemReveal from './ItemReveal.vue';
 import ItemDiscard from './ItemDiscard.vue';
+import DiceOverlay from './DiceOverlay.vue';
 import { useAuth } from '../stores/auth';
+import { useToast } from '../stores/toast';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard, DiceOverlay },
   setup() {
     const auth = useAuth();
-    return { auth };
+    const toast = useToast();
+    return { auth, toast };
   },
   props: {
     id: { type: [String, Number], required: true },
@@ -238,6 +281,11 @@ export default {
       connectionStatus: 'connected',
       // Item discard (when over 2-item limit)
       itemsOverLimit: [],
+      // Item phase
+      itemDeciding: false,
+      usingItem: false,
+      currentItemPlayer: null,
+      allItemsDecided: false,
       // Online mode
       myPlayerNumber: null,
       waitingForOthers: false,
@@ -312,6 +360,29 @@ export default {
         p => p.player_number === this.turnHandoffPlayerNumber
       );
       return ps?.character_name || `Player ${this.turnHandoffPlayerNumber}`;
+    },
+    myKingdomStyleSlug() {
+      const userId = this.auth.state.user?.id;
+      const player = this.gameData?.game?.players?.find(p => p.user_id === userId);
+      return player?.user?.active_kingdom_style_slug || 'classic';
+    },
+    myKingdomStyleData() {
+      const userId = this.auth.state.user?.id;
+      const player = this.gameData?.game?.players?.find(p => p.user_id === userId);
+      return player?.user?.active_kingdom_style || null;
+    },
+    showItemPrompt() {
+      if (!this.gameData?.all_assigned) return false;
+      if (this.allItemsDecided) return false;
+      // Check if current active player has items and hasn't decided
+      const ps = this.gameData.player_status?.find(p => p.player_number === this.activePlayerNumber);
+      if (!ps) return false;
+      if (ps.item_decided) return false;
+      if (!ps.has_items) return false;
+      return true;
+    },
+    usableItems() {
+      return this.currentPlayerItems.filter(pi => !pi.is_used);
     },
     displayGame() {
       // Before any phase is accepted, show pre-resolution stats
@@ -422,10 +493,12 @@ export default {
 
         // If in selecting phase, load current player's hand
         if (this.gameData.round_phase === 'selecting') {
-          // Auto-resolve if all assigned but round wasn't resolved (recovery from stuck state)
-          if (this.gameData.all_assigned && (this.isSinglePlayer || this.isPassAndPlay)) {
-            await this.resolveRound();
-            return;
+          // Update allItemsDecided from server state
+          this.allItemsDecided = this.gameData.all_items_decided ?? false;
+
+          // If all assigned and all items decided, show Roll button (don't auto-resolve)
+          if (this.gameData.all_assigned && this.allItemsDecided && (this.isSinglePlayer || this.isPassAndPlay)) {
+            // Don't auto-resolve — player must click "Roll Dice"
           }
 
           if (this.isOnline) {
@@ -460,7 +533,7 @@ export default {
           await this.loadRoundResults();
         }
       } catch (e) {
-        alert('Failed to load game: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Failed to load game: ' + (e.response?.data?.message || e.message));
       }
       this.loading = false;
     },
@@ -537,15 +610,15 @@ export default {
         const gameRes = await axios.get(`/api/games/${this.id}`);
         this.gameData = gameRes.data;
 
-        // Single player: skip the "See What Happens" prompt, auto-trigger resolve
-        if (res.data.all_assigned && this.isSinglePlayer) {
-          await this.resolveRound();
-          return;
-        }
-
-        // Pass and play: auto-resolve once all players have assigned
-        if (res.data.all_assigned && this.isPassAndPlay) {
-          await this.resolveRound();
+        // All assigned: start item decision phase or auto-resolve
+        if (res.data.all_assigned) {
+          this.allItemsDecided = this.gameData.all_items_decided ?? false;
+          if (!this.allItemsDecided) {
+            this.startItemPhase();
+          } else if (this.isSinglePlayer) {
+            // Single player: skip "The council is ready" prompt, auto-resolve
+            await this.resolveRound();
+          }
           return;
         }
 
@@ -566,7 +639,7 @@ export default {
           await this.loadHand(this.activePlayerNumber);
         }
       } catch (e) {
-        alert('Failed to assign: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed to assign: ' + (e.response?.data?.error || e.message));
       }
     },
     async resolveRound() {
@@ -595,9 +668,120 @@ export default {
         // Queue item reveals for any draw_item special effects
         this.queueItemReveals(this.specialEffects);
       } catch (e) {
-        alert('Failed to resolve: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed to resolve: ' + (e.response?.data?.error || e.message));
       }
       this.resolving = false;
+    },
+    startItemPhase() {
+      // Determine which player needs to decide on items
+      if (this.isPassAndPlay) {
+        const firstUndecided = this.gameData.player_status?.find(
+          p => p.has_items && !p.item_decided
+        );
+        if (firstUndecided) {
+          this.activePlayerNumber = firstUndecided.player_number;
+          this.turnHandoffPlayerNumber = firstUndecided.player_number;
+          this.showTurnHandoff = true;
+        } else {
+          // All decided or no items
+          this.allItemsDecided = true;
+        }
+      } else if (this.isSinglePlayer) {
+        // Single player: check if they have items
+        const ps = this.gameData.player_status?.find(p => p.player_number === this.activePlayerNumber);
+        if (!ps?.has_items) {
+          this.allItemsDecided = true;
+          // Auto-resolve immediately
+          this.resolveRound();
+        }
+        // Otherwise, item prompt shows via showItemPrompt computed
+      }
+      // Online: each player sees their own prompt via showItemPrompt
+    },
+    async useItem(gamePlayerItemId) {
+      this.usingItem = true;
+      try {
+        const res = await axios.post(`/api/games/${this.id}/use-item`, {
+          game_player_item_id: gamePlayerItemId,
+          player_number: this.activePlayerNumber,
+        });
+        this.itemDeciding = false;
+        this.allItemsDecided = res.data.all_items_decided;
+        // Update items
+        if (res.data.player_items) {
+          this.currentPlayerItems = res.data.player_items;
+        }
+        // Update player_status
+        if (this.gameData.player_status) {
+          const ps = this.gameData.player_status.find(p => p.player_number === this.activePlayerNumber);
+          if (ps) ps.item_decided = true;
+        }
+        // Pass-and-play: advance to next player or show roll
+        if (this.isPassAndPlay && !this.allItemsDecided) {
+          this.advanceItemPlayer();
+        } else if (this.isSinglePlayer && this.allItemsDecided) {
+          this.usingItem = false;
+          await this.resolveRound();
+          return;
+        }
+      } catch (e) {
+        this.toast.error('Failed to use item: ' + (e.response?.data?.error || e.message));
+      }
+      this.usingItem = false;
+    },
+    async skipItem() {
+      this.usingItem = true;
+      try {
+        const res = await axios.post(`/api/games/${this.id}/skip-item`, {
+          player_number: this.activePlayerNumber,
+        });
+        this.itemDeciding = false;
+        this.allItemsDecided = res.data.all_items_decided;
+        // Update player_status
+        if (this.gameData.player_status) {
+          const ps = this.gameData.player_status.find(p => p.player_number === this.activePlayerNumber);
+          if (ps) ps.item_decided = true;
+        }
+        // Pass-and-play: advance to next player or show roll
+        if (this.isPassAndPlay && !this.allItemsDecided) {
+          this.advanceItemPlayer();
+        } else if (this.isSinglePlayer && this.allItemsDecided) {
+          this.usingItem = false;
+          await this.resolveRound();
+          return;
+        }
+      } catch (e) {
+        this.toast.error('Failed to skip item: ' + (e.response?.data?.error || e.message));
+      }
+      this.usingItem = false;
+    },
+    advanceItemPlayer() {
+      const nextUndecided = this.gameData.player_status?.find(
+        p => p.has_items && !p.item_decided
+      );
+      if (nextUndecided) {
+        this.activePlayerNumber = nextUndecided.player_number;
+        this.turnHandoffPlayerNumber = nextUndecided.player_number;
+        this.showTurnHandoff = true;
+        this.loadHand(nextUndecided.player_number);
+      } else {
+        this.allItemsDecided = true;
+      }
+    },
+    itemEffectLabel(item) {
+      if (!item?.effect) return '';
+      const type = item.effect.bonus_type || '';
+      const value = item.effect.bonus_value ?? 0;
+      switch (type) {
+        case 'roll_bonus': return `+${value} to roll`;
+        case 'roll_penalty': return `${value} to roll`;
+        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
+        case 'difficulty_increase': return `+${Math.abs(value)} difficulty`;
+        case 'stat_boost': return `+${value} ${item.effect.stat || 'stat'}`;
+        case 'heal_die': return 'Recover a lost die';
+        case 'score_bonus': return `${value > 0 ? '+' : ''}${value} renown`;
+        default: return item.description || 'Use this item';
+      }
     },
     setupOnlinePlayer() {
       const userId = this.auth.state.user?.id;
@@ -632,6 +816,14 @@ export default {
             if (ps) ps.has_assigned = true;
             this.gameData.all_assigned = data.all_assigned;
           }
+        })
+        .listen('PlayerItemDecided', (data) => {
+          // Update item decided status
+          if (this.gameData?.player_status) {
+            const ps = this.gameData.player_status.find(p => p.player_number === data.player_number);
+            if (ps) ps.item_decided = true;
+          }
+          this.allItemsDecided = data.all_decided;
         })
         .listen('RoundResolved', (data) => {
           // All players receive resolve data simultaneously
@@ -673,6 +865,9 @@ export default {
           this.preResolveGame = null;
           this.currentStatPhase = null;
           this.waitingForOthers = false;
+          this.itemDeciding = false;
+          this.usingItem = false;
+          this.allItemsDecided = false;
           this.gameData = data;
           this.checkEventReveal();
           if (this.myPlayerNumber) {
@@ -718,11 +913,11 @@ export default {
         // Broadcast game started
         await this.fetchGame();
       } catch (e) {
-        alert('Failed to start: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed to start: ' + (e.response?.data?.error || e.message));
       }
     },
     queueItemReveals(specialEffects) {
-      const itemEffects = (specialEffects || []).filter(e => (e.type === 'draw_item' || e.type === 'immediate_item' || e.type === 'item_blocked') && e.item);
+      const itemEffects = (specialEffects || []).filter(e => (e.type === 'draw_item' || e.type === 'item_blocked') && e.item);
       if (itemEffects.length) {
         this.itemRevealQueue = [...itemEffects];
         this.showItemReveal = true;
@@ -785,6 +980,9 @@ export default {
         this.gameAfterNegative = null;
         this.preResolveGame = null;
         this.currentStatPhase = null;
+        this.itemDeciding = false;
+        this.usingItem = false;
+        this.allItemsDecided = false;
         this.gameData = res.data;
         this.activePlayerNumber = 1;
         this.checkEventReveal();
@@ -795,7 +993,7 @@ export default {
           await this.loadHand(1);
         }
       } catch (e) {
-        alert('Failed to advance: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed to advance: ' + (e.response?.data?.error || e.message));
         await this.fetchGame();
       }
     },
@@ -932,6 +1130,11 @@ export default {
   transition: width 0.5s ease;
 }
 
+.action-btn-top-wrap {
+  text-align: center;
+  margin-bottom: 10px;
+}
+
 .resolve-prompt {
   text-align: center;
   margin: 20px 0;
@@ -993,6 +1196,112 @@ export default {
   .resolve-prompt p {
     font-size: 0.95rem;
   }
+
+  .item-prompt-card {
+    padding: 14px;
+    margin: 12px 0;
+  }
 }
 
+/* Item Phase Styles */
+.item-phase {
+  margin: 12px 0;
+}
+
+.item-prompt-card {
+  background: var(--bg-secondary, #2a1f14);
+  border: 2px solid var(--border-gold, #6b5b3a);
+  border-radius: 10px;
+  padding: 20px;
+  text-align: center;
+}
+
+.item-prompt-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold, #c9a84c);
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.item-prompt-text {
+  color: var(--text-primary, #e8d5b0);
+  font-size: 0.95rem;
+  margin-bottom: 14px;
+}
+
+.item-prompt-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.item-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.item-select-label {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary, #a09080);
+  font-size: 0.85rem;
+  margin-bottom: 4px;
+}
+
+.item-use-card {
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid var(--border-gold, #6b5b3a);
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  max-width: 300px;
+  text-align: center;
+}
+
+.item-use-card:hover {
+  border-color: var(--accent-gold, #c9a84c);
+  background: rgba(212, 168, 67, 0.15);
+  box-shadow: 0 0 10px rgba(212, 168, 67, 0.15);
+}
+
+.item-use-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold, #c9a84c);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.item-use-effect {
+  color: var(--text-secondary, #a09080);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.btn-secondary {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-gold, #6b5b3a);
+  color: var(--text-secondary, #a09080);
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  border-color: var(--accent-gold, #c9a84c);
+  color: var(--accent-gold, #c9a84c);
+}
+
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 </style>

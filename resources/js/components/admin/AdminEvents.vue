@@ -220,11 +220,13 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
 
 export default {
   name: 'AdminEvents',
   components: { AdminSearchInput },
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       events: [],
@@ -462,7 +464,7 @@ export default {
         await axios.delete(`/api/admin/events/${ev.id}`);
         await this.fetch();
       } catch (e) {
-        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
       }
     },
   },

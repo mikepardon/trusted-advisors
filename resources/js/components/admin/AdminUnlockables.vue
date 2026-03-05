@@ -35,10 +35,12 @@
               <select v-model="form.type" @change="form.entity_id = ''">
                 <option value="character">Character</option>
                 <option value="item">Item</option>
+                <option value="dice_theme">Dice Theme</option>
+                <option value="kingdom_style">Kingdom Style</option>
               </select>
             </div>
             <div class="form-group">
-              <label>{{ form.type === 'character' ? 'Character' : 'Item' }}</label>
+              <label>{{ { character: 'Character', dice_theme: 'Dice Theme', kingdom_style: 'Kingdom Style', item: 'Item' }[form.type] || 'Item' }}</label>
               <select v-model.number="form.entity_id" required>
                 <option value="" disabled>Select...</option>
                 <option v-for="e in entityOptions" :key="e.id" :value="e.id">{{ e.name }}</option>
@@ -59,6 +61,25 @@
                 <option value="" disabled>Select achievement...</option>
                 <option v-for="a in achievements" :key="a.id" :value="a.id">{{ a.name }}</option>
               </select>
+            </div>
+          </div>
+          <div class="form-section-label">Cash Pricing (optional)</div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label>Cash Price (cents)</label>
+              <input v-model.number="form.cash_price_cents" type="number" min="0" placeholder="e.g. 299" />
+            </div>
+            <div class="form-group">
+              <label>Stripe Price ID</label>
+              <input v-model="form.stripe_price_id" type="text" placeholder="price_..." />
+            </div>
+            <div class="form-group">
+              <label>Apple Product ID</label>
+              <input v-model="form.apple_product_id" type="text" placeholder="com.app.item" />
+            </div>
+            <div class="form-group">
+              <label>Google Product ID</label>
+              <input v-model="form.google_product_id" type="text" placeholder="com.app.item" />
             </div>
           </div>
           <div v-if="formError" class="form-error">{{ formError }}</div>
@@ -82,16 +103,21 @@ export default {
       unlockables: [],
       characters: [],
       items: [],
+      diceThemes: [],
+      kingdomStyles: [],
       achievements: [],
       showModal: false,
       editing: null,
       formError: '',
-      form: { type: 'character', entity_id: '', unlock_method: 'level', unlock_value: 1 },
+      form: { type: 'character', entity_id: '', unlock_method: 'level', unlock_value: 1, cash_price_cents: null, stripe_price_id: '', apple_product_id: '', google_product_id: '' },
     };
   },
   computed: {
     entityOptions() {
-      return this.form.type === 'character' ? this.characters : this.items;
+      if (this.form.type === 'character') return this.characters;
+      if (this.form.type === 'dice_theme') return this.diceThemes;
+      if (this.form.type === 'kingdom_style') return this.kingdomStyles;
+      return this.items;
     },
   },
   async mounted() { this.load(); },
@@ -101,17 +127,19 @@ export default {
       this.unlockables = res.data.unlockables;
       this.characters = res.data.characters;
       this.items = res.data.items;
+      this.diceThemes = res.data.dice_themes || [];
+      this.kingdomStyles = res.data.kingdom_styles || [];
       this.achievements = res.data.achievements;
     },
     openCreate() {
       this.editing = null;
-      this.form = { type: 'character', entity_id: '', unlock_method: 'level', unlock_value: 1 };
+      this.form = { type: 'character', entity_id: '', unlock_method: 'level', unlock_value: 1, cash_price_cents: null, stripe_price_id: '', apple_product_id: '', google_product_id: '' };
       this.formError = '';
       this.showModal = true;
     },
     openEdit(u) {
       this.editing = u.id;
-      this.form = { type: u.type, entity_id: u.entity_id, unlock_method: u.unlock_method, unlock_value: u.unlock_value };
+      this.form = { type: u.type, entity_id: u.entity_id, unlock_method: u.unlock_method, unlock_value: u.unlock_value, cash_price_cents: u.cash_price_cents, stripe_price_id: u.stripe_price_id || '', apple_product_id: u.apple_product_id || '', google_product_id: u.google_product_id || '' };
       this.formError = '';
       this.showModal = true;
     },
@@ -162,6 +190,7 @@ export default {
 .form-group label { display: block; color: var(--text-secondary); font-size: 0.85rem; margin-bottom: 3px; }
 .form-group input, .form-group select { width: 100%; background: var(--bg-primary); border: 1px solid rgba(138, 106, 46, 0.3); color: var(--text-bright); padding: 6px 10px; border-radius: 4px; font-family: inherit; }
 .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--accent-gold); }
+.form-section-label { grid-column: 1 / -1; font-family: 'Cinzel', serif; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px; margin-top: 10px; padding-top: 10px; border-top: 1px solid rgba(138, 106, 46, 0.15); }
 .form-error { color: var(--accent-red); font-size: 0.9rem; margin: 10px 0; }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }

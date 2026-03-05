@@ -2,54 +2,44 @@
   <div class="duel-roll">
     <h4 class="phase-title">{{ playerName }}'s Challenge</h4>
 
-    <!-- Dice rolling area (at top) -->
-    <div class="dice-area">
-      <div class="dice-row">
-        <template v-if="hasRolled">
-          <span
-            v-for="(roll, ri) in rollData.rolls"
-            :key="ri"
-            class="face-badge"
-            :class="[
-              roll.face === 'WILD' ? 'face-wild' : 'face-num',
-              roll.rerolled ? 'face-rerolled' : '',
-            ]"
-          >
-            {{ roll.face === 'WILD' ? 'W ' + roll.value : roll.face }}
-          </span>
-        </template>
+    <p v-if="!canRoll && !hasRolled" class="waiting-text">
+      Waiting for opponent to roll...
+    </p>
 
-        <template v-else-if="isRolling">
-          <span
-            v-for="(face, ri) in rollingFaces"
-            :key="'r-' + ri"
-            class="face-badge face-rolling"
+    <!-- Item prompt (before rolling) -->
+    <template v-if="canRoll && !hasRolled && !isRolling && !itemDecided">
+      <div v-if="usableItems.length > 0" class="item-prompt-section">
+        <p v-if="!choosingItem" class="item-prompt-text">Use an item before rolling?</p>
+        <div v-if="!choosingItem" class="item-prompt-btns">
+          <button class="btn-item-yes" @click="choosingItem = true">Yes</button>
+          <button class="btn-item-no" @click="$emit('skip-item')">No</button>
+        </div>
+        <div v-else class="item-choose-list">
+          <div
+            v-for="pi in usableItems"
+            :key="pi.id"
+            class="item-choose-card"
+            @click="$emit('use-item', pi.id)"
           >
-            {{ face }}
-          </span>
-        </template>
+            <span class="item-choose-name">{{ pi.item?.name }}</span>
+            <span class="item-choose-effect">{{ itemEffectLabel(pi.item) }}</span>
+          </div>
+          <button class="btn-item-cancel" @click="choosingItem = false">Cancel</button>
+        </div>
       </div>
+    </template>
 
-      <p v-if="!canRoll && !hasRolled" class="waiting-text">
-        Waiting for opponent to roll...
-      </p>
+    <!-- Roll Dice button (manual) -->
+    <div v-if="canRoll && !hasRolled && !isRolling && itemDecided" class="roll-btn-section">
+      <button class="btn-roll-dice" @click="startRolling">Roll Dice</button>
     </div>
 
-    <!-- Roll total banner (after dice, before cards) -->
+    <!-- Wild/ability trigger info -->
     <template v-if="hasRolled">
       <div v-if="rollData.ability_effects && rollData.ability_effects.length" class="wild-section">
         <div v-for="(desc, i) in rollData.ability_effects" :key="i" class="wild-trigger">
           {{ desc }}
         </div>
-      </div>
-
-      <div class="roll-total-banner">
-        Roll: <strong>{{ rollData.total_roll }}</strong>
-        <span v-if="totalDifficulty" class="roll-vs">vs</span>
-        <span v-if="totalDifficulty" class="roll-difficulty">Difficulty: <strong>{{ totalDifficulty }}</strong></span>
-        <span v-if="totalDifficulty" class="result-badge roll-result-badge" :class="rollData.total_roll >= totalDifficulty ? 'badge-success' : 'badge-failure'">
-          {{ rollData.total_roll >= totalDifficulty ? 'SUCCESS' : 'FAILURE' }}
-        </span>
       </div>
     </template>
 
@@ -134,14 +124,7 @@
           :disabled="rerolling"
           @click="$emit('continue')"
         >
-          {{ rerolling ? 'Rerolling...' : 'Continue' }}
-        </button>
-      </div>
-
-      <!-- Continue button (when no reroll available or already rerolled) -->
-      <div v-else-if="needsContinue" class="reroll-section">
-        <button class="btn-continue" @click="$emit('continue')">
-          Continue
+          {{ rerolling ? 'Rerolling...' : 'Skip' }}
         </button>
       </div>
     </template>
@@ -157,6 +140,7 @@ export default {
     cards: { type: Array, default: () => [] },
     card: { type: Object, default: null },
     playerName: { type: String, default: 'Player' },
+    diceCount: { type: Number, default: 4 },
     canRoll: { type: Boolean, default: false },
     rollData: { type: Object, default: null },
     ability: { type: Object, default: null },
@@ -166,13 +150,16 @@ export default {
     peekedCards: { type: Array, default: null },
     rerolling: { type: Boolean, default: false },
     needsContinue: { type: Boolean, default: false },
+    use3dDice: { type: Boolean, default: false },
+    playerItems: { type: Array, default: () => [] },
+    itemDecided: { type: Boolean, default: false },
   },
-  emits: ['roll', 'use-ability', 'reroll', 'continue'],
+  emits: ['roll', 'use-ability', 'reroll', 'continue', 'use-item', 'skip-item'],
   data() {
     return {
       isRolling: false,
-      rollingFaces: [],
       submitting: false,
+      choosingItem: false,
     };
   },
   computed: {
@@ -246,53 +233,45 @@ export default {
       if (this.rollData.effects) return this.rollData.effects;
       return {};
     },
+    usableItems() {
+      return (this.playerItems || []).filter(pi => !pi.is_used);
+    },
   },
   methods: {
-    scheduleAutoRoll() {
-      const hasPreRollAbility = this.ability && this.abilityUses > 0 && !this.abilityActivated && !this.isRerollAbility;
-      const delay = hasPreRollAbility ? 3000 : 600;
-      this._autoRollTimer = setTimeout(() => this.startRolling(), delay);
-    },
     startRolling() {
-      if (this._autoRollTimer) clearTimeout(this._autoRollTimer);
       if (this.isRolling || this.hasRolled || this.submitting) return;
 
-      playSound('dice');
+      if (!this.use3dDice) {
+        playSound('dice');
+      }
+
       this.isRolling = true;
       this.submitting = true;
-      this.rollingFaces = [1, 2, 3].map(() => '?');
 
-      const possibleFaces = ['1', '2', '3', '4', '5', 'W'];
-      let ticks = 0;
-      const maxTicks = 12;
-
-      const interval = setInterval(() => {
-        ticks++;
-        this.rollingFaces = this.rollingFaces.map(() =>
-          possibleFaces[Math.floor(Math.random() * possibleFaces.length)]
-        );
-
-        if (ticks >= maxTicks) {
-          clearInterval(interval);
-          this.isRolling = false;
-          this.$emit('roll');
-        }
-      }, 70);
+      this.$emit('roll');
     },
-  },
-  mounted() {
-    if (this.canRoll && !this.hasRolled && !this.isRolling) {
-      this.scheduleAutoRoll();
-    }
-  },
-  watch: {
-    canRoll(val) {
-      if (val && !this.hasRolled && !this.isRolling) {
-        this.scheduleAutoRoll();
+    itemEffectLabel(item) {
+      if (!item?.effect) return '';
+      const type = item.effect.bonus_type || '';
+      const value = item.effect.bonus_value ?? 0;
+      switch (type) {
+        case 'roll_bonus': return `+${value} to roll`;
+        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
+        case 'stat_boost': return `+${value} ${item.effect.stat || 'stat'}`;
+        case 'heal_die': return 'Recover a lost die';
+        case 'shield_negative': return 'Block negative effects';
+        case 'debuff_roll': return `${value} to opponent roll`;
+        case 'increase_difficulty': return `+${Math.abs(value)} opponent difficulty`;
+        case 'peek_cards': return 'Peek at opponent cards';
+        case 'steal_stat': return `Steal ${value} stat point`;
+        default: return item.description || 'Use this item';
       }
     },
+  },
+  watch: {
     rollData(val) {
       if (val) {
+        this.isRolling = false;
         this.$nextTick(() => {
           const anySuccess = (val.cards || []).some(c => c.success) || val.success;
           if (anySuccess) {
@@ -381,56 +360,11 @@ export default {
   margin-top: 6px;
 }
 
-.dice-area {
-  text-align: center;
-  margin-bottom: 12px;
-}
-
-.dice-row {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  margin-bottom: 12px;
-}
-
-.face-badge {
-  padding: 6px 14px;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  font-weight: 700;
-  font-family: 'Cinzel', serif;
-  min-width: 32px;
-  text-align: center;
-}
-
-.face-num { background: #6a4a2a; color: #f5e6cc; border: 1px solid #8a6a2e; }
-.face-wild { background: #d4a843; color: #1a1209; font-weight: 900; }
-
-.face-rerolled {
-  animation: rerollGlow 0.6s ease;
-}
-
-@keyframes rerollGlow {
-  0% { box-shadow: 0 0 12px rgba(138, 96, 192, 0.8); }
-  100% { box-shadow: none; }
-}
-
-.face-rolling {
-  background: #4a3a24;
-  color: var(--accent-gold);
-  border: 1px solid var(--accent-gold);
-  animation: diceShake 0.1s infinite alternate;
-}
-
-@keyframes diceShake {
-  0% { transform: translateY(-1px) rotate(-2deg); }
-  100% { transform: translateY(1px) rotate(2deg); }
-}
-
 .waiting-text {
   color: var(--text-secondary);
   font-style: italic;
   padding: 12px;
+  text-align: center;
 }
 
 .wild-section {
@@ -446,47 +380,6 @@ export default {
   font-style: italic;
   margin-bottom: 3px;
 }
-
-.roll-total-banner {
-  text-align: center;
-  font-size: 1rem;
-  color: var(--text-bright);
-  padding: 8px 10px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  margin-bottom: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.roll-vs {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-style: italic;
-}
-
-.roll-difficulty {
-  font-size: 1.05rem;
-}
-
-.roll-result-badge {
-  margin-left: 4px;
-}
-
-.result-badge {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-weight: 700;
-}
-
-.badge-success { background: rgba(74, 138, 58, 0.2); color: #4a8a3a; }
-.badge-failure { background: rgba(160, 48, 32, 0.2); color: #c0392b; }
 
 .effects-row {
   display: flex;
@@ -645,11 +538,138 @@ export default {
   padding: 2px 0;
 }
 
+/* Item prompt */
+.item-prompt-section {
+  text-align: center;
+  margin-bottom: 12px;
+  padding: 12px;
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(212, 168, 67, 0.2);
+  border-radius: 8px;
+}
+
+.item-prompt-text {
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  margin-bottom: 10px;
+}
+
+.item-prompt-btns {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.btn-item-yes {
+  background: linear-gradient(135deg, #8b4513, #6b3410);
+  color: var(--accent-gold);
+  border: 1px solid var(--accent-gold);
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-item-yes:hover { background: linear-gradient(135deg, #a05a20, #8b4513); }
+
+.btn-item-no {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--border-gold, #6b5b3a);
+  color: var(--text-secondary);
+  padding: 8px 24px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-item-no:hover { border-color: var(--accent-gold); color: var(--accent-gold); }
+
+.item-choose-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.item-choose-card {
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid var(--border-gold, #6b5b3a);
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  max-width: 280px;
+  text-align: center;
+}
+
+.item-choose-card:hover {
+  border-color: var(--accent-gold);
+  background: rgba(212, 168, 67, 0.15);
+}
+
+.item-choose-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.item-choose-effect {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.btn-item-cancel {
+  background: none;
+  border: 1px solid var(--border-gold, #6b5b3a);
+  color: var(--text-secondary);
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.btn-item-cancel:hover { color: var(--accent-gold); border-color: var(--accent-gold); }
+
+/* Roll Dice button */
+.roll-btn-section {
+  text-align: center;
+  margin-bottom: 14px;
+}
+
+.btn-roll-dice {
+  background: linear-gradient(135deg, #8b4513, #6b3410);
+  color: var(--accent-gold, #c9a84c);
+  border: 2px solid var(--accent-gold, #c9a84c);
+  padding: 12px 40px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.btn-roll-dice:hover {
+  background: linear-gradient(135deg, #a05a20, #8b4513);
+  box-shadow: 0 4px 20px rgba(212, 168, 67, 0.3);
+}
+
 @media (max-width: 768px) {
   .duel-roll { padding: 12px; }
-  .face-badge { padding: 4px 10px; font-size: 0.8rem; }
   .btn-ability, .btn-reroll { font-size: 0.75rem; padding: 8px 12px; }
   .roll-cards { flex-direction: column; align-items: center; }
   .roll-card { max-width: 100%; }
+  .btn-roll-dice { padding: 10px 30px; font-size: 0.9rem; }
 }
 </style>

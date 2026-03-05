@@ -93,9 +93,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminAnnouncements',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       announcements: [],
@@ -175,7 +177,7 @@ export default {
         await axios.delete(`/api/admin/announcements/${a.id}`);
         await this.load();
       } catch (e) {
-        alert(e.response?.data?.message || 'Failed to delete');
+        this.toast.error(e.response?.data?.message || 'Failed to delete');
       }
     },
     formatDateRange(start, end) {

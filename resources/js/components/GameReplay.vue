@@ -167,9 +167,13 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../stores/toast';
 
 export default {
   name: 'GameReplay',
+  setup() {
+    return { toast: useToast() };
+  },
   props: {
     id: { type: [String, Number], default: null },
     shareToken: { type: String, default: null },
@@ -274,7 +278,7 @@ export default {
         this.shareCopied = true;
         setTimeout(() => { this.shareCopied = false; }, 2000);
       } catch {
-        alert('Failed to generate share link');
+        this.toast.error('Failed to generate share link');
       }
     },
   },

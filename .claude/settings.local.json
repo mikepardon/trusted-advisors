@@ -11,7 +11,13 @@
       "Bash(ls:*)",
       "Bash(/c/Users/Michael/.config/herd/bin/php.bat artisan migrate)",
       "Bash(/c/Users/Michael/.config/herd/bin/php.bat:*)",
-      "Bash(/c/Users/Michael/.config/herd/bin/php.bat -l app/Http/Controllers/Admin/UnlockableController.php)"
+      "Bash(/c/Users/Michael/.config/herd/bin/php.bat -l app/Http/Controllers/Admin/UnlockableController.php)",
+      "WebFetch(domain:dddice.com)",
+      "WebFetch(domain:docs.dddice.com)",
+      "WebSearch",
+      "Bash(node -e:*)",
+      "WebFetch(domain:www.webtonative.com)",
+      "WebFetch(domain:docs.webtonative.com)"
     ]
   }
 }

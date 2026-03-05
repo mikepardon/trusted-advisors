@@ -42,6 +42,15 @@ class GameCompletionService
             'weekly_challenge_completed' => null,
         ];
 
+        // Custom games do not award XP, coins, ELO, achievements, or challenges
+        if ($game->is_custom) {
+            // Still advance tournament bracket if applicable
+            if ($game->tournament_match_id) {
+                $this->advanceTournament($game);
+            }
+            return $summary;
+        }
+
         // Gather all users who participated
         $players = $game->players()->with('user')->get();
         $users = $players->pluck('user')->filter();
@@ -121,6 +130,11 @@ class GameCompletionService
         // Rotating event entry
         if ($game->rotating_event_id) {
             $summary['rotating_event'] = $this->processRotatingEvent($game, $users);
+        }
+
+        // Tournament bracket advancement
+        if ($game->tournament_match_id) {
+            $this->advanceTournament($game);
         }
 
         return $summary;
@@ -381,6 +395,32 @@ class GameCompletionService
             return $player && $player->player_number === $game->winner_player_number;
         }
         return $game->win === true;
+    }
+
+    private function advanceTournament(Game $game): void
+    {
+        $match = $game->tournamentMatch;
+        if (!$match) return;
+
+        // Determine winner of this game
+        $winnerId = null;
+        if ($game->isDuel() && $game->winner_player_number) {
+            $winnerPlayer = $game->players()->where('player_number', $game->winner_player_number)->first();
+            $winnerId = $winnerPlayer?->user_id;
+        }
+
+        if (!$winnerId) return;
+
+        $match->update([
+            'winner_id' => $winnerId,
+            'status' => 'completed',
+        ]);
+
+        // Use TournamentController to advance bracket
+        $tournament = $match->tournament;
+        if ($tournament) {
+            app(\App\Http\Controllers\TournamentController::class)->advanceBracket($tournament);
+        }
     }
 
     private function updateElo(Game $game, $players): array
@@ -1349,7 +1389,12 @@ class GameCompletionService
                     'coins_awarded' => $coins,
                 ],
             ]);
-            broadcast(new UserNotificationReceived($notification))->toOthers();
+            broadcast(new UserNotificationReceived(
+                $referrer->id,
+                $notification->id,
+                'referral_reward',
+                $notification->title,
+            ));
         } catch (\Throwable) {}
     }
 }

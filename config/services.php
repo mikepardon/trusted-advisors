@@ -54,4 +54,23 @@ return [
         'api_key' => env('ANTHROPIC_API_KEY'),
     ],
 
+    'dddice' => [
+        'api_key' => env('DDDICE_API_KEY'),
+    ],
+
+    'stripe' => [
+        'key' => env('STRIPE_KEY'),
+        'secret' => env('STRIPE_SECRET'),
+        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+        'premium_price_id' => env('STRIPE_PREMIUM_PRICE_ID'),
+    ],
+
+    'apple' => [
+        'shared_secret' => env('APPLE_SHARED_SECRET'),
+    ],
+
+    'google_play' => [
+        'package_name' => env('GOOGLE_PLAY_PACKAGE_NAME'),
+    ],
+
 ];

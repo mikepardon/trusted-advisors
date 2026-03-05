@@ -82,11 +82,15 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../stores/toast';
 import NotificationDetailModal from './NotificationDetailModal.vue';
 
 export default {
   name: 'NotificationsDrawer',
   components: { NotificationDetailModal },
+  setup() {
+    return { toast: useToast() };
+  },
   props: {
     open: { type: Boolean, default: false },
   },
@@ -192,7 +196,7 @@ export default {
         this.$emit('close');
         this.$router.push('/game/' + res.data.game_id);
       } catch (e) {
-        alert(e.response?.data?.error || 'Failed to accept invite');
+        this.toast.error(e.response?.data?.error || 'Failed to accept invite');
         invite.busy = false;
       }
     },

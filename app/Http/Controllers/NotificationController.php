@@ -107,6 +107,28 @@ class NotificationController extends Controller
             }
         }
 
+        // Grant dice theme unlockable
+        $diceThemeId = $data['reward_dice_theme_id'] ?? null;
+        if ($diceThemeId) {
+            $unlockable = \App\Models\Unlockable::where('type', 'dice_theme')
+                ->where('entity_id', $diceThemeId)
+                ->first();
+
+            if ($unlockable) {
+                $exists = UserUnlockable::where('user_id', $user->id)
+                    ->where('unlockable_id', $unlockable->id)
+                    ->exists();
+
+                if (!$exists) {
+                    UserUnlockable::create([
+                        'user_id' => $user->id,
+                        'unlockable_id' => $unlockable->id,
+                        'unlocked_at' => now(),
+                    ]);
+                }
+            }
+        }
+
         // Mark as claimed and read
         $notification->update([
             'claimed_at' => now(),

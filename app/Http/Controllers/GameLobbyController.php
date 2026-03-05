@@ -17,6 +17,7 @@ use App\Models\UserUnlockable;
 use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class GameLobbyController extends Controller
 {
@@ -302,5 +303,80 @@ class GameLobbyController extends Controller
             ->get();
 
         return response()->json($invites);
+    }
+
+    public function publicLobbies(): JsonResponse
+    {
+        $lobbies = Game::where('game_mode', 'online')
+            ->where('status', 'setup')
+            ->whereNull('tournament_match_id')
+            ->with('user:id,name')
+            ->get()
+            ->filter(function ($game) {
+                $currentPlayers = GamePlayer::where('game_id', $game->id)->count();
+                return $currentPlayers < $game->num_players;
+            })
+            ->map(function ($game) {
+                $currentPlayers = GamePlayer::where('game_id', $game->id)->count();
+                return [
+                    'id' => $game->id,
+                    'host_name' => $game->user?->name ?? 'Unknown',
+                    'game_type' => $game->game_type ?? 'cooperative',
+                    'num_players' => $game->num_players,
+                    'current_players' => $currentPlayers,
+                    'is_private' => (bool) $game->is_private,
+                    'is_custom' => (bool) $game->is_custom,
+                ];
+            })
+            ->values();
+
+        return response()->json($lobbies);
+    }
+
+    public function joinLobby(Game $game, Request $request): JsonResponse
+    {
+        if (!$game->isOnline() || $game->status !== 'setup') {
+            return response()->json(['error' => 'Game is not accepting players.'], 422);
+        }
+
+        $currentPlayers = GamePlayer::where('game_id', $game->id)->count();
+        if ($currentPlayers >= $game->num_players) {
+            return response()->json(['error' => 'Game is full.'], 422);
+        }
+
+        // Check if already in this game
+        $alreadyIn = GamePlayer::where('game_id', $game->id)
+            ->where('user_id', $request->user()->id)
+            ->exists();
+        if ($alreadyIn) {
+            return response()->json(['error' => 'Already in this game.'], 422);
+        }
+
+        // Password check for private games
+        if ($game->is_private && $game->lobby_password) {
+            $request->validate(['password' => 'required|string']);
+            if (!Hash::check($request->password, $game->lobby_password)) {
+                return response()->json(['error' => 'Incorrect password.'], 403);
+            }
+        }
+
+        $nextPlayerNumber = GamePlayer::where('game_id', $game->id)->max('player_number') + 1;
+
+        $player = GamePlayer::create([
+            'game_id' => $game->id,
+            'user_id' => $request->user()->id,
+            'player_number' => $nextPlayerNumber,
+        ]);
+
+        broadcast(new PlayerJoinedGame(
+            $game->id,
+            $nextPlayerNumber,
+            $request->user()->name,
+        ));
+
+        return response()->json([
+            'player' => $player,
+            'game_id' => $game->id,
+        ]);
     }
 }

@@ -37,6 +37,20 @@
           </div>
         </div>
 
+        <!-- Cosmetics -->
+        <div v-if="profile.active_dice_theme || profile.active_kingdom_style" class="modal-cosmetics">
+          <div v-if="profile.active_dice_theme" class="cosmetic-item">
+            <span class="cosmetic-icon">&#127922;</span>
+            <span class="cosmetic-label">Dice:</span>
+            <span class="cosmetic-value">{{ profile.active_dice_theme }}</span>
+          </div>
+          <div v-if="profile.active_kingdom_style" class="cosmetic-item">
+            <span class="cosmetic-icon">&#127984;</span>
+            <span class="cosmetic-label">Style:</span>
+            <span class="cosmetic-value">{{ profile.active_kingdom_style }}</span>
+          </div>
+        </div>
+
         <!-- Game stats -->
         <div class="modal-game-stats">
           <div class="mini-stat">
@@ -300,6 +314,39 @@ export default {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.5px;
+}
+
+/* Cosmetics */
+.modal-cosmetics {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.cosmetic-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(138, 106, 46, 0.2);
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
+.cosmetic-icon {
+  font-size: 1rem;
+}
+
+.cosmetic-label {
+  color: var(--text-secondary);
+}
+
+.cosmetic-value {
+  color: var(--accent-gold);
+  font-weight: 600;
 }
 
 /* Game stats */

@@ -14,6 +14,7 @@ class SeasonReward extends Model
         'reward_xp',
         'reward_coins',
         'reward_character_id',
+        'reward_dice_theme_id',
         'reward_title',
     ];
 
@@ -31,5 +32,10 @@ class SeasonReward extends Model
     public function rewardCharacter(): BelongsTo
     {
         return $this->belongsTo(Character::class, 'reward_character_id');
+    }
+
+    public function rewardDiceTheme(): BelongsTo
+    {
+        return $this->belongsTo(DiceTheme::class, 'reward_dice_theme_id');
     }
 }

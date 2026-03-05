@@ -35,10 +35,16 @@ import AdminAddons from './components/admin/AdminAddons.vue';
 import AdminGifts from './components/admin/AdminGifts.vue';
 import AdminAnnouncements from './components/admin/AdminAnnouncements.vue';
 import AdminUsers from './components/admin/AdminUsers.vue';
+import AdminPayments from './components/admin/AdminPayments.vue';
 import ShopPage from './components/ShopPage.vue';
 import SettingsPage from './components/SettingsPage.vue';
 import StatsPage from './components/StatsPage.vue';
 import RotatingEventPage from './components/RotatingEventPage.vue';
+import PaymentProcessing from './components/PaymentProcessing.vue';
+import PremiumPage from './components/PremiumPage.vue';
+import TournamentPage from './components/TournamentPage.vue';
+import AdminDice from './components/admin/AdminDice.vue';
+import AdminKingdomStyles from './components/admin/AdminKingdomStyles.vue';
 import AdminRotatingEvents from './components/admin/AdminRotatingEvents.vue';
 import AuthCallback from './components/AuthCallback.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
@@ -54,9 +60,12 @@ const routes = [
     { path: '/leaderboard', component: LeaderboardPage, meta: { auth: true } },
     { path: '/achievements', component: AchievementsList, meta: { auth: true } },
     { path: '/season', component: SeasonPage, meta: { auth: true } },
-    { path: '/characters', component: CharactersPage, meta: { auth: true } },
+    { path: '/collection', component: CharactersPage, meta: { auth: true } },
     { path: '/shop', component: ShopPage, meta: { auth: true } },
     { path: '/stats', component: StatsPage, meta: { auth: true } },
+    { path: '/payment/processing', component: PaymentProcessing, meta: { auth: true } },
+    { path: '/premium', component: PremiumPage, meta: { auth: true } },
+    { path: '/tournaments', component: TournamentPage, meta: { auth: true } },
     { path: '/events/:id', component: RotatingEventPage, props: true, meta: { auth: true } },
     { path: '/settings', component: SettingsPage },
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
@@ -73,6 +82,8 @@ const routes = [
             { path: 'cards', component: AdminCards },
             { path: 'events', component: AdminEvents },
             { path: 'items', component: AdminItems },
+            { path: 'dice', component: AdminDice },
+            { path: 'kingdom-styles', component: AdminKingdomStyles },
             { path: 'sounds', component: AdminSounds },
             { path: 'bot-games', component: AdminBotGames },
             { path: 'games', component: AdminGames },
@@ -87,6 +98,7 @@ const routes = [
             { path: 'announcements', component: AdminAnnouncements },
             { path: 'rotating-events', component: AdminRotatingEvents },
             { path: 'users', component: AdminUsers },
+            { path: 'payments', component: AdminPayments },
         ],
     },
 ];

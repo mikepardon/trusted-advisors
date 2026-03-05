@@ -1,4 +1,5 @@
 <template>
+
   <div class="duel-resolve">
     <h4 class="phase-title">Month Summary</h4>
 
@@ -38,11 +39,11 @@
     </div>
 
     <button
-      v-if="canAdvance"
-      class="btn-primary next-btn"
-      @click="$emit('next-round')"
+        v-if="canAdvance"
+        class="btn-primary next-btn"
+        @click="$emit('next-round')"
     >
-      {{ gameOver ? 'View Results' : 'Next Month' }}
+        {{ gameOver ? 'View Results' : 'Next Month' }}
     </button>
     <p v-else class="waiting-host-text">Waiting for host to advance...</p>
   </div>

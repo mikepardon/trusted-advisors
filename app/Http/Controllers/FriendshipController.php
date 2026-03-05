@@ -17,7 +17,7 @@ class FriendshipController extends Controller
 
         $friends = Friendship::where('status', 'accepted')
             ->where(fn ($q) => $q->where('sender_id', $userId)->orWhere('receiver_id', $userId))
-            ->with(['sender:id,name,level,elo_rating', 'receiver:id,name,level,elo_rating'])
+            ->with(['sender:id,name,level,elo_rating,last_login_at', 'receiver:id,name,level,elo_rating,last_login_at'])
             ->get()
             ->map(function ($f) use ($userId) {
                 $friend = $f->sender_id === $userId ? $f->receiver : $f->sender;
@@ -49,6 +49,7 @@ class FriendshipController extends Controller
                 return [
                     'id' => $f->id,
                     'user' => $friend,
+                    'last_login_at' => $friend->last_login_at?->toIso8601String(),
                     'stats' => [
                         'wins' => $wins,
                         'losses' => $losses,

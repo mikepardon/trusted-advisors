@@ -43,6 +43,12 @@ class User extends Authenticatable
         'notification_preferences',
         'referral_code',
         'referred_by',
+        'active_dice_theme_slug',
+        'active_kingdom_style_slug',
+        'active_title',
+        'is_premium',
+        'premium_expires_at',
+        'app_review_prompted_at',
     ];
 
     /**
@@ -79,6 +85,9 @@ class User extends Authenticatable
             'banned_at' => 'datetime',
             'username_chosen' => 'boolean',
             'notification_preferences' => 'array',
+            'is_premium' => 'boolean',
+            'premium_expires_at' => 'datetime',
+            'app_review_prompted_at' => 'datetime',
         ];
     }
 
@@ -96,6 +105,16 @@ class User extends Authenticatable
         // Total cumulative XP needed to reach this level
         // Level 1 = 0 (start here), Level 2 = 100, Level 3 = 300, Level 4 = 600...
         return (int) (100 * ($level - 1) * $level / 2);
+    }
+
+    public function activeDiceTheme(): BelongsTo
+    {
+        return $this->belongsTo(DiceTheme::class, 'active_dice_theme_slug', 'slug');
+    }
+
+    public function activeKingdomStyle(): BelongsTo
+    {
+        return $this->belongsTo(KingdomStyle::class, 'active_kingdom_style_slug', 'slug');
     }
 
     public function referrer(): BelongsTo
@@ -157,6 +176,42 @@ class User extends Authenticatable
     public function coinTransactions(): HasMany
     {
         return $this->hasMany(CoinTransaction::class);
+    }
+
+    public function purchases(): HasMany
+    {
+        return $this->hasMany(Purchase::class);
+    }
+
+    public function paymentCustomers(): HasMany
+    {
+        return $this->hasMany(PaymentCustomer::class);
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(UserSubscription::class);
+    }
+
+    public function activeSubscription(): ?UserSubscription
+    {
+        return $this->subscriptions()
+            ->where('status', 'active')
+            ->latest()
+            ->first();
+    }
+
+    public function isPremium(): bool
+    {
+        if (!$this->is_premium) {
+            return false;
+        }
+
+        if ($this->premium_expires_at && $this->premium_expires_at->isPast()) {
+            return false;
+        }
+
+        return true;
     }
 
     public function wantsPushNotification(string $category): bool

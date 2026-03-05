@@ -1,5 +1,21 @@
 <template>
   <div class="round-results">
+    <!-- Action button at top for easy access -->
+    <button
+      v-if="viewPhase === 'positive' && allRolled && !resultsAccepted"
+      class="btn-primary action-btn-top"
+      @click="acceptAndContinue"
+    >
+      Accept Results
+    </button>
+    <button
+      v-else-if="viewPhase === 'negative' && canAdvance"
+      class="btn-primary action-btn-top"
+      @click="$emit('next-round')"
+    >
+      {{ gameOver ? 'View Results' : 'Next Month' }}
+    </button>
+
     <!-- ===================== -->
     <!-- PHASE 1: POSITIVE     -->
     <!-- ===================== -->
@@ -117,14 +133,6 @@
             </div>
           </div>
 
-          <!-- Accept Results & continue to negative phase -->
-          <button
-            v-if="!resultsAccepted"
-            class="btn-primary accept-btn"
-            @click="acceptAndContinue"
-          >
-            Accept Results
-          </button>
         </template>
       </div>
     </template>
@@ -196,16 +204,14 @@
         </div>
       </div>
 
-      <button v-if="canAdvance" class="btn-primary next-btn" @click="$emit('next-round')">
-        {{ gameOver ? 'View Results' : 'Next Month' }}
-      </button>
-      <p v-else class="waiting-host-text">Waiting for host to advance...</p>
+      <p v-if="!canAdvance" class="waiting-host-text">Waiting for host to advance...</p>
     </template>
   </div>
 </template>
 
 <script>
 import { playSound } from '../sounds';
+import dddiceService from '../dddiceService';
 
 export default {
   name: 'RoundResults',
@@ -219,6 +225,7 @@ export default {
     specialEffects: { type: Array, default: () => [] },
     gameOver: { type: Boolean, default: false },
     canAdvance: { type: Boolean, default: true },
+    players: { type: Array, default: () => [] },
   },
   emits: ['next-round', 'phase-complete'],
   data() {
@@ -275,42 +282,74 @@ export default {
     isRolling(playerNumber) {
       return this.rollingPlayerNumbers.includes(playerNumber);
     },
-    startRolling(pr) {
+    getThemesForPlayer(playerNumber) {
+      const player = (this.players || []).find(p => p.player_number === playerNumber);
+      const slug = player?.user?.active_dice_theme_slug || 'dddice-standard';
+      return [slug, slug, slug];
+    },
+    async startRolling(pr) {
       const pn = pr.player_number;
       if (this.rollingPlayerNumbers.includes(pn) || this.rolledPlayerNumbers.includes(pn)) return;
 
-      playSound('dice');
+      const use3D = dddiceService.isReady();
+
+      if (!use3D) {
+        playSound('dice');
+      }
+
       this.rollingPlayerNumbers.push(pn);
       this.rollingFaces[pn] = pr.rolls.map(() => '?');
 
-      const possibleFaces = ['1', '2', '3', '4', '5', 'W'];
-      let ticks = 0;
-      const maxTicks = 12;
-      const interval = setInterval(() => {
-        ticks++;
-        this.rollingFaces[pn] = pr.rolls.map(() =>
-          possibleFaces[Math.floor(Math.random() * possibleFaces.length)]
-        );
-        // Force reactivity
-        this.rollingFaces = { ...this.rollingFaces };
+      if (use3D) {
+        // 3D dice path: animate via dddice, then show final results immediately
+        const themes = this.getThemesForPlayer(pn);
+        const diceSpecs = pr.rolls.map((roll, i) => ({
+          theme: themes[i] || 'dddice-standard',
+          value: roll.value,
+        }));
+        await dddiceService.roll(diceSpecs);
 
-        if (ticks >= maxTicks) {
-          clearInterval(interval);
-          this.rollingPlayerNumbers = this.rollingPlayerNumbers.filter(n => n !== pn);
-          this.rolledPlayerNumbers.push(pn);
+        this.rollingPlayerNumbers = this.rollingPlayerNumbers.filter(n => n !== pn);
+        this.rolledPlayerNumbers.push(pn);
 
-          // Play success/fail sound when all rolled
-          this.$nextTick(() => {
-            if (this.allRolled) {
-              if (this.positivePhase.success) {
-                playSound('win');
-              } else {
-                playSound('fail');
-              }
+        this.$nextTick(() => {
+          if (this.allRolled) {
+            if (this.positivePhase.success) {
+              playSound('win');
+            } else {
+              playSound('fail');
             }
-          });
-        }
-      }, 70);
+          }
+        });
+      } else {
+        // Fallback: text animation
+        const possibleFaces = ['1', '2', '3', '4', '5', 'W'];
+        let ticks = 0;
+        const maxTicks = 12;
+        const interval = setInterval(() => {
+          ticks++;
+          this.rollingFaces[pn] = pr.rolls.map(() =>
+            possibleFaces[Math.floor(Math.random() * possibleFaces.length)]
+          );
+          this.rollingFaces = { ...this.rollingFaces };
+
+          if (ticks >= maxTicks) {
+            clearInterval(interval);
+            this.rollingPlayerNumbers = this.rollingPlayerNumbers.filter(n => n !== pn);
+            this.rolledPlayerNumbers.push(pn);
+
+            this.$nextTick(() => {
+              if (this.allRolled) {
+                if (this.positivePhase.success) {
+                  playSound('win');
+                } else {
+                  playSound('fail');
+                }
+              }
+            });
+          }
+        }, 70);
+      }
     },
     rollForPlayer(playerNumber) {
       if (!this.rolledPlayerNumbers.includes(playerNumber)) {
@@ -381,6 +420,13 @@ export default {
 <style scoped>
 .round-results {
   margin-bottom: 20px;
+}
+
+.action-btn-top {
+  display: block;
+  margin: 0 auto 12px;
+  font-size: 1rem;
+  padding: 10px 36px;
 }
 
 .phase-section {
@@ -843,6 +889,11 @@ export default {
   .total-summary {
     padding: 10px;
     margin-bottom: 12px;
+  }
+
+  .action-btn-top {
+    font-size: 0.9rem;
+    padding: 8px 28px;
   }
 
   .next-btn {

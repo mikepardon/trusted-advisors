@@ -108,9 +108,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminRotatingEvents',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       events: [],
@@ -186,7 +188,7 @@ export default {
         this.showModal = false;
         await this.fetch();
       } catch (e) {
-        alert(e.response?.data?.message || 'Failed to save');
+        this.toast.error(e.response?.data?.message || 'Failed to save');
       }
       this.saving = false;
     },

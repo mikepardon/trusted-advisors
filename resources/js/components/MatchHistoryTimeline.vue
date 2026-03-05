@@ -52,9 +52,9 @@
         </div>
       </template>
 
-      <div v-if="hasMore" class="load-more" ref="loadMore">
-        <span v-if="loading">Loading...</span>
-      </div>
+      <button v-if="hasMore" class="load-more-btn" @click="loadNext" :disabled="loading">
+        {{ loading ? 'Loading...' : 'Load More' }}
+      </button>
     </template>
   </div>
 </template>
@@ -72,7 +72,6 @@ export default {
       lastPage: 1,
       filterType: '',
       filterMode: '',
-      observer: null,
     };
   },
   computed: {
@@ -91,10 +90,6 @@ export default {
   },
   async mounted() {
     await this.fetchPage();
-    this.setupIntersectionObserver();
-  },
-  beforeUnmount() {
-    if (this.observer) this.observer.disconnect();
   },
   methods: {
     formatDuration(minutes) {
@@ -128,21 +123,6 @@ export default {
         this.currentPage++;
         await this.fetchPage();
       }
-    },
-    setupIntersectionObserver() {
-      this.observer = new IntersectionObserver((entries) => {
-        if (entries[0]?.isIntersecting) {
-          this.loadNext();
-        }
-      }, { threshold: 0.1 });
-
-      this.$watch('hasMore', (val) => {
-        this.$nextTick(() => {
-          if (this.$refs.loadMore && val) {
-            this.observer.observe(this.$refs.loadMore);
-          }
-        });
-      }, { immediate: true });
     },
     formatDateHeader(dateStr) {
       const date = new Date(dateStr + 'T00:00:00');
@@ -319,10 +299,27 @@ export default {
 .mode-online { background: rgba(67, 160, 212, 0.15); color: #60b8e0; border: 1px solid rgba(67, 160, 212, 0.3); }
 .event-badge-sm { background: rgba(138, 58, 185, 0.15); color: #c890e0; border: 1px solid rgba(138, 58, 185, 0.3); }
 
-.load-more {
-  text-align: center;
-  padding: 16px;
-  color: var(--text-secondary);
-  font-style: italic;
+.load-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 10px;
+  background: rgba(138, 106, 46, 0.12);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 6px;
+  color: var(--accent-gold);
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.load-more-btn:hover {
+  background: rgba(138, 106, 46, 0.25);
+}
+
+.load-more-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
 }
 </style>

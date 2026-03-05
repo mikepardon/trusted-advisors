@@ -309,12 +309,14 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
 import SortableHeader from './SortableHeader.vue';
 
 export default {
   name: 'AdminCards',
   components: { AdminSearchInput, SortableHeader },
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       cards: [],
@@ -685,7 +687,7 @@ export default {
         await axios.delete(`/api/admin/cards/${card.id}`);
         await this.fetch();
       } catch (e) {
-        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
       }
     },
   },

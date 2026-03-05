@@ -42,15 +42,18 @@ class SendAdminGiftToUsers implements ShouldQueue
                             'reward_xp' => $this->validated['reward_xp'] ?? 0,
                             'reward_coins' => $this->validated['reward_coins'] ?? 0,
                             'reward_character_id' => $this->validated['reward_character_id'] ?? null,
+                            'reward_dice_theme_id' => $this->validated['reward_dice_theme_id'] ?? null,
                         ],
                     ]);
 
-                    broadcast(new UserNotificationReceived(
-                        $user->id,
-                        $notification->id,
-                        'admin_gift',
-                        $this->gift->title,
-                    ));
+                    try {
+                        broadcast(new UserNotificationReceived(
+                            $user->id,
+                            $notification->id,
+                            'admin_gift',
+                            $this->gift->title,
+                        ));
+                    } catch (\Throwable) {}
 
                     try {
                         $oneSignal->sendToUser(

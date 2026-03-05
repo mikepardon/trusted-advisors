@@ -40,10 +40,13 @@
         @click="showProfileFriend = f"
       >
         <div class="friend-card-left">
-          <div class="friend-avatar">{{ f.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+          <div class="friend-avatar-wrap">
+            <div class="friend-avatar">{{ f.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
+            <span class="status-dot" :class="isOnline(f) ? 'online' : 'offline'"></span>
+          </div>
           <div class="friend-info">
             <span class="friend-card-name">{{ f.user.name }}</span>
-            <span class="friend-card-level">Lv.{{ f.user.level ?? 1 }}</span>
+            <span class="friend-card-level">Lv.{{ f.user.level ?? 1 }} <span class="last-seen">{{ lastSeenText(f) }}</span></span>
           </div>
         </div>
         <div class="friend-card-stats">
@@ -152,6 +155,22 @@ export default {
       } catch (e) {
         this.error = e.response?.data?.message || 'Failed to remove';
       }
+    },
+    isOnline(f) {
+      if (!f.last_login_at) return false;
+      const last = new Date(f.last_login_at);
+      return (Date.now() - last.getTime()) < 15 * 60 * 1000; // 15 minutes
+    },
+    lastSeenText(f) {
+      if (!f.last_login_at) return '';
+      if (this.isOnline(f)) return 'Online';
+      const diff = Date.now() - new Date(f.last_login_at).getTime();
+      const mins = Math.floor(diff / 60000);
+      if (mins < 60) return `${mins}m ago`;
+      const hours = Math.floor(mins / 60);
+      if (hours < 24) return `${hours}h ago`;
+      const days = Math.floor(hours / 24);
+      return `${days}d ago`;
     },
   },
 };
@@ -274,6 +293,11 @@ export default {
   min-width: 0;
 }
 
+.friend-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
 .friend-avatar {
   width: 36px;
   height: 36px;
@@ -288,6 +312,25 @@ export default {
   justify-content: center;
   border: 1.5px solid var(--border-gold);
   flex-shrink: 0;
+}
+
+.status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--bg-primary, #1a1209);
+}
+
+.status-dot.online {
+  background: #4caf50;
+  box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
+}
+
+.status-dot.offline {
+  background: #666;
 }
 
 .friend-info {
@@ -309,6 +352,12 @@ export default {
 .friend-card-level {
   color: var(--text-secondary);
   font-size: 0.7rem;
+}
+
+.last-seen {
+  margin-left: 4px;
+  opacity: 0.7;
+  font-size: 0.65rem;
 }
 
 .friend-card-stats {

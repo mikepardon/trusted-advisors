@@ -55,16 +55,19 @@ class SeasonRewardService
                         'reward_xp' => $reward->reward_xp ?? 0,
                         'reward_coins' => $reward->reward_coins ?? 0,
                         'reward_character_id' => $reward->reward_character_id,
+                        'reward_dice_theme_id' => $reward->reward_dice_theme_id,
                         'reward_title' => $reward->reward_title,
                     ],
                 ]);
 
-                broadcast(new UserNotificationReceived(
-                    $user->id,
-                    $notification->id,
-                    'season_reward',
-                    $notification->title,
-                ));
+                try {
+                    broadcast(new UserNotificationReceived(
+                        $user->id,
+                        $notification->id,
+                        'season_reward',
+                        $notification->title,
+                    ));
+                } catch (\Throwable) {}
 
                 $this->oneSignal->sendToUser(
                     $user,

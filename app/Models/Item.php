@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Item extends Model
 {
-    protected $fillable = ['name', 'description', 'effect', 'effect_type', 'is_negative', 'is_consumable', 'addon_id', 'available_cooperative', 'available_duel'];
+    protected $fillable = ['name', 'description', 'effect', 'effect_type', 'is_negative', 'is_consumable', 'addon_id', 'available_cooperative', 'available_duel', 'target'];
 
     protected $casts = [
         'effect' => 'array',

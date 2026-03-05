@@ -66,9 +66,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminAddons',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       addons: [],
@@ -121,7 +123,7 @@ export default {
         await axios.delete(`/api/admin/addons/${a.id}`);
         this.load();
       } catch (e) {
-        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
       }
     },
   },

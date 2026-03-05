@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Achievement;
 use App\Models\Character;
+use App\Models\DiceTheme;
 use App\Models\Item;
 use App\Models\Unlockable;
 use Illuminate\Http\JsonResponse;
@@ -25,20 +26,27 @@ class AchievementController extends Controller
         // Resolve entity names manually (dynamic entity() relationship breaks eager loading)
         $characterIds = $allUnlockables->where('type', 'character')->pluck('entity_id')->unique();
         $itemIds = $allUnlockables->where('type', 'item')->pluck('entity_id')->unique();
+        $diceThemeIds = $allUnlockables->where('type', 'dice_theme')->pluck('entity_id')->unique();
         $characterNames = Character::whereIn('id', $characterIds)->pluck('name', 'id');
         $itemNames = Item::whereIn('id', $itemIds)->pluck('name', 'id');
+        $diceThemeNames = DiceTheme::whereIn('id', $diceThemeIds)->pluck('name', 'id');
 
         $grouped = $allUnlockables->groupBy('unlock_value');
 
-        $achievements->each(function ($a) use ($grouped, $characterNames, $itemNames) {
-            $a->linked_unlockables = ($grouped[$a->id] ?? collect())->map(fn ($u) => [
-                'id' => $u->id,
-                'type' => $u->type,
-                'entity_id' => $u->entity_id,
-                'entity_name' => $u->type === 'character'
-                    ? ($characterNames[$u->entity_id] ?? "#{$u->entity_id}")
-                    : ($itemNames[$u->entity_id] ?? "#{$u->entity_id}"),
-            ])->values();
+        $achievements->each(function ($a) use ($grouped, $characterNames, $itemNames, $diceThemeNames) {
+            $a->linked_unlockables = ($grouped[$a->id] ?? collect())->map(function ($u) use ($characterNames, $itemNames, $diceThemeNames) {
+                $entityName = match ($u->type) {
+                    'character' => $characterNames[$u->entity_id] ?? "#{$u->entity_id}",
+                    'dice_theme' => $diceThemeNames[$u->entity_id] ?? "#{$u->entity_id}",
+                    default => $itemNames[$u->entity_id] ?? "#{$u->entity_id}",
+                };
+                return [
+                    'id' => $u->id,
+                    'type' => $u->type,
+                    'entity_id' => $u->entity_id,
+                    'entity_name' => $entityName,
+                ];
+            })->values();
         });
 
         return response()->json($achievements);

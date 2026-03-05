@@ -94,6 +94,29 @@
           <div class="stat-item"><span class="stat-label">Timeouts</span><span class="stat-val" :class="{ 'text-warn': selectedUser.timeout_count > 0 }">{{ selectedUser.timeout_count || 0 }}</span></div>
           <div class="stat-item"><span class="stat-label">Joined</span><span class="stat-val">{{ formatDate(selectedUser.created_at) }}</span></div>
           <div class="stat-item"><span class="stat-label">Status</span><span class="stat-val" :class="{ 'text-banned': selectedUser.banned_at }">{{ selectedUser.banned_at ? 'Banned ' + formatDate(selectedUser.banned_at) : 'Active' }}</span></div>
+          <div class="stat-item"><span class="stat-label">Premium</span><span class="stat-val" :class="selectedUser.is_premium ? 'text-premium' : ''">{{ selectedUser.is_premium ? 'Active' : 'No' }}</span></div>
+        </div>
+
+        <!-- Gift Premium -->
+        <div class="gift-section">
+          <h3 class="logs-title">Gift Premium</h3>
+          <div v-if="selectedUser.is_premium" class="gift-active">
+            <p class="gift-status">Premium active (expires {{ formatDate(selectedUser.premium_expires_at) }})</p>
+            <button class="btn-sm btn-danger" @click="revokePremium" :disabled="giftLoading">Revoke</button>
+          </div>
+          <div v-else class="gift-form">
+            <select v-model="giftDuration" class="gift-select">
+              <option value="1_month">1 Month</option>
+              <option value="3_months">3 Months</option>
+              <option value="6_months">6 Months</option>
+              <option value="1_year">1 Year</option>
+              <option value="lifetime">Lifetime</option>
+            </select>
+            <button class="btn-sm btn-gift" @click="giftPremium" :disabled="giftLoading">
+              {{ giftLoading ? 'Gifting...' : 'Gift Premium' }}
+            </button>
+          </div>
+          <p v-if="giftMsg" class="gift-msg">{{ giftMsg }}</p>
         </div>
 
         <!-- Login Logs -->
@@ -125,9 +148,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminUsers',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       users: [],
@@ -136,6 +161,9 @@ export default {
       selectedUser: null,
       loginLogs: [],
       _searchTimer: null,
+      giftDuration: '1_month',
+      giftLoading: false,
+      giftMsg: '',
     };
   },
   mounted() {
@@ -183,7 +211,7 @@ export default {
         await axios.post(`/api/admin/users/${user.id}/impersonate`);
         window.location.href = '/';
       } catch (e) {
-        alert('Failed: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed: ' + (e.response?.data?.error || e.message));
       }
     },
     async toggleBan(user) {
@@ -193,8 +221,39 @@ export default {
         const res = await axios.post(`/api/admin/users/${user.id}/ban`);
         user.banned_at = res.data.banned_at;
       } catch (e) {
-        alert('Failed: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed: ' + (e.response?.data?.error || e.message));
       }
+    },
+    async giftPremium() {
+      if (!this.selectedUser) return;
+      this.giftLoading = true;
+      this.giftMsg = '';
+      try {
+        const res = await axios.post(`/api/admin/users/${this.selectedUser.id}/grant-premium`, {
+          duration: this.giftDuration,
+        });
+        this.giftMsg = res.data.message;
+        // Refresh user details
+        const userRes = await axios.get(`/api/admin/users/${this.selectedUser.id}`);
+        this.selectedUser = userRes.data;
+      } catch (e) {
+        this.giftMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
+      }
+      this.giftLoading = false;
+    },
+    async revokePremium() {
+      if (!this.selectedUser || !confirm(`Revoke premium from ${this.selectedUser.name}?`)) return;
+      this.giftLoading = true;
+      this.giftMsg = '';
+      try {
+        const res = await axios.post(`/api/admin/users/${this.selectedUser.id}/revoke-premium`);
+        this.giftMsg = res.data.message;
+        const userRes = await axios.get(`/api/admin/users/${this.selectedUser.id}`);
+        this.selectedUser = userRes.data;
+      } catch (e) {
+        this.giftMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
+      }
+      this.giftLoading = false;
     },
     formatDate(dateStr) {
       if (!dateStr) return '—';
@@ -491,6 +550,61 @@ export default {
   color: var(--text-secondary);
   font-style: italic;
   font-size: 0.85rem;
+}
+
+.text-premium {
+  color: var(--accent-gold) !important;
+}
+
+.gift-section {
+  margin-bottom: 20px;
+}
+
+.gift-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.gift-status {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+.gift-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.gift-select {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  color: var(--text-bright);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+}
+
+.gift-select:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.btn-gift {
+  background: rgba(106, 191, 80, 0.15) !important;
+  color: #6abf50 !important;
+  border-color: rgba(106, 191, 80, 0.3) !important;
+  white-space: nowrap;
+}
+
+.gift-msg {
+  font-size: 0.82rem;
+  color: #6abf50;
+  margin-top: 6px;
 }
 
 @media (max-width: 768px) {

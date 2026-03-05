@@ -110,6 +110,7 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../stores/toast';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
 import 'swiper/css';
@@ -117,6 +118,9 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'ItemDiscard',
+  setup() {
+    return { toast: useToast() };
+  },
   components: { Swiper, SwiperSlide },
   props: {
     gameId: { type: [String, Number], required: true },
@@ -189,7 +193,7 @@ export default {
         });
         this.$emit('discarded', res.data.items_over_limit);
       } catch (e) {
-        alert(e.response?.data?.error || 'Failed to discard item');
+        this.toast.error(e.response?.data?.error || 'Failed to discard item');
       }
       this.discarding = false;
     },

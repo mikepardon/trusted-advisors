@@ -256,12 +256,14 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
 import SortableHeader from './SortableHeader.vue';
 
 export default {
   name: 'AdminCharacters',
   components: { AdminSearchInput, SortableHeader },
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       characters: [],
@@ -543,7 +545,7 @@ export default {
         await axios.delete(`/api/admin/characters/${c.id}`);
         await this.fetch();
       } catch (e) {
-        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
       }
     },
   },
@@ -1047,4 +1049,5 @@ export default {
   color: var(--accent-gold);
   font-weight: 700;
 }
+
 </style>

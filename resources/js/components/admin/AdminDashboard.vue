@@ -130,12 +130,23 @@
           <div class="stat-label">Challenges</div>
         </router-link>
       </div>
+
+      <!-- Feature Toggles -->
+      <h3 class="section-title">Feature Toggles</h3>
+      <div class="toggles-panel">
+        <label class="toggle-row">
+          <input type="checkbox" v-model="tournamentsEnabled" @change="saveToggle('tournaments_enabled', tournamentsEnabled)" />
+          <span class="toggle-label">Tournaments Mode</span>
+          <span class="toggle-desc">Allow players to create and join tournaments</span>
+        </label>
+      </div>
     </template>
   </div>
 </template>
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 import { Doughnut } from 'vue-chartjs';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 
@@ -144,10 +155,12 @@ ChartJS.register(ArcElement, Tooltip, Legend);
 export default {
   name: 'AdminDashboard',
   components: { Doughnut },
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       loading: true,
       stats: {},
+      tournamentsEnabled: false,
     };
   },
   computed: {
@@ -223,12 +236,25 @@ export default {
   },
   async mounted() {
     try {
-      const res = await axios.get('/api/admin/dashboard-stats');
-      this.stats = res.data;
+      const [statsRes, rulesRes] = await Promise.all([
+        axios.get('/api/admin/dashboard-stats'),
+        axios.get('/api/admin/rules'),
+      ]);
+      this.stats = statsRes.data;
+      this.tournamentsEnabled = !!rulesRes.data?.tournaments_enabled;
     } catch (e) {
       console.error('Failed to load dashboard stats', e);
     }
     this.loading = false;
+  },
+  methods: {
+    async saveToggle(key, value) {
+      try {
+        await axios.put(`/api/admin/rules/${key}`, { value });
+      } catch {
+        this.toast.error('Failed to save setting');
+      }
+    },
   },
 };
 </script>
@@ -320,6 +346,43 @@ export default {
   color: var(--accent-gold);
   font-size: 0.9rem;
   margin-bottom: 12px;
+}
+
+/* Feature Toggles */
+.toggles-panel {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 16px 20px;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  flex-wrap: wrap;
+}
+
+.toggle-row input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent-gold);
+  cursor: pointer;
+}
+
+.toggle-label {
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.toggle-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  width: 100%;
+  padding-left: 28px;
 }
 
 @media (max-width: 768px) {

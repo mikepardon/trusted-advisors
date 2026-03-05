@@ -196,11 +196,13 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
 
 export default {
   name: 'AdminItems',
   components: { AdminSearchInput },
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       items: [],
@@ -394,7 +396,7 @@ export default {
         await axios.delete(`/api/admin/items/${item.id}`);
         await this.fetch();
       } catch (e) {
-        alert('Delete failed: ' + (e.response?.data?.message || e.message));
+        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
       }
     },
   },

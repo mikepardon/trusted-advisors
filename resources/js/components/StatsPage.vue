@@ -2,9 +2,19 @@
   <div class="stats-page">
     <h2 class="page-title">Statistics</h2>
 
+    <!-- Premium Upsell Overlay -->
+    <div v-if="premiumRequired" class="premium-gate">
+      <div class="premium-gate-content">
+        <span class="premium-gate-icon">&#9733;</span>
+        <h3 class="premium-gate-title">Premium Feature</h3>
+        <p class="premium-gate-desc">Detailed statistics require a Premium subscription. Unlock in-depth stats, ELO history, character performance, and more!</p>
+        <router-link to="/premium" class="premium-gate-btn">View Premium</router-link>
+      </div>
+    </div>
+
     <div v-if="loading" class="loading">Loading stats...</div>
 
-    <template v-else>
+    <template v-else-if="!premiumRequired">
       <!-- Summary Cards -->
       <div class="summary-grid">
         <div class="summary-card">
@@ -161,6 +171,7 @@ export default {
       achievementsEarned: 0,
       achievementsTotal: 0,
       loading: true,
+      premiumRequired: false,
       chartWidth: 320,
       chartHeight: 150,
       chartPad: 16,
@@ -197,6 +208,18 @@ export default {
       axios.get('/api/stats/characters'),
       axios.get('/api/achievements'),
     ]);
+
+    // Check if any stats endpoint returned 403 with premium_required
+    const premiumBlocked = [overviewRes, historyRes, charsRes].some(
+      r => r.status === 'rejected' && r.reason?.response?.status === 403 && r.reason?.response?.data?.premium_required
+    );
+
+    if (premiumBlocked) {
+      this.premiumRequired = true;
+      this.loading = false;
+      return;
+    }
+
     this.overview = overviewRes.status === 'fulfilled' ? overviewRes.value.data : {};
     this.history = historyRes.status === 'fulfilled' ? historyRes.value.data : {};
     this.characters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
@@ -446,6 +469,58 @@ export default {
 .ach-text {
   font-size: 0.85rem;
   color: var(--text-secondary);
+}
+
+/* Premium Gate */
+.premium-gate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+}
+
+.premium-gate-content {
+  text-align: center;
+  max-width: 320px;
+}
+
+.premium-gate-icon {
+  font-size: 3rem;
+  color: var(--accent-gold);
+  display: block;
+  margin-bottom: 12px;
+}
+
+.premium-gate-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.3rem;
+  margin-bottom: 10px;
+}
+
+.premium-gate-desc {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+
+.premium-gate-btn {
+  display: inline-block;
+  font-family: 'Cinzel', serif;
+  font-size: 0.9rem;
+  padding: 10px 28px;
+  border-radius: 8px;
+  border: 1px solid var(--accent-gold);
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+  text-decoration: none;
+  font-weight: 700;
+  transition: background 0.2s;
+}
+
+.premium-gate-btn:hover {
+  background: rgba(212, 168, 67, 0.35);
 }
 
 @media (max-width: 768px) {

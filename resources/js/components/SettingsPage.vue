@@ -65,6 +65,20 @@
             <span class="toggle-knob"></span>
           </button>
         </div>
+
+        <div class="setting-row">
+          <div class="setting-info">
+            <span class="setting-label">3D Dice</span>
+            <span class="setting-desc">Animated 3D dice rolling via dddice</span>
+          </div>
+          <button
+            class="toggle"
+            :class="{ active: dddiceEnabled }"
+            @click="toggleDddice"
+          >
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
       </div>
 
       <div class="settings-group">
@@ -175,6 +189,7 @@ export default {
     return {
       settings: getSoundSettings(),
       hintsEnabled: getHintsSetting(),
+      dddiceEnabled: localStorage.getItem('dddice_enabled') !== 'false',
       notifPrefs: {
         push_game: true,
         push_social: true,
@@ -209,6 +224,13 @@ export default {
       this.hintsEnabled = !this.hintsEnabled;
       setHintsSetting(this.hintsEnabled);
       if (this.hintsEnabled) {
+        playSound('clickToggle');
+      }
+    },
+    toggleDddice() {
+      this.dddiceEnabled = !this.dddiceEnabled;
+      localStorage.setItem('dddice_enabled', this.dddiceEnabled ? 'true' : 'false');
+      if (this.dddiceEnabled) {
         playSound('clickToggle');
       }
     },

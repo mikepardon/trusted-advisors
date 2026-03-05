@@ -18,7 +18,7 @@
         <h3 class="sub-title">Active Games</h3>
         <div class="active-cards">
           <div
-            v-for="game in activeGames"
+            v-for="game in visibleActiveGames"
             :key="'a-' + game.id"
             class="active-card"
             @click="resumeGame(game)"
@@ -52,6 +52,9 @@
             </div>
           </div>
         </div>
+        <button v-if="activeGames.length > activeLimit" class="load-more-btn" @click="activeLimit += 10">
+          Load More ({{ activeGames.length - activeLimit }} remaining)
+        </button>
       </div>
 
       <!-- COMPLETED GAMES — Timeline -->
@@ -75,6 +78,7 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../stores/toast';
 import ConfirmModal from './ConfirmModal.vue';
 import HintBubble from './HintBubble.vue';
 import MatchHistoryTimeline from './MatchHistoryTimeline.vue';
@@ -82,6 +86,9 @@ import MatchHistoryTimeline from './MatchHistoryTimeline.vue';
 export default {
   name: 'GameHistory',
   components: { ConfirmModal, HintBubble, MatchHistoryTimeline },
+  setup() {
+    return { toast: useToast() };
+  },
   data() {
     return {
       games: [],
@@ -89,7 +96,13 @@ export default {
       loading: true,
       cancelTarget: null,
       hasCompleted: false,
+      activeLimit: 10,
     };
+  },
+  computed: {
+    visibleActiveGames() {
+      return this.activeGames.slice(0, this.activeLimit);
+    },
   },
   async mounted() {
     await this.fetchGames();
@@ -120,7 +133,7 @@ export default {
         await axios.post(`/api/games/${game.id}/cancel`);
         await this.fetchGames();
       } catch (e) {
-        alert('Failed to cancel: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Failed to cancel: ' + (e.response?.data?.error || e.message));
       }
     },
     modeLabel(mode) {
@@ -281,6 +294,25 @@ export default {
 
 .btn-cancel:hover {
   background: rgba(160, 48, 32, 0.25);
+}
+
+.load-more-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(138, 106, 46, 0.12);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 6px;
+  color: var(--accent-gold);
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.load-more-btn:hover {
+  background: rgba(138, 106, 46, 0.25);
 }
 
 /* === COMPLETED GAMES — Compact rows === */

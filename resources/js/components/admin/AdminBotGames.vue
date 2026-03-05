@@ -303,9 +303,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminBotGames',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       mode: 'cooperative',
@@ -355,7 +357,7 @@ export default {
         });
         this.results = res.data;
       } catch (e) {
-        alert('Simulation failed: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Simulation failed: ' + (e.response?.data?.error || e.message));
       }
       this.running = false;
     },
@@ -370,7 +372,7 @@ export default {
         });
         this.duelResults = res.data;
       } catch (e) {
-        alert('Duel simulation failed: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Duel simulation failed: ' + (e.response?.data?.error || e.message));
       }
       this.running = false;
     },

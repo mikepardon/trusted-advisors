@@ -82,6 +82,8 @@ class AdminUserController extends Controller
             'max_login_streak' => $user->max_login_streak,
             'last_login_at' => $user->last_login_at?->toDateTimeString(),
             'created_at' => $user->created_at->toDateTimeString(),
+            'is_premium' => $user->is_premium,
+            'premium_expires_at' => $user->premium_expires_at?->toDateTimeString(),
             'games_played' => $gamesPlayed,
             'games_won' => $gamesWon,
             'achievement_count' => $achievementCount,

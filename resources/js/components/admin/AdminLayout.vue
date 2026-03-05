@@ -32,6 +32,12 @@
         <router-link to="/admin/items" class="nav-item" active-class="active">
           <span class="nav-icon">&#9878;</span> Items
         </router-link>
+        <router-link to="/admin/dice" class="nav-item" active-class="active">
+          <span class="nav-icon">&#127922;</span> Dice
+        </router-link>
+        <router-link to="/admin/kingdom-styles" class="nav-item" active-class="active">
+          <span class="nav-icon">&#127984;</span> Kingdom Styles
+        </router-link>
         <router-link to="/admin/sounds" class="nav-item" active-class="active">
           <span class="nav-icon">&#9835;</span> Sounds
         </router-link>
@@ -75,6 +81,9 @@
         </router-link>
         <router-link to="/admin/users" class="nav-item" active-class="active">
           <span class="nav-icon">&#128100;</span> Users
+        </router-link>
+        <router-link to="/admin/payments" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128179;</span> Payments
         </router-link>
         <router-link to="/admin/games" class="nav-item" active-class="active">
           <span class="nav-icon">&#127918;</span> Games

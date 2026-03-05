@@ -144,6 +144,17 @@ class GameController extends Controller
             'game_type' => 'sometimes|string|in:cooperative,duel',
             'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
             'rotating_event_id' => 'nullable|integer|exists:rotating_events,id',
+            'is_custom' => 'sometimes|boolean',
+            'starting_stats' => 'sometimes|integer|min:1|max:20',
+            'card_pool' => 'sometimes|array',
+            'card_pool.*' => 'integer|exists:cards,id',
+            'event_pool' => 'sometimes|array',
+            'event_pool.*' => 'integer|exists:events,id',
+            'item_pool' => 'sometimes|array',
+            'item_pool.*' => 'integer|exists:items,id',
+            'house_rules' => 'sometimes|array',
+            'is_private' => 'sometimes|boolean',
+            'lobby_password' => 'required_if:is_private,true|nullable|string|min:1',
         ]);
 
         $gameType = $validated['game_type'] ?? 'cooperative';
@@ -186,6 +197,37 @@ class GameController extends Controller
             }
         }
 
+        // Premium-gated custom/private game features
+        $isCustom = !empty($validated['is_custom']);
+        $isPrivate = !empty($validated['is_private']);
+        $customRules = null;
+
+        if ($isCustom || $isPrivate) {
+            $user = $request->user();
+            if (!$user || !$user->isPremium()) {
+                return response()->json(['error' => 'Premium subscription required for custom and private games.'], 403);
+            }
+        }
+
+        if ($isCustom) {
+            $customRules = [];
+            if (isset($validated['starting_stats'])) {
+                $customRules['starting_stats'] = $validated['starting_stats'];
+            }
+            if (isset($validated['card_pool'])) {
+                $customRules['card_pool'] = $validated['card_pool'];
+            }
+            if (isset($validated['event_pool'])) {
+                $customRules['event_pool'] = $validated['event_pool'];
+            }
+            if (isset($validated['item_pool'])) {
+                $customRules['item_pool'] = $validated['item_pool'];
+            }
+            if (isset($validated['house_rules'])) {
+                $customRules['house_rules'] = $validated['house_rules'];
+            }
+        }
+
         $game = Game::create([
             'status' => 'setup',
             'game_mode' => $validated['game_mode'],
@@ -195,6 +237,12 @@ class GameController extends Controller
             'user_id' => $request->user()?->id,
             'season_id' => $seasonId,
             'rotating_event_id' => $rotatingEventId,
+            'is_custom' => $isCustom,
+            'custom_rules' => $customRules,
+            'is_private' => $isPrivate,
+            'lobby_password' => $isPrivate && isset($validated['lobby_password'])
+                ? bcrypt($validated['lobby_password'])
+                : null,
         ]);
 
         // Online mode: auto-add host as player 1
@@ -211,7 +259,7 @@ class GameController extends Controller
 
     public function show(Game $game): JsonResponse
     {
-        $game->load(['players.character', 'players.user', 'players.items.item']);
+        $game->load(['players.character', 'players.user.activeKingdomStyle', 'players.items.item']);
 
         $data = [
             'game' => $game,
@@ -261,14 +309,18 @@ class GameController extends Controller
             foreach ($game->players as $player) {
                 $playerHands = $hands->where('game_player_id', $player->id);
                 $assignedCount = $playerHands->whereNotNull('role')->count();
+                $hasItems = $player->items->where('is_used', false)->isNotEmpty();
                 $playerStatus[] = [
                     'player_number' => $player->player_number,
                     'character_name' => $player->character->name,
                     'has_assigned' => $assignedCount >= $cardsPerPlayer,
+                    'item_decided' => $player->item_decided || !$hasItems,
+                    'has_items' => $hasItems,
                 ];
             }
             $data['player_status'] = $playerStatus;
             $data['all_assigned'] = $this->allPlayersAssigned($game, $event);
+            $data['all_items_decided'] = $this->allItemsDecided($game);
             $data['cards_per_player'] = $cardsPerPlayer;
         }
 
@@ -374,9 +426,14 @@ class GameController extends Controller
 
         // Determine availability column for game type filtering
         $availCol = $game->isDuel() ? 'available_duel' : 'available_cooperative';
+        $customRules = $game->custom_rules;
 
         // Create shuffled deck (recycle cards if more needed than available)
-        $allCards = Card::where($availCol, true)->inRandomOrder()->get();
+        if (!empty($customRules['card_pool'])) {
+            $allCards = Card::whereIn('id', $customRules['card_pool'])->inRandomOrder()->get();
+        } else {
+            $allCards = Card::where($availCol, true)->inRandomOrder()->get();
+        }
         $cards = collect();
         while ($cards->count() < $totalCardsNeeded) {
             $cards = $cards->concat($allCards->shuffle());
@@ -394,7 +451,11 @@ class GameController extends Controller
         // Duel mode: skip item deck
         if (!$game->isDuel()) {
             // Create shuffled item deck (recycle items if needed)
-            $allItems = Item::where($availCol, true)->inRandomOrder()->get();
+            if (!empty($customRules['item_pool'])) {
+                $allItems = Item::whereIn('id', $customRules['item_pool'])->inRandomOrder()->get();
+            } else {
+                $allItems = Item::where($availCol, true)->inRandomOrder()->get();
+            }
             $itemsNeeded = $game->total_rounds * 2; // generous estimate
             $itemPool = collect();
             while ($itemPool->count() < $itemsNeeded) {
@@ -412,7 +473,11 @@ class GameController extends Controller
         }
 
         // Shuffle event order per game so every game is unique
-        $eventOrder = Event::where($availCol, true)->pluck('id')->shuffle()->values()->toArray();
+        if (!empty($customRules['event_pool'])) {
+            $eventOrder = collect($customRules['event_pool'])->shuffle()->values()->toArray();
+        } else {
+            $eventOrder = Event::where($availCol, true)->pluck('id')->shuffle()->values()->toArray();
+        }
 
         if ($game->isDuel()) {
             $game->update([
@@ -427,23 +492,48 @@ class GameController extends Controller
             // Refresh players relationship (just created/updated above)
             $game->load('players');
 
-            // Create per-player kingdoms
+            // Create per-player kingdoms (with custom starting stats if set)
+            $startStats = $customRules['starting_stats'] ?? 8;
+            $randomStart = !empty($customRules['house_rules']['random_starting_stats']);
             foreach ($game->players as $player) {
-                GamePlayerKingdom::create([
+                $kingdomData = [
                     'game_id' => $game->id,
                     'game_player_id' => $player->id,
-                ]);
+                ];
+                if ($randomStart) {
+                    foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
+                        $kingdomData[$stat] = random_int(1, 15);
+                    }
+                } elseif ($startStats !== 8) {
+                    foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
+                        $kingdomData[$stat] = $startStats;
+                    }
+                }
+                GamePlayerKingdom::create($kingdomData);
             }
 
             // Deal duel cards for first round
             $this->dealDuelCardsForRound($game);
         } else {
-            $game->update([
+            $coopUpdate = [
                 'status' => 'active',
                 'current_round' => 1,
                 'round_phase' => 'selecting',
                 'event_order' => $eventOrder,
-            ]);
+            ];
+
+            // Custom starting stats for cooperative mode
+            if (!empty($customRules['house_rules']['random_starting_stats'])) {
+                foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
+                    $coopUpdate[$stat] = random_int(1, 15);
+                }
+            } elseif (!empty($customRules['starting_stats']) && $customRules['starting_stats'] !== 8) {
+                foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
+                    $coopUpdate[$stat] = $customRules['starting_stats'];
+                }
+            }
+
+            $game->update($coopUpdate);
 
             // Deal first round
             $this->dealCardsForRound($game);
@@ -520,12 +610,13 @@ class GameController extends Controller
             }
         }
 
-        // Sum roll modifiers from all players' active items
+        // Sum roll modifiers from items used this round (single-use system)
         $totalRollMod = 0;
         $totalDiffMod = 0;
         foreach ($allPlayers as $p) {
-            foreach ($p->items->where('is_used', false) as $pi) {
-                $eff = $pi->item->effect ?? [];
+            $usedItem = $p->items->firstWhere('used_round', $game->current_round);
+            if ($usedItem) {
+                $eff = $usedItem->item->effect ?? [];
                 $bt = $eff['bonus_type'] ?? '';
                 $bv = (int) ($eff['bonus_value'] ?? 0);
                 if ($bt === 'roll_bonus' || $bt === 'roll_penalty') {
@@ -556,6 +647,7 @@ class GameController extends Controller
             'cards_per_player' => $cardsPerPlayer,
             'items' => $items,
             'dice_count' => $diceCount,
+            'item_decided' => $player->item_decided,
         ]);
     }
 
@@ -709,17 +801,18 @@ class GameController extends Controller
         $scaling = $this->getDifficultyScaling($game);
         $totalDifficulty = $positiveHands->sum(fn ($h) => $h->card->difficulty + $scaling);
 
-        // Apply item difficulty modifiers (only active/non-used items)
+        // Apply single-use item difficulty modifiers (items used this round)
         $itemModifiers = [];
         foreach ($players as $player) {
-            foreach ($player->items->where('is_used', false) as $playerItem) {
-                $effect = $playerItem->item->effect;
+            $usedItem = $player->items->firstWhere('used_round', $game->current_round);
+            if ($usedItem) {
+                $effect = $usedItem->item->effect;
                 $bonusType = $effect['bonus_type'] ?? '';
                 if ($bonusType === 'difficulty_reduction') {
                     $value = abs((int) ($effect['bonus_value'] ?? 0));
                     $totalDifficulty -= $value;
                     $itemModifiers[] = [
-                        'item_name' => $playerItem->item->name,
+                        'item_name' => $usedItem->item->name,
                         'type' => 'difficulty_reduction',
                         'value' => $value,
                         'player' => $player->character->name,
@@ -728,7 +821,7 @@ class GameController extends Controller
                     $value = abs((int) ($effect['bonus_value'] ?? 0));
                     $totalDifficulty += $value;
                     $itemModifiers[] = [
-                        'item_name' => $playerItem->item->name,
+                        'item_name' => $usedItem->item->name,
                         'type' => 'difficulty_increase',
                         'value' => $value,
                         'player' => $player->character->name,
@@ -785,15 +878,16 @@ class GameController extends Controller
                 }
             }
 
-            // Apply item roll bonuses and penalties (only active/non-used items)
-            foreach ($player->items->where('is_used', false) as $playerItem) {
-                $effect = $playerItem->item->effect;
+            // Apply single-use item roll bonuses (items used this round)
+            $usedItemForRoll = $player->items->firstWhere('used_round', $game->current_round);
+            if ($usedItemForRoll) {
+                $effect = $usedItemForRoll->item->effect;
                 $bonusType = $effect['bonus_type'] ?? '';
                 if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
                     $value = (int) ($effect['bonus_value'] ?? 0);
                     $totalRoll += $value;
                     $itemModifiers[] = [
-                        'item_name' => $playerItem->item->name,
+                        'item_name' => $usedItemForRoll->item->name,
                         'type' => $bonusType,
                         'value' => $value,
                         'player' => $player->character->name,
@@ -848,42 +942,28 @@ class GameController extends Controller
                             $playerObj = $players->firstWhere('id', $hand->game_player_id);
                             $playerChar = $hand->player->character->name;
 
-                            // Check if player can receive items
                             if ($playerObj && !$this->canPlayerReceiveItem($playerObj)) {
                                 $specialEffects[] = [
                                     'type' => 'item_blocked',
                                     'player' => $playerChar,
                                     'item' => $drawnItem->name,
-                                    'description' => "{$playerChar}'s inventory is full of cursed items! {$drawnItem->name} was lost.",
+                                    'description' => "{$playerChar}'s inventory is full! {$drawnItem->name} was lost.",
                                 ];
                             } else {
-                                $isConsumed = $drawnItem->is_consumable;
-                                $immediateDesc = null;
-                                if ($isConsumed && $playerObj) {
-                                    $immediateDesc = $this->applyImmediateItemEffect($game, $playerObj, $drawnItem);
-                                }
                                 GamePlayerItem::create([
                                     'game_player_id' => $hand->game_player_id,
                                     'item_id' => $drawnItem->id,
                                     'acquired_round' => $game->current_round,
                                     'is_cursed' => false,
-                                    'is_used' => $isConsumed,
+                                    'is_used' => false,
                                 ]);
-                                $effect = [
+                                $specialEffects[] = [
                                     'type' => 'draw_item',
                                     'phase' => 'positive',
                                     'player' => $playerChar,
                                     'item' => $drawnItem->name,
-                                    'is_negative' => $drawnItem->is_negative,
                                     'description' => "{$playerChar} found {$drawnItem->name}!",
-                                    'is_consumable' => $isConsumed,
                                 ];
-                                if ($isConsumed && $immediateDesc) {
-                                    $effect['type'] = 'immediate_item';
-                                    $effect['immediate_description'] = $immediateDesc;
-                                    $effect['description'] .= " ({$immediateDesc})";
-                                }
-                                $specialEffects[] = $effect;
                             }
                         }
                         continue;
@@ -953,12 +1033,24 @@ class GameController extends Controller
             }
         }
 
+        // Double positive effects if house rule is active
+        $houseRules = $game->custom_rules['house_rules'] ?? [];
+        if (!empty($houseRules['double_positive_effects'])) {
+            foreach ($positiveEffects as $stat => $change) {
+                if ($change > 0) {
+                    $positiveEffects[$stat] = $change * 2;
+                }
+            }
+        }
+
         // === NEGATIVE PHASE ===
         // On failed roll, ALL cards' negative effects apply (positive cards included)
         $handsForNegativePhase = !$positiveSuccess ? $negativeHands->merge($positiveHands) : $negativeHands;
 
         $negativeEffects = [];
+        $skipNegatives = !empty($houseRules['no_negative_effects']);
         foreach ($handsForNegativePhase as $hand) {
+            if ($skipNegatives) break;
             $effects = $hand->card->negative_effects ?? [];
             foreach ($effects as $stat => $change) {
                 if ($stat === 'lose_die') {
@@ -977,10 +1069,9 @@ class GameController extends Controller
                     continue;
                 }
                 if ($stat === 'draw_item') {
-                    // Negative phase: draw item from deck, marked as cursed
+                    // Negative phase: draw item from deck
                     $drawnItem = $this->drawItemFromDeck($game);
                     if ($drawnItem) {
-                        // Pick a random player to receive the cursed item
                         $target = $players->random();
                         $charName = $target->character->name;
 
@@ -989,48 +1080,35 @@ class GameController extends Controller
                                 'type' => 'item_blocked',
                                 'player' => $charName,
                                 'item' => $drawnItem->name,
-                                'description' => "{$charName}'s inventory is full of cursed items! {$drawnItem->name} was lost.",
+                                'description' => "{$charName}'s inventory is full! {$drawnItem->name} was lost.",
                             ];
                         } else {
-                            $isConsumed = $drawnItem->is_consumable;
-                            $immediateDesc = null;
-                            if ($isConsumed) {
-                                $immediateDesc = $this->applyImmediateItemEffect($game, $target, $drawnItem);
-                            }
                             GamePlayerItem::create([
                                 'game_player_id' => $target->id,
                                 'item_id' => $drawnItem->id,
                                 'acquired_round' => $game->current_round,
-                                'is_cursed' => true,
-                                'is_used' => $isConsumed,
+                                'is_cursed' => false,
+                                'is_used' => false,
                             ]);
-                            $effect = [
+                            $specialEffects[] = [
                                 'type' => 'draw_item',
                                 'phase' => 'negative',
                                 'player' => $charName,
                                 'item' => $drawnItem->name,
-                                'is_cursed' => true,
-                                'description' => "{$charName} received a cursed {$drawnItem->name}!",
-                                'is_consumable' => $isConsumed,
+                                'description' => "{$charName} found {$drawnItem->name}!",
                             ];
-                            if ($isConsumed && $immediateDesc) {
-                                $effect['type'] = 'immediate_item';
-                                $effect['immediate_description'] = $immediateDesc;
-                                $effect['description'] .= " ({$immediateDesc})";
-                            }
-                            $specialEffects[] = $effect;
                         }
                     }
                     continue;
                 }
                 if ($stat === 'discard_item') {
-                    // Find a random player who has non-cursed items and discard one
+                    // Find a random player who has items and discard one
                     $playersWithItems = $players->filter(function ($p) {
-                        return $p->items->contains(fn ($pi) => !$pi->is_cursed);
+                        return $p->items->isNotEmpty();
                     });
                     if ($playersWithItems->isNotEmpty()) {
                         $target = $playersWithItems->random();
-                        $item = $target->items->filter(fn ($pi) => !$pi->is_cursed)->random();
+                        $item = $target->items->random();
                         $itemName = $item->item->name;
                         $charName = $target->character->name;
                         $item->delete();
@@ -1094,39 +1172,27 @@ class GameController extends Controller
                         'type' => 'item_blocked',
                         'player' => $playerChar,
                         'item' => $item->name,
-                        'description' => "{$playerChar}'s inventory is full of cursed items! {$item->name} was lost.",
+                        'description' => "{$playerChar}'s inventory is full! {$item->name} was lost.",
                     ];
                     continue;
                 }
 
-                $isConsumed = $item->is_consumable;
-                $immediateDesc = null;
-                if ($isConsumed && $grantPlayer) {
-                    $immediateDesc = $this->applyImmediateItemEffect($game, $grantPlayer, $item);
-                }
+                // Positive items go to inventory
                 GamePlayerItem::create([
                     'game_player_id' => $grant['player_id'],
                     'item_id' => $item->id,
                     'acquired_round' => $game->current_round,
-                    'is_used' => $isConsumed,
+                    'is_used' => false,
                 ]);
                 if ($grantPlayer) {
                     $playerChar = $grantPlayer->character->name;
-                    $effect = [
+                    $specialEffects[] = [
                         'type' => 'draw_item',
                         'phase' => 'positive',
                         'player' => $playerChar,
                         'item' => $item->name,
-                        'is_negative' => $item->is_negative ?? false,
                         'description' => "{$playerChar} received {$item->name}!",
-                        'is_consumable' => $isConsumed,
                     ];
-                    if ($isConsumed && $immediateDesc) {
-                        $effect['type'] = 'immediate_item';
-                        $effect['immediate_description'] = $immediateDesc;
-                        $effect['description'] .= " ({$immediateDesc})";
-                    }
-                    $specialEffects[] = $effect;
                 }
             }
         }
@@ -1158,52 +1224,14 @@ class GameController extends Controller
             }
         }
 
-        // Process score modifier items (cooperative only)
-        $scoreItemEffects = [];
-        if (!$game->isDuel()) {
-            // Compute score multiplier from held items
-            $scoreMultiplier = 1.0;
-            $allPlayerItems = $game->players()->with('items.item')->get()
-                ->pluck('items')->flatten();
-            foreach ($allPlayerItems as $playerItem) {
-                if ($playerItem->is_used) continue;
-                $itemEffect = $playerItem->item->effect ?? [];
-                if (($itemEffect['bonus_type'] ?? '') === 'score_multiplier') {
-                    $scoreMultiplier *= (float) ($itemEffect['bonus_value'] ?? 1);
-                }
-            }
-
-            // Apply score_per_round items
-            foreach ($allPlayerItems as $playerItem) {
-                if ($playerItem->is_used) continue;
-                $itemEffect = $playerItem->item->effect ?? [];
-                if (($itemEffect['bonus_type'] ?? '') === 'score_per_round') {
-                    $value = (int) ($itemEffect['bonus_value'] ?? 0);
-                    $adjusted = (int) floor($value * $scoreMultiplier);
-                    if ($adjusted !== 0) {
-                        $game->bonus_score = ($game->bonus_score ?? 0) + $adjusted;
-                        $scoreItemEffects[] = [
-                            'item' => $playerItem->item->name,
-                            'value' => $adjusted,
-                        ];
-                    }
-                }
-            }
-
-            if (!empty($scoreItemEffects)) {
-                $totalItemScore = array_sum(array_column($scoreItemEffects, 'value'));
-                $specialEffects[] = [
-                    'type' => 'score_items',
-                    'phase' => 'items',
-                    'items' => $scoreItemEffects,
-                    'total' => $totalItemScore,
-                    'description' => "Score items added +{$totalItemScore} renown this round!",
-                ];
-            }
-        }
+        // Score modifier items are now single-use (score_bonus applied via useItem endpoint)
+        // No passive score_per_round or score_multiplier processing needed
 
         $game->round_phase = 'resolving';
         $game->save();
+
+        // Reset item_decided for all players after resolution
+        $game->players()->update(['item_decided' => false]);
 
         // Compute game_after_negative (final stats)
         $gameAfterNegative = $game->fresh()->only($stats);
@@ -1262,7 +1290,7 @@ class GameController extends Controller
             'game_after_negative' => $gameAfterNegative,
             'game_over' => $gameOverReason !== null,
             'game_over_reason' => $gameOverReason,
-            'game' => $game->fresh(),
+            'game' => $game->fresh(['players.character', 'players.user.activeKingdomStyle', 'players.items.item']),
             'player_items' => $game->players()->with('items.item')->get()->mapWithKeys(fn ($p) => [
                 $p->player_number => $p->items,
             ]),
@@ -1354,8 +1382,8 @@ class GameController extends Controller
         $game->round_phase = 'selecting';
         $game->save();
 
-        // Reset ability flags for new round
-        $game->players()->update(['ability_active_this_round' => false]);
+        // Reset ability and item decision flags for new round
+        $game->players()->update(['ability_active_this_round' => false, 'item_decided' => false]);
 
         // Check if the new round's event grants items
         $event = $this->getCurrentEvent($game);
@@ -1486,8 +1514,8 @@ class GameController extends Controller
         }
         $game->save();
 
-        // Reset ability flags for new round
-        $game->players()->update(['ability_active_this_round' => false]);
+        // Reset ability and item decision flags for new round
+        $game->players()->update(['ability_active_this_round' => false, 'item_decided' => false]);
 
         // Deal duel cards (2 to each player)
         $this->dealDuelCardsForRound($game);
@@ -1564,8 +1592,8 @@ class GameController extends Controller
             ->with('item')
             ->get();
 
-        // Calculate active dice count for duel (base 3, no event reduction)
-        $diceCount = max(1, 3 - $player->lost_dice);
+        // Calculate active dice count for duel (base 4, no event reduction)
+        $diceCount = max(1, 4 - $player->lost_dice);
 
         // No difficulty scaling in duel mode (co-op only)
         $scaling = 0;
@@ -1575,16 +1603,18 @@ class GameController extends Controller
         $allDiceFaces = [];
         $activeDice = $diceCount;
         $pDice = $player->character->dice;
-        foreach (array_slice($pDice, 0, $activeDice) as $die) {
+        for ($di = 0; $di < $activeDice; $di++) {
+            $die = $pDice[$di % count($pDice)];
             $faces = array_map(fn ($f) => $f === 'WILD' ? $player->character->wild_value : (int) $f, $die);
             $allDiceFaces[] = $faces;
         }
 
-        // Sum roll modifiers from player's items
+        // Sum roll modifiers from items used this round (single-use system)
         $totalRollMod = 0;
         $totalDiffMod = 0;
-        foreach ($player->items->where('is_used', false) as $pi) {
-            $eff = $pi->item->effect ?? [];
+        $usedItem = $player->items->firstWhere('used_round', $game->current_round);
+        if ($usedItem) {
+            $eff = $usedItem->item->effect ?? [];
             $bt = $eff['bonus_type'] ?? '';
             $bv = (int) ($eff['bonus_value'] ?? 0);
             if ($bt === 'roll_bonus' || $bt === 'roll_penalty') {
@@ -1815,10 +1845,11 @@ class GameController extends Controller
             return response()->json(['error' => 'No cards assigned to rolling player'], 422);
         }
 
-        // Calculate item modifiers (shared across both cards)
+        // Calculate single-use item modifiers (items used this round by rolling player)
         $difficultyReduction = 0;
-        foreach ($rollingPlayer->items->where('is_used', false) as $playerItem) {
-            $effect = $playerItem->item->effect;
+        $usedItem = $rollingPlayer->items->firstWhere('used_round', $game->current_round);
+        if ($usedItem) {
+            $effect = $usedItem->item->effect;
             $bonusType = $effect['bonus_type'] ?? '';
             if ($bonusType === 'difficulty_reduction') {
                 $difficultyReduction += abs((int) ($effect['bonus_value'] ?? 0));
@@ -1827,16 +1858,31 @@ class GameController extends Controller
             }
         }
 
+        // Check for opponent-targeting items used against the rolling player
+        $otherPlayer = $rollingPlayer->player_number === $offerer->player_number ? $chooser : $offerer;
+        $otherPlayer->load('items.item');
+        $opponentDebuffs = $otherPlayer->items
+            ->where('used_round', $game->current_round)
+            ->filter(fn ($pi) => ($pi->item->target ?? null) === 'opponent');
+        foreach ($opponentDebuffs as $debuffItem) {
+            $dEffect = $debuffItem->item->effect;
+            $dBonusType = $dEffect['bonus_type'] ?? '';
+            if ($dBonusType === 'increase_difficulty') {
+                $difficultyReduction -= abs((int) ($dEffect['bonus_value'] ?? 0));
+            }
+        }
+
         // Roll dice ONCE
         $character = $rollingPlayer->character;
         $dice = $character->dice;
-        $activeDice = max(1, 3 - $rollingPlayer->lost_dice);
+        $activeDice = max(1, 4 - $rollingPlayer->lost_dice);
 
         $totalRoll = 0;
         $playerRolls = [];
         $wildTriggers = [];
 
-        foreach (array_slice($dice, 0, $activeDice) as $dieIndex => $die) {
+        for ($dieIndex = 0; $dieIndex < $activeDice; $dieIndex++) {
+            $die = $dice[$dieIndex % count($dice)];
             $faceIndex = random_int(0, 5);
             $face = $die[$faceIndex];
             $playerRolls[] = [
@@ -1860,14 +1906,24 @@ class GameController extends Controller
             }
         }
 
-        // Apply item roll bonuses/penalties
-        foreach ($rollingPlayer->items->where('is_used', false) as $playerItem) {
-            $effect = $playerItem->item->effect;
-            $bonusType = $effect['bonus_type'] ?? '';
-            if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
-                $totalRoll += (int) ($effect['bonus_value'] ?? 0);
+        // Apply single-use item roll bonuses (items used this round)
+        if ($usedItem) {
+            $uBonusType = ($usedItem->item->effect['bonus_type'] ?? '');
+            if ($uBonusType === 'roll_bonus' || $uBonusType === 'roll_penalty') {
+                $totalRoll += (int) ($usedItem->item->effect['bonus_value'] ?? 0);
             }
         }
+
+        // Apply opponent debuff_roll items
+        foreach ($opponentDebuffs as $debuffItem) {
+            $dBonusType = $debuffItem->item->effect['bonus_type'] ?? '';
+            if ($dBonusType === 'debuff_roll') {
+                $totalRoll += (int) ($debuffItem->item->effect['bonus_value'] ?? 0);
+            }
+        }
+
+        // Check for shield_negative item
+        $hasShield = $usedItem && ($usedItem->item->effect['bonus_type'] ?? '') === 'shield_negative';
 
         // Process wild abilities
         $abilityEffects = $this->processDuelWildAbilities($wildTriggers, $totalRoll);
@@ -1902,22 +1958,26 @@ class GameController extends Controller
         // One combined check: roll vs sum of all card difficulties
         $success = $totalRoll >= $totalDifficulty;
 
+        $duelHouseRules = $game->custom_rules['house_rules'] ?? [];
         foreach ($cardData as $cd) {
             $card = $cd['card'];
             $difficulty = $cd['difficulty'];
 
             $cardEffects = [];
-            // Negative effects ALWAYS apply
-            foreach (($card->negative_effects ?? []) as $stat => $change) {
-                if (in_array($stat, $statKeys)) {
-                    $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $change;
+            // Negative effects ALWAYS apply (unless shielded or no_negative_effects house rule)
+            if (!$hasShield && empty($duelHouseRules['no_negative_effects'])) {
+                foreach (($card->negative_effects ?? []) as $stat => $change) {
+                    if (in_array($stat, $statKeys)) {
+                        $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $change;
+                    }
                 }
             }
             // Positive effects only on success (all-or-nothing)
             if ($success) {
                 foreach (($card->positive_effects ?? []) as $stat => $change) {
                     if (in_array($stat, $statKeys)) {
-                        $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $change;
+                        $val = !empty($duelHouseRules['double_positive_effects']) && $change > 0 ? $change * 2 : $change;
+                        $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $val;
                     }
                 }
             }
@@ -2093,10 +2153,11 @@ class GameController extends Controller
             ->with('card')
             ->get();
 
-        // Calculate item modifiers
+        // Calculate single-use item modifiers (items used this round)
         $difficultyReduction = 0;
-        foreach ($rollingPlayer->items->where('is_used', false) as $playerItem) {
-            $effect = $playerItem->item->effect;
+        $rerollUsedItem = $rollingPlayer->items->firstWhere('used_round', $game->current_round);
+        if ($rerollUsedItem) {
+            $effect = $rerollUsedItem->item->effect;
             $bonusType = $effect['bonus_type'] ?? '';
             if ($bonusType === 'difficulty_reduction') {
                 $difficultyReduction += abs((int) ($effect['bonus_value'] ?? 0));
@@ -2105,10 +2166,24 @@ class GameController extends Controller
             }
         }
 
+        // Check for opponent debuffs targeting this player
+        $rerollOtherPlayer = $rollingPlayer->player_number === $game->getOfferer()->player_number
+            ? $game->getChooser() : $game->getOfferer();
+        $rerollOtherPlayer->load('items.item');
+        $rerollOpponentDebuffs = $rerollOtherPlayer->items
+            ->where('used_round', $game->current_round)
+            ->filter(fn ($pi) => ($pi->item->target ?? null) === 'opponent');
+        foreach ($rerollOpponentDebuffs as $debuffItem) {
+            $dEffect = $debuffItem->item->effect;
+            if (($dEffect['bonus_type'] ?? '') === 'increase_difficulty') {
+                $difficultyReduction -= abs((int) ($dEffect['bonus_value'] ?? 0));
+            }
+        }
+
         // Get the original dice results
         $character = $rollingPlayer->character;
         $dice = $character->dice;
-        $activeDice = max(1, 3 - $rollingPlayer->lost_dice);
+        $activeDice = max(1, 4 - $rollingPlayer->lost_dice);
         $oldDiceResults = $roundResult->dice_results[0] ?? [];
         $oldRolls = $oldDiceResults['rolls'] ?? [];
 
@@ -2174,7 +2249,8 @@ class GameController extends Controller
             }
         } else {
             // Gamble: reroll ALL dice
-            foreach (array_slice($dice, 0, $activeDice) as $dieIndex => $die) {
+            for ($dieIndex = 0; $dieIndex < $activeDice; $dieIndex++) {
+                $die = $dice[$dieIndex % count($dice)];
                 $faceIndex = random_int(0, 5);
                 $face = $die[$faceIndex];
                 $playerRolls[] = [
@@ -2200,12 +2276,16 @@ class GameController extends Controller
             }
         }
 
-        // Apply item roll bonuses/penalties
-        foreach ($rollingPlayer->items->where('is_used', false) as $playerItem) {
-            $effect = $playerItem->item->effect;
-            $bonusType = $effect['bonus_type'] ?? '';
-            if ($bonusType === 'roll_bonus' || $bonusType === 'roll_penalty') {
-                $totalRoll += (int) ($effect['bonus_value'] ?? 0);
+        // Apply single-use item roll bonuses (items used this round)
+        if ($rerollUsedItem) {
+            $uBonusType = ($rerollUsedItem->item->effect['bonus_type'] ?? '');
+            if ($uBonusType === 'roll_bonus' || $uBonusType === 'roll_penalty') {
+                $totalRoll += (int) ($rerollUsedItem->item->effect['bonus_value'] ?? 0);
+            }
+        }
+        foreach ($rerollOpponentDebuffs as $debuffItem) {
+            if (($debuffItem->item->effect['bonus_type'] ?? '') === 'debuff_roll') {
+                $totalRoll += (int) ($debuffItem->item->effect['bonus_value'] ?? 0);
             }
         }
 
@@ -2560,7 +2640,7 @@ class GameController extends Controller
             $query->where('updated_at', '<=', $request->input('date_to') . ' 23:59:59');
         }
 
-        $paginated = $query->paginate(20);
+        $paginated = $query->paginate(10);
 
         $items = collect($paginated->items())->map(function ($game) use ($userId) {
             $myPlayer = $game->players->firstWhere('user_id', $userId);
@@ -2737,6 +2817,10 @@ class GameController extends Controller
         if ($bonusType === 'stat_boost') {
             $stat = $effect['stat'] ?? null;
             $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+            // If no specific stat, pick a random one
+            if (!$stat || !in_array($stat, $stats)) {
+                $stat = $stats[array_rand($stats)];
+            }
             if ($stat && in_array($stat, $stats)) {
                 if ($game->isDuel()) {
                     $kingdom = GamePlayerKingdom::where('game_id', $game->id)
@@ -3613,13 +3697,9 @@ class GameController extends Controller
     {
         $activeItems = GamePlayerItem::where('game_player_id', $player->id)
             ->where('is_used', false)
-            ->get();
+            ->count();
 
-        if ($activeItems->count() >= 2 && $activeItems->every(fn ($pi) => $pi->is_cursed)) {
-            return false;
-        }
-
-        return true;
+        return $activeItems < 2;
     }
 
     private function getPlayersOverItemLimit(Game $game): array
@@ -3645,6 +3725,185 @@ class GameController extends Controller
         }
 
         return $overLimit;
+    }
+
+    /**
+     * Use an item from the player's inventory before rolling.
+     */
+    public function useItem(Game $game, Request $request): JsonResponse
+    {
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active'], 422);
+        }
+
+        $validated = $request->validate([
+            'game_player_item_id' => 'required|integer',
+            'player_number' => 'sometimes|integer',
+        ]);
+
+        // Determine the correct phase check
+        $isDuel = $game->isDuel();
+        if ($isDuel) {
+            if (!in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'rolling'])) {
+                return response()->json(['error' => 'Not in a rolling phase'], 422);
+            }
+        } else {
+            if ($game->round_phase !== 'selecting') {
+                return response()->json(['error' => 'Not in selecting phase'], 422);
+            }
+        }
+
+        $playerItem = GamePlayerItem::where('id', $validated['game_player_item_id'])
+            ->whereHas('gamePlayer', fn ($q) => $q->where('game_id', $game->id))
+            ->with(['item', 'gamePlayer'])
+            ->first();
+
+        if (!$playerItem) {
+            return response()->json(['error' => 'Item not found in this game'], 404);
+        }
+
+        if ($playerItem->is_used) {
+            return response()->json(['error' => 'Item is already used'], 422);
+        }
+
+        $player = $playerItem->gamePlayer;
+
+        // Verify the requesting user owns this player (online mode)
+        if ($game->isOnline() && $request->user()) {
+            if ($request->user()->id !== $player->user_id) {
+                return response()->json(['error' => 'This item does not belong to you'], 403);
+            }
+        }
+
+        // Check player hasn't already used an item this round
+        $alreadyUsed = GamePlayerItem::where('game_player_id', $player->id)
+            ->where('used_round', $game->current_round)
+            ->exists();
+
+        if ($alreadyUsed) {
+            return response()->json(['error' => 'Already used an item this round'], 422);
+        }
+
+        // Mark item as used
+        $playerItem->update([
+            'is_used' => true,
+            'used_round' => $game->current_round,
+        ]);
+
+        // Apply immediate effects for stat_boost/heal_die/score_bonus/steal_stat
+        $immediateDesc = null;
+        $bonusType = $playerItem->item->effect['bonus_type'] ?? '';
+        if (in_array($bonusType, ['stat_boost', 'heal_die', 'score_bonus'])) {
+            $immediateDesc = $this->applyImmediateItemEffect($game, $player, $playerItem->item);
+        } elseif ($bonusType === 'steal_stat' && $game->isDuel()) {
+            // Steal stat from opponent's kingdom
+            $opponent = $game->players()->where('player_number', '!=', $player->player_number)->first();
+            if ($opponent) {
+                $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+                $stat = $stats[array_rand($stats)];
+                $stealValue = (int) ($playerItem->item->effect['bonus_value'] ?? 1);
+                $opponentKingdom = GamePlayerKingdom::where('game_id', $game->id)
+                    ->where('game_player_id', $opponent->id)->first();
+                $playerKingdom = GamePlayerKingdom::where('game_id', $game->id)
+                    ->where('game_player_id', $player->id)->first();
+                if ($opponentKingdom && $playerKingdom) {
+                    $opponentKingdom->{$stat} = max(0, $opponentKingdom->{$stat} - $stealValue);
+                    $playerKingdom->{$stat} = min(20, $playerKingdom->{$stat} + $stealValue);
+                    $opponentKingdom->save();
+                    $playerKingdom->save();
+                    $immediateDesc = "Stole {$stealValue} {$stat} from opponent!";
+                }
+            }
+        }
+
+        // Mark player as decided
+        $player->update(['item_decided' => true]);
+
+        // Check if all players decided
+        $allDecided = $this->allItemsDecided($game);
+
+        // Broadcast for online mode
+        if ($game->isOnline()) {
+            broadcast(new \App\Events\PlayerItemDecided(
+                $game->id,
+                $player->player_number,
+                true,
+                $allDecided,
+            ));
+        }
+
+        return response()->json([
+            'used' => true,
+            'immediate_description' => $immediateDesc,
+            'item_decided' => true,
+            'all_items_decided' => $allDecided,
+            'player_items' => GamePlayerItem::where('game_player_id', $player->id)->with('item')->get(),
+        ]);
+    }
+
+    /**
+     * Skip using an item this round.
+     */
+    public function skipItem(Game $game, Request $request): JsonResponse
+    {
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active'], 422);
+        }
+
+        $validated = $request->validate([
+            'player_number' => 'required|integer',
+        ]);
+
+        $player = $game->players()->where('player_number', $validated['player_number'])->first();
+        if (!$player) {
+            return response()->json(['error' => 'Invalid player number'], 422);
+        }
+
+        // Verify the requesting user owns this player (online mode)
+        if ($game->isOnline() && $request->user()) {
+            if ($request->user()->id !== $player->user_id) {
+                return response()->json(['error' => 'Not your player'], 403);
+            }
+        }
+
+        $player->update(['item_decided' => true]);
+
+        $allDecided = $this->allItemsDecided($game);
+
+        if ($game->isOnline()) {
+            broadcast(new \App\Events\PlayerItemDecided(
+                $game->id,
+                $player->player_number,
+                false,
+                $allDecided,
+            ));
+        }
+
+        return response()->json([
+            'skipped' => true,
+            'item_decided' => true,
+            'all_items_decided' => $allDecided,
+        ]);
+    }
+
+    /**
+     * Check if all players have made their item decision for this round.
+     */
+    private function allItemsDecided(Game $game): bool
+    {
+        $players = $game->players()->with(['items' => fn ($q) => $q->where('is_used', false)])->get();
+
+        foreach ($players as $player) {
+            // Players with no usable items are auto-decided
+            if ($player->items->isEmpty()) {
+                continue;
+            }
+            if (!$player->item_decided) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
@@ -3682,6 +3941,19 @@ class GameController extends Controller
         return response()->json([
             'discarded' => true,
             'items_over_limit' => $this->getPlayersOverItemLimit($game),
+        ]);
+    }
+
+    public function customGameOptions(): JsonResponse
+    {
+        $cards = Card::select('id', 'title', 'category', 'available_cooperative', 'available_duel')->get();
+        $events = Event::select('id', 'title', 'available_cooperative', 'available_duel')->get();
+        $items = Item::select('id', 'name', 'available_cooperative', 'available_duel')->get();
+
+        return response()->json([
+            'cards' => $cards,
+            'events' => $events,
+            'items' => $items,
         ]);
     }
 }

@@ -6,7 +6,10 @@
       <div class="profile-info">
         <div class="profile-avatar">&#9876;</div>
         <div class="profile-details">
-          <h3 class="profile-name">{{ auth.state.user?.name }}</h3>
+          <h3 class="profile-name">
+            {{ auth.state.user?.name }}
+            <span v-if="auth.state.user?.is_premium && auth.state.user?.payments_enabled" class="premium-badge-inline" title="Premium">&#9733;</span>
+          </h3>
           <p class="profile-joined">Level {{ gameStats.level || 1 }} Advisor</p>
         </div>
       </div>
@@ -126,53 +129,69 @@
       </div>
     </div>
 
-    <!-- My Advisors -->
-    <div class="card-panel">
-      <h2 class="section-title">My Advisors</h2>
-      <div v-if="charsLoading" class="stats-loading">Loading advisors...</div>
-      <div v-else class="char-grid">
-        <div
-          v-for="c in myCharacters"
-          :key="c.id"
-          class="char-card"
-          :class="{ 'char-locked': !c.is_unlocked }"
-          @click="c.is_unlocked ? (selectedChar = c) : null"
-        >
-          <img
-            :src="c.image_url || '/images/character.png'"
-            :alt="c.name"
-            class="char-portrait"
-            :class="{ 'char-grayscale': !c.is_unlocked }"
-          />
-          <span class="char-name">{{ c.name }}</span>
-          <span v-if="!c.is_unlocked" class="char-lock">&#128274; {{ c.unlock_requirement }}</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Character detail modal -->
-    <div v-if="selectedChar" class="char-modal-overlay" @click.self="selectedChar = null">
-      <div class="char-modal-card">
-        <img :src="selectedChar.image_url || '/images/character.png'" :alt="selectedChar.name" class="char-modal-portrait" />
-        <h3 class="char-modal-name">{{ selectedChar.name }}</h3>
-        <p class="char-modal-desc">{{ selectedChar.description }}</p>
-        <div v-if="selectedChar.dice" class="char-modal-dice">
-          <div v-for="(die, di) in selectedChar.dice" :key="di" class="dice-row">
-            <span class="dice-label">Die {{ di + 1 }}:</span>
-            <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face }}</span>
-          </div>
-        </div>
-        <div v-if="selectedChar.wild_ability" class="char-modal-wild">
-          <span class="wild-badge">W = {{ selectedChar.wild_value }}</span>
-          <span class="wild-desc">{{ selectedChar.wild_ability }}: {{ selectedChar.wild_ability_description }}</span>
-        </div>
-        <button class="btn-primary char-modal-close" @click="selectedChar = null">Close</button>
-      </div>
-    </div>
-
-    <!-- Detailed Stats Link -->
-    <div class="card-panel" style="text-align: center;">
+    <!-- Detailed Stats Link (hidden if no payments and not premium) -->
+    <div v-if="auth.state.user?.is_premium" class="card-panel" style="text-align: center;">
       <router-link to="/stats" class="btn-primary stats-link">View Detailed Stats</router-link>
+    </div>
+    <div v-else-if="auth.state.user?.payments_enabled" class="card-panel" style="text-align: center;">
+      <router-link to="/stats" class="btn-primary stats-link">
+        <span class="lock-icon">&#128274; </span>View Detailed Stats
+      </router-link>
+    </div>
+
+    <!-- Subscription Management -->
+    <div v-if="auth.state.user?.is_premium && auth.state.user?.payments_enabled" class="card-panel">
+      <h2 class="section-title">Subscription</h2>
+      <div v-if="subLoading" class="stats-loading">Loading subscription details...</div>
+      <div v-else-if="subDetails" class="sub-panel">
+        <div class="sub-row">
+          <span class="sub-label">Platform</span>
+          <span class="sub-value sub-platform">{{ platformLabel }}</span>
+        </div>
+        <div v-if="subDetails.interval" class="sub-row">
+          <span class="sub-label">Plan</span>
+          <span class="sub-value">{{ intervalLabel }}</span>
+        </div>
+        <div v-if="subDetails.amount_cents" class="sub-row">
+          <span class="sub-label">Price</span>
+          <span class="sub-value">{{ formattedPrice }}</span>
+        </div>
+        <div class="sub-row">
+          <span class="sub-label">Status</span>
+          <span class="sub-value" :class="subStatusClass">{{ subStatusLabel }}</span>
+        </div>
+        <div v-if="subDetails.cancel_at_period_end && subDetails.current_period_end" class="sub-row">
+          <span class="sub-label">Cancels on</span>
+          <span class="sub-value sub-cancelling">{{ formatDate(subDetails.current_period_end) }}</span>
+        </div>
+        <div v-else-if="subDetails.current_period_end" class="sub-row">
+          <span class="sub-label">Next bill date</span>
+          <span class="sub-value">{{ formatDate(subDetails.current_period_end) }}</span>
+        </div>
+
+        <!-- Stripe: Cancel button -->
+        <div v-if="subDetails.platform === 'stripe' && !subDetails.cancel_at_period_end" class="sub-actions">
+          <button class="btn-cancel-sub" @click="showCancelConfirm = true">Cancel Subscription</button>
+        </div>
+
+        <!-- Apple/Google: external management -->
+        <p v-if="subDetails.platform === 'apple'" class="sub-external">Manage your subscription in the App Store.</p>
+        <p v-if="subDetails.platform === 'google'" class="sub-external">Manage your subscription in Google Play.</p>
+      </div>
+    </div>
+
+    <!-- Cancel confirmation modal -->
+    <div v-if="showCancelConfirm" class="modal-overlay" @click.self="showCancelConfirm = false">
+      <div class="modal-box">
+        <h3 class="modal-title">Cancel Subscription?</h3>
+        <p class="modal-body">Your premium access will continue until the end of your current billing period. You won't be charged again.</p>
+        <div class="modal-actions">
+          <button @click="showCancelConfirm = false">Keep Subscription</button>
+          <button class="btn-danger" @click="confirmCancel" :disabled="cancelling">
+            {{ cancelling ? 'Cancelling...' : 'Yes, Cancel' }}
+          </button>
+        </div>
+      </div>
     </div>
 
     <!-- Account Management -->
@@ -191,20 +210,19 @@
 <script>
 import axios from 'axios';
 import { useAuth } from '../stores/auth';
+import { useToast } from '../stores/toast';
 
 export default {
   name: 'ProfilePage',
   setup() {
     const auth = useAuth();
-    return { auth };
+    const toast = useToast();
+    return { auth, toast };
   },
   data() {
     return {
       gameStats: {},
       statsLoading: true,
-      myCharacters: [],
-      charsLoading: true,
-      selectedChar: null,
       authServiceUrl: import.meta.env.VITE_AUTH_URL || '',
       referralCode: null,
       referralStats: null,
@@ -214,9 +232,48 @@ export default {
       applyingReferral: false,
       referralError: '',
       referralApplied: false,
+      subDetails: null,
+      subLoading: false,
+      showCancelConfirm: false,
+      cancelling: false,
     };
   },
   computed: {
+    platformLabel() {
+      const p = this.subDetails?.platform;
+      if (p === 'stripe') return 'Stripe';
+      if (p === 'apple') return 'Apple';
+      if (p === 'google') return 'Google Play';
+      return p || 'Unknown';
+    },
+    subStatusLabel() {
+      if (this.subDetails?.cancel_at_period_end) {
+        return 'Cancelling';
+      }
+      return this.subDetails?.status === 'active' ? 'Active' : (this.subDetails?.status || 'Active');
+    },
+    subStatusClass() {
+      if (this.subDetails?.cancel_at_period_end) return 'sub-cancelling';
+      return this.subDetails?.status === 'active' ? 'sub-active' : '';
+    },
+    intervalLabel() {
+      const interval = this.subDetails?.interval;
+      const count = this.subDetails?.interval_count || 1;
+      if (!interval) return '';
+      const labels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
+      if (count === 1) return labels[interval] || interval;
+      return `Every ${count} ${interval}s`;
+    },
+    formattedPrice() {
+      const cents = this.subDetails?.amount_cents;
+      const currency = this.subDetails?.currency || 'USD';
+      if (!cents && cents !== 0) return '';
+      try {
+        return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
+      } catch {
+        return `${(cents / 100).toFixed(2)} ${currency}`;
+      }
+    },
     xpPercent() {
       const xp = this.gameStats.xp || 0;
       const level = this.gameStats.level || 1;
@@ -228,15 +285,15 @@ export default {
     },
   },
   async mounted() {
-    const [statsRes, charsRes] = await Promise.allSettled([
-      axios.get('/api/auth/stats'),
-      axios.get('/api/my-characters'),
-    ]);
-    this.gameStats = statsRes.status === 'fulfilled' ? statsRes.value.data : {};
+    try {
+      const res = await axios.get('/api/auth/stats');
+      this.gameStats = res.data;
+    } catch {}
     this.statsLoading = false;
-    this.myCharacters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
-    this.charsLoading = false;
     this.fetchReferralData();
+    if (this.auth.state.user?.is_premium && this.auth.state.user?.payments_enabled) {
+      this.fetchSubscriptionDetails();
+    }
   },
   methods: {
     async handleLogout() {
@@ -269,6 +326,38 @@ export default {
           text: `Use my referral code: ${this.referralCode}`,
         });
       } catch {}
+    },
+    async fetchSubscriptionDetails() {
+      this.subLoading = true;
+      try {
+        const res = await axios.get('/api/premium/details');
+        this.subDetails = res.data;
+      } catch {
+        // fallback to basic info
+        this.subDetails = {
+          is_premium: true,
+          status: 'active',
+        };
+      }
+      this.subLoading = false;
+    },
+    async confirmCancel() {
+      this.cancelling = true;
+      try {
+        const res = await axios.post('/api/premium/cancel');
+        this.showCancelConfirm = false;
+        if (this.subDetails) {
+          this.subDetails.cancel_at_period_end = true;
+          this.subDetails.current_period_end = res.data.ends_at;
+        }
+      } catch {
+        this.toast.error('Failed to cancel subscription. Please try again.');
+      }
+      this.cancelling = false;
+    },
+    formatDate(isoString) {
+      if (!isoString) return '';
+      return new Date(isoString).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
     },
     async applyReferralCode() {
       const code = this.referralInput.trim();
@@ -491,166 +580,6 @@ export default {
   color: #e06050;
 }
 
-/* My Advisors */
-.char-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
-}
-
-.char-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  padding: 10px 6px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(138, 106, 46, 0.2);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.char-card:hover:not(.char-locked) {
-  border-color: var(--accent-gold);
-}
-
-.char-locked {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.char-portrait {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(138, 106, 46, 0.3);
-}
-
-.char-grayscale {
-  filter: grayscale(1);
-}
-
-.char-name {
-  font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 0.75rem;
-  text-align: center;
-}
-
-.char-lock {
-  font-size: 0.6rem;
-  color: var(--text-secondary);
-  text-align: center;
-  line-height: 1.2;
-}
-
-/* Character detail modal */
-.char-modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 200;
-}
-
-.char-modal-card {
-  background: linear-gradient(180deg, #3a2a1a, #2a1f14);
-  border: 2px solid var(--accent-gold);
-  border-radius: 12px;
-  padding: 24px;
-  max-width: 340px;
-  width: 90%;
-  text-align: center;
-}
-
-.char-modal-portrait {
-  width: 90px;
-  height: 90px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid var(--accent-gold);
-  margin-bottom: 12px;
-}
-
-.char-modal-name {
-  font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 1.2rem;
-  margin-bottom: 8px;
-}
-
-.char-modal-desc {
-  color: var(--text-secondary);
-  font-style: italic;
-  font-size: 0.85rem;
-  margin-bottom: 12px;
-}
-
-.char-modal-dice {
-  margin-bottom: 12px;
-}
-
-.char-modal-dice .dice-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-  justify-content: center;
-}
-
-.char-modal-dice .dice-label {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  min-width: 42px;
-}
-
-.char-modal-dice .dice-face {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  background: rgba(212, 168, 67, 0.12);
-  border: 1px solid rgba(212, 168, 67, 0.3);
-  border-radius: 4px;
-  color: var(--text-bright);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.char-modal-wild {
-  background: rgba(212, 168, 67, 0.08);
-  border-top: 1px solid rgba(212, 168, 67, 0.2);
-  border-radius: 6px;
-  padding: 8px;
-  margin-bottom: 16px;
-}
-
-.char-modal-wild .wild-badge {
-  display: inline-block;
-  background: rgba(212, 168, 67, 0.2);
-  color: var(--accent-gold);
-  padding: 2px 10px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.char-modal-wild .wild-desc {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-style: italic;
-}
-
-.char-modal-close {
-  padding: 8px 28px;
-}
 
 /* Referral Section */
 .referral-section {
@@ -815,12 +744,143 @@ export default {
   border-top: 1px solid rgba(138, 106, 46, 0.15);
 }
 
+.premium-badge-inline {
+  color: var(--accent-gold);
+  font-size: 1rem;
+  margin-left: 4px;
+}
+
+.lock-icon {
+  font-size: 0.8rem;
+}
+
+/* Subscription panel */
+.sub-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sub-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(138, 106, 46, 0.15);
+}
+
+.sub-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.sub-value {
+  font-family: 'Cinzel', serif;
+  color: var(--text-bright);
+  font-weight: 600;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+.sub-platform {
+  color: var(--accent-gold);
+}
+
+.sub-active {
+  color: #6abf50;
+}
+
+.sub-cancelling {
+  color: #e08040;
+}
+
+.sub-actions {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.btn-cancel-sub {
+  padding: 8px 24px;
+  font-size: 0.9rem;
+  background: rgba(160, 48, 32, 0.15);
+  border: 1px solid rgba(160, 48, 32, 0.4);
+  border-radius: 6px;
+  color: #d05040;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.btn-cancel-sub:hover {
+  background: rgba(160, 48, 32, 0.3);
+  color: #e06050;
+}
+
+.sub-external {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* Cancel confirmation modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 20px;
+}
+
+.modal-box {
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-gold);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 400px;
+  width: 100%;
+}
+
+.modal-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.2rem;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.modal-body {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 20px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.modal-actions button {
+  padding: 8px 20px;
+  font-size: 0.9rem;
+}
+
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
-  }
-  .char-grid {
-    grid-template-columns: repeat(3, 1fr);
   }
 }
 </style>

@@ -63,8 +63,11 @@ class LeaderboardController extends Controller
             return $this->xpLeaderboard($userIds, $currentUser);
         }
 
-        // Wins or score: need to query games
-        $query = Game::where('status', 'completed');
+        // Wins or score: need to query games (exclude custom games)
+        $query = Game::where('status', 'completed')
+            ->where(function ($q) {
+                $q->where('is_custom', false)->orWhereNull('is_custom');
+            });
 
         if ($seasonId) {
             $query->where('season_id', $seasonId);

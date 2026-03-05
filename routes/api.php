@@ -23,6 +23,8 @@ use App\Http\Controllers\Admin\SoundAssetController;
 use App\Http\Controllers\Admin\UnlockableController;
 use App\Http\Controllers\Admin\AddonController;
 use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\AdminDiceController;
+use App\Http\Controllers\Admin\AdminKingdomStyleController;
 use App\Http\Controllers\Admin\AiGeneratorController;
 use App\Http\Controllers\Admin\CsvController;
 use App\Http\Controllers\Admin\GameManagementController;
@@ -34,8 +36,15 @@ use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementContro
 use App\Http\Controllers\Admin\RotatingEventController as AdminRotatingEventController;
 use App\Http\Controllers\Admin\WeeklyChallengeController;
 use App\Http\Controllers\ReferralController;
+use App\Http\Controllers\DddiceController;
+use App\Http\Controllers\DiceController;
+use App\Http\Controllers\KingdomStyleController;
 use App\Http\Controllers\RotatingEventController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\StatsController;
+use App\Http\Controllers\TournamentController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -43,6 +52,15 @@ use Illuminate\Support\Facades\Storage;
 Route::post('/webhooks/auth', [WebhookController::class, 'handleAuthWebhook'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])
     ->middleware(\App\Http\Middleware\VerifyWebhookSignature::class);
+
+Route::post('/webhooks/stripe', [StripeWebhookController::class, 'handle'])
+    ->withoutMiddleware([
+        \Illuminate\Cookie\Middleware\EncryptCookies::class,
+        \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
+        \Illuminate\Session\Middleware\StartSession::class,
+        \Illuminate\View\Middleware\ShareErrorsFromSession::class,
+        \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
+    ]);
 
 // Public
 Route::get('/characters', [GameController::class, 'characters']);
@@ -95,6 +113,8 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/games/{game}/use-ability', [GameController::class, 'useAbility']);
 
     // Item management
+    Route::post('/games/{game}/use-item', [GameController::class, 'useItem']);
+    Route::post('/games/{game}/skip-item', [GameController::class, 'skipItem']);
     Route::post('/games/{game}/discard-item', [GameController::class, 'discardItem']);
 
     // Timeout reporting
@@ -140,6 +160,7 @@ Route::middleware('auth:web')->group(function () {
     // Coin shop
     Route::get('/shop', [CoinShopController::class, 'index']);
     Route::post('/shop/{unlockable}/purchase', [CoinShopController::class, 'purchase']);
+    Route::post('/shop/{unlockable}/gift', [CoinShopController::class, 'gift']);
     Route::get('/coin-transactions', [CoinShopController::class, 'transactions']);
 
     // Announcements
@@ -156,10 +177,37 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/rotating-events/{rotatingEvent}', [RotatingEventController::class, 'show']);
     Route::get('/rotating-events/{rotatingEvent}/leaderboard', [RotatingEventController::class, 'leaderboard']);
 
-    // Stats dashboard
-    Route::get('/stats/overview', [StatsController::class, 'overview']);
-    Route::get('/stats/history', [StatsController::class, 'history']);
-    Route::get('/stats/characters', [StatsController::class, 'characters']);
+    // dddice 3D dice
+    Route::get('/dddice/guest-token', [DddiceController::class, 'guestToken']);
+
+    // User dice themes
+    Route::get('/my-dice', [DiceController::class, 'myDice']);
+    Route::post('/my-dice/{diceTheme}/activate', [DiceController::class, 'activate']);
+
+    // User kingdom styles
+    Route::get('/my-kingdom-styles', [KingdomStyleController::class, 'myStyles']);
+    Route::post('/my-kingdom-styles/{kingdomStyle}/activate', [KingdomStyleController::class, 'activate']);
+    Route::post('/my-kingdom-styles/set-title', [KingdomStyleController::class, 'setTitle']);
+
+    // Stats dashboard (premium-gated)
+    Route::middleware('premium')->group(function () {
+        Route::get('/stats/overview', [StatsController::class, 'overview']);
+        Route::get('/stats/history', [StatsController::class, 'history']);
+        Route::get('/stats/characters', [StatsController::class, 'characters']);
+        Route::get('/games/custom-options', [GameController::class, 'customGameOptions']);
+    });
+
+    // Payments & Premium
+    Route::get('/premium/price', [PaymentController::class, 'premiumPrice']);
+    Route::get('/premium/status', [PaymentController::class, 'premiumStatus']);
+    Route::post('/purchase/stripe/checkout', [PaymentController::class, 'stripeCheckout']);
+    Route::post('/purchase/iap/verify', [PaymentController::class, 'iapVerify']);
+    Route::post('/purchase/restore', [PaymentController::class, 'restore']);
+    Route::get('/premium/manage', [PaymentController::class, 'managePremium']);
+    Route::get('/premium/details', [PaymentController::class, 'subscriptionDetails']);
+    Route::post('/premium/cancel', [PaymentController::class, 'cancelSubscription']);
+    Route::get('/app-review/should-prompt', [PaymentController::class, 'shouldPromptReview']);
+    Route::post('/app-review/prompted', [PaymentController::class, 'markReviewPrompted']);
 
     Route::get('/friends', [FriendshipController::class, 'index']);
     Route::post('/friends', [FriendshipController::class, 'store']);
@@ -167,12 +215,22 @@ Route::middleware('auth:web')->group(function () {
     Route::delete('/friends/{friendship}', [FriendshipController::class, 'destroy']);
 
     // Online lobby routes
+    Route::get('/games/lobbies', [GameLobbyController::class, 'publicLobbies']);
     Route::post('/games/{game}/invite', [GameLobbyController::class, 'invite']);
+    Route::post('/games/{game}/join', [GameLobbyController::class, 'joinLobby']);
     Route::post('/game-invites/{invite}/accept', [GameLobbyController::class, 'acceptInvite']);
     Route::post('/game-invites/{invite}/decline', [GameLobbyController::class, 'declineInvite']);
     Route::post('/games/{game}/select-character', [GameLobbyController::class, 'selectCharacter']);
     Route::get('/games/{game}/lobby', [GameLobbyController::class, 'lobbyStatus']);
     Route::get('/game-invites/pending', [GameLobbyController::class, 'myPendingInvites']);
+
+    // Tournaments
+    Route::get('/tournaments', [TournamentController::class, 'index']);
+    Route::get('/tournaments/mine', [TournamentController::class, 'mine']);
+    Route::post('/tournaments', [TournamentController::class, 'store']);
+    Route::get('/tournaments/{tournament}', [TournamentController::class, 'show']);
+    Route::post('/tournaments/{tournament}/join', [TournamentController::class, 'join']);
+    Route::post('/tournaments/{tournament}/start', [TournamentController::class, 'start']);
 });
 
 // Admin CRUD routes
@@ -230,8 +288,27 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::post('weekly-challenges/generate', [WeeklyChallengeController::class, 'generateRange']);
     Route::apiResource('weekly-challenges', WeeklyChallengeController::class);
 
+    // Dice themes
+    Route::get('dice-themes', [AdminDiceController::class, 'index']);
+    Route::put('dice-themes/{diceTheme}', [AdminDiceController::class, 'update']);
+    Route::post('dice-themes/sync', [AdminDiceController::class, 'sync']);
+
+    // Kingdom styles
+    Route::get('kingdom-styles', [AdminKingdomStyleController::class, 'index']);
+    Route::put('kingdom-styles/{kingdomStyle}', [AdminKingdomStyleController::class, 'update']);
+    Route::post('kingdom-styles/{kingdomStyle}/image', [AdminKingdomStyleController::class, 'uploadImage']);
+    Route::delete('kingdom-styles/{kingdomStyle}/image', [AdminKingdomStyleController::class, 'removeImage']);
+
     // AI content generation
     Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);
     Route::post('ai/generate-card', [AiGeneratorController::class, 'generateCard']);
     Route::post('ai/generate-event', [AiGeneratorController::class, 'generateEvent']);
+
+    // Payment management
+    Route::get('subscribers', [AdminPaymentController::class, 'subscribers']);
+    Route::get('purchases', [AdminPaymentController::class, 'purchases']);
+    Route::get('payment-settings', [AdminPaymentController::class, 'settings']);
+    Route::put('payment-settings', [AdminPaymentController::class, 'updateSettings']);
+    Route::post('users/{user}/grant-premium', [AdminPaymentController::class, 'grantPremium']);
+    Route::post('users/{user}/revoke-premium', [AdminPaymentController::class, 'revokePremium']);
 });

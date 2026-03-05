@@ -1,13 +1,13 @@
 <template>
-  <!-- Inventory icon button (only visible when player has items and showButton is true) -->
-  <div v-if="showButton && items && items.length" class="items-icon-wrapper">
+  <!-- Inventory icon button (only visible when player has available items and showButton is true) -->
+  <div v-if="showButton && availableItems.length" class="items-icon-wrapper">
     <button class="items-icon-btn" @click="open = true" title="View Inventory">
       <svg class="items-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
         <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
         <path d="M12 11v4M10 13h4"/>
       </svg>
-      <span class="items-badge">{{ items.length }}</span>
+      <span class="items-badge">{{ availableItems.length }}</span>
     </button>
   </div>
 
@@ -21,16 +21,15 @@
           <p class="items-heading">Inventory</p>
 
           <!-- Parchment card display -->
-          <div class="parchment-card" :class="{ cursed: currentItem.is_cursed || currentItem.item?.is_negative, used: currentItem.is_used }">
+          <div class="parchment-card" :class="{ used: currentItem.is_used }">
             <div class="card-ornament">&#9876;</div>
             <h3 class="parchment-title">{{ currentItem.item?.name || 'Unknown Item' }}</h3>
 
             <!-- Tags row -->
             <div class="tag-row">
-              <span v-if="currentItem.is_cursed" class="cursed-tag">Cursed</span>
-              <span v-if="currentItem.item?.is_consumable" class="type-tag immediate-tag">Immediate</span>
-              <span v-else-if="currentItem.item?.effect_type" class="type-tag ongoing-tag">Ongoing</span>
+              <span v-if="!currentItem.is_used" class="type-tag ongoing-tag">Single Use</span>
               <span v-if="currentItem.is_used" class="type-tag used-tag">Used</span>
+              <span v-if="currentItem.item?.target === 'opponent'" class="type-tag opponent-tag">Targets Opponent</span>
             </div>
 
             <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
@@ -52,9 +51,9 @@
           </div>
 
           <!-- Navigation -->
-          <div v-if="items.length > 1" class="items-nav">
+          <div v-if="availableItems.length > 1" class="items-nav">
             <button class="nav-btn" @click="prev">&lsaquo;</button>
-            <span class="nav-counter">{{ currentIndex + 1 }} / {{ items.length }}</span>
+            <span class="nav-counter">{{ currentIndex + 1 }} / {{ availableItems.length }}</span>
             <button class="nav-btn" @click="next">&rsaquo;</button>
           </div>
         </div>
@@ -77,29 +76,36 @@ export default {
     };
   },
   computed: {
+    availableItems() {
+      return (this.items || []).filter(pi => !pi.is_used);
+    },
     currentItem() {
-      return this.items[this.currentIndex] || {};
+      return this.availableItems[this.currentIndex] || {};
     },
   },
   watch: {
-    items() {
-      // Reset index when items change
-      if (this.currentIndex >= this.items.length) {
+    availableItems() {
+      // Reset index when available items change
+      if (this.currentIndex >= this.availableItems.length) {
         this.currentIndex = 0;
+      }
+      // Auto-close overlay if no items left
+      if (this.availableItems.length === 0) {
+        this.open = false;
       }
     },
   },
   methods: {
     openOverlay() {
-      if (this.items && this.items.length) {
+      if (this.availableItems.length) {
         this.open = true;
       }
     },
     prev() {
-      this.currentIndex = this.currentIndex <= 0 ? this.items.length - 1 : this.currentIndex - 1;
+      this.currentIndex = this.currentIndex <= 0 ? this.availableItems.length - 1 : this.currentIndex - 1;
     },
     next() {
-      this.currentIndex = this.currentIndex >= this.items.length - 1 ? 0 : this.currentIndex + 1;
+      this.currentIndex = this.currentIndex >= this.availableItems.length - 1 ? 0 : this.currentIndex + 1;
     },
     effectSummary(item) {
       if (!item?.effect) return '';
@@ -107,27 +113,37 @@ export default {
       const value = item.effect.bonus_value ?? 0;
       switch (type) {
         case 'roll_bonus':
-          return `+${value} to rolls`;
+          return `+${value} to roll`;
         case 'roll_penalty':
-          return `${value} to rolls`;
+          return `${value} to roll`;
         case 'difficulty_reduction':
           return `-${Math.abs(value)} difficulty`;
         case 'difficulty_increase':
           return `+${Math.abs(value)} difficulty`;
         case 'score_bonus':
           return `${value > 0 ? '+' : ''}${value} renown`;
-        case 'score_per_round':
-          return `+${value} renown/round`;
-        case 'score_multiplier':
-          return `${value}x score multiplier`;
+        case 'stat_boost':
+          return `+${value} ${item.effect.stat || 'stat'}`;
+        case 'heal_die':
+          return 'Recover a lost die';
+        case 'shield_negative':
+          return 'Block negative effects';
+        case 'debuff_roll':
+          return `${value} to opponent roll`;
+        case 'increase_difficulty':
+          return `+${Math.abs(value)} opponent difficulty`;
+        case 'peek_cards':
+          return 'Peek at opponent cards';
+        case 'steal_stat':
+          return `Steal ${value} stat point`;
         default:
-          return item.description || 'Passive effect';
+          return item.description || 'Single-use effect';
       }
     },
     effectChipClass(pi) {
       const type = pi.item?.effect?.bonus_type || '';
-      if (pi.is_cursed || type === 'roll_penalty' || type === 'difficulty_increase') return 'chip-negative';
       if (type === 'roll_bonus' || type === 'difficulty_reduction') return 'chip-positive';
+      if (type === 'debuff_roll' || type === 'increase_difficulty') return 'chip-negative';
       return 'chip-neutral';
     },
   },
@@ -320,6 +336,11 @@ export default {
 .immediate-tag {
   color: #f0c040;
   border: 1px solid #f0c040;
+}
+
+.opponent-tag {
+  color: #e57373;
+  border: 1px solid #e57373;
 }
 
 .used-tag {

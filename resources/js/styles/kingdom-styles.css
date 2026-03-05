@@ -1,0 +1,248 @@
+/* Kingdom Style Variants
+   Applied via [data-kingdom-style="slug"] on .kingdom-col / .kingdom-stats elements.
+   Each style sets CSS custom properties that the component CSS consumes. */
+
+/* === Base defaults (Classic) === */
+[data-kingdom-style] {
+  --ks-border-color: transparent;
+  --ks-border-glow: none;
+  --ks-border-color-rgb: 0, 0, 0;
+  --ks-bg-tint: transparent;
+  --ks-bg-color: transparent;
+  --ks-bg-image: none;
+  --ks-name-accent: var(--accent-gold);
+  --ks-total-accent: var(--accent-gold);
+  --ks-bar-safe: #27ae60;
+  --ks-bar-caution: #d4a843;
+  --ks-stat-color: var(--text-bright);
+  --ks-text-color: var(--text-secondary);
+}
+
+/* === Classic === */
+[data-kingdom-style="classic"] {
+  --ks-border-color: transparent;
+  --ks-border-glow: none;
+  --ks-bg-tint: transparent;
+  --ks-bg-color: transparent;
+  --ks-bg-image: none;
+  --ks-name-accent: var(--accent-gold);
+  --ks-total-accent: var(--accent-gold);
+  --ks-bar-safe: #27ae60;
+  --ks-bar-caution: #d4a843;
+  --ks-stat-color: var(--text-bright);
+  --ks-text-color: var(--text-secondary);
+}
+
+/* === Royal Gold === */
+[data-kingdom-style="royal-gold"] {
+  --ks-border-color: #c9a227;
+  --ks-border-glow: 0 0 12px rgba(201, 162, 39, 0.4);
+  --ks-bg-tint: rgba(201, 162, 39, 0.06);
+  --ks-bg-color: rgba(201, 162, 39, 0.12);
+  --ks-name-accent: #e8c468;
+  --ks-total-accent: #e8c468;
+  --ks-bar-safe: #c9a227;
+  --ks-bar-caution: #b08a20;
+}
+
+/* === Shadow Knight === */
+[data-kingdom-style="shadow-knight"] {
+  --ks-border-color: #7b42c9;
+  --ks-border-glow: 0 0 12px rgba(123, 66, 201, 0.4);
+  --ks-bg-tint: rgba(123, 66, 201, 0.06);
+  --ks-bg-color: rgba(123, 66, 201, 0.12);
+  --ks-name-accent: #c49bff;
+  --ks-total-accent: #c49bff;
+  --ks-bar-safe: #9055d4;
+  --ks-bar-caution: #7b42c9;
+}
+
+/* === Nature's Keeper === */
+[data-kingdom-style="natures-keeper"] {
+  --ks-border-color: #2d8a4e;
+  --ks-border-glow: 0 0 12px rgba(45, 138, 78, 0.4);
+  --ks-bg-tint: rgba(45, 138, 78, 0.06);
+  --ks-bg-color: rgba(45, 138, 78, 0.12);
+  --ks-name-accent: #5ec87a;
+  --ks-total-accent: #5ec87a;
+  --ks-bar-safe: #2d8a4e;
+  --ks-bar-caution: #4a9e60;
+}
+
+/* === Fire Lord === */
+[data-kingdom-style="fire-lord"] {
+  --ks-border-color: #c44a20;
+  --ks-border-glow: 0 0 12px rgba(196, 74, 32, 0.4);
+  --ks-bg-tint: rgba(196, 74, 32, 0.06);
+  --ks-bg-color: rgba(196, 74, 32, 0.12);
+  --ks-name-accent: #f09040;
+  --ks-total-accent: #f09040;
+  --ks-bar-safe: #c44a20;
+  --ks-bar-caution: #b84020;
+}
+
+/* === Ice Crown === */
+[data-kingdom-style="ice-crown"] {
+  --ks-border-color: #5ba4c9;
+  --ks-border-glow: 0 0 12px rgba(91, 164, 201, 0.4);
+  --ks-bg-tint: rgba(91, 164, 201, 0.06);
+  --ks-bg-color: rgba(91, 164, 201, 0.12);
+  --ks-name-accent: #8cc8e8;
+  --ks-total-accent: #8cc8e8;
+  --ks-bar-safe: #5ba4c9;
+  --ks-bar-caution: #4a90b8;
+}
+
+/* ============================
+   Border Animations
+   ============================ */
+
+/* --- Pulse: glow intensity cycles soft → bright → soft --- */
+@keyframes ks-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(var(--ks-border-color-rgb), 0.25); }
+  50%      { box-shadow: 0 0 20px rgba(var(--ks-border-color-rgb), 0.7), 0 0 40px rgba(var(--ks-border-color-rgb), 0.3); }
+}
+
+[data-ks-anim="pulse"] {
+  animation: ks-pulse 3s ease-in-out infinite;
+}
+
+/* --- Breathe: glow radius expands and contracts --- */
+@keyframes ks-breathe {
+  0%, 100% {
+    box-shadow: 0 0 4px rgba(var(--ks-border-color-rgb), 0.2);
+    border-color: rgba(var(--ks-border-color-rgb), 0.5);
+  }
+  50% {
+    box-shadow: 0 0 32px rgba(var(--ks-border-color-rgb), 0.6), 0 0 64px rgba(var(--ks-border-color-rgb), 0.2);
+    border-color: rgba(var(--ks-border-color-rgb), 1);
+  }
+}
+
+[data-ks-anim="breathe"] {
+  animation: ks-breathe 4s ease-in-out infinite;
+}
+
+/* --- Flicker: rapid candlelight-style glow variation --- */
+@keyframes ks-flicker {
+  0%, 100% { box-shadow: 0 0 8px rgba(var(--ks-border-color-rgb), 0.4); }
+  10%      { box-shadow: 0 0 14px rgba(var(--ks-border-color-rgb), 0.6); }
+  20%      { box-shadow: 0 0 6px rgba(var(--ks-border-color-rgb), 0.3); }
+  35%      { box-shadow: 0 0 18px rgba(var(--ks-border-color-rgb), 0.7); }
+  45%      { box-shadow: 0 0 10px rgba(var(--ks-border-color-rgb), 0.35); }
+  60%      { box-shadow: 0 0 16px rgba(var(--ks-border-color-rgb), 0.65); }
+  75%      { box-shadow: 0 0 5px rgba(var(--ks-border-color-rgb), 0.25); }
+  85%      { box-shadow: 0 0 20px rgba(var(--ks-border-color-rgb), 0.7); }
+}
+
+[data-ks-anim="flicker"] {
+  animation: ks-flicker 2s ease-in-out infinite;
+}
+
+/* === Shared rotating-border base for shimmer, pride, etc. === */
+@keyframes ks-border-rotate {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Shared pseudo-element setup for rotating border effects */
+[data-ks-anim="shimmer"],
+[data-ks-anim="pride"],
+[data-ks-anim="fire"],
+[data-ks-anim="ocean"] {
+  position: relative;
+  overflow: hidden;
+}
+
+[data-ks-anim="shimmer"]::before,
+[data-ks-anim="pride"]::before,
+[data-ks-anim="fire"]::before,
+[data-ks-anim="ocean"]::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  z-index: 0;
+  border-radius: inherit;
+  animation: ks-border-rotate 6s linear infinite;
+  -webkit-mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#fff 0 0) content-box,
+    linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 2px;
+}
+
+/* Ensure children sit above the rotating pseudo-element */
+[data-ks-anim="shimmer"] > *,
+[data-ks-anim="pride"] > *,
+[data-ks-anim="fire"] > *,
+[data-ks-anim="ocean"] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- Shimmer: rotating conic-gradient border (uses style's border color) --- */
+[data-ks-anim="shimmer"]::before {
+  background: conic-gradient(
+    from 0deg,
+    rgba(var(--ks-border-color-rgb), 0.05),
+    rgba(var(--ks-border-color-rgb), 0.8),
+    rgba(var(--ks-border-color-rgb), 0.05),
+    rgba(var(--ks-border-color-rgb), 0.8),
+    rgba(var(--ks-border-color-rgb), 0.05)
+  );
+}
+
+/* --- Pride: rainbow pride flag colours rotating around the border --- */
+[data-ks-anim="pride"]::before {
+  background: conic-gradient(
+    from 0deg,
+    #e40303,
+    #ff8c00,
+    #ffed00,
+    #008026,
+    #004dff,
+    #750787,
+    #e40303
+  );
+  animation-duration: 4s;
+}
+
+[data-ks-anim="pride"] {
+  border-color: #750787;
+  box-shadow: 0 0 12px rgba(117, 7, 135, 0.3);
+}
+
+/* --- Fire: warm red/orange/yellow rotating gradient --- */
+[data-ks-anim="fire"]::before {
+  background: conic-gradient(
+    from 0deg,
+    #ff2200,
+    #ff6600,
+    #ffaa00,
+    #ffdd00,
+    #ffaa00,
+    #ff6600,
+    #ff2200
+  );
+  animation-duration: 3s;
+}
+
+/* --- Ocean: cool blue/teal/cyan rotating gradient --- */
+[data-ks-anim="ocean"]::before {
+  background: conic-gradient(
+    from 0deg,
+    #003366,
+    #006699,
+    #0099cc,
+    #00cccc,
+    #33ffcc,
+    #0099cc,
+    #006699,
+    #003366
+  );
+  animation-duration: 5s;
+}

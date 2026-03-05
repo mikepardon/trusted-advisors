@@ -16,10 +16,14 @@ class Game extends Model
         'event_order', 'share_token',
         'bonus_score', 'final_score',
         'turn_time_limit', 'turn_started_at', 'cancelled_at',
+        'is_custom', 'custom_rules', 'is_private', 'lobby_password', 'tournament_match_id',
     ];
 
     protected $casts = [
         'win' => 'boolean',
+        'is_custom' => 'boolean',
+        'custom_rules' => 'array',
+        'is_private' => 'boolean',
         'offerer_player_number' => 'integer',
         'winner_player_number' => 'integer',
         'timed_out_player_number' => 'integer',
@@ -81,6 +85,11 @@ class Game extends Model
         return $this->hasMany(GamePlayerKingdom::class);
     }
 
+    public function tournamentMatch(): BelongsTo
+    {
+        return $this->belongsTo(TournamentMatch::class);
+    }
+
     public function isDuel(): bool
     {
         return $this->game_type === 'duel';
@@ -110,9 +119,15 @@ class Game extends Model
     {
         $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
         $atMax = 0;
+        $lossThreshold = 0;
+
+        // Hardcore mode: lose at stat <= 3
+        if (!empty($this->custom_rules['house_rules']['hardcore_mode'])) {
+            $lossThreshold = 3;
+        }
 
         foreach ($stats as $stat) {
-            if ($kingdom->{$stat} <= 0) {
+            if ($kingdom->{$stat} <= $lossThreshold) {
                 return 'loss';
             }
             if ($kingdom->{$stat} >= 20) {
@@ -175,10 +190,19 @@ class Game extends Model
     public function checkStatBounds(): ?string
     {
         $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        $threshold = 0;
+
+        // Hardcore mode: lose at stat <= 3
+        if (!empty($this->custom_rules['house_rules']['hardcore_mode'])) {
+            $threshold = 3;
+        }
 
         foreach ($stats as $stat) {
-            if ($this->{$stat} <= 0) {
-                return ucfirst($stat) . ' has collapsed to zero!';
+            if ($this->{$stat} <= $threshold) {
+                $label = ucfirst($stat);
+                return $threshold > 0
+                    ? "{$label} has fallen to {$this->{$stat}} (hardcore mode)!"
+                    : "{$label} has collapsed to zero!";
             }
         }
 

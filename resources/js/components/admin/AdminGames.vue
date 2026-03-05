@@ -48,9 +48,11 @@
 
 <script>
 import axios from 'axios';
+import { useToast } from '../../stores/toast';
 
 export default {
   name: 'AdminGames',
+  setup() { return { toast: useToast() }; },
   data() {
     return {
       games: [],
@@ -77,7 +79,7 @@ export default {
         await axios.post(`/api/admin/games/${g.id}/cancel`);
         await this.fetch();
       } catch (e) {
-        alert('Cancel failed: ' + (e.response?.data?.error || e.message));
+        this.toast.error('Cancel failed: ' + (e.response?.data?.error || e.message));
       }
     },
   },

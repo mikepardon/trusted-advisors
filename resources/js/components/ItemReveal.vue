@@ -4,20 +4,17 @@
       <div class="item-reveal-content" :class="{ 'card-entered': cardVisible }">
         <p class="item-intro">{{ introText }}</p>
 
-        <div class="item-card" :class="{ 'card-show': cardVisible, cursed: item.is_cursed || item.is_negative, blocked: isBlocked }">
+        <div class="item-card" :class="{ 'card-show': cardVisible, blocked: isBlocked }">
           <div class="card-ornament">{{ isBlocked ? '&#128683;' : '&#9876;' }}</div>
           <p class="card-recipient">{{ item.player }}</p>
           <h2 class="card-title">{{ item.item }}</h2>
-          <span v-if="item.is_cursed && !isBlocked" class="cursed-tag">Cursed</span>
           <span v-if="isBlocked" class="cursed-tag">Lost</span>
           <div class="card-divider"></div>
-          <p v-if="isBlocked" class="card-desc">Your inventory is full of cursed items. Remove curses to receive new items.</p>
+          <p v-if="isBlocked" class="card-desc">Your inventory is full! Remove items to receive new ones.</p>
           <p v-else-if="item.description" class="card-desc">{{ item.description }}</p>
-          <div class="card-effect" :class="isBlocked || item.is_cursed || item.is_negative ? 'effect-negative' : 'effect-positive'">
-            {{ isBlocked ? 'Item could not be received!' : (item.is_cursed ? 'A dark burden befalls...' : 'A boon has been found!') }}
+          <div class="card-effect" :class="isBlocked ? 'effect-negative' : 'effect-positive'">
+            {{ isBlocked ? 'Item could not be received!' : 'Added to inventory!' }}
           </div>
-          <div v-if="item.is_consumable && !isBlocked" class="card-immediate">Takes effect immediately!</div>
-          <div v-if="item.immediate_description && !isBlocked" class="card-immediate-detail">{{ item.immediate_description }}</div>
         </div>
 
         <button class="btn-continue" :class="{ 'btn-show': cardVisible }" @click="dismiss">
@@ -47,7 +44,6 @@ export default {
     },
     introText() {
       if (this.isBlocked) return 'Item Lost!';
-      if (this.item.is_cursed) return 'A cursed relic emerges...';
       return 'An item has been discovered!';
     },
   },
