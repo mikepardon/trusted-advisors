@@ -87,46 +87,29 @@ class NotificationController extends Controller
         // Grant character unlockable
         $characterId = $data['reward_character_id'] ?? null;
         if ($characterId) {
-            $exists = UserUnlockable::where('user_id', $user->id)
-                ->where('unlockable_id', $characterId)
-                ->exists();
+            $unlockable = \App\Models\Unlockable::firstOrCreate(
+                ['type' => 'character', 'entity_id' => $characterId],
+                ['unlock_method' => 'gift'],
+            );
 
-            if (!$exists) {
-                // Find the unlockable linked to this character
-                $unlockable = \App\Models\Unlockable::where('type', 'character')
-                    ->where('reference_id', $characterId)
-                    ->first();
-
-                if ($unlockable) {
-                    UserUnlockable::create([
-                        'user_id' => $user->id,
-                        'unlockable_id' => $unlockable->id,
-                        'unlocked_at' => now(),
-                    ]);
-                }
-            }
+            UserUnlockable::firstOrCreate(
+                ['user_id' => $user->id, 'unlockable_id' => $unlockable->id],
+                ['unlocked_at' => now()],
+            );
         }
 
         // Grant dice theme unlockable
         $diceThemeId = $data['reward_dice_theme_id'] ?? null;
         if ($diceThemeId) {
-            $unlockable = \App\Models\Unlockable::where('type', 'dice_theme')
-                ->where('entity_id', $diceThemeId)
-                ->first();
+            $unlockable = \App\Models\Unlockable::firstOrCreate(
+                ['type' => 'dice_theme', 'entity_id' => $diceThemeId],
+                ['unlock_method' => 'gift'],
+            );
 
-            if ($unlockable) {
-                $exists = UserUnlockable::where('user_id', $user->id)
-                    ->where('unlockable_id', $unlockable->id)
-                    ->exists();
-
-                if (!$exists) {
-                    UserUnlockable::create([
-                        'user_id' => $user->id,
-                        'unlockable_id' => $unlockable->id,
-                        'unlocked_at' => now(),
-                    ]);
-                }
-            }
+            UserUnlockable::firstOrCreate(
+                ['user_id' => $user->id, 'unlockable_id' => $unlockable->id],
+                ['unlocked_at' => now()],
+            );
         }
 
         // Mark as claimed and read
