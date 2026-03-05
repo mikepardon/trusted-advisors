@@ -1085,6 +1085,7 @@ export default {
         this.playerDifficulties = {};
         this.playerRollResults = {};
         this.diceAnimationTrigger = null;
+        this._opponentTurnPending = false;
 
         // Update from response
         this.syncFromGameData(res.data);
@@ -1114,6 +1115,9 @@ export default {
     async handleDuelRollComplete(data) {
       const rollData = data.roll_data;
       const pn = rollData.player_number;
+
+      // Ignore stale broadcasts from previous rounds (we're already in card selection)
+      if (this.duelPhase === 'choosing' || this.duelPhase === 'offering') return;
 
       // Skip if this is our own roll — already handled by submitRoll/applyRollResult
       if (pn === this.activePlayerNumber) {
@@ -1184,6 +1188,13 @@ export default {
       try {
         const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
         const data = res.data;
+
+        // Guard: if the round advanced while we were waiting, discard stale result
+        if (this.duelPhase === 'choosing' || this.duelPhase === 'offering') {
+          this._opponentTurnPending = false;
+          return;
+        }
+
         if (data.player_number !== undefined) {
           // Set difficulty BEFORE animation so "Required: X" is visible during roll
           if (data.cards?.length) {
@@ -1247,7 +1258,7 @@ export default {
               return;
             }
           }
-        } else if (data.player_number !== undefined) {
+        } else if (data.player_number !== undefined && this.duelPhase !== 'choosing' && this.duelPhase !== 'offering') {
           // Set difficulty BEFORE animation so "Required: X" is visible during roll
           if (data.cards?.length) {
             const diff = data.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
@@ -1319,6 +1330,7 @@ export default {
       this.playerRollResults = {};
       this.diceAnimationTrigger = null;
       this.itemDecided = false;
+      this._opponentTurnPending = false;
       this.syncFromGameData(data);
       this.$emit('game-data-updated', data);
     },
