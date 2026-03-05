@@ -90,7 +90,7 @@ class NotificationController extends Controller
         if ($characterId) {
             $unlockable = \App\Models\Unlockable::firstOrCreate(
                 ['type' => 'character', 'entity_id' => $characterId],
-                ['unlock_method' => 'gift'],
+                ['unlock_method' => 'gift', 'unlock_value' => 0],
             );
 
             UserUnlockable::firstOrCreate(
@@ -104,7 +104,7 @@ class NotificationController extends Controller
         if ($diceThemeId) {
             $unlockable = \App\Models\Unlockable::firstOrCreate(
                 ['type' => 'dice_theme', 'entity_id' => $diceThemeId],
-                ['unlock_method' => 'gift'],
+                ['unlock_method' => 'gift', 'unlock_value' => 0],
             );
 
             UserUnlockable::firstOrCreate(
