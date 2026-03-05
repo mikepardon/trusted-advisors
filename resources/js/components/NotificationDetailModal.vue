@@ -31,6 +31,10 @@
             <span class="reward-icon">&#9812;</span>
             <span>Exclusive Character</span>
           </div>
+          <div v-if="notification.data?.reward_dice_theme_id" class="reward-item">
+            <span class="reward-icon">&#127922;</span>
+            <span>Dice Theme</span>
+          </div>
         </div>
       </div>
 
@@ -74,7 +78,7 @@ export default {
   computed: {
     hasRewards() {
       const d = this.notification.data;
-      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id);
+      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id || d.reward_dice_theme_id);
     },
   },
   methods: {

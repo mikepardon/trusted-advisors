@@ -130,7 +130,7 @@ export default {
   methods: {
     hasRewards(notif) {
       const d = notif.data;
-      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id);
+      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id || d.reward_dice_theme_id);
     },
     async fetchAll() {
       this.loading = true;
