@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.mpgames.ta",
+      "sha256_cert_fingerprints": [
+        "40:E7:58:7E:17:6B:66:50:C8:4B:0C:E7:E6:C5:FD:34:B1:2C:05:4A:55:64:5A:D8:1D:77:CD:7C:32:10:E7:B9"
+      ]
+    }
+  }
+]

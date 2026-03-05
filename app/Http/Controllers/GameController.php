@@ -31,6 +31,7 @@ use App\Models\UserAchievement;
 use App\Models\User;
 use App\Models\UserUnlockable;
 use App\Jobs\ForfeitExpiredTurn;
+use App\Jobs\ProcessBotTurn;
 use App\Services\BotService;
 use App\Services\DuelForfeitService;
 use App\Services\GameCompletionService;
@@ -42,6 +43,28 @@ use Illuminate\Support\Facades\DB;
 
 class GameController extends Controller
 {
+    /**
+     * Dispatch timeout enforcement + bot turn jobs for an online duel with a timer.
+     */
+    private function dispatchTurnTimerJobs(Game $game): void
+    {
+        if (!$game->isOnline() || !$game->turn_time_limit || !$game->turn_started_at) {
+            return;
+        }
+
+        $turnStartedAt = $game->turn_started_at->toIso8601String();
+
+        ForfeitExpiredTurn::dispatch($game->id, $turnStartedAt)
+            ->delay(now()->addSeconds($game->turn_time_limit));
+
+        // If the game has a bot player, schedule the bot's turn (3-9s delay)
+        if ($game->players()->where('is_bot', true)->exists()) {
+            $botDelay = rand(3, 9);
+            ProcessBotTurn::dispatch($game->id, $turnStartedAt)
+                ->delay(now()->addSeconds($botDelay));
+        }
+    }
+
     public function characters(Request $request): JsonResponse
     {
         $gameType = $request->query('game_type');
@@ -545,8 +568,7 @@ class GameController extends Controller
             // Start turn timer for online duels
             if ($game->isDuel() && $game->turn_time_limit) {
                 $game->update(['turn_started_at' => now()]);
-                ForfeitExpiredTurn::dispatch($game->id, now()->toIso8601String())
-                    ->delay(now()->addSeconds($game->turn_time_limit));
+                $this->dispatchTurnTimerJobs($game);
             }
             broadcast(new GameStarted($game->id));
         }
@@ -1521,8 +1543,7 @@ class GameController extends Controller
         $game->save();
 
         if ($game->isOnline() && $game->turn_time_limit) {
-            ForfeitExpiredTurn::dispatch($game->id, $game->turn_started_at->toIso8601String())
-                ->delay(now()->addSeconds($game->turn_time_limit));
+            $this->dispatchTurnTimerJobs($game);
         }
 
         // Reset ability and item decision flags for new round
@@ -1755,8 +1776,7 @@ class GameController extends Controller
         $game->update($updateData);
 
         if ($game->isOnline() && $game->turn_time_limit) {
-            ForfeitExpiredTurn::dispatch($game->id, $game->turn_started_at->toIso8601String())
-                ->delay(now()->addSeconds($game->turn_time_limit));
+            $this->dispatchTurnTimerJobs($game);
         }
 
         // Reload hands with updated assignments
@@ -2069,8 +2089,7 @@ class GameController extends Controller
             $game->update($updateData);
 
             if ($game->isOnline() && $game->turn_time_limit) {
-                ForfeitExpiredTurn::dispatch($game->id, $game->turn_started_at->toIso8601String())
-                    ->delay(now()->addSeconds($game->turn_time_limit));
+                $this->dispatchTurnTimerJobs($game);
             }
         } else {
             $game->update([

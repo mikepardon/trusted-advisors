@@ -17,7 +17,8 @@
       "WebSearch",
       "Bash(node -e:*)",
       "WebFetch(domain:www.webtonative.com)",
-      "WebFetch(domain:docs.webtonative.com)"
+      "WebFetch(domain:docs.webtonative.com)",
+      "WebFetch(domain:orufy.com)"
     ]
   }
 }
