@@ -704,6 +704,13 @@ export default {
         this.waitingForOpponentSelection = false;
         this.$emit('phase-updated', phase);
 
+        // Compute difficulties for both players from swapped cards
+        const computeDiff = (cards) => cards?.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0) || 0;
+        const d1 = computeDiff(res.data.player1_cards);
+        const d2 = computeDiff(res.data.player2_cards);
+        if (d1 > 0) this.playerDifficulties = { ...this.playerDifficulties, 1: d1 };
+        if (d2 > 0) this.playerDifficulties = { ...this.playerDifficulties, 2: d2 };
+
         if (this.isPassAndPlay) {
           await this.loadMyRollCards();
           this.initiatePassAndPlayHandoff(this.offererNumber);
@@ -1104,6 +1111,14 @@ export default {
       this.loadMyRollCards();
       this.showWaiting = false;
       this.updateOnlineWaiting();
+
+      // Compute difficulties for both players from swapped cards
+      const computeDiff = (cards) => cards?.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0) || 0;
+      const d1 = computeDiff(data.player1_cards);
+      const d2 = computeDiff(data.player2_cards);
+      if (d1 > 0) this.playerDifficulties = { ...this.playerDifficulties, 1: d1 };
+      if (d2 > 0) this.playerDifficulties = { ...this.playerDifficulties, 2: d2 };
+
       // Phase changed — re-sync timer from server
       if (this.isOnline && this.turnTimeLimit) {
         this.$emit('refresh');

@@ -3171,6 +3171,12 @@ class GameController extends Controller
             return;
         }
 
+        // Skip push notification for the user who triggered this action (they're on the page)
+        $currentUserId = request()->user()?->id;
+        if ($currentUserId && $player?->user_id === $currentUserId) {
+            return;
+        }
+
         // Broadcast in-game alert via WebSocket
         try {
             event(new \App\Events\GameAlertSent($game->id, $message, $playerNumber));
