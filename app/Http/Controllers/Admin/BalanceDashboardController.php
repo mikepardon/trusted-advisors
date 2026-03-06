@@ -85,10 +85,12 @@ class BalanceDashboardController extends Controller
                 ->where('game_type', '!=', 'duel')
                 ->select(
                     DB::raw("'cooperative' as source"),
-                    DB::raw('ROUND(AVG(strength), 1) as avg_strength'),
-                    DB::raw('ROUND(AVG(wisdom), 1) as avg_wisdom'),
-                    DB::raw('ROUND(AVG(morale), 1) as avg_morale'),
-                    DB::raw('ROUND(AVG(defence), 1) as avg_defence'),
+                    DB::raw('ROUND(AVG(wealth), 1) as avg_wealth'),
+                    DB::raw('ROUND(AVG(influence), 1) as avg_influence'),
+                    DB::raw('ROUND(AVG(security), 1) as avg_security'),
+                    DB::raw('ROUND(AVG(religion), 1) as avg_religion'),
+                    DB::raw('ROUND(AVG(food), 1) as avg_food'),
+                    DB::raw('ROUND(AVG(happiness), 1) as avg_happiness'),
                     DB::raw('COUNT(*) as game_count'),
                 );
 
@@ -101,10 +103,12 @@ class BalanceDashboardController extends Controller
                 ->where('games.game_type', 'duel')
                 ->select(
                     DB::raw("'duel' as source"),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.strength), 1) as avg_strength'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.wisdom), 1) as avg_wisdom'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.morale), 1) as avg_morale'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.defence), 1) as avg_defence'),
+                    DB::raw('ROUND(AVG(game_player_kingdoms.wealth), 1) as avg_wealth'),
+                    DB::raw('ROUND(AVG(game_player_kingdoms.influence), 1) as avg_influence'),
+                    DB::raw('ROUND(AVG(game_player_kingdoms.security), 1) as avg_security'),
+                    DB::raw('ROUND(AVG(game_player_kingdoms.religion), 1) as avg_religion'),
+                    DB::raw('ROUND(AVG(game_player_kingdoms.food), 1) as avg_food'),
+                    DB::raw('ROUND(AVG(game_player_kingdoms.happiness), 1) as avg_happiness'),
                     DB::raw('COUNT(DISTINCT games.id) as game_count'),
                 );
 

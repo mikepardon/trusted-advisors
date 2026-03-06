@@ -203,7 +203,7 @@ export default {
 
 /* Sidebar */
 .admin-sidebar {
-  width: 220px;
+  width: 300px;
   height: 100vh;
   position: fixed;
   top: 0;
@@ -276,7 +276,6 @@ export default {
 
 .nav-icon {
   font-size: 1rem;
-  width: 20px;
   text-align: center;
   flex-shrink: 0;
 }
@@ -299,7 +298,7 @@ export default {
 
 /* Main content area */
 .admin-main {
-  margin-left: 220px;
+  margin-left: 300px;
   flex: 1;
   padding: 24px 28px;
 }
