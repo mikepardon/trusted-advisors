@@ -49,6 +49,11 @@
 
     <!-- PHASE 2: Character Selection (simultaneous) -->
     <div v-else-if="!allSelected" key="picking" class="card-panel carousel-panel">
+      <!-- Turn timer -->
+      <div v-if="turnTimeLimit && timeRemaining > 0" :class="['lobby-timer', { urgent: timeRemaining <= 10 }]">
+        {{ formattedTime }}
+      </div>
+
       <!-- I still need to pick -->
       <template v-if="myPlayerNeedsPick">
         <h2 class="section-title picking-header">
@@ -152,6 +157,7 @@ export default {
     gameId: { type: [String, Number], required: true },
     hostId: { type: Number, required: true },
     gameType: { type: String, default: 'cooperative' },
+    turnTimeLimit: { type: Number, default: 0 },
   },
   emits: ['start-game', 'lobby-updated'],
   setup() {
@@ -173,6 +179,8 @@ export default {
       autoStarting: false,
       swiperInstance: null,
       activeSlideIndex: 0,
+      timeRemaining: 0,
+      timerInterval: null,
     };
   },
   computed: {
@@ -215,10 +223,28 @@ export default {
     pickedPlayers() {
       return this.players.filter(p => p.character_id);
     },
+    formattedTime() {
+      const mins = Math.floor(this.timeRemaining / 60);
+      const secs = this.timeRemaining % 60;
+      return `${mins}:${secs.toString().padStart(2, '0')}`;
+    },
+  },
+  watch: {
+    allJoined(joined) {
+      if (joined && this.turnTimeLimit) {
+        this.startTimer();
+      }
+    },
   },
   async mounted() {
     await this.fetchLobby();
     await this.fetchFriends();
+    if (this.allJoined && this.turnTimeLimit) {
+      this.startTimer();
+    }
+  },
+  beforeUnmount() {
+    this.clearTimer();
   },
   methods: {
     async fetchLobby() {
@@ -306,6 +332,23 @@ export default {
         this.$emit('start-game');
       }
       this.autoStarting = false;
+    },
+    startTimer() {
+      this.clearTimer();
+      this.timeRemaining = this.turnTimeLimit;
+      this.timerInterval = setInterval(() => {
+        if (this.timeRemaining > 0) {
+          this.timeRemaining--;
+        } else {
+          this.clearTimer();
+        }
+      }, 1000);
+    },
+    clearTimer() {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+        this.timerInterval = null;
+      }
     },
     getPlayerForSlot(slot) {
       return this.players.find(p => p.player_number === slot);
@@ -475,6 +518,26 @@ export default {
 .btn-small:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Lobby timer */
+.lobby-timer {
+  text-align: center;
+  font-family: 'Cinzel', serif;
+  font-size: 1.6rem;
+  color: var(--text-bright);
+  background: rgba(26, 18, 9, 0.8);
+  border: 1px solid var(--border-gold);
+  border-radius: 8px;
+  padding: 6px 20px;
+  width: fit-content;
+  margin: 0 auto 12px;
+}
+
+.lobby-timer.urgent {
+  color: var(--accent-red);
+  border-color: var(--accent-red);
+  animation: pulse 1s ease-in-out infinite;
 }
 
 /* Character selection carousel */

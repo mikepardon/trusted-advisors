@@ -13,6 +13,7 @@
         :gameId="id"
         :hostId="gameData.game.user_id"
         :gameType="gameData.game.game_type || 'cooperative'"
+        :turnTimeLimit="gameData.game.turn_time_limit || 0"
         @start-game="startOnlineGame"
         @lobby-updated="fetchGame"
       />
