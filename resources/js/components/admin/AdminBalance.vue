@@ -25,7 +25,8 @@
     <div class="tabs">
       <button :class="{ active: tab === 'cards' }" @click="tab = 'cards'; loadTab()">Cards</button>
       <button :class="{ active: tab === 'characters' }" @click="tab = 'characters'; loadTab()">Characters</button>
-      <button :class="{ active: tab === 'stats' }" @click="tab = 'stats'; loadTab()">Stats</button>
+      <button :class="{ active: tab === 'items' }" @click="tab = 'items'; loadTab()">Items</button>
+      <button :class="{ active: tab === 'events' }" @click="tab = 'events'; loadTab()">Events</button>
     </div>
 
     <!-- Cards Tab -->
@@ -78,22 +79,56 @@
       </table>
     </div>
 
-    <!-- Stats Tab -->
-    <div v-if="tab === 'stats'">
-      <div class="stats-cards">
-        <div v-for="(data, source) in statData" :key="source" class="stat-card" v-if="data">
-          <h4>{{ source === 'cooperative' ? 'Cooperative' : 'Duel' }} ({{ data.game_count || 0 }} games)</h4>
-          <div class="stat-bars">
-            <div v-for="stat in ['wealth', 'influence', 'security', 'religion', 'food', 'happiness']" :key="stat" class="stat-bar-row">
-              <span class="stat-label">{{ stat }}</span>
-              <div class="bar-track">
-                <div class="bar-fill" :style="{ width: ((data['avg_' + stat] || 0) / 20 * 100) + '%' }"></div>
-              </div>
-              <span class="stat-value">{{ data['avg_' + stat] || 0 }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+    <!-- Items Tab -->
+    <div v-if="tab === 'items'" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th @click="sortBy('name')" class="sortable">Name</th>
+            <th @click="sortBy('effect_type')" class="sortable">Type</th>
+            <th @click="sortBy('times_acquired')" class="sortable">Acquired</th>
+            <th @click="sortBy('games_appeared_in')" class="sortable">Games</th>
+            <th @click="sortBy('times_used')" class="sortable">Used</th>
+            <th @click="sortBy('times_cursed')" class="sortable">Cursed</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="item in sortedItems" :key="item.id" class="clickable-row" @click="openItemModal(item)">
+            <td>
+              <span :class="{ 'negative-item': item.is_negative }">{{ item.name }}</span>
+            </td>
+            <td><span class="type-badge">{{ item.effect_type }}</span></td>
+            <td>{{ item.times_acquired }}</td>
+            <td>{{ item.games_appeared_in }}</td>
+            <td>{{ item.times_used }}</td>
+            <td>{{ item.times_cursed }}</td>
+          </tr>
+          <tr v-if="items.length === 0"><td colspan="6" class="empty">No data</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Events Tab -->
+    <div v-if="tab === 'events'" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th @click="sortBy('title')" class="sortable">Title</th>
+            <th @click="sortBy('mechanic')" class="sortable">Mechanic</th>
+            <th @click="sortBy('times_drawn')" class="sortable">Times Drawn</th>
+            <th>of Games</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="ev in sortedEvents" :key="ev.id" class="clickable-row" @click="openEventModal(ev)">
+            <td>{{ ev.title }}</td>
+            <td><span class="type-badge" v-if="ev.mechanic">{{ ev.mechanic }}</span><span v-else class="muted">—</span></td>
+            <td>{{ ev.times_drawn }}</td>
+            <td class="muted">/ {{ ev.total_games }}</td>
+          </tr>
+          <tr v-if="events.length === 0"><td colspan="4" class="empty">No data</td></tr>
+        </tbody>
+      </table>
     </div>
 
     <!-- Card Detail Modal -->
@@ -110,7 +145,6 @@
 
         <p class="detail-description" v-if="selectedCard.description">{{ selectedCard.description }}</p>
 
-        <!-- Balance Stats -->
         <div class="detail-stats">
           <div class="detail-stat">
             <span class="detail-stat-label">Appearances</span>
@@ -126,7 +160,6 @@
           </div>
         </div>
 
-        <!-- Effects -->
         <div class="effects-grid" v-if="selectedCard.positive_effects || selectedCard.negative_effects">
           <div class="effect-block" v-if="hasEffects(selectedCard.positive_effects)">
             <h4 class="effect-title success">On Success</h4>
@@ -150,7 +183,6 @@
           </div>
         </div>
 
-        <!-- Availability -->
         <div class="availability-row">
           <span :class="['avail-tag', selectedCard.available_cooperative ? 'active' : 'inactive']">Cooperative</span>
           <span :class="['avail-tag', selectedCard.available_duel ? 'active' : 'inactive']">Duel</span>
@@ -185,7 +217,6 @@
           <strong>Wild Ability:</strong> {{ selectedCharacter.wild_ability_description }}
         </p>
 
-        <!-- Balance Stats -->
         <div class="detail-stats">
           <div class="detail-stat">
             <span class="detail-stat-label">Picks</span>
@@ -201,7 +232,6 @@
           </div>
         </div>
 
-        <!-- Dice -->
         <div class="dice-section" v-if="selectedCharacter.dice">
           <h4 class="section-label">Dice</h4>
           <div class="dice-grid">
@@ -214,7 +244,6 @@
           </div>
         </div>
 
-        <!-- Availability -->
         <div class="availability-row">
           <span :class="['avail-tag', selectedCharacter.available_cooperative ? 'active' : 'inactive']">Cooperative</span>
           <span :class="['avail-tag', selectedCharacter.available_duel ? 'active' : 'inactive']">Duel</span>
@@ -222,6 +251,116 @@
 
         <div class="detail-actions">
           <router-link :to="'/admin/characters'" class="btn-edit" @click.native="selectedCharacter = null">Edit in Character Manager</router-link>
+        </div>
+      </div>
+    </div>
+
+    <!-- Item Detail Modal -->
+    <div v-if="selectedItem" class="modal-overlay" @click.self="selectedItem = null">
+      <div class="modal-content detail-modal">
+        <button class="modal-close" @click="selectedItem = null">&times;</button>
+        <div class="detail-header">
+          <h3 :class="{ 'negative-item': selectedItem.is_negative }">{{ selectedItem.name }}</h3>
+          <div class="detail-badges">
+            <span class="badge">{{ selectedItem.effect_type }}</span>
+            <span class="badge negative-badge" v-if="selectedItem.is_negative">Negative</span>
+            <span class="badge" v-if="selectedItem.is_consumable">Consumable</span>
+          </div>
+        </div>
+
+        <p class="detail-description" v-if="selectedItem.description">{{ selectedItem.description }}</p>
+
+        <div class="detail-stats">
+          <div class="detail-stat">
+            <span class="detail-stat-label">Acquired</span>
+            <span class="detail-stat-value">{{ selectedItemStats.times_acquired }}</span>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-label">Games</span>
+            <span class="detail-stat-value">{{ selectedItemStats.games_appeared_in }}</span>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-label">Used</span>
+            <span class="detail-stat-value">{{ selectedItemStats.times_used }}</span>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-label">Cursed</span>
+            <span class="detail-stat-value">{{ selectedItemStats.times_cursed }}</span>
+          </div>
+        </div>
+
+        <div class="effect-block" v-if="selectedItem.effect && Object.keys(selectedItem.effect).length">
+          <h4 class="section-label">Effect</h4>
+          <div class="effect-list">
+            <div v-for="(val, key) in selectedItem.effect" :key="key" class="effect-item">
+              <span class="effect-key">{{ formatEffectKey(key) }}</span>
+              <span class="effect-val">{{ val }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="availability-row">
+          <span :class="['avail-tag', selectedItem.available_cooperative ? 'active' : 'inactive']">Cooperative</span>
+          <span :class="['avail-tag', selectedItem.available_duel ? 'active' : 'inactive']">Duel</span>
+        </div>
+
+        <div class="detail-actions">
+          <router-link :to="'/admin/items'" class="btn-edit" @click.native="selectedItem = null">Edit in Item Manager</router-link>
+        </div>
+      </div>
+    </div>
+
+    <!-- Event Detail Modal -->
+    <div v-if="selectedEvent" class="modal-overlay" @click.self="selectedEvent = null">
+      <div class="modal-content detail-modal">
+        <button class="modal-close" @click="selectedEvent = null">&times;</button>
+        <div class="detail-header">
+          <h3>{{ selectedEvent.title }}</h3>
+          <div class="detail-badges">
+            <span class="badge" v-if="selectedEvent.mechanic">{{ selectedEvent.mechanic }}</span>
+          </div>
+        </div>
+
+        <p class="detail-description" v-if="selectedEvent.effect">{{ selectedEvent.effect }}</p>
+
+        <div class="detail-stats">
+          <div class="detail-stat">
+            <span class="detail-stat-label">Times Drawn</span>
+            <span class="detail-stat-value">{{ selectedEventStats.times_drawn }}</span>
+          </div>
+          <div class="detail-stat">
+            <span class="detail-stat-label">Total Games</span>
+            <span class="detail-stat-value">{{ selectedEventStats.total_games }}</span>
+          </div>
+        </div>
+
+        <div class="effect-block" v-if="selectedEvent.stat_modifiers && hasEffects(selectedEvent.stat_modifiers)">
+          <h4 class="section-label">Stat Modifiers</h4>
+          <div class="effect-list">
+            <div v-for="(val, key) in filteredEffects(selectedEvent.stat_modifiers)" :key="key" class="effect-item">
+              <span class="effect-key">{{ formatEffectKey(key) }}</span>
+              <span class="effect-val" :class="val > 0 ? 'positive' : 'negative'">{{ val > 0 ? '+' : '' }}{{ val }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="effect-block" v-if="selectedEvent.mechanic_data && Object.keys(selectedEvent.mechanic_data).length">
+          <h4 class="section-label">Mechanic Data</h4>
+          <div class="effect-list">
+            <div v-for="(val, key) in selectedEvent.mechanic_data" :key="key" class="effect-item">
+              <span class="effect-key">{{ formatEffectKey(key) }}</span>
+              <span class="effect-val">{{ val }}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="availability-row">
+          <span :class="['avail-tag', selectedEvent.available_cooperative ? 'active' : 'inactive']">Cooperative</span>
+          <span :class="['avail-tag', selectedEvent.available_duel ? 'active' : 'inactive']">Duel</span>
+        </div>
+
+        <div class="detail-actions">
+          <router-link :to="'/admin/events'" class="btn-edit" @click.native="selectedEvent = null">Edit in Event Manager</router-link>
         </div>
       </div>
     </div>
@@ -239,13 +378,18 @@ export default {
       filters: { game_mode: '', game_type: '', date_from: '', date_to: '' },
       cards: [],
       characters: [],
-      statData: {},
+      items: [],
+      events: [],
       sortKey: '',
       sortAsc: true,
       selectedCard: null,
       selectedCardStats: {},
       selectedCharacter: null,
       selectedCharStats: {},
+      selectedItem: null,
+      selectedItemStats: {},
+      selectedEvent: null,
+      selectedEventStats: {},
     };
   },
   computed: {
@@ -255,6 +399,12 @@ export default {
     sortedCharacters() {
       return this.sorted(this.characters);
     },
+    sortedItems() {
+      return this.sorted(this.items);
+    },
+    sortedEvents() {
+      return this.sorted(this.events);
+    },
   },
   async mounted() {
     await this.loadTab();
@@ -263,6 +413,7 @@ export default {
     async loadTab() {
       const params = {};
       Object.entries(this.filters).forEach(([k, v]) => { if (v) params[k] = v; });
+      this.sortKey = '';
 
       try {
         if (this.tab === 'cards') {
@@ -271,9 +422,12 @@ export default {
         } else if (this.tab === 'characters') {
           const res = await axios.get('/api/admin/balance/characters', { params });
           this.characters = res.data;
-        } else {
-          const res = await axios.get('/api/admin/balance/stats', { params });
-          this.statData = res.data;
+        } else if (this.tab === 'items') {
+          const res = await axios.get('/api/admin/balance/items', { params });
+          this.items = res.data;
+        } else if (this.tab === 'events') {
+          const res = await axios.get('/api/admin/balance/events', { params });
+          this.events = res.data;
         }
       } catch {}
     },
@@ -293,6 +447,24 @@ export default {
         this.selectedCharacter = res.data;
       } catch {
         this.selectedCharacter = { name: charStats.name };
+      }
+    },
+    async openItemModal(itemStats) {
+      this.selectedItemStats = itemStats;
+      try {
+        const res = await axios.get(`/api/admin/items/${itemStats.id}`);
+        this.selectedItem = res.data;
+      } catch {
+        this.selectedItem = { name: itemStats.name, effect_type: itemStats.effect_type, is_negative: itemStats.is_negative };
+      }
+    },
+    async openEventModal(eventStats) {
+      this.selectedEventStats = eventStats;
+      try {
+        const res = await axios.get(`/api/admin/events/${eventStats.id}`);
+        this.selectedEvent = res.data;
+      } catch {
+        this.selectedEvent = { title: eventStats.title, effect: eventStats.effect, mechanic: eventStats.mechanic };
       }
     },
     hasEffects(effects) {
@@ -342,7 +514,7 @@ export default {
 .filter-bar { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
 .filter-bar select, .filter-bar input { background: var(--bg-secondary); border: 1px solid rgba(138, 106, 46, 0.3); color: var(--text-bright); padding: 5px 8px; border-radius: 4px; font-family: inherit; font-size: 0.85rem; }
 
-.tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; flex-wrap: wrap; }
 .tabs button { background: var(--bg-secondary); border: 1px solid rgba(138, 106, 46, 0.2); color: var(--text-secondary); padding: 6px 16px; border-radius: 4px; cursor: pointer; font-family: inherit; }
 .tabs button.active { color: var(--accent-gold); border-color: var(--accent-gold); background: rgba(212, 168, 67, 0.1); }
 
@@ -353,24 +525,18 @@ th.sortable { cursor: pointer; }
 th.sortable:hover { color: var(--accent-gold); }
 td { padding: 8px 10px; border-bottom: 1px solid rgba(138, 106, 46, 0.1); color: var(--text-bright); }
 .empty { text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px; }
+.muted { color: var(--text-secondary); }
 
 .clickable-row { cursor: pointer; transition: background 0.15s; }
 .clickable-row:hover { background: rgba(212, 168, 67, 0.08); }
 
+.negative-item { color: #e74c3c; }
+.type-badge { background: rgba(138, 106, 46, 0.12); border: 1px solid rgba(138, 106, 46, 0.2); color: var(--text-secondary); padding: 1px 6px; border-radius: 3px; font-size: 0.75rem; text-transform: capitalize; }
+.negative-badge { background: rgba(231, 76, 60, 0.12); border-color: rgba(231, 76, 60, 0.25); color: #e74c3c; }
+
 .rate-high { color: #2ecc71; font-weight: 600; }
 .rate-mid { color: #f1c40f; font-weight: 600; }
 .rate-low { color: #e74c3c; font-weight: 600; }
-
-.stats-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 768px) { .stats-cards { grid-template-columns: 1fr; } }
-.stat-card { background: var(--bg-secondary); border: 1px solid rgba(138, 106, 46, 0.2); border-radius: 8px; padding: 16px; }
-.stat-card h4 { font-family: 'Cinzel', serif; color: var(--accent-gold); margin-bottom: 12px; font-size: 1rem; }
-.stat-bars { display: flex; flex-direction: column; gap: 8px; }
-.stat-bar-row { display: flex; align-items: center; gap: 8px; }
-.stat-label { width: 70px; font-size: 0.82rem; color: var(--text-secondary); text-transform: capitalize; }
-.bar-track { flex: 1; height: 14px; background: rgba(0,0,0,0.3); border-radius: 7px; overflow: hidden; }
-.bar-fill { height: 100%; background: linear-gradient(90deg, var(--accent-gold), #e6c54a); border-radius: 7px; transition: width 0.3s; }
-.stat-value { width: 36px; text-align: right; font-size: 0.85rem; color: var(--text-bright); font-weight: 600; }
 
 /* Modal */
 .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; padding: 20px; }
@@ -391,14 +557,14 @@ td { padding: 8px 10px; border-bottom: 1px solid rgba(138, 106, 46, 0.1); color:
 .wild-desc { color: var(--text-secondary); font-size: 0.85rem; margin: 0 0 14px; }
 .wild-desc strong { color: var(--text-bright); }
 
-.detail-stats { display: flex; gap: 12px; margin-bottom: 16px; }
-.detail-stat { flex: 1; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; text-align: center; }
+.detail-stats { display: flex; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.detail-stat { flex: 1; min-width: 70px; background: rgba(0,0,0,0.2); border-radius: 8px; padding: 10px; text-align: center; }
 .detail-stat-label { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary); margin-bottom: 4px; }
 .detail-stat-value { display: block; font-size: 1.2rem; font-weight: 700; color: var(--text-bright); }
 
 .effects-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
 @media (max-width: 480px) { .effects-grid { grid-template-columns: 1fr; } }
-.effect-block { background: rgba(0,0,0,0.15); border-radius: 8px; padding: 12px; }
+.effect-block { background: rgba(0,0,0,0.15); border-radius: 8px; padding: 12px; margin-bottom: 12px; }
 .effect-title { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 6px; }
 .effect-title.success { color: #2ecc71; }
 .effect-title.failure { color: #e74c3c; }
@@ -406,6 +572,7 @@ td { padding: 8px 10px; border-bottom: 1px solid rgba(138, 106, 46, 0.1); color:
 .effect-list { display: flex; flex-direction: column; gap: 3px; }
 .effect-item { display: flex; justify-content: space-between; font-size: 0.82rem; }
 .effect-key { color: var(--text-secondary); text-transform: capitalize; }
+.effect-val { color: var(--text-bright); }
 .effect-val.positive { color: #2ecc71; font-weight: 600; }
 .effect-val.negative { color: #e74c3c; font-weight: 600; }
 

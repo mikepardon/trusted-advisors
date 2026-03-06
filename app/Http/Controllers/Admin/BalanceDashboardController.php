@@ -74,50 +74,105 @@ class BalanceDashboardController extends Controller
         return response()->json($data);
     }
 
-    public function statDistribution(Request $request): JsonResponse
+    public function itemStats(Request $request): JsonResponse
     {
-        $cacheKey = 'balance.stats.' . md5(json_encode($request->only('game_mode', 'game_type', 'season_id', 'date_from', 'date_to')));
+        $cacheKey = 'balance.items.' . md5(json_encode($request->only('game_mode', 'game_type', 'season_id', 'date_from', 'date_to')));
 
         $data = Cache::remember($cacheKey, 900, function () use ($request) {
-            // For coop games, stats are on the games table
-            $coopQuery = DB::table('games')
-                ->where('status', 'completed')
-                ->where('game_type', '!=', 'duel')
-                ->select(
-                    DB::raw("'cooperative' as source"),
-                    DB::raw('ROUND(AVG(wealth), 1) as avg_wealth'),
-                    DB::raw('ROUND(AVG(influence), 1) as avg_influence'),
-                    DB::raw('ROUND(AVG(security), 1) as avg_security'),
-                    DB::raw('ROUND(AVG(religion), 1) as avg_religion'),
-                    DB::raw('ROUND(AVG(food), 1) as avg_food'),
-                    DB::raw('ROUND(AVG(happiness), 1) as avg_happiness'),
-                    DB::raw('COUNT(*) as game_count'),
-                );
-
-            $this->applyGameFilters($coopQuery, $request, false);
-
-            // For duel games, stats come from game_player_kingdoms
-            $duelQuery = DB::table('game_player_kingdoms')
-                ->join('games', 'games.id', '=', 'game_player_kingdoms.game_id')
+            $query = DB::table('game_player_items')
+                ->join('game_players', 'game_players.id', '=', 'game_player_items.game_player_id')
+                ->join('games', 'games.id', '=', 'game_players.game_id')
+                ->join('items', 'items.id', '=', 'game_player_items.item_id')
                 ->where('games.status', 'completed')
-                ->where('games.game_type', 'duel')
                 ->select(
-                    DB::raw("'duel' as source"),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.wealth), 1) as avg_wealth'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.influence), 1) as avg_influence'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.security), 1) as avg_security'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.religion), 1) as avg_religion'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.food), 1) as avg_food'),
-                    DB::raw('ROUND(AVG(game_player_kingdoms.happiness), 1) as avg_happiness'),
-                    DB::raw('COUNT(DISTINCT games.id) as game_count'),
-                );
+                    'items.id',
+                    'items.name',
+                    'items.effect_type',
+                    'items.is_negative',
+                    DB::raw('COUNT(*) as times_acquired'),
+                    DB::raw('COUNT(DISTINCT games.id) as games_appeared_in'),
+                    DB::raw('SUM(CASE WHEN game_player_items.is_used = true THEN 1 ELSE 0 END) as times_used'),
+                    DB::raw('SUM(CASE WHEN game_player_items.is_cursed = true THEN 1 ELSE 0 END) as times_cursed'),
+                )
+                ->groupBy('items.id', 'items.name', 'items.effect_type', 'items.is_negative');
 
-            $this->applyGameFilters($duelQuery, $request, false);
+            $this->applyGameFilters($query, $request);
 
-            return [
-                'cooperative' => $coopQuery->first(),
-                'duel' => $duelQuery->first(),
-            ];
+            return $query->orderByDesc('times_acquired')->get();
+        });
+
+        return response()->json($data);
+    }
+
+    public function eventStats(Request $request): JsonResponse
+    {
+        $cacheKey = 'balance.events.' . md5(json_encode($request->only('game_mode', 'game_type', 'season_id', 'date_from', 'date_to')));
+
+        $data = Cache::remember($cacheKey, 900, function () use ($request) {
+            // Count event appearances from the event_order JSON array on games
+            $gamesQuery = DB::table('games')
+                ->where('status', 'completed')
+                ->whereNotNull('event_order');
+
+            if ($request->filled('game_mode')) {
+                $gamesQuery->where('game_mode', $request->game_mode);
+            }
+            if ($request->filled('game_type')) {
+                $gamesQuery->where('game_type', $request->game_type);
+            }
+            if ($request->filled('season_id')) {
+                $gamesQuery->where('season_id', $request->season_id);
+            }
+            if ($request->filled('date_from')) {
+                $gamesQuery->where('created_at', '>=', $request->date_from);
+            }
+            if ($request->filled('date_to')) {
+                $gamesQuery->where('created_at', '<=', $request->date_to . ' 23:59:59');
+            }
+
+            $games = $gamesQuery->select('event_order')->get();
+
+            $eventCounts = [];
+            $totalGames = $games->count();
+
+            foreach ($games as $game) {
+                $eventOrder = json_decode($game->event_order, true);
+                if (!is_array($eventOrder)) continue;
+
+                $seen = [];
+                foreach ($eventOrder as $eventId) {
+                    $eventCounts[$eventId] = ($eventCounts[$eventId] ?? 0) + 1;
+                    $seen[$eventId] = true;
+                }
+            }
+
+            if (empty($eventCounts)) {
+                return [];
+            }
+
+            $events = DB::table('events')
+                ->whereIn('id', array_keys($eventCounts))
+                ->get()
+                ->keyBy('id');
+
+            $results = [];
+            foreach ($eventCounts as $eventId => $count) {
+                $event = $events[$eventId] ?? null;
+                if (!$event) continue;
+
+                $results[] = [
+                    'id' => $eventId,
+                    'title' => $event->title,
+                    'effect' => $event->effect,
+                    'mechanic' => $event->mechanic,
+                    'times_drawn' => $count,
+                    'total_games' => $totalGames,
+                ];
+            }
+
+            usort($results, fn ($a, $b) => $b['times_drawn'] - $a['times_drawn']);
+
+            return $results;
         });
 
         return response()->json($data);

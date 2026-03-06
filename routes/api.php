@@ -339,7 +339,8 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     // Balance dashboard
     Route::get('balance/cards', [BalanceDashboardController::class, 'cardStats'])->middleware('admin:admin.balance');
     Route::get('balance/characters', [BalanceDashboardController::class, 'characterStats'])->middleware('admin:admin.balance');
-    Route::get('balance/stats', [BalanceDashboardController::class, 'statDistribution'])->middleware('admin:admin.balance');
+    Route::get('balance/items', [BalanceDashboardController::class, 'itemStats'])->middleware('admin:admin.balance');
+    Route::get('balance/events', [BalanceDashboardController::class, 'eventStats'])->middleware('admin:admin.balance');
 
     // Retention dashboard
     Route::get('retention/overview', [RetentionDashboardController::class, 'overview'])->middleware('admin:admin.retention');
