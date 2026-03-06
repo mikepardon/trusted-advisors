@@ -417,38 +417,21 @@ export default {
 /* Tab Navigation */
 .htp-tabs {
   display: flex;
-  gap: 4px;
+  gap: 6px;
   margin-bottom: 20px;
-  border-bottom: 1px solid rgba(138, 106, 46, 0.3);
-  padding-bottom: 0;
+  justify-content: center;
 }
 
 .htp-tab {
-  flex: 1;
-  padding: 8px 12px;
-  background: none;
-  border: 1px solid transparent;
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
-  color: var(--text-secondary);
-  font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
-  position: relative;
-  bottom: -1px;
-}
-
-.htp-tab:hover {
-  color: var(--text-bright);
-  background: rgba(212, 168, 67, 0.06);
+  padding: 6px 16px;
+  font-size: 0.8rem;
 }
 
 .htp-tab.active {
-  color: var(--accent-gold);
-  border-color: rgba(138, 106, 46, 0.3);
-  background: linear-gradient(180deg, rgba(212, 168, 67, 0.08), transparent);
-  border-bottom: 1px solid #0d0a06;
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: black;
+  box-shadow: 0 4px 0 #7a5a14, inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
 .htp-body {

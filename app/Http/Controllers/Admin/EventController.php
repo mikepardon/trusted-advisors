@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Event;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class EventController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         return response()->json(Event::orderBy('id')->get());
@@ -33,6 +35,7 @@ class EventController extends Controller
         ]);
 
         $event = Event::create($validated);
+        $this->auditLog('create', 'Event', $event->id);
 
         return response()->json($event, 201);
     }
@@ -50,13 +53,16 @@ class EventController extends Controller
             'available_duel' => 'boolean',
         ]);
 
+        $old = $event->only(array_keys($validated));
         $event->update($validated);
+        $this->auditModelChange('update', $event, $old);
 
         return response()->json($event);
     }
 
     public function destroy(Event $event): JsonResponse
     {
+        $this->auditLog('delete', 'Event', $event->id, null, ['title' => $event->title]);
         $event->delete();
 
         return response()->json(['message' => 'Deleted']);

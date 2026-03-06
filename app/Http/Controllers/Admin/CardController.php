@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Card;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class CardController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         return response()->json(
@@ -38,6 +40,7 @@ class CardController extends Controller
         ]);
 
         $card = Card::create($validated);
+        $this->auditLog('create', 'Card', $card->id);
 
         return response()->json($card, 201);
     }
@@ -58,13 +61,16 @@ class CardController extends Controller
             'available_duel' => 'boolean',
         ]);
 
+        $old = $card->only(array_keys($validated));
         $card->update($validated);
+        $this->auditModelChange('update', $card, $old);
 
         return response()->json($card);
     }
 
     public function destroy(Card $card): JsonResponse
     {
+        $this->auditLog('delete', 'Card', $card->id, null, ['title' => $card->title]);
         $card->delete();
 
         return response()->json(['message' => 'Deleted']);

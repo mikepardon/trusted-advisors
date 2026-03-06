@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\GameRule;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class GameRuleController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         $rules = GameRule::all()->pluck('value', 'key');
@@ -23,10 +25,12 @@ class GameRuleController extends Controller
             'value' => 'required',
         ]);
 
+        $oldValue = GameRule::where('key', $key)->value('value');
         $rule = GameRule::updateOrCreate(
             ['key' => $key],
             ['value' => $validated['value']]
         );
+        $this->auditLog('update', 'GameRule', $rule->id, ['value' => ['old' => $oldValue, 'new' => $validated['value']]]);
 
         return response()->json($rule);
     }

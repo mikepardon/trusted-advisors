@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Announcement;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AnnouncementController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         $announcements = Announcement::with('creator:id,name')
@@ -36,6 +38,7 @@ class AnnouncementController extends Controller
             ...$validated,
             'created_by' => $request->user()->id,
         ]);
+        $this->auditLog('create', 'Announcement', $announcement->id);
 
         return response()->json($announcement->load('creator:id,name'), 201);
     }
@@ -53,13 +56,16 @@ class AnnouncementController extends Controller
             'sort_order' => 'integer',
         ]);
 
+        $old = $announcement->only(array_keys($validated));
         $announcement->update($validated);
+        $this->auditModelChange('update', $announcement, $old);
 
         return response()->json($announcement->fresh()->load('creator:id,name'));
     }
 
     public function destroy(Announcement $announcement): JsonResponse
     {
+        $this->auditLog('delete', 'Announcement', $announcement->id, null, ['title' => $announcement->title]);
         $announcement->delete();
 
         return response()->json(['success' => true]);

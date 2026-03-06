@@ -128,15 +128,20 @@ class LeaderboardController extends Controller
         uasort($userStats, fn($a, $b) => $b[$sortKey] <=> $a[$sortKey]);
 
         // Build result
-        $userIdsOrdered = array_keys(array_slice($userStats, 0, 50, true));
+        $allOrdered = array_keys($userStats);
+        $userIdsOrdered = array_slice($allOrdered, 0, 50);
         $users = User::whereIn('id', $userIdsOrdered)->get()->keyBy('id');
 
         $result = [];
         $rank = 1;
+        $currentUserInTop = false;
         foreach ($userIdsOrdered as $userId) {
             $user = $users[$userId] ?? null;
             if (!$user) continue;
 
+            if ($user->id === $currentUser->id) {
+                $currentUserInTop = true;
+            }
             $result[] = [
                 'rank' => $rank++,
                 'user_id' => $user->id,
@@ -144,6 +149,19 @@ class LeaderboardController extends Controller
                 'value' => $userStats[$userId][$sortKey],
                 'level' => $user->level,
                 'is_current_user' => $user->id === $currentUser->id,
+            ];
+        }
+
+        // Append current user if not in top 50
+        if (!$currentUserInTop && isset($userStats[$currentUser->id])) {
+            $currentRank = array_search($currentUser->id, $allOrdered);
+            $result[] = [
+                'rank' => $currentRank !== false ? $currentRank + 1 : count($allOrdered) + 1,
+                'user_id' => $currentUser->id,
+                'username' => $currentUser->name,
+                'value' => $userStats[$currentUser->id][$sortKey],
+                'level' => $currentUser->level,
+                'is_current_user' => true,
             ];
         }
 
@@ -162,7 +180,11 @@ class LeaderboardController extends Controller
 
         $result = [];
         $rank = 1;
+        $currentUserInTop = false;
         foreach ($users as $user) {
+            if ($user->id === $currentUser->id) {
+                $currentUserInTop = true;
+            }
             $result[] = [
                 'rank' => $rank++,
                 'user_id' => $user->id,
@@ -170,6 +192,24 @@ class LeaderboardController extends Controller
                 'value' => $user->elo_rating,
                 'level' => $user->level,
                 'is_current_user' => $user->id === $currentUser->id,
+            ];
+        }
+
+        // Append current user if not in top 50
+        if (!$currentUserInTop) {
+            $rankQuery = User::where('elo_rating', '>', $currentUser->elo_rating);
+            if ($userIds) {
+                $rankQuery->whereIn('id', $userIds);
+            }
+            $currentRank = $rankQuery->count() + 1;
+
+            $result[] = [
+                'rank' => $currentRank,
+                'user_id' => $currentUser->id,
+                'username' => $currentUser->name,
+                'value' => $currentUser->elo_rating,
+                'level' => $currentUser->level,
+                'is_current_user' => true,
             ];
         }
 
@@ -188,7 +228,11 @@ class LeaderboardController extends Controller
 
         $result = [];
         $rank = 1;
+        $currentUserInTop = false;
         foreach ($users as $user) {
+            if ($user->id === $currentUser->id) {
+                $currentUserInTop = true;
+            }
             $result[] = [
                 'rank' => $rank++,
                 'user_id' => $user->id,
@@ -196,6 +240,24 @@ class LeaderboardController extends Controller
                 'value' => $user->xp,
                 'level' => $user->level,
                 'is_current_user' => $user->id === $currentUser->id,
+            ];
+        }
+
+        // Append current user if not in top 50
+        if (!$currentUserInTop) {
+            $rankQuery = User::where('xp', '>', $currentUser->xp);
+            if ($userIds) {
+                $rankQuery->whereIn('id', $userIds);
+            }
+            $currentRank = $rankQuery->count() + 1;
+
+            $result[] = [
+                'rank' => $currentRank,
+                'user_id' => $currentUser->id,
+                'username' => $currentUser->name,
+                'value' => $currentUser->xp,
+                'level' => $currentUser->level,
+                'is_current_user' => true,
             ];
         }
 

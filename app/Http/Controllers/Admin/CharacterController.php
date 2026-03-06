@@ -5,12 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Character;
 use App\Models\Unlockable;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
 class CharacterController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         $characters = Character::orderBy('name')->get();
@@ -54,6 +56,7 @@ class CharacterController extends Controller
         ]);
 
         $character = Character::create($validated);
+        $this->auditLog('create', 'Character', $character->id);
 
         return response()->json($character, 201);
     }
@@ -74,7 +77,9 @@ class CharacterController extends Controller
             'is_available' => 'boolean',
         ]);
 
+        $old = $character->only(array_keys($validated));
         $character->update($validated);
+        $this->auditModelChange('update', $character, $old);
 
         return response()->json($character);
     }
@@ -118,6 +123,7 @@ class CharacterController extends Controller
             }
         }
 
+        $this->auditLog('delete', 'Character', $character->id, null, ['name' => $character->name]);
         $character->delete();
 
         return response()->json(['message' => 'Deleted']);

@@ -48,7 +48,7 @@
             </td>
             <td>{{ formatDate(user.last_login_at) }}</td>
             <td class="actions-cell">
-              <button class="action-btn" @click="viewUser(user.id)" title="View Details">&#128065;</button>
+              <button class="action-btn" @click="viewUser(user.id)" title="Manage User">&#128065;</button>
               <button
                 v-if="!user.is_admin"
                 class="action-btn"
@@ -75,13 +75,23 @@
       <button :disabled="pagination.currentPage >= pagination.lastPage" @click="goToPage(pagination.currentPage + 1)">Next</button>
     </div>
 
-    <!-- User Detail Panel -->
+    <!-- Manage User Panel -->
     <div v-if="selectedUser" class="detail-overlay" @click.self="selectedUser = null">
       <div class="detail-panel">
         <button class="detail-close" @click="selectedUser = null">&times;</button>
-        <h2 class="detail-name">{{ selectedUser.name }}</h2>
-        <p class="detail-email">{{ selectedUser.email }}</p>
 
+        <!-- Header -->
+        <div class="detail-header">
+          <h2 class="detail-name">{{ selectedUser.name }}</h2>
+          <p class="detail-email">{{ selectedUser.email }}</p>
+          <div class="detail-badges">
+            <span v-if="selectedUser.is_admin" class="badge badge-admin">{{ selectedUser.admin_role ? selectedUser.admin_role.replace('_', ' ') : 'Admin' }}</span>
+            <span v-if="selectedUser.banned_at" class="badge badge-banned">Banned</span>
+            <span v-if="selectedUser.is_premium" class="badge badge-premium">Premium</span>
+          </div>
+        </div>
+
+        <!-- Stats Grid -->
         <div class="detail-stats">
           <div class="stat-item"><span class="stat-label">Level</span><span class="stat-val">{{ selectedUser.level }}</span></div>
           <div class="stat-item"><span class="stat-label">XP</span><span class="stat-val">{{ selectedUser.xp }}</span></div>
@@ -93,19 +103,60 @@
           <div class="stat-item"><span class="stat-label">Login Streak</span><span class="stat-val">{{ selectedUser.login_streak }} (max: {{ selectedUser.max_login_streak }})</span></div>
           <div class="stat-item"><span class="stat-label">Timeouts</span><span class="stat-val" :class="{ 'text-warn': selectedUser.timeout_count > 0 }">{{ selectedUser.timeout_count || 0 }}</span></div>
           <div class="stat-item"><span class="stat-label">Joined</span><span class="stat-val">{{ formatDate(selectedUser.created_at) }}</span></div>
-          <div class="stat-item"><span class="stat-label">Status</span><span class="stat-val" :class="{ 'text-banned': selectedUser.banned_at }">{{ selectedUser.banned_at ? 'Banned ' + formatDate(selectedUser.banned_at) : 'Active' }}</span></div>
-          <div class="stat-item"><span class="stat-label">Premium</span><span class="stat-val" :class="selectedUser.is_premium ? 'text-premium' : ''">{{ selectedUser.is_premium ? 'Active' : 'No' }}</span></div>
+        </div>
+
+        <!-- Edit Name -->
+        <div class="manage-section">
+          <h3 class="section-title">Edit Name</h3>
+          <div class="inline-form">
+            <input v-model="editName" class="form-input" placeholder="New display name" />
+            <button class="btn-sm btn-action" @click="saveName" :disabled="nameLoading || !editName.trim()">
+              {{ nameLoading ? 'Saving...' : 'Save' }}
+            </button>
+          </div>
+          <p v-if="nameMsg" :class="['action-msg', nameMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ nameMsg }}</p>
+        </div>
+
+        <!-- Admin Role -->
+        <div class="manage-section">
+          <h3 class="section-title">Admin Role</h3>
+          <div class="inline-form">
+            <select v-model="editRole" class="form-input">
+              <option value="">Not an admin</option>
+              <option value="super_admin">Super Admin</option>
+              <option value="content_admin">Content Admin</option>
+              <option value="moderator">Moderator</option>
+              <option value="analyst">Analyst</option>
+            </select>
+            <button class="btn-sm btn-action" @click="saveRole" :disabled="roleLoading">
+              {{ roleLoading ? 'Saving...' : 'Update Role' }}
+            </button>
+          </div>
+          <p v-if="roleMsg" :class="['action-msg', roleMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ roleMsg }}</p>
+        </div>
+
+        <!-- Send Notification -->
+        <div class="manage-section">
+          <h3 class="section-title">Send Notification</h3>
+          <div class="stacked-form">
+            <input v-model="notifyTitle" class="form-input" placeholder="Notification title" />
+            <textarea v-model="notifyMessage" class="form-input form-textarea" rows="2" placeholder="Message body"></textarea>
+            <button class="btn-sm btn-action" @click="sendNotification" :disabled="notifyLoading || !notifyTitle.trim() || !notifyMessage.trim()">
+              {{ notifyLoading ? 'Sending...' : 'Send' }}
+            </button>
+          </div>
+          <p v-if="notifyMsg" :class="['action-msg', notifyMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ notifyMsg }}</p>
         </div>
 
         <!-- Gift Premium -->
-        <div class="gift-section">
-          <h3 class="logs-title">Gift Premium</h3>
-          <div v-if="selectedUser.is_premium" class="gift-active">
-            <p class="gift-status">Premium active (expires {{ formatDate(selectedUser.premium_expires_at) }})</p>
+        <div class="manage-section">
+          <h3 class="section-title">Premium Subscription</h3>
+          <div v-if="selectedUser.is_premium" class="premium-active">
+            <p class="premium-status">Active — expires {{ formatDate(selectedUser.premium_expires_at) }}</p>
             <button class="btn-sm btn-danger" @click="revokePremium" :disabled="giftLoading">Revoke</button>
           </div>
-          <div v-else class="gift-form">
-            <select v-model="giftDuration" class="gift-select">
+          <div v-else class="inline-form">
+            <select v-model="giftDuration" class="form-input">
               <option value="1_month">1 Month</option>
               <option value="3_months">3 Months</option>
               <option value="6_months">6 Months</option>
@@ -116,30 +167,32 @@
               {{ giftLoading ? 'Gifting...' : 'Gift Premium' }}
             </button>
           </div>
-          <p v-if="giftMsg" class="gift-msg">{{ giftMsg }}</p>
+          <p v-if="giftMsg" :class="['action-msg', giftMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ giftMsg }}</p>
         </div>
 
         <!-- Login Logs -->
-        <h3 class="logs-title">Recent Login History</h3>
-        <div v-if="loginLogs.length" class="logs-table-wrap">
-          <table class="logs-table">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>IP</th>
-                <th>User Agent</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="log in loginLogs" :key="log.id">
-                <td>{{ formatDate(log.logged_in_at) }}</td>
-                <td>{{ log.ip_address }}</td>
-                <td class="ua-cell">{{ log.user_agent }}</td>
-              </tr>
-            </tbody>
-          </table>
+        <div class="manage-section">
+          <h3 class="section-title">Recent Login History</h3>
+          <div v-if="loginLogs.length" class="logs-table-wrap">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th>IP</th>
+                  <th>User Agent</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="log in loginLogs" :key="log.id">
+                  <td>{{ formatDate(log.logged_in_at) }}</td>
+                  <td>{{ log.ip_address }}</td>
+                  <td class="ua-cell">{{ log.user_agent }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p v-else class="no-logs">No login logs recorded yet.</p>
         </div>
-        <p v-else class="no-logs">No login logs recorded yet.</p>
       </div>
     </div>
 
@@ -161,6 +214,20 @@ export default {
       selectedUser: null,
       loginLogs: [],
       _searchTimer: null,
+      // Edit name
+      editName: '',
+      nameLoading: false,
+      nameMsg: '',
+      // Role
+      editRole: '',
+      roleLoading: false,
+      roleMsg: '',
+      // Notification
+      notifyTitle: '',
+      notifyMessage: '',
+      notifyLoading: false,
+      notifyMsg: '',
+      // Premium
       giftDuration: '1_month',
       giftLoading: false,
       giftMsg: '',
@@ -194,6 +261,14 @@ export default {
       this.fetchUsers(page);
     },
     async viewUser(userId) {
+      // Reset form state
+      this.nameMsg = '';
+      this.roleMsg = '';
+      this.notifyMsg = '';
+      this.giftMsg = '';
+      this.notifyTitle = '';
+      this.notifyMessage = '';
+
       try {
         const [userRes, logsRes] = await Promise.all([
           axios.get(`/api/admin/users/${userId}`),
@@ -201,6 +276,8 @@ export default {
         ]);
         this.selectedUser = userRes.data;
         this.loginLogs = logsRes.data;
+        this.editName = this.selectedUser.name;
+        this.editRole = this.selectedUser.admin_role || '';
       } catch (e) {
         console.error('Failed to fetch user details:', e);
       }
@@ -224,6 +301,69 @@ export default {
         this.toast.error('Failed: ' + (e.response?.data?.error || e.message));
       }
     },
+    // Edit name
+    async saveName() {
+      if (!this.selectedUser || !this.editName.trim()) return;
+      this.nameLoading = true;
+      this.nameMsg = '';
+      try {
+        const res = await axios.put(`/api/admin/users/${this.selectedUser.id}/name`, { name: this.editName.trim() });
+        this.selectedUser.name = res.data.name;
+        this.nameMsg = 'Name updated';
+        // Update table row too
+        const row = this.users.find(u => u.id === this.selectedUser.id);
+        if (row) row.name = res.data.name;
+        setTimeout(() => { this.nameMsg = ''; }, 3000);
+      } catch (e) {
+        this.nameMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
+      }
+      this.nameLoading = false;
+    },
+    // Admin role
+    async saveRole() {
+      if (!this.selectedUser) return;
+      this.roleLoading = true;
+      this.roleMsg = '';
+      try {
+        if (this.editRole) {
+          await axios.put(`/api/admin/users/${this.selectedUser.id}/role`, { admin_role: this.editRole });
+          this.selectedUser.admin_role = this.editRole;
+          this.selectedUser.is_admin = true;
+          this.roleMsg = 'Role updated to ' + this.editRole.replace(/_/g, ' ');
+        } else {
+          this.roleMsg = 'Error: Select a role to assign';
+          this.roleLoading = false;
+          return;
+        }
+        // Update table row
+        const row = this.users.find(u => u.id === this.selectedUser.id);
+        if (row) row.is_admin = true;
+        setTimeout(() => { this.roleMsg = ''; }, 3000);
+      } catch (e) {
+        this.roleMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
+      }
+      this.roleLoading = false;
+    },
+    // Send notification
+    async sendNotification() {
+      if (!this.selectedUser || !this.notifyTitle.trim() || !this.notifyMessage.trim()) return;
+      this.notifyLoading = true;
+      this.notifyMsg = '';
+      try {
+        await axios.post(`/api/admin/users/${this.selectedUser.id}/notify`, {
+          title: this.notifyTitle.trim(),
+          message: this.notifyMessage.trim(),
+        });
+        this.notifyMsg = 'Notification sent';
+        this.notifyTitle = '';
+        this.notifyMessage = '';
+        setTimeout(() => { this.notifyMsg = ''; }, 3000);
+      } catch (e) {
+        this.notifyMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
+      }
+      this.notifyLoading = false;
+    },
+    // Premium
     async giftPremium() {
       if (!this.selectedUser) return;
       this.giftLoading = true;
@@ -233,9 +373,10 @@ export default {
           duration: this.giftDuration,
         });
         this.giftMsg = res.data.message;
-        // Refresh user details
         const userRes = await axios.get(`/api/admin/users/${this.selectedUser.id}`);
         this.selectedUser = userRes.data;
+        this.editName = this.selectedUser.name;
+        this.editRole = this.selectedUser.admin_role || '';
       } catch (e) {
         this.giftMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
       }
@@ -250,6 +391,8 @@ export default {
         this.giftMsg = res.data.message;
         const userRes = await axios.get(`/api/admin/users/${this.selectedUser.id}`);
         this.selectedUser = userRes.data;
+        this.editName = this.selectedUser.name;
+        this.editRole = this.selectedUser.admin_role || '';
       } catch (e) {
         this.giftMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
       }
@@ -425,9 +568,9 @@ export default {
   border: 2px solid var(--border-gold);
   border-radius: 12px;
   padding: 28px;
-  max-width: 600px;
+  max-width: 640px;
   width: 100%;
-  max-height: 80vh;
+  max-height: 85vh;
   overflow-y: auto;
   position: relative;
 }
@@ -451,6 +594,11 @@ export default {
   box-shadow: none;
 }
 
+/* Header */
+.detail-header {
+  margin-bottom: 18px;
+}
+
 .detail-name {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
@@ -461,9 +609,40 @@ export default {
 .detail-email {
   color: var(--text-secondary);
   font-size: 0.9rem;
-  margin-bottom: 18px;
+  margin: 0 0 8px;
 }
 
+.detail-badges {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.65rem;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-admin {
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+}
+
+.badge-banned {
+  background: rgba(231, 76, 60, 0.15);
+  color: #e74c3c;
+}
+
+.badge-premium {
+  background: rgba(155, 89, 182, 0.15);
+  color: #9b59b6;
+}
+
+/* Stats grid */
 .detail-stats {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -499,17 +678,129 @@ export default {
   font-weight: 600;
 }
 
-.logs-title {
+/* Manage sections */
+.manage-section {
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(138, 106, 46, 0.15);
+}
+
+.manage-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.section-title {
   font-family: 'Cinzel', serif;
   color: var(--text-secondary);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 1.5px;
   margin-bottom: 8px;
-  border-bottom: 1px solid rgba(138, 106, 46, 0.2);
-  padding-bottom: 4px;
 }
 
+.inline-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.stacked-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-input {
+  flex: 1;
+  background: var(--bg-primary);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  color: var(--text-bright);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.88rem;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--accent-gold);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 40px;
+}
+
+.btn-sm {
+  background: var(--bg-primary);
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  color: var(--text-bright);
+  padding: 6px 14px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.82rem;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-sm:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.btn-sm:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.btn-action {
+  background: rgba(212, 168, 67, 0.1);
+  border-color: rgba(212, 168, 67, 0.3);
+  color: var(--accent-gold);
+}
+
+.btn-danger {
+  background: rgba(231, 76, 60, 0.1) !important;
+  color: #e74c3c !important;
+  border-color: rgba(231, 76, 60, 0.3) !important;
+}
+
+.btn-gift {
+  background: rgba(106, 191, 80, 0.15) !important;
+  color: #6abf50 !important;
+  border-color: rgba(106, 191, 80, 0.3) !important;
+}
+
+.action-msg {
+  font-size: 0.8rem;
+  margin-top: 6px;
+}
+
+.msg-success {
+  color: #6abf50;
+}
+
+.msg-error {
+  color: #e74c3c;
+}
+
+/* Premium */
+.premium-active {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.premium-status {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-style: italic;
+}
+
+/* Login logs */
 .logs-table-wrap {
   overflow-x: auto;
 }
@@ -552,64 +843,13 @@ export default {
   font-size: 0.85rem;
 }
 
-.text-premium {
-  color: var(--accent-gold) !important;
-}
-
-.gift-section {
-  margin-bottom: 20px;
-}
-
-.gift-active {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.gift-status {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-style: italic;
-}
-
-.gift-form {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.gift-select {
-  flex: 1;
-  background: var(--bg-primary);
-  border: 1px solid rgba(138, 106, 46, 0.3);
-  color: var(--text-bright);
-  padding: 6px 10px;
-  border-radius: 4px;
-  font-family: inherit;
-}
-
-.gift-select:focus {
-  outline: none;
-  border-color: var(--accent-gold);
-}
-
-.btn-gift {
-  background: rgba(106, 191, 80, 0.15) !important;
-  color: #6abf50 !important;
-  border-color: rgba(106, 191, 80, 0.3) !important;
-  white-space: nowrap;
-}
-
-.gift-msg {
-  font-size: 0.82rem;
-  color: #6abf50;
-  margin-top: 6px;
-}
-
 @media (max-width: 768px) {
   .detail-stats {
     grid-template-columns: 1fr;
+  }
+  .inline-form {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 </style>

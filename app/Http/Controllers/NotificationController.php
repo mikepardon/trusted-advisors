@@ -143,6 +143,34 @@ class NotificationController extends Controller
         ]);
     }
 
+    public function deleteAllRead(Request $request): JsonResponse
+    {
+        $deleted = UserNotification::where('user_id', $request->user()->id)
+            ->notDeleted()
+            ->whereNotNull('read_at')
+            ->where(function ($q) {
+                $q->whereNotNull('claimed_at')
+                  ->orWhere(function ($q2) {
+                      $q2->whereNull('claimed_at');
+                      // Only delete read notifications that have no unclaimed rewards
+                      $q2->where(function ($q3) {
+                          $q3->whereNull('data->reward_xp')
+                             ->orWhere('data->reward_xp', 0);
+                      });
+                      $q2->where(function ($q3) {
+                          $q3->whereNull('data->reward_coins')
+                             ->orWhere('data->reward_coins', 0);
+                      });
+                      $q2->whereNull('data->reward_character_id');
+                      $q2->whereNull('data->reward_dice_theme_id');
+                      $q2->whereNull('data->reward_kingdom_style_id');
+                  });
+            })
+            ->update(['deleted_at' => now()]);
+
+        return response()->json(['deleted' => $deleted]);
+    }
+
     public function destroy(Request $request, UserNotification $notification): JsonResponse
     {
         if ($notification->user_id !== $request->user()->id) {

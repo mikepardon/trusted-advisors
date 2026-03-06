@@ -3,7 +3,10 @@
     <div class="notif-drawer" :class="{ 'drawer-visible': visible }">
       <div class="drawer-header">
         <h3 class="drawer-title">Notifications</h3>
-        <button v-if="dbNotifications.length" class="mark-read-btn" @click="markAllRead">Mark all read</button>
+        <div class="header-actions">
+          <button v-if="dbNotifications.length" class="mark-read-btn" @click="markAllRead">Mark all read</button>
+          <button v-if="hasReadNotifications" class="mark-read-btn delete-read-btn" @click="deleteAllRead">Delete all read</button>
+        </div>
         <button class="drawer-close" @click="$emit('close')">&times;</button>
       </div>
 
@@ -113,6 +116,9 @@ export default {
       const unreadDb = this.dbNotifications.filter(n => !n.read_at).length;
       return this.gameInvites.length + this.friendRequests.length + unreadDb;
     },
+    hasReadNotifications() {
+      return this.dbNotifications.some(n => n.read_at);
+    },
   },
   watch: {
     open(val) {
@@ -175,6 +181,12 @@ export default {
       try {
         await axios.post('/api/notifications/mark-all-read');
         this.dbNotifications.forEach(n => { n.read_at = n.read_at || new Date().toISOString(); });
+      } catch {}
+    },
+    async deleteAllRead() {
+      try {
+        await axios.delete('/api/notifications/read');
+        this.dbNotifications = this.dbNotifications.filter(n => !n.read_at);
       } catch {}
     },
     timeAgo(dateStr) {
@@ -259,11 +271,12 @@ export default {
 
 .drawer-header {
   display: flex;
-  align-items: center;
   justify-content: space-between;
   padding: 14px 18px 10px;
   border-bottom: 1px solid rgba(138, 106, 46, 0.3);
   gap: 8px;
+    position: relative;
+    flex-direction: column;
 }
 
 .drawer-title {
@@ -272,30 +285,50 @@ export default {
   font-size: 1.1rem;
 }
 
+.header-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .mark-read-btn {
-  background: none;
-  border: none;
+  background: none !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.75rem !important;
   cursor: pointer;
   text-decoration: underline;
-  padding: 0;
+  padding: 0 !important;
+    background: unset !important;
 }
 
 .mark-read-btn:hover {
   color: var(--accent-gold);
   transform: none;
-  box-shadow: none;
+  box-shadow: none !important;
+}
+
+.delete-read-btn {
+  color: var(--accent-red);
+}
+
+.delete-read-btn:hover {
+  color: #f06050;
 }
 
 .drawer-close {
-  background: none;
-  border: none;
+  background: none !important;
+  border: none !important;
   color: var(--text-secondary);
-  font-size: 1.6rem;
   cursor: pointer;
   padding: 0 4px;
   line-height: 1;
+    box-shadow: none !important;
+    position: absolute;
+    top: 0;
+    right: 0;
+    font-size: 2rem;
 }
 
 .drawer-close:hover {

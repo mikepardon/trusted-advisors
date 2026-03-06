@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Events\UserNotificationReceived;
 use App\Http\Controllers\Controller;
 use App\Models\Game;
 use App\Models\LoginLog;
 use App\Models\User;
 use App\Models\UserAchievement;
+use App\Models\UserNotification;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -14,6 +17,7 @@ use Illuminate\Support\Facades\DB;
 
 class AdminUserController extends Controller
 {
+    use AuditsAdminActions;
     public function index(Request $request): JsonResponse
     {
         $query = User::query();
@@ -76,6 +80,7 @@ class AdminUserController extends Controller
             'elo_rating' => $user->elo_rating,
             'coins' => $user->coins,
             'is_admin' => $user->is_admin,
+            'admin_role' => $user->admin_role,
             'banned_at' => $user->banned_at?->toDateTimeString(),
             'timeout_count' => $user->timeout_count ?? 0,
             'login_streak' => $user->login_streak,
@@ -98,11 +103,13 @@ class AdminUserController extends Controller
 
         if ($user->banned_at) {
             $user->update(['banned_at' => null]);
+            $this->auditLog('unban', 'User', $user->id);
 
             return response()->json(['message' => 'User unbanned', 'banned_at' => null]);
         }
 
         $user->update(['banned_at' => now()]);
+        $this->auditLog('ban', 'User', $user->id);
 
         return response()->json(['message' => 'User banned', 'banned_at' => $user->fresh()->banned_at->toDateTimeString()]);
     }
@@ -136,9 +143,54 @@ class AdminUserController extends Controller
         }
 
         $request->session()->put('impersonator_id', $request->user()->id);
+        $this->auditLog('impersonate', 'User', $user->id);
         Auth::login($user);
 
         return response()->json(['message' => 'Now impersonating ' . $user->name]);
+    }
+
+    public function updateName(Request $request, User $user): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        $oldName = $user->name;
+        $user->update(['name' => $validated['name']]);
+        $this->auditLog('update_name', 'User', $user->id, ['name' => ['old' => $oldName, 'new' => $validated['name']]]);
+
+        return response()->json(['message' => 'Name updated', 'name' => $user->name]);
+    }
+
+    public function sendNotification(Request $request, User $user): JsonResponse
+    {
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'message' => 'required|string|max:1000',
+        ]);
+
+        $notification = UserNotification::create([
+            'user_id' => $user->id,
+            'type' => 'admin_message',
+            'title' => $validated['title'],
+            'message' => $validated['message'],
+            'data' => ['sent_by' => $request->user()->id],
+        ]);
+
+        try {
+            broadcast(new UserNotificationReceived(
+                $user->id,
+                $notification->id,
+                'admin_message',
+                $validated['title'],
+            ));
+        } catch (\Throwable) {}
+
+        $this->auditLog('send_notification', 'User', $user->id, null, [
+            'title' => $validated['title'],
+        ]);
+
+        return response()->json(['message' => 'Notification sent']);
     }
 
     public function stopImpersonating(Request $request): JsonResponse

@@ -38,13 +38,14 @@ export default {
 
 <style scoped>
 .hint-bubble {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 8px;
   background: linear-gradient(135deg, rgba(212, 168, 67, 0.15), rgba(212, 168, 67, 0.06));
   border: 1px solid rgba(212, 168, 67, 0.35);
   border-radius: 8px;
-  padding: 10px 14px;
+  padding: 10px 32px 10px 14px;
   margin: 8px 0;
   cursor: pointer;
   animation: hintGlow 2s ease-in-out infinite alternate;
@@ -69,20 +70,26 @@ export default {
 }
 
 .hint-dismiss {
-  background: none;
-  border: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: none !important;
+  border: none !important;
+  border-radius: 0;
+  box-shadow: none !important;
   color: var(--text-secondary, #a08a6a);
-  font-size: 1.1rem;
+  font-size: 1.4rem;
   cursor: pointer;
-  padding: 0;
+  padding: 4px 8px;
   line-height: 1;
-  flex-shrink: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
 }
 
 .hint-dismiss:hover {
   color: var(--accent-gold, #d4a843);
   transform: none;
   box-shadow: none;
+  background: none;
 }
 
 .hint-pop-enter-active {

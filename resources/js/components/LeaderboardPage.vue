@@ -395,21 +395,15 @@ export default {
 }
 
 .tab-btn {
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(138, 106, 46, 0.3);
-  color: var(--text-secondary);
-  padding: 6px 20px;
-  border-radius: 6px;
-  font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: all 0.2s;
+  padding: 6px 16px;
+  font-size: 0.8rem;
 }
 
 .tab-btn.active {
-  background: rgba(212, 168, 67, 0.15);
+  background: var(--accent-gold);
   border-color: var(--accent-gold);
-  color: var(--accent-gold);
+  color: black;
+  box-shadow: 0 4px 0 #7a5a14, inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
 .filters-row {
@@ -455,7 +449,7 @@ export default {
 
 .lb-row.lb-current {
   border-color: var(--accent-gold);
-  background: rgba(212, 168, 67, 0.08);
+  background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
 }
 
 .lb-rank {

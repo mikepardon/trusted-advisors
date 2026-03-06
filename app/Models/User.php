@@ -27,6 +27,7 @@ class User extends Authenticatable
         'password',
         'avatar_url',
         'is_admin',
+        'admin_role',
         'is_bot',
         'onesignal_player_id',
         'onesignal_email_token',
@@ -212,6 +213,20 @@ class User extends Authenticatable
         }
 
         return true;
+    }
+
+    public function hasAdminRole(string ...$roles): bool
+    {
+        if ($this->admin_role === 'super_admin') {
+            return true;
+        }
+
+        return in_array($this->admin_role, $roles);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return $this->admin_role === 'super_admin';
     }
 
     public function wantsPushNotification(string $category): bool

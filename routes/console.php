@@ -12,3 +12,4 @@ Schedule::command('app:process-expired-turns')->everyMinute();
 Schedule::command('app:process-season-end')->dailyAt('00:05');
 Schedule::command('app:generate-weekly-challenge')->weeklyOn(1, '00:01');
 Schedule::command('app:check-expiring-subscriptions')->dailyAt('02:00');
+Schedule::command('app:process-scheduled-gifts')->everyMinute();

@@ -43,6 +43,10 @@ use App\Http\Controllers\RotatingEventController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Admin\AdminPaymentController;
+use App\Http\Controllers\Admin\AdminRoleController;
+use App\Http\Controllers\Admin\AdminAuditLogController;
+use App\Http\Controllers\Admin\BalanceDashboardController;
+use App\Http\Controllers\Admin\RetentionDashboardController;
 use App\Http\Controllers\Admin\MediaLibraryController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TournamentController;
@@ -152,6 +156,7 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/notifications', [NotificationController::class, 'index']);
     Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead']);
+    Route::delete('/notifications/read', [NotificationController::class, 'deleteAllRead']);
     Route::put('/notifications/preferences', [NotificationController::class, 'updatePreferences']);
     Route::post('/notifications/{notification}/read', [NotificationController::class, 'markRead']);
     Route::post('/notifications/{notification}/claim', [NotificationController::class, 'claim']);
@@ -272,6 +277,8 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('users', [AdminUserController::class, 'index']);
     Route::get('users/{user}', [AdminUserController::class, 'show']);
     Route::post('users/{user}/ban', [AdminUserController::class, 'ban']);
+    Route::put('users/{user}/name', [AdminUserController::class, 'updateName']);
+    Route::post('users/{user}/notify', [AdminUserController::class, 'sendNotification']);
     Route::get('users/{user}/login-logs', [AdminUserController::class, 'loginLogs']);
     Route::post('users/{user}/impersonate', [AdminUserController::class, 'impersonate']);
 
@@ -281,6 +288,8 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     // Admin gifts
     Route::get('gifts', [AdminGiftController::class, 'index']);
     Route::post('gifts', [AdminGiftController::class, 'store']);
+    Route::post('gifts/preview-count', [AdminGiftController::class, 'previewRecipientCount']);
+    Route::post('gifts/{gift}/cancel', [AdminGiftController::class, 'cancel']);
 
     // Announcements
     Route::apiResource('announcements', AdminAnnouncementController::class);
@@ -319,4 +328,23 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::put('payment-settings', [AdminPaymentController::class, 'updateSettings']);
     Route::post('users/{user}/grant-premium', [AdminPaymentController::class, 'grantPremium']);
     Route::post('users/{user}/revoke-premium', [AdminPaymentController::class, 'revokePremium']);
+
+    // Roles (super_admin only)
+    Route::get('roles', [AdminRoleController::class, 'index'])->middleware('admin:admin.roles');
+    Route::put('users/{user}/role', [AdminRoleController::class, 'updateRole'])->middleware('admin:admin.roles');
+
+    // Audit log (super_admin only)
+    Route::get('audit-log', [AdminAuditLogController::class, 'index'])->middleware('admin:admin.audit-log');
+
+    // Balance dashboard
+    Route::get('balance/cards', [BalanceDashboardController::class, 'cardStats'])->middleware('admin:admin.balance');
+    Route::get('balance/characters', [BalanceDashboardController::class, 'characterStats'])->middleware('admin:admin.balance');
+    Route::get('balance/stats', [BalanceDashboardController::class, 'statDistribution'])->middleware('admin:admin.balance');
+
+    // Retention dashboard
+    Route::get('retention/overview', [RetentionDashboardController::class, 'overview'])->middleware('admin:admin.retention');
+    Route::get('retention/active-users', [RetentionDashboardController::class, 'activeUsers'])->middleware('admin:admin.retention');
+    Route::get('retention/cohorts', [RetentionDashboardController::class, 'retentionCohorts'])->middleware('admin:admin.retention');
+    Route::get('retention/churn', [RetentionDashboardController::class, 'churnIndicators'])->middleware('admin:admin.retention');
+    Route::get('retention/completion', [RetentionDashboardController::class, 'gameCompletionRate'])->middleware('admin:admin.retention');
 });

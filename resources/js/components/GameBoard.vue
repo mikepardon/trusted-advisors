@@ -466,7 +466,10 @@ export default {
       }
     },
     async fetchGame() {
-      this.loading = true;
+      // Only show loading spinner on initial load, not on refreshes
+      if (!this.gameData) {
+        this.loading = true;
+      }
       try {
         const res = await axios.get(`/api/games/${this.id}`);
         this.gameData = res.data;

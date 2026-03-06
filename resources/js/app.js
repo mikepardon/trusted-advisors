@@ -47,6 +47,10 @@ import AdminDice from './components/admin/AdminDice.vue';
 import AdminKingdomStyles from './components/admin/AdminKingdomStyles.vue';
 import AdminRotatingEvents from './components/admin/AdminRotatingEvents.vue';
 import AdminMediaLibrary from './components/admin/AdminMediaLibrary.vue';
+import AdminRoles from './components/admin/AdminRoles.vue';
+import AdminAuditLog from './components/admin/AdminAuditLog.vue';
+import AdminBalance from './components/admin/AdminBalance.vue';
+import AdminRetention from './components/admin/AdminRetention.vue';
 import AuthCallback from './components/AuthCallback.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
 import { fetchSoundUrls } from './sounds';
@@ -101,6 +105,10 @@ const routes = [
             { path: 'rotating-events', component: AdminRotatingEvents },
             { path: 'users', component: AdminUsers },
             { path: 'payments', component: AdminPayments },
+            { path: 'roles', component: AdminRoles },
+            { path: 'audit-log', component: AdminAuditLog },
+            { path: 'balance', component: AdminBalance },
+            { path: 'retention', component: AdminRetention },
         ],
     },
 ];

@@ -7,11 +7,13 @@ use App\Jobs\ProcessSeasonEndJob;
 use App\Models\Season;
 use App\Models\SeasonReward;
 use App\Services\SeasonRewardService;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class SeasonController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         return response()->json(Season::orderByDesc('starts_at')->get());
@@ -42,6 +44,7 @@ class SeasonController extends Controller
         }
 
         $season = Season::create($validated);
+        $this->auditLog('create', 'Season', $season->id);
         return response()->json($season, 201);
     }
 
@@ -80,7 +83,9 @@ class SeasonController extends Controller
             Season::where('id', '!=', $season->id)->where('is_active', true)->update(['is_active' => false]);
         }
 
+        $old = $season->only(array_keys($validated));
         $season->update($validated);
+        $this->auditModelChange('update', $season, $old);
         return response()->json($season);
     }
 
@@ -93,6 +98,7 @@ class SeasonController extends Controller
     public function endSeason(Season $season): JsonResponse
     {
         ProcessSeasonEndJob::dispatch($season);
+        $this->auditLog('end_season', 'Season', $season->id);
 
         return response()->json(['message' => 'Season end processing has been queued.']);
     }

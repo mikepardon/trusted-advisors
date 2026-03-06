@@ -4,11 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ItemController extends Controller
 {
+    use AuditsAdminActions;
     public function index(): JsonResponse
     {
         return response()->json(Item::orderBy('name')->get());
@@ -34,6 +36,7 @@ class ItemController extends Controller
         ]);
 
         $item = Item::create($validated);
+        $this->auditLog('create', 'Item', $item->id);
 
         return response()->json($item, 201);
     }
@@ -52,13 +55,16 @@ class ItemController extends Controller
             'available_duel' => 'boolean',
         ]);
 
+        $old = $item->only(array_keys($validated));
         $item->update($validated);
+        $this->auditModelChange('update', $item, $old);
 
         return response()->json($item);
     }
 
     public function destroy(Item $item): JsonResponse
     {
+        $this->auditLog('delete', 'Item', $item->id, null, ['name' => $item->name]);
         $item->delete();
 
         return response()->json(['message' => 'Deleted']);

@@ -627,41 +627,21 @@ export default {
 .shop-tabs {
   display: flex;
   gap: 6px;
-  padding: 4px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  border: 1px solid rgba(138, 106, 46, 0.15);
+  justify-content: center;
   min-width: min-content;
 }
 
 .shop-tab {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 8px 14px;
-  border-radius: 8px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-family: 'Cinzel', serif;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 6px 16px;
+  font-size: 0.8rem;
   white-space: nowrap;
-  transition: all 0.2s;
-  flex: 1;
-  justify-content: center;
-}
-
-.shop-tab:hover:not(.active) {
-  background: rgba(138, 106, 46, 0.08);
-  color: var(--text-bright);
 }
 
 .shop-tab.active {
-  background: rgba(212, 168, 67, 0.15);
-  border-color: rgba(212, 168, 67, 0.4);
-  color: var(--accent-gold);
+  background: var(--accent-gold);
+  border-color: var(--accent-gold);
+  color: black;
+  box-shadow: 0 4px 0 #7a5a14, inset 0 1px 0 rgba(255,255,255,0.2);
 }
 
 
@@ -1230,9 +1210,12 @@ export default {
 /* Persistent dice canvas */
 .dice-canvas-persistent {
   position: fixed;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 70px;
   width: 100%;
-  height: 100%;
+  height: calc(100% - 70px);
   pointer-events: none;
   z-index: 200;
 }

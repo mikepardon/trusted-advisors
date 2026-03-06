@@ -12,13 +12,15 @@
     <nav class="admin-sidebar" :class="{ open: sidebarOpen }">
       <router-link to="/admin" class="sidebar-brand">Admin Panel</router-link>
 
+      <div class="nav-scroll">
+
       <div class="nav-section">
         <router-link to="/admin" class="nav-item" exact-active-class="active">
           <span class="nav-icon">&#9670;</span> Dashboard
         </router-link>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" v-if="canSee('content')">
         <span class="nav-group-label">Content</span>
         <router-link to="/admin/characters" class="nav-item" active-class="active">
           <span class="nav-icon">&#9812;</span> Characters
@@ -49,7 +51,7 @@
         </router-link>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" v-if="canSee('content')">
         <span class="nav-group-label">Progression</span>
         <router-link to="/admin/seasons" class="nav-item" active-class="active">
           <span class="nav-icon">&#128197;</span> Seasons
@@ -71,12 +73,12 @@
         </router-link>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" v-if="canSee('management')">
         <span class="nav-group-label">Management</span>
-        <router-link to="/admin/announcements" class="nav-item" active-class="active">
+        <router-link to="/admin/announcements" class="nav-item" active-class="active" v-if="canSee('content')">
           <span class="nav-icon">&#128227;</span> Announcements
         </router-link>
-        <router-link to="/admin/rotating-events" class="nav-item" active-class="active">
+        <router-link to="/admin/rotating-events" class="nav-item" active-class="active" v-if="canSee('content')">
           <span class="nav-icon">&#9889;</span> Rotating Events
         </router-link>
         <router-link to="/admin/gifts" class="nav-item" active-class="active">
@@ -91,10 +93,32 @@
         <router-link to="/admin/games" class="nav-item" active-class="active">
           <span class="nav-icon">&#127918;</span> Games
         </router-link>
-        <router-link to="/admin/bot-games" class="nav-item" active-class="active">
+        <router-link to="/admin/bot-games" class="nav-item" active-class="active" v-if="canSee('content')">
           <span class="nav-icon">&#129302;</span> Bot Games
         </router-link>
       </div>
+
+      <div class="nav-section" v-if="canSee('analytics')">
+        <span class="nav-group-label">Analytics</span>
+        <router-link to="/admin/balance" class="nav-item" active-class="active">
+          <span class="nav-icon">&#9878;</span> Balance
+        </router-link>
+        <router-link to="/admin/retention" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128200;</span> Retention
+        </router-link>
+      </div>
+
+      <div class="nav-section" v-if="canSee('system')">
+        <span class="nav-group-label">System</span>
+        <router-link to="/admin/audit-log" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128220;</span> Audit Log
+        </router-link>
+        <router-link to="/admin/roles" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128101;</span> Roles
+        </router-link>
+      </div>
+
+      </div><!-- end nav-scroll -->
 
       <div class="nav-section nav-bottom">
         <router-link to="/" class="nav-item nav-back">
@@ -111,6 +135,8 @@
 </template>
 
 <script>
+import { useAuth } from '../../stores/auth';
+
 export default {
   name: 'AdminLayout',
   data() {
@@ -118,6 +144,12 @@ export default {
       sidebarOpen: false,
       isMobile: false,
     };
+  },
+  computed: {
+    userRole() {
+      const auth = useAuth();
+      return auth.state.user?.admin_role || null;
+    },
   },
   watch: {
     $route() {
@@ -140,6 +172,25 @@ export default {
         this.sidebarOpen = false;
       }
     },
+    canSee(section) {
+      const role = this.userRole;
+      // If no role set (legacy admin without role), show everything
+      if (!role) return true;
+      if (role === 'super_admin') return true;
+
+      switch (section) {
+        case 'content':
+          return role === 'content_admin';
+        case 'management':
+          return ['content_admin', 'moderator'].includes(role);
+        case 'analytics':
+          return ['content_admin', 'moderator', 'analyst'].includes(role);
+        case 'system':
+          return false; // super_admin only
+        default:
+          return false;
+      }
+    },
   },
 };
 </script>
@@ -153,7 +204,7 @@ export default {
 /* Sidebar */
 .admin-sidebar {
   width: 220px;
-  min-height: 100vh;
+  height: 100vh;
   position: fixed;
   top: 0;
   left: 0;
@@ -163,7 +214,6 @@ export default {
   display: flex;
   flex-direction: column;
   padding: 0;
-  overflow-y: auto;
 }
 
 .sidebar-brand {
@@ -175,6 +225,12 @@ export default {
   font-weight: 700;
   padding: 20px 18px 16px;
   border-bottom: 1px solid rgba(184, 148, 46, 0.2);
+}
+
+.nav-scroll {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
 }
 
 .nav-section {
@@ -226,7 +282,7 @@ export default {
 }
 
 .nav-bottom {
-  margin-top: auto;
+  flex-shrink: 0;
   border-top: 1px solid rgba(184, 148, 46, 0.2);
   padding-top: 8px;
   padding-bottom: 12px;

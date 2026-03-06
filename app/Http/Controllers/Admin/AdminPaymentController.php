@@ -7,11 +7,13 @@ use App\Models\GameRule;
 use App\Models\Purchase;
 use App\Models\User;
 use App\Services\PaymentService;
+use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class AdminPaymentController extends Controller
 {
+    use AuditsAdminActions;
     public function subscribers(): JsonResponse
     {
         $subscribers = User::where('is_premium', true)
@@ -119,6 +121,7 @@ class AdminPaymentController extends Controller
         }
 
         $label = str_replace('_', ' ', $duration);
+        $this->auditLog('grant_premium', 'User', $user->id, null, ['duration' => $duration]);
 
         return response()->json(['message' => "Premium gifted to {$user->name} for {$label}."]);
     }
@@ -127,6 +130,7 @@ class AdminPaymentController extends Controller
     {
         $paymentService = app(PaymentService::class);
         $paymentService->deactivatePremium($user);
+        $this->auditLog('revoke_premium', 'User', $user->id);
 
         return response()->json(['message' => "Premium revoked from {$user->name}."]);
     }
