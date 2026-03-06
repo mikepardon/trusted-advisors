@@ -27,8 +27,8 @@ class BalanceDashboardController extends Controller
                     'cards.difficulty',
                     'cards.category',
                     DB::raw('COUNT(*) as appearances'),
-                    DB::raw('SUM(CASE WHEN game_round_results.success = 1 THEN 1 ELSE 0 END) as success_count'),
-                    DB::raw('ROUND(AVG(CASE WHEN game_round_results.success = 1 THEN 1.0 ELSE 0.0 END) * 100, 1) as success_rate'),
+                    DB::raw('SUM(CASE WHEN game_round_results.success = true THEN 1 ELSE 0 END) as success_count'),
+                    DB::raw('ROUND(AVG(CASE WHEN game_round_results.success = true THEN 1.0 ELSE 0.0 END) * 100, 1) as success_rate'),
                 )
                 ->groupBy('cards.id', 'cards.title', 'cards.difficulty', 'cards.category');
 
@@ -55,12 +55,12 @@ class BalanceDashboardController extends Controller
                     DB::raw('COUNT(*) as pick_count'),
                     DB::raw('SUM(CASE
                         WHEN games.game_type = \'duel\' AND game_players.player_number = games.winner_player_number THEN 1
-                        WHEN games.game_type != \'duel\' AND games.win = 1 THEN 1
+                        WHEN games.game_type != \'duel\' AND games.win = true THEN 1
                         ELSE 0
                     END) as win_count'),
                     DB::raw('ROUND(AVG(CASE
                         WHEN games.game_type = \'duel\' AND game_players.player_number = games.winner_player_number THEN 1.0
-                        WHEN games.game_type != \'duel\' AND games.win = 1 THEN 1.0
+                        WHEN games.game_type != \'duel\' AND games.win = true THEN 1.0
                         ELSE 0.0
                     END) * 100, 1) as win_rate'),
                 )

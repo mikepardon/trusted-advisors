@@ -16,15 +16,15 @@ class RetentionDashboardController extends Controller
 
         $data = [
             'dau' => DB::table('login_logs')
-                ->where('created_at', '>=', $now->copy()->startOfDay())
+                ->where('logged_in_at', '>=', $now->copy()->startOfDay())
                 ->distinct('user_id')
                 ->count('user_id'),
             'wau' => DB::table('login_logs')
-                ->where('created_at', '>=', $now->copy()->subDays(7))
+                ->where('logged_in_at', '>=', $now->copy()->subDays(7))
                 ->distinct('user_id')
                 ->count('user_id'),
             'mau' => DB::table('login_logs')
-                ->where('created_at', '>=', $now->copy()->subDays(30))
+                ->where('logged_in_at', '>=', $now->copy()->subDays(30))
                 ->distinct('user_id')
                 ->count('user_id'),
             'new_today' => DB::table('users')
@@ -53,9 +53,9 @@ class RetentionDashboardController extends Controller
         };
 
         $data = DB::table('login_logs')
-            ->where('login_logs.created_at', '>=', now()->subDays($days))
+            ->where('login_logs.logged_in_at', '>=', now()->subDays($days))
             ->select(
-                DB::raw('DATE(login_logs.created_at) as date'),
+                DB::raw('DATE(login_logs.logged_in_at) as date'),
                 DB::raw('COUNT(DISTINCT login_logs.user_id) as active_users'),
             )
             ->groupBy('date')
@@ -123,8 +123,8 @@ class RetentionDashboardController extends Controller
 
                     $returned = DB::table('login_logs')
                         ->whereIn('user_id', $cohortUserIds)
-                        ->where('created_at', '>=', $checkDate->startOfDay())
-                        ->where('created_at', '<=', $checkDate->endOfDay())
+                        ->where('logged_in_at', '>=', $checkDate->startOfDay())
+                        ->where('logged_in_at', '<=', $checkDate->endOfDay())
                         ->distinct('user_id')
                         ->count('user_id');
 
