@@ -734,8 +734,16 @@ export default {
         if (totalDifficulty > 0) {
           this.playerDifficulties = { ...this.playerDifficulties, [this.activePlayerNumber]: totalDifficulty };
         }
+        // Update items so the roll button / item prompt shows correctly
+        this.currentPlayerItems = res.data.items || [];
+        const usable = this.currentPlayerItems.filter(pi => !pi.is_used);
+        if (usable.length === 0) {
+          this.itemDecided = true;
+        }
       } catch {
         this.myCards = [];
+        this.currentPlayerItems = [];
+        this.itemDecided = true;
       }
     },
 
