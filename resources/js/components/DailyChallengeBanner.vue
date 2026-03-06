@@ -36,11 +36,13 @@ export default {
 
 <style scoped>
 .daily-banner {
-  background: linear-gradient(90deg, rgba(212, 168, 67, 0.08), rgba(212, 168, 67, 0.02));
-  border: 1px solid rgba(212, 168, 67, 0.25);
-  border-radius: 8px;
-  padding: 10px 14px;
-  margin-bottom: 12px;
+  background: rgba(13, 10, 6, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
 }
 
 .banner-row {
@@ -59,14 +61,15 @@ export default {
 .banner-label {
   font-size: 0.6rem;
   text-transform: uppercase;
-  letter-spacing: 1px;
-  color: rgba(212, 168, 67, 0.8);
-  background: rgba(212, 168, 67, 0.12);
-  padding: 1px 6px;
+  letter-spacing: 1.5px;
+  color: var(--accent-gold);
+  background: rgba(212, 168, 67, 0.18);
+  padding: 2px 8px;
   border-radius: 3px;
-  font-weight: 600;
+  font-weight: 700;
   flex-shrink: 0;
   margin-top: 2px;
+  font-family: 'Cinzel', serif;
 }
 
 .banner-info {
@@ -77,25 +80,28 @@ export default {
 
 .banner-title {
   font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 0.9rem;
+  color: var(--text-bright);
+  font-size: 0.95rem;
+  font-weight: 700;
 }
 
 .banner-desc {
   margin: 0;
   color: var(--text-secondary);
   font-size: 0.8rem;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .banner-reward {
   display: flex;
   justify-content: center;
   font-size: 0.75rem;
-  color: var(--text-secondary);
-  background: rgba(212, 168, 67, 0.15);
-  padding: 1px 6px;
+  color: var(--accent-gold);
+  background: rgba(212, 168, 67, 0.1);
+  padding: 2px 8px;
   border-radius: 3px;
-  margin-top: 6px;
+  margin-top: 8px;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.5px;
 }
 </style>

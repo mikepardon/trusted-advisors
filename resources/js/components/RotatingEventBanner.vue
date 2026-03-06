@@ -69,7 +69,9 @@ export default {
   align-items: center;
   justify-content: space-between;
   padding: 12px 14px;
-  background: linear-gradient(135deg, rgba(138, 58, 185, 0.15), rgba(67, 100, 212, 0.15));
+  background: rgba(13, 10, 6, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 2px solid rgba(138, 58, 185, 0.4);
   border-radius: 10px;
   cursor: pointer;
@@ -114,7 +116,7 @@ export default {
   font-size: 0.8rem;
   font-family: 'Cinzel', serif;
   font-weight: 700;
-  background: linear-gradient(180deg, rgba(138, 58, 185, 0.3), rgba(138, 58, 185, 0.15));
+  background: rgba(138, 58, 185, 0.2);
   border: 1px solid rgba(138, 58, 185, 0.5);
   border-radius: 6px;
   color: #c890e0;
@@ -124,7 +126,7 @@ export default {
 }
 
 .event-play-btn:hover {
-  background: rgba(138, 58, 185, 0.4);
+  background: rgba(138, 58, 185, 0.35);
   color: #e0b0f0;
 }
 </style>

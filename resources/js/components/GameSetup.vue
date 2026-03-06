@@ -996,12 +996,14 @@ export default {
 }
 
 .mode-card {
-  background: linear-gradient(180deg, #2a1f14, #1a1209);
-  border: 2px solid rgba(138, 106, 46, 0.3);
+  background: rgba(13, 10, 6, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 2px solid rgba(138, 106, 46, 0.4);
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 14px 14px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
   box-sizing: border-box;
   width: 100%;
   text-align: center;
@@ -1012,7 +1014,9 @@ export default {
 }
 
 .mode-card:hover {
-  border-color: rgba(212, 168, 67, 0.5);
+  border-color: rgba(212, 168, 67, 0.6);
+  background: rgba(26, 18, 9, 0.8);
+  box-shadow: 0 0 16px rgba(212, 168, 67, 0.15);
 }
 
 .mode-title {
@@ -1025,6 +1029,11 @@ export default {
 /* Pending invites */
 .invites-panel {
   margin-top: 20px;
+  background: rgba(13, 10, 6, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(138, 106, 46, 0.35);
+  border-radius: 10px;
 }
 
 .invite-list {
@@ -1659,7 +1668,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 12px;
+  padding: 0;
   margin-bottom: 8px;
 }
 
@@ -1752,15 +1761,17 @@ export default {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: rgba(212, 168, 67, 0.1);
-  border: 1px solid rgba(138, 106, 46, 0.3);
+  background: rgba(13, 10, 6, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(138, 106, 46, 0.35);
   border-radius: 16px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
 .home-elo:hover {
-  background: rgba(212, 168, 67, 0.2);
+  background: rgba(26, 18, 9, 0.7);
   border-color: var(--accent-gold);
 }
 
@@ -1780,8 +1791,10 @@ export default {
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  background: rgba(212, 168, 67, 0.1);
-  border: 1px solid rgba(138, 106, 46, 0.3);
+  background: rgba(13, 10, 6, 0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(138, 106, 46, 0.35);
   border-radius: 16px;
   font-family: 'Cinzel', serif;
   font-size: 0.85rem;
@@ -1792,7 +1805,7 @@ export default {
 }
 
 .home-coins:hover {
-  background: rgba(212, 168, 67, 0.2);
+  background: rgba(26, 18, 9, 0.7);
   border-color: var(--accent-gold);
 }
 
@@ -1820,8 +1833,10 @@ export default {
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: rgba(26, 18, 9, 0.9);
-  border: 1px solid rgba(138, 106, 46, 0.4);
+  background: rgba(13, 10, 6, 0.6);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(138, 106, 46, 0.35);
   color: var(--text-secondary);
   font-size: 1.1rem;
   display: flex;
@@ -1831,7 +1846,7 @@ export default {
   transition: all 0.2s;
   padding: 0;
   letter-spacing: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   flex-shrink: 0;
   overflow: visible;
 }
@@ -1839,21 +1854,21 @@ export default {
 .side-icon-btn:hover {
   color: var(--accent-gold);
   border-color: var(--accent-gold);
-  background: rgba(42, 31, 20, 0.95);
+  background: rgba(26, 18, 9, 0.75);
   transform: none;
   box-shadow: 0 2px 12px rgba(212, 168, 67, 0.2);
 }
 
 .side-premium-btn {
-  background: linear-gradient(135deg, rgba(212, 168, 67, 0.3), rgba(180, 120, 30, 0.2));
+  background: rgba(42, 31, 14, 0.7);
   border-color: var(--accent-gold);
   color: var(--accent-gold);
-  box-shadow: 0 0 10px rgba(212, 168, 67, 0.25), 0 2px 8px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 0 10px rgba(212, 168, 67, 0.2), 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .side-premium-btn:hover {
-  background: linear-gradient(135deg, rgba(212, 168, 67, 0.45), rgba(180, 120, 30, 0.3));
-  box-shadow: 0 0 16px rgba(212, 168, 67, 0.4), 0 2px 12px rgba(212, 168, 67, 0.2);
+  background: rgba(56, 42, 18, 0.8);
+  box-shadow: 0 0 16px rgba(212, 168, 67, 0.35), 0 2px 12px rgba(212, 168, 67, 0.2);
 }
 
 .side-badge {
@@ -1921,26 +1936,6 @@ export default {
   margin-bottom: 10px;
 }
 
-.daily-enhanced :deep(.daily-banner) {
-  padding: 14px 16px;
-  border-width: 2px;
-  border-radius: 10px;
-  margin-bottom: 8px;
-}
-
-.daily-enhanced :deep(.banner-icon) {
-  font-size: 1.6rem;
-}
-
-.daily-enhanced :deep(.banner-title) {
-  font-size: 1rem;
-}
-
-.daily-enhanced :deep(.banner-reward) {
-  font-size: 0.85rem;
-  padding: 2px 8px;
-}
-
 /* In-Progress Games in grid */
 .home-grid-main .in-progress-card {
   margin-bottom: 0;
@@ -1949,12 +1944,19 @@ export default {
 /* In-Progress Games Card */
 .in-progress-card {
   cursor: pointer;
-  transition: border-color 0.2s;
-  padding: 10px 14px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  padding: 12px 16px;
+  background: rgba(13, 10, 6, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(138, 106, 46, 0.35);
+  border-radius: 10px;
+  box-shadow: none;
 }
 
 .in-progress-card:hover {
   border-color: var(--accent-gold);
+  box-shadow: 0 0 12px rgba(212, 168, 67, 0.15);
 }
 
 .in-progress-row {
@@ -2022,7 +2024,7 @@ export default {
   }
 
   .mode-card {
-    padding: 10px 14px;
+    padding: 6px 10px;
   }
 
   .player-buttons button {

@@ -38,7 +38,8 @@
       </div>
     </header>
 
-    <main>
+    <main :style="mainBgStyle">
+      <div v-if="homepageBgUrl && isHomePage" class="main-bg-overlay"></div>
       <router-view />
     </main>
 
@@ -134,6 +135,7 @@ export default {
       notifCount: 0,
       streakToast: null,
       showTutorial: false,
+      homepageBgUrl: null,
     };
   },
   watch: {
@@ -169,6 +171,19 @@ export default {
     isGamePage() {
       return /^\/game\/\d+(\/.*)?$/.test(this.$route.path);
     },
+    isHomePage() {
+      return !this.isAdmin && !this.isGamePage && ['/', '/collection', '/shop', '/friends', '/profile', '/leaderboard'].includes(this.$route.path);
+    },
+    mainBgStyle() {
+      if (!this.homepageBgUrl || !this.isHomePage) return {};
+      return {
+        backgroundImage: `url(${this.homepageBgUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundAttachment: 'scroll',
+        position: 'relative',
+      };
+    },
     isInGame() {
       return /^\/game\/\d+$/.test(this.$route.path);
     },
@@ -182,6 +197,10 @@ export default {
       this.showTutorial = true;
       localStorage.setItem('has_seen_tutorial', '1');
     }
+    // Fetch site settings (homepage background)
+    axios.get('/api/site-settings').then(res => {
+      this.homepageBgUrl = res.data?.homepage_background_url || null;
+    }).catch(() => {});
     // fetchUser() is already called in app.js router guard; just wait for it
     const check = () => {
       if (!this.auth.state.loading && this.auth.state.user) {
@@ -906,5 +925,19 @@ button:disabled {
 
 .impersonation-banner:hover {
   background: #e74c3c;
+}
+
+/* Homepage background overlay */
+.main-bg-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(13, 10, 6, 0.65);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#game-app > main > :not(.main-bg-overlay) {
+  position: relative;
+  z-index: 1;
 }
 </style>

@@ -46,6 +46,7 @@ import TournamentPage from './components/TournamentPage.vue';
 import AdminDice from './components/admin/AdminDice.vue';
 import AdminKingdomStyles from './components/admin/AdminKingdomStyles.vue';
 import AdminRotatingEvents from './components/admin/AdminRotatingEvents.vue';
+import AdminMediaLibrary from './components/admin/AdminMediaLibrary.vue';
 import AuthCallback from './components/AuthCallback.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
 import { fetchSoundUrls } from './sounds';
@@ -90,6 +91,7 @@ const routes = [
             { path: 'xp', component: AdminXp },
             { path: 'coins', component: AdminCoins },
             { path: 'addons', component: AdminAddons },
+            { path: 'media', component: AdminMediaLibrary },
             { path: 'seasons', component: AdminSeasons },
             { path: 'achievements', component: AdminAchievements },
             { path: 'unlockables', component: AdminUnlockables },

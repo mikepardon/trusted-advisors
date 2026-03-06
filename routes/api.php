@@ -43,6 +43,7 @@ use App\Http\Controllers\RotatingEventController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Admin\AdminPaymentController;
+use App\Http\Controllers\Admin\MediaLibraryController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TournamentController;
 use Illuminate\Support\Facades\Route;
@@ -75,6 +76,7 @@ Route::get('/storage/{path}', function (string $path) {
         ->header('Cache-Control', 'public, max-age=86400');
 })->where('path', '.*');
 Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
+Route::get('/site-settings', [GameRuleController::class, 'siteSettings']);
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::post('/auth/callback', [AuthController::class, 'handleOAuthCallback']);
 
@@ -258,6 +260,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::apiResource('addons', AddonController::class);
     Route::get('rules', [GameRuleController::class, 'index']);
     Route::put('rules/{key}', [GameRuleController::class, 'update']);
+    Route::delete('homepage-background', [GameRuleController::class, 'removeHomepageBackground']);
     Route::post('characters/{character}/image', [CharacterController::class, 'uploadImage']);
     Route::get('sound-assets', [SoundAssetController::class, 'index']);
     Route::post('sound-assets/{key}/upload', [SoundAssetController::class, 'upload']);
@@ -293,6 +296,10 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('dice-themes', [AdminDiceController::class, 'index']);
     Route::put('dice-themes/{diceTheme}', [AdminDiceController::class, 'update']);
     Route::post('dice-themes/sync', [AdminDiceController::class, 'sync']);
+
+    // Media library
+    Route::apiResource('media-library', MediaLibraryController::class);
+    Route::get('media-library-tags', [MediaLibraryController::class, 'tags']);
 
     // Kingdom styles
     Route::get('kingdom-styles', [AdminKingdomStyleController::class, 'index']);

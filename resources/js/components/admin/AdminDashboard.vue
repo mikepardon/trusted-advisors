@@ -140,6 +140,30 @@
           <span class="toggle-desc">Allow players to create and join tournaments</span>
         </label>
       </div>
+
+      <!-- Site Appearance -->
+      <h3 class="section-title">Site Appearance</h3>
+      <div class="toggles-panel">
+        <div class="appearance-row">
+          <span class="toggle-label">Homepage Background Image</span>
+          <span class="toggle-desc" style="padding-left:0">Displayed between header and bottom nav on the homepage.</span>
+          <div class="bg-preview-wrap" v-if="homepageBgUrl">
+            <img :src="homepageBgUrl" class="bg-preview" alt="Homepage background" />
+            <button class="btn-remove-bg" @click="removeHomepageBg">Remove</button>
+          </div>
+          <div class="bg-upload-wrap">
+            <button class="btn-upload-bg" @click="showMediaPicker = true">
+              {{ homepageBgUrl ? 'Choose Different Image' : 'Choose Image' }}
+            </button>
+          </div>
+        </div>
+        <MediaLibraryModal
+          :visible="showMediaPicker"
+          :select-mode="true"
+          @close="showMediaPicker = false"
+          @select="onMediaSelected"
+        />
+      </div>
     </template>
   </div>
 </template>
@@ -149,18 +173,21 @@ import axios from 'axios';
 import { useToast } from '../../stores/toast';
 import { Doughnut } from 'vue-chartjs';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
+import MediaLibraryModal from './MediaLibraryModal.vue';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default {
   name: 'AdminDashboard',
-  components: { Doughnut },
+  components: { Doughnut, MediaLibraryModal },
   setup() { return { toast: useToast() }; },
   data() {
     return {
       loading: true,
       stats: {},
       tournamentsEnabled: false,
+      homepageBgUrl: null,
+      showMediaPicker: false,
     };
   },
   computed: {
@@ -236,12 +263,14 @@ export default {
   },
   async mounted() {
     try {
-      const [statsRes, rulesRes] = await Promise.all([
+      const [statsRes, rulesRes, siteRes] = await Promise.all([
         axios.get('/api/admin/dashboard-stats'),
         axios.get('/api/admin/rules'),
+        axios.get('/api/site-settings'),
       ]);
       this.stats = statsRes.data;
       this.tournamentsEnabled = !!rulesRes.data?.tournaments_enabled;
+      this.homepageBgUrl = siteRes.data?.homepage_background_url || null;
     } catch (e) {
       console.error('Failed to load dashboard stats', e);
     }
@@ -253,6 +282,25 @@ export default {
         await axios.put(`/api/admin/rules/${key}`, { value });
       } catch {
         this.toast.error('Failed to save setting');
+      }
+    },
+    async onMediaSelected(item) {
+      this.showMediaPicker = false;
+      try {
+        await axios.put('/api/admin/rules/homepage_background_image', { value: item.path });
+        this.homepageBgUrl = item.url;
+        this.toast.success('Background updated');
+      } catch {
+        this.toast.error('Failed to set background');
+      }
+    },
+    async removeHomepageBg() {
+      try {
+        await axios.delete('/api/admin/homepage-background');
+        this.homepageBgUrl = null;
+        this.toast.success('Background removed');
+      } catch {
+        this.toast.error('Failed to remove background');
       }
     },
   },
@@ -383,6 +431,43 @@ export default {
   color: var(--text-secondary);
   width: 100%;
   padding-left: 28px;
+}
+
+/* Site Appearance */
+.appearance-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.bg-preview-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.bg-preview {
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border-gold);
+}
+
+.btn-upload-bg,
+.btn-remove-bg {
+  font-size: 0.85rem;
+  padding: 6px 14px;
+}
+
+.btn-remove-bg {
+  border-color: var(--accent-red);
+  color: var(--accent-red);
+}
+
+.btn-remove-bg:hover {
+  background: rgba(160, 48, 32, 0.2);
 }
 
 @media (max-width: 768px) {

@@ -36,8 +36,15 @@ class ProcessBotTurn implements ShouldQueue
             return;
         }
 
-        // Idempotency: if turn_started_at changed, the phase advanced and this job is stale
-        if (!$game->turn_started_at || $game->turn_started_at->toIso8601String() !== $this->expectedTurnStartedAt) {
+        // Idempotency check
+        $isChoosingDispatch = str_starts_with($this->expectedTurnStartedAt, 'choosing_round_');
+        if ($isChoosingDispatch) {
+            // Dispatched during choosing phase — verify we're still in choosing for the same round
+            $expectedRound = (int) str_replace('choosing_round_', '', $this->expectedTurnStartedAt);
+            if ($game->duel_phase !== 'choosing' || $game->current_round !== $expectedRound) {
+                return;
+            }
+        } elseif (!$game->turn_started_at || $game->turn_started_at->toIso8601String() !== $this->expectedTurnStartedAt) {
             return;
         }
 

@@ -44,6 +44,9 @@
         <router-link to="/admin/addons" class="nav-item" active-class="active">
           <span class="nav-icon">&#128230;</span> Addons
         </router-link>
+        <router-link to="/admin/media" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128444;</span> Media Library
+        </router-link>
       </div>
 
       <div class="nav-section">

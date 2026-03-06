@@ -1761,6 +1761,13 @@ class GameController extends Controller
         $submittedCount = $allHands->whereNotNull('offered_to_player_id')->count();
 
         if ($submittedCount < 2) {
+            // If online game with a bot opponent, trigger the bot to select
+            if ($game->isOnline() && $opponent->is_bot) {
+                $botDelay = rand(3, 6);
+                ProcessBotTurn::dispatch($game->id, 'choosing_round_' . $game->current_round)
+                    ->delay(now()->addSeconds($botDelay));
+            }
+
             // Still waiting for opponent
             return response()->json([
                 'success' => true,

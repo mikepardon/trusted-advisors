@@ -86,7 +86,9 @@ export default {
 
 .announcement-slide {
   position: relative;
-  background: linear-gradient(180deg, #2a1f14, #1a1209);
+  background: rgba(13, 10, 6, 0.65);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   border: 2px solid rgba(138, 106, 46, 0.3);
   border-radius: 10px;
   padding: 12px 14px;
