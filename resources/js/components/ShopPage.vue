@@ -22,7 +22,7 @@
       </button>
     </div>
 
-    <div v-if="!loading && isPremium && paymentsEnabled" class="premium-active-badge">
+    <div v-if="!loading && isPremium" class="premium-active-badge">
       <span class="premium-crown">&#9733;</span> Premium Active
     </div>
 

@@ -8,7 +8,7 @@
         <div class="profile-details">
           <h3 class="profile-name">
             {{ auth.state.user?.name }}
-            <span v-if="auth.state.user?.is_premium && auth.state.user?.payments_enabled" class="premium-badge-inline" title="Premium">&#9733;</span>
+            <span v-if="auth.state.user?.is_premium" class="premium-badge-inline" title="Premium">&#9733;</span>
           </h3>
           <p class="profile-joined">Level {{ gameStats.level || 1 }} Advisor</p>
         </div>
@@ -140,7 +140,7 @@
     </div>
 
     <!-- Subscription Management -->
-    <div v-if="auth.state.user?.is_premium && auth.state.user?.payments_enabled" class="card-panel">
+    <div v-if="auth.state.user?.is_premium" class="card-panel">
       <h2 class="section-title">Subscription</h2>
       <div v-if="subLoading" class="stats-loading">Loading subscription details...</div>
       <div v-else-if="subDetails" class="sub-panel">
@@ -291,7 +291,7 @@ export default {
     } catch {}
     this.statsLoading = false;
     this.fetchReferralData();
-    if (this.auth.state.user?.is_premium && this.auth.state.user?.payments_enabled) {
+    if (this.auth.state.user?.is_premium) {
       this.fetchSubscriptionDetails();
     }
   },
