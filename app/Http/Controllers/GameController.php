@@ -532,35 +532,32 @@ class GameController extends Controller
         }
         GameCardDeck::insert($deckRows);
 
-        // Duel mode: skip item deck
-        if (!$game->isDuel()) {
-            // Create shuffled item deck (recycle items if needed)
-            if (!empty($customRules['item_pool'])) {
-                $allItems = Item::whereIn('id', $customRules['item_pool'])->inRandomOrder()->get();
-            } elseif ($rotatingEvent && $rotatingEvent->item_pool) {
-                $allItems = Item::whereIn('id', $rotatingEvent->item_pool)->inRandomOrder()->get();
-            } else {
-                $allItems = Item::where($availCol, true)->inRandomOrder()->get();
-            }
-            $itemsNeeded = $game->total_rounds * 2; // generous estimate
-            $itemPool = collect();
-            while ($itemPool->count() < $itemsNeeded) {
-                $itemPool = $itemPool->concat($allItems->shuffle());
-            }
-            $itemPool = $itemPool->take($itemsNeeded);
-            $itemRows = [];
-            foreach ($itemPool as $i => $item) {
-                $itemRows[] = [
-                    'game_id' => $game->id,
-                    'item_id' => $item->id,
-                    'position' => $i,
-                    'is_drawn' => false,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-            GameItemDeck::insert($itemRows);
+        // Create shuffled item deck (recycle items if needed)
+        if (!empty($customRules['item_pool'])) {
+            $allItems = Item::whereIn('id', $customRules['item_pool'])->inRandomOrder()->get();
+        } elseif ($rotatingEvent && $rotatingEvent->item_pool) {
+            $allItems = Item::whereIn('id', $rotatingEvent->item_pool)->inRandomOrder()->get();
+        } else {
+            $allItems = Item::where($availCol, true)->inRandomOrder()->get();
         }
+        $itemsNeeded = $game->total_rounds * 2; // generous estimate
+        $itemPool = collect();
+        while ($itemPool->count() < $itemsNeeded) {
+            $itemPool = $itemPool->concat($allItems->shuffle());
+        }
+        $itemPool = $itemPool->take($itemsNeeded);
+        $itemRows = [];
+        foreach ($itemPool as $i => $item) {
+            $itemRows[] = [
+                'game_id' => $game->id,
+                'item_id' => $item->id,
+                'position' => $i,
+                'is_drawn' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        GameItemDeck::insert($itemRows);
 
         // Initialize curse deck (both modes)
         $this->initCurseDeck($game);
@@ -2244,14 +2241,43 @@ class GameController extends Controller
             $difficulty = $cd['difficulty'];
 
             $cardEffects = [];
-            // Negative effects ALWAYS apply (unless shielded or no_negative_effects house rule)
-            if (!$hasShield && empty($duelHouseRules['no_negative_effects'])) {
+            // Negative effects apply on failure (unless shielded or no_negative_effects house rule)
+            if (!$success && !$hasShield && empty($duelHouseRules['no_negative_effects'])) {
                 foreach (($card->getDuelNegativeEffects() ?? []) as $stat => $change) {
                     if ($stat === 'draw_curse') {
                         $curseResult = $this->drawCursesFromDeck($game, $rollingPlayer->id, $character->name);
                         if ($curseResult) {
                             $duelPendingCurses[] = $curseResult['pending'];
                             $duelSpecialEffects[] = $curseResult['effect'];
+                        }
+                        continue;
+                    }
+                    if ($stat === 'draw_item') {
+                        $drawnItem = $this->drawItemFromDeck($game);
+                        if ($drawnItem) {
+                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
+                                $duelSpecialEffects[] = [
+                                    'type' => 'item_blocked',
+                                    'player' => $character->name,
+                                    'item' => $drawnItem->name,
+                                    'description' => "{$character->name}'s inventory is full! {$drawnItem->name} was lost.",
+                                ];
+                            } else {
+                                GamePlayerItem::create([
+                                    'game_player_id' => $rollingPlayer->id,
+                                    'item_id' => $drawnItem->id,
+                                    'acquired_round' => $game->current_round,
+                                    'is_cursed' => false,
+                                    'is_used' => false,
+                                ]);
+                                $duelSpecialEffects[] = [
+                                    'type' => 'draw_item',
+                                    'phase' => 'negative',
+                                    'player' => $character->name,
+                                    'item' => $drawnItem->name,
+                                    'description' => "{$character->name} found {$drawnItem->name}!",
+                                ];
+                            }
                         }
                         continue;
                     }
@@ -2268,6 +2294,63 @@ class GameController extends Controller
                         if ($curseResult) {
                             $duelPendingCurses[] = $curseResult['pending'];
                             $duelSpecialEffects[] = $curseResult['effect'];
+                        }
+                        continue;
+                    }
+                    if ($stat === 'draw_item') {
+                        $drawnItem = $this->drawItemFromDeck($game);
+                        if ($drawnItem) {
+                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
+                                $duelSpecialEffects[] = [
+                                    'type' => 'item_blocked',
+                                    'player' => $character->name,
+                                    'item' => $drawnItem->name,
+                                    'description' => "{$character->name}'s inventory is full! {$drawnItem->name} was lost.",
+                                ];
+                            } else {
+                                GamePlayerItem::create([
+                                    'game_player_id' => $rollingPlayer->id,
+                                    'item_id' => $drawnItem->id,
+                                    'acquired_round' => $game->current_round,
+                                    'is_cursed' => false,
+                                    'is_used' => false,
+                                ]);
+                                $duelSpecialEffects[] = [
+                                    'type' => 'draw_item',
+                                    'phase' => 'positive',
+                                    'player' => $character->name,
+                                    'item' => $drawnItem->name,
+                                    'description' => "{$character->name} found {$drawnItem->name}!",
+                                ];
+                            }
+                        }
+                        continue;
+                    }
+                    if ($stat === 'grant_item_id') {
+                        $item = Item::find($change);
+                        if ($item) {
+                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
+                                $duelSpecialEffects[] = [
+                                    'type' => 'item_blocked',
+                                    'player' => $character->name,
+                                    'item' => $item->name,
+                                    'description' => "{$character->name}'s inventory is full! {$item->name} was lost.",
+                                ];
+                            } else {
+                                GamePlayerItem::create([
+                                    'game_player_id' => $rollingPlayer->id,
+                                    'item_id' => $item->id,
+                                    'acquired_round' => $game->current_round,
+                                    'is_used' => false,
+                                ]);
+                                $duelSpecialEffects[] = [
+                                    'type' => 'draw_item',
+                                    'phase' => 'positive',
+                                    'player' => $character->name,
+                                    'item' => $item->name,
+                                    'description' => "{$character->name} received {$item->name}!",
+                                ];
+                            }
                         }
                         continue;
                     }

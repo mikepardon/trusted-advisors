@@ -100,7 +100,7 @@
             </span>
           </div>
           <div v-if="c.negative_effects && Object.keys(c.negative_effects).length" class="effects-row card-effects">
-            <span class="effects-label">Always:</span>
+            <span class="effects-label">On Failure:</span>
             <span
               v-for="(val, stat) in c.negative_effects"
               :key="'neg-'+stat"

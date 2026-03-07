@@ -105,7 +105,7 @@
     </div>
 
     <!-- Kingdom Stats -->
-    <KingdomStats :game="displayGame" :kingdomStyleSlug="myKingdomStyleSlug" :kingdomStyleData="myKingdomStyleData" />
+    <KingdomStats :game="displayGame" :kingdomStyleSlug="myKingdomStyleSlug" :kingdomStyleData="myKingdomStyleData" :previewEffects="cardPreviewEffects" />
 
     <!-- Player Items (overlay only, button in top bar) -->
     <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
@@ -181,6 +181,7 @@
           :hasAssigned="currentPlayerHasAssigned"
           :loading="handLoading"
           @assign="assignRoles"
+          @preview="onCardPreview"
         />
       </template>
 
@@ -344,7 +345,8 @@ export default {
       pendingCurses: null,
       playerCurses: {},
       showCurseDetails: false,
-      // In-game alerts
+      // Card effect preview
+      cardPreviewEffects: null,
     };
   },
   computed: {
@@ -645,7 +647,11 @@ export default {
         }
       }
     },
+    onCardPreview(effects) {
+      this.cardPreviewEffects = effects;
+    },
     async assignRoles({ positive_hand_id, negative_hand_ids }) {
+      this.cardPreviewEffects = null;
       try {
         const res = await axios.post(`/api/games/${this.id}/assign-roles`, {
           positive_hand_id,

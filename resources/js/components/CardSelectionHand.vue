@@ -86,6 +86,8 @@
           'card-unattended': selectedPositive !== null && selectedPositive !== item.hand_id,
         }"
         @click="selectAndConfirm(item.hand_id)"
+        @mouseenter="onCardHover(item)"
+        @mouseleave="onCardLeave"
       >
         <!-- Special effect badges -->
         <div v-if="hasSpecialEffects(item.card)" class="special-badges">
@@ -151,7 +153,7 @@ export default {
     hasAssigned: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
   },
-  emits: ['assign'],
+  emits: ['assign', 'preview'],
   data() {
     return {
       selectedPositive: null,
@@ -159,6 +161,7 @@ export default {
       activeSlideIndex: 0,
       swiperInstance: null,
       mediaQuery: null,
+      hoveredId: null,
     };
   },
   computed: {
@@ -175,6 +178,9 @@ export default {
     this.mediaQuery = window.matchMedia('(max-width: 768px)');
     this.isMobile = this.mediaQuery.matches;
     this.mediaQuery.addEventListener('change', this.onMediaChange);
+    if (this.isMobile && this.cards.length) {
+      this.$nextTick(() => this.emitPreview(this.cards[0]));
+    }
   },
   beforeUnmount() {
     if (this.mediaQuery) {
@@ -190,11 +196,15 @@ export default {
     },
     onSlideChange(swiper) {
       this.activeSlideIndex = swiper.activeIndex;
+      if (this.selectedPositive !== null) return;
+      const item = this.cards[swiper.activeIndex];
+      if (item) this.emitPreview(item);
     },
     selectAndConfirm(handId) {
       if (this.selectedPositive !== null) return;
       playSound('clickCard');
       this.selectedPositive = handId;
+      this.$emit('preview', null);
       const negativeIds = this.cards
         .filter(c => c.hand_id !== handId)
         .map(c => c.hand_id);
@@ -204,6 +214,47 @@ export default {
           negative_hand_ids: negativeIds,
         });
       }
+    },
+    emitPreview(item) {
+      if (!item) {
+        this.$emit('preview', null);
+        return;
+      }
+      // Merge this card's positive effects with the other cards' negative effects
+      // into a single net change per stat
+      const net = {};
+      const pos = this.filterStatEffects(item.card.positive_effects);
+      for (const [stat, val] of Object.entries(pos)) {
+        net[stat] = (net[stat] || 0) + val;
+      }
+      const otherCards = this.cards.filter(c => c.hand_id !== item.hand_id);
+      for (const other of otherCards) {
+        const neg = this.filterNegativeEffects(other.card.negative_effects);
+        for (const [stat, val] of Object.entries(neg)) {
+          net[stat] = (net[stat] || 0) + val;
+        }
+      }
+      // Split into positive/negative based on net direction, skip zeros
+      const positive = {};
+      const negative = {};
+      for (const [stat, val] of Object.entries(net)) {
+        if (val > 0) positive[stat] = val;
+        else if (val < 0) negative[stat] = val;
+      }
+      if (!Object.keys(positive).length && !Object.keys(negative).length) {
+        this.$emit('preview', null);
+        return;
+      }
+      this.$emit('preview', { positive, negative });
+    },
+    onCardHover(item) {
+      if (this.selectedPositive !== null) return;
+      this.hoveredId = item.hand_id;
+      this.emitPreview(item);
+    },
+    onCardLeave() {
+      this.hoveredId = null;
+      this.$emit('preview', null);
     },
     filterStatEffects(effects) {
       if (!effects) return {};
@@ -237,13 +288,16 @@ export default {
     },
   },
   watch: {
-    cards() {
+    cards(newCards) {
       this.selectedPositive = null;
       this.activeSlideIndex = 0;
       if (this.swiperInstance) {
         this.$nextTick(() => {
           this.swiperInstance.slideTo(0, 0);
         });
+      }
+      if (this.isMobile && newCards?.length) {
+        this.$nextTick(() => this.emitPreview(newCards[0]));
       }
     },
   },

@@ -43,7 +43,7 @@
                 <p class="outcome-label">On Success:</p>
                 <div class="outcome-chips">
                   <span
-                    v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
+                    v-for="(val, stat) in filterStatEffects(getDuelPositive(item.card))"
                     :key="'p-' + stat"
                     class="stat-chip chip-positive"
                   >
@@ -53,10 +53,10 @@
               </div>
 
               <div class="outcome-section">
-                <p class="outcome-label">Always:</p>
+                <p class="outcome-label">On Failure:</p>
                 <div class="outcome-chips">
                   <span
-                    v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
+                    v-for="(val, stat) in filterStatEffects(getDuelNegative(item.card))"
                     :key="'n-' + stat"
                     class="stat-chip chip-negative"
                   >
@@ -79,8 +79,11 @@
         :class="{
           'card-acting': selectedId === item.hand_id,
           'card-unattended': selectedId !== null && selectedId !== item.hand_id,
+          'card-previewing': hoveredId === item.hand_id && selectedId === null,
         }"
         @click="selectAndConfirm(item.hand_id)"
+        @mouseenter="onCardHover(item)"
+        @mouseleave="onCardLeave"
       >
         <div v-if="selectedId === item.hand_id" class="card-ribbon acting">
           Keeping this
@@ -99,7 +102,7 @@
           <p class="outcome-label">On Success:</p>
           <div class="outcome-chips">
             <span
-              v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
+              v-for="(val, stat) in filterStatEffects(getDuelPositive(item.card))"
               :key="'p-' + stat"
               class="stat-chip chip-positive"
             >
@@ -109,10 +112,10 @@
         </div>
 
         <div class="outcome-section">
-          <p class="outcome-label">Always:</p>
+          <p class="outcome-label">On Failure:</p>
           <div class="outcome-chips">
             <span
-              v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
+              v-for="(val, stat) in filterStatEffects(getDuelNegative(item.card))"
               :key="'n-' + stat"
               class="stat-chip chip-negative"
             >
@@ -138,13 +141,14 @@ export default {
   props: {
     cards: { type: Array, default: () => [] },
   },
-  emits: ['select'],
+  emits: ['select', 'preview'],
   data() {
     return {
       selectedId: null,
       isMobile: false,
       swiperInstance: null,
       mediaQuery: null,
+      hoveredId: null,
     };
   },
   computed: {
@@ -156,6 +160,10 @@ export default {
     this.mediaQuery = window.matchMedia('(max-width: 768px)');
     this.isMobile = this.mediaQuery.matches;
     this.mediaQuery.addEventListener('change', this.onMediaChange);
+    // Emit initial preview for the first card on mobile
+    if (this.isMobile && this.cards.length) {
+      this.$nextTick(() => this.emitPreview(this.cards[0]));
+    }
   },
   beforeUnmount() {
     if (this.mediaQuery) {
@@ -169,12 +177,46 @@ export default {
     onSwiper(swiper) {
       this.swiperInstance = swiper;
     },
-    onSlideChange() {},
+    onSlideChange() {
+      if (!this.swiperInstance || this.selectedId !== null) return;
+      const idx = this.swiperInstance.activeIndex;
+      const item = this.cards[idx];
+      if (item) {
+        this.emitPreview(item);
+      }
+    },
     selectAndConfirm(handId) {
       if (this.selectedId !== null) return;
       playSound('clickCard');
       this.selectedId = handId;
+      this.$emit('preview', null);
       this.$emit('select', handId);
+    },
+    emitPreview(item) {
+      if (!item) {
+        this.$emit('preview', null);
+        return;
+      }
+      // Duel: only show positive effects (what you gain on success)
+      this.$emit('preview', {
+        positive: this.filterStatEffects(this.getDuelPositive(item.card)),
+        negative: {},
+      });
+    },
+    onCardHover(item) {
+      if (this.selectedId !== null) return;
+      this.hoveredId = item.hand_id;
+      this.emitPreview(item);
+    },
+    onCardLeave() {
+      this.hoveredId = null;
+      this.$emit('preview', null);
+    },
+    getDuelPositive(card) {
+      return card.positive_effects_duel ?? card.positive_effects;
+    },
+    getDuelNegative(card) {
+      return card.negative_effects_duel ?? card.negative_effects;
     },
     filterStatEffects(effects) {
       if (!effects) return {};
@@ -189,12 +231,16 @@ export default {
     },
   },
   watch: {
-    cards() {
+    cards(newCards) {
       this.selectedId = null;
       if (this.swiperInstance) {
         this.$nextTick(() => {
           this.swiperInstance.slideTo(0, 0);
         });
+      }
+      // Auto-emit preview for first card on mobile
+      if (this.isMobile && newCards?.length) {
+        this.$nextTick(() => this.emitPreview(newCards[0]));
       }
     },
   },
@@ -264,6 +310,13 @@ export default {
   box-shadow:
     0 8px 30px rgba(0, 0, 0, 0.6),
     0 0 15px rgba(212, 168, 67, 0.15);
+}
+
+.parchment-card.card-previewing {
+  border-color: rgba(212, 168, 67, 0.6);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 12px rgba(212, 168, 67, 0.12);
 }
 
 .parchment-card.card-acting {

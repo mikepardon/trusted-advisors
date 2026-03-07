@@ -23,6 +23,7 @@
       :playerKingdomStyles="playerKingdomStylesComputed"
       :playerKingdomStyleData="playerKingdomStyleDataComputed"
       :playerTitles="playerTitlesComputed"
+      :previewEffects="cardPreviewEffects"
       @show-character="openCharacterModal"
       @dice-animation-complete="onDiceAnimationComplete"
     />
@@ -87,6 +88,7 @@
       <DuelChoosePhase
         :cards="currentCards"
         @select="submitSelection"
+        @preview="onCardPreview"
       />
       <div v-if="waitingForOpponentSelection" class="waiting-inline">
         <p>Waiting for opponent to choose their card...</p>
@@ -309,6 +311,8 @@ export default {
       // Curses
       pendingCurses: null,
       playerCurses: {},
+      // Card effect preview
+      cardPreviewEffects: null,
     };
   },
   computed: {
@@ -488,6 +492,11 @@ export default {
         }
       },
       immediate: true,
+    },
+    duelPhase(newPhase) {
+      if (newPhase !== 'choosing') {
+        this.cardPreviewEffects = null;
+      }
     },
     isCurrentTurnBot(isBotTurn) {
       // For simultaneous rolling, bot rolls when human rolls — don't pre-trigger
@@ -690,6 +699,10 @@ export default {
       this.showHandoff = false;
       this.activePlayerNumber = this.handoffPlayerNumber;
       await this.loadDuelHand();
+    },
+
+    onCardPreview(effects) {
+      this.cardPreviewEffects = effects;
     },
 
     async submitSelection(keptHandId) {

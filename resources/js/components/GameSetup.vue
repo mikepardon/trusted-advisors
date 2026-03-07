@@ -379,7 +379,7 @@
         <h2 class="section-title">Your Council is Assembled</h2>
         <div class="summary-picks">
           <div v-for="(charId, playerNum) in playerSelections" :key="playerNum" class="summary-pick">
-            <div class="summary-card">
+            <div class="summary-card summary-card-clickable" @click="showAdvisorPreview(charId)">
               <img :src="getCharacterImage(charId)" alt="Advisor" class="summary-portrait" />
               <div class="summary-info">
                 <span class="summary-player">Player {{ playerNum }}</span>
@@ -395,67 +395,18 @@
         >
           {{ starting ? 'Beginning...' : 'Begin Campaign' }}
         </button>
+        <button class="back-btn back-btn-centered" @click="playSound('clickNav'); undoLastPick()">&#8592; Change Advisor</button>
       </div>
 
-      <!-- Picking in progress -->
-      <div v-else class="card-panel carousel-panel">
-        <h2 class="section-title picking-header">
-          Player {{ currentPickingPlayer }}, choose your advisor
-        </h2>
-        <p class="picking-subtitle">Swipe through the available advisors</p>
-
-        <div class="carousel-wrapper">
-          <Swiper
-            :modules="swiperModules"
-            :effect="'cards'"
-            :grab-cursor="true"
-            :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
-            :style="{ overflow: 'visible' }"
-            @swiper="onSwiper"
-            @slideChange="onSlideChange"
-          >
-            <SwiperSlide
-              v-for="char in availableCharacters"
-              :key="char.id"
-            >
-              <div class="advisor-card" @click="selectCharacterByIndex(availableCharacters.indexOf(char))">
-                <div class="advisor-portrait-wrap">
-                  <img :src="char.image_url || '/images/character.png'" :alt="char.name" class="advisor-portrait" />
-                </div>
-                <h3 class="advisor-name">{{ char.name }}</h3>
-                <p class="advisor-desc">{{ char.description }}</p>
-                <div class="advisor-dice">
-                  <div class="dice-row" v-for="(die, di) in char.dice" :key="di">
-                    <span class="dice-label">Die {{ di + 1 }}:</span>
-                    <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face === 'WILD' ? 'W' : face }}</span>
-                  </div>
-                </div>
-                <div class="advisor-wild">
-                  <span class="wild-badge">W = {{ char.wild_value }}</span>
-                  <span class="wild-desc">{{ char.wild_ability }}: {{ char.wild_ability_description }}</span>
-                </div>
-              </div>
-            </SwiperSlide>
-          </Swiper>
-        </div>
-
-        <p class="tap-hint">Tap an advisor to select</p>
-
-        <div v-if="lockedCharacters.length" class="locked-section">
-          <p class="locked-label">Locked Advisors</p>
-          <div class="locked-list">
-            <div v-for="c in lockedCharacters" :key="c.id" class="locked-card">
-              <img :src="c.image_url || '/images/character.png'" :alt="c.name" class="locked-portrait" />
-              <div class="locked-info">
-                <span class="locked-name">{{ c.name }}</span>
-                <span class="locked-req">{{ c.unlock_requirement }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <button class="back-btn back-btn-centered" @click="playSound('clickNav'); goBack()">&#8592; Back</button>
-      </div>
+      <!-- Advisor Preview Modal -->
+      <CharacterInfoModal
+        v-if="previewCharacter"
+        :character="previewCharacter"
+        :activeDice="3"
+        :abilityUses="1"
+        :items="[]"
+        @close="previewCharacter = null"
+      />
     </div>
     </Transition>
     </template>
@@ -474,6 +425,7 @@ import RotatingEventBanner from './RotatingEventBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import MatchmakingQueue from './MatchmakingQueue.vue';
 import StoryIntro from './StoryIntro.vue';
+import CharacterInfoModal from './CharacterInfoModal.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
 import 'swiper/css';
@@ -481,7 +433,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, RotatingEventBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
+  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, RotatingEventBanner, LoginRegister, MatchmakingQueue, StoryIntro, CharacterInfoModal, Swiper, SwiperSlide },
   inject: {
     openNotifications: { default: () => () => {} },
     openRules: { default: () => () => {} },
@@ -532,6 +484,8 @@ export default {
         random_starting_stats: false,
         hardcore_mode: false,
       },
+      // Advisor preview modal
+      previewCharacter: null,
       // Rotating event
       rotatingEventId: null,
       rotatingEventData: null,
@@ -877,6 +831,24 @@ export default {
             this.swiperInstance.slideTo(0, 0);
           }
         });
+      }
+    },
+    undoLastPick() {
+      const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
+      // Remove the last pick and go back to picking
+      this.currentPickingPlayer = pickCount;
+      delete this.playerSelections[this.currentPickingPlayer];
+      this.$nextTick(() => {
+        this.activeSlideIndex = 0;
+        if (this.swiperInstance) {
+          this.swiperInstance.slideTo(0, 0);
+        }
+      });
+    },
+    showAdvisorPreview(charId) {
+      const char = this.characters.find(c => c.id === charId);
+      if (char) {
+        this.previewCharacter = char;
       }
     },
     getCharacterName(charId) {
@@ -1664,6 +1636,16 @@ export default {
   align-items: center;
   gap: 14px;
   box-shadow: 0 0 20px rgba(212, 168, 67, 0.15);
+}
+
+.summary-card-clickable {
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.summary-card-clickable:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 25px rgba(212, 168, 67, 0.3);
 }
 
 .summary-portrait {

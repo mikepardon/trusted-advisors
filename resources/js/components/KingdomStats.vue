@@ -20,7 +20,25 @@
           <div
             class="stat-bar"
             :style="{ width: (game[stat.key] / 20 * 100) + '%' }"
-            :class="[getBarClass(game[stat.key]), barFlashClass[stat.key]]"
+            :class="[getBarClass(game[stat.key]), barFlashClass[stat.key], { 'bar-flat-right': getPreview(stat.key)?.pos > 0 }]"
+          ></div>
+          <!-- Positive preview (green) -->
+          <div
+            v-if="getPreview(stat.key)?.pos > 0"
+            class="stat-bar-preview preview-positive"
+            :style="{
+              left: Math.min(game[stat.key] / 20 * 100, 100) + '%',
+              width: Math.min(getPreview(stat.key).pos / 20 * 100, 100 - game[stat.key] / 20 * 100) + '%',
+            }"
+          ></div>
+          <!-- Negative preview (red) -->
+          <div
+            v-if="getPreview(stat.key)?.neg < 0"
+            class="stat-bar-preview preview-negative"
+            :style="{
+              left: Math.max((game[stat.key] + getPreview(stat.key).neg) / 20 * 100, 0) + '%',
+              width: Math.min(Math.abs(getPreview(stat.key).neg) / 20 * 100, game[stat.key] / 20 * 100) + '%',
+            }"
           ></div>
         </div>
         <!-- Mobile: radial progress with number centered inside -->
@@ -32,6 +50,26 @@
               :class="[getBarClass(game[stat.key]), barFlashClass[stat.key]]"
               cx="24" cy="24" r="20"
               :style="{ strokeDashoffset: radialOffset(game[stat.key]) }"
+            />
+            <!-- Positive preview arc (green) -->
+            <circle
+              v-if="getPreview(stat.key)?.pos > 0"
+              class="radial-preview radial-preview-positive"
+              cx="24" cy="24" r="20"
+              :style="{
+                strokeDasharray: radialPreviewDash(game[stat.key], getPreview(stat.key).pos),
+                strokeDashoffset: radialPreviewOffset(game[stat.key]),
+              }"
+            />
+            <!-- Negative preview arc (red) -->
+            <circle
+              v-if="getPreview(stat.key)?.neg < 0"
+              class="radial-preview radial-preview-negative"
+              cx="24" cy="24" r="20"
+              :style="{
+                strokeDasharray: radialPreviewDash(game[stat.key] + getPreview(stat.key).neg, Math.abs(getPreview(stat.key).neg)),
+                strokeDashoffset: radialPreviewOffset(game[stat.key] + getPreview(stat.key).neg),
+              }"
             />
           </svg>
           <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
@@ -122,6 +160,7 @@ export default {
     game: { type: Object, required: true },
     kingdomStyleSlug: { type: String, default: 'classic' },
     kingdomStyleData: { type: Object, default: null },
+    previewEffects: { type: Object, default: null },
   },
   data() {
     return {
@@ -274,6 +313,13 @@ export default {
       };
       this.tweenTimers[key] = requestAnimationFrame(step);
     },
+    getPreview(statKey) {
+      if (!this.previewEffects) return null;
+      const pos = this.previewEffects.positive?.[statKey] || 0;
+      const neg = this.previewEffects.negative?.[statKey] || 0;
+      if (!pos && !neg) return null;
+      return { pos, neg };
+    },
     getBarClass(value) {
       if (value <= 2) return 'bar-critical';
       if (value <= 5) return 'bar-danger-low';
@@ -288,6 +334,19 @@ export default {
     radialOffset(value) {
       const circumference = 2 * Math.PI * 20; // ~125.66
       const pct = Math.min(value, 20) / 20;
+      return circumference * (1 - pct);
+    },
+    radialPreviewDash(startValue, amount) {
+      const circumference = 2 * Math.PI * 20;
+      const clampedStart = Math.max(0, Math.min(startValue, 20));
+      const clampedEnd = Math.min(clampedStart + amount, 20);
+      const arcLen = ((clampedEnd - clampedStart) / 20) * circumference;
+      return `${arcLen} ${circumference - arcLen}`;
+    },
+    radialPreviewOffset(startValue) {
+      const circumference = 2 * Math.PI * 20;
+      const pct = Math.max(0, Math.min(startValue, 20)) / 20;
+      // Rotate so arc starts at the end of the current value
       return circumference * (1 - pct);
     },
     extractSolidColor(value, fallback) {
@@ -422,6 +481,52 @@ export default {
 .bar-caution-low { background: var(--ks-bar-caution, #d4a843); }
 .bar-safe { background: var(--ks-bar-safe, #27ae60); }
 
+.bar-flat-right {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.stat-bar-preview {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  z-index: 2;
+  transition: left 0.25s ease, width 0.25s ease, opacity 0.25s ease;
+  animation: preview-pulse 1.5s ease-in-out infinite;
+}
+
+.preview-positive {
+  background: rgba(6, 120, 10, 1);
+  box-shadow: 0 0 4px rgba(6, 120, 10, 0.9);
+}
+
+.preview-negative {
+  background: rgba(249, 23, 0, 0.9);
+  box-shadow: 0 0 4px rgba(249, 23, 0, 0.8);
+}
+
+@keyframes preview-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.radial-preview {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  transition: stroke-dasharray 0.25s ease, stroke-dashoffset 0.25s ease;
+  animation: preview-pulse 1.5s ease-in-out infinite;
+}
+
+.radial-preview-positive {
+  stroke: rgba(6, 120, 10, 1);
+}
+
+.radial-preview-negative {
+  stroke: rgba(249, 23, 0, 0.9);
+}
+
 .bar-flash-up {
   background: #4caf50 !important;
   box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
@@ -537,8 +642,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: 8px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   background: rgba(212, 168, 67, 0.1);
   border: 1px solid rgba(212, 168, 67, 0.3);
   border-radius: 6px;

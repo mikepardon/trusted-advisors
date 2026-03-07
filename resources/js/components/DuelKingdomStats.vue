@@ -46,7 +46,25 @@
               <div
                 class="stat-bar"
                 :style="{ width: (kingdom[stat.key] / 20 * 100) + '%' }"
-                :class="[getBarClass(kingdom[stat.key]), barFlashClass[kingdom.id + '-' + stat.key]]"
+                :class="[getBarClass(kingdom[stat.key]), barFlashClass[kingdom.id + '-' + stat.key], { 'bar-flat-right': getPreview(kingdom, stat.key)?.pos > 0 }]"
+              ></div>
+              <!-- Positive preview (green, extends after current bar) -->
+              <div
+                v-if="getPreview(kingdom, stat.key)?.pos > 0"
+                class="stat-bar-preview preview-positive"
+                :style="{
+                  left: Math.min(kingdom[stat.key] / 20 * 100, 100) + '%',
+                  width: Math.min(getPreview(kingdom, stat.key).pos / 20 * 100, 100 - kingdom[stat.key] / 20 * 100) + '%',
+                }"
+              ></div>
+              <!-- Negative preview (red, overlaps end of current bar) -->
+              <div
+                v-if="getPreview(kingdom, stat.key)?.neg < 0"
+                class="stat-bar-preview preview-negative"
+                :style="{
+                  left: Math.max((kingdom[stat.key] + getPreview(kingdom, stat.key).neg) / 20 * 100, 0) + '%',
+                  width: Math.min(Math.abs(getPreview(kingdom, stat.key).neg) / 20 * 100, kingdom[stat.key] / 20 * 100) + '%',
+                }"
               ></div>
             </div>
           </div>
@@ -82,6 +100,7 @@ export default {
     playerKingdomStyles: { type: Object, default: () => ({}) },
     playerKingdomStyleData: { type: Object, default: () => ({}) },
     playerTitles: { type: Object, default: () => ({}) },
+    previewEffects: { type: Object, default: null },
   },
   emits: ['show-character', 'dice-animation-complete'],
   data() {
@@ -330,6 +349,14 @@ export default {
       if (value >= 20) return 'bar-max';
       return 'bar-safe';
     },
+    getPreview(kingdom, statKey) {
+      if (!this.previewEffects || kingdom.player_number !== this.myPlayerNumber) return null;
+      const pos = this.previewEffects.positive?.[statKey] || 0;
+      const neg = this.previewEffects.negative?.[statKey] || 0;
+      if (!pos && !neg) return null;
+      const current = kingdom[statKey] || 0;
+      return { pos, neg, current };
+    },
     getValueClass(value) {
       if (value <= 2) return 'val-critical';
       if (value <= 5) return 'val-danger';
@@ -513,6 +540,7 @@ export default {
   height: 8px;
   border-radius: 4px;
   overflow: hidden;
+  position: relative;
 }
 
 .stat-bar {
@@ -526,6 +554,35 @@ export default {
 .bar-caution { background: var(--ks-bar-caution, #d4a843); }
 .bar-safe { background: var(--ks-bar-safe, #27ae60); }
 .bar-max { background: linear-gradient(90deg, #d4a843, #f0d060); }
+
+.bar-flat-right {
+  border-top-right-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+}
+
+.stat-bar-preview {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  transition: left 0.25s ease, width 0.25s ease, opacity 0.25s ease;
+  animation: preview-pulse 1.5s ease-in-out infinite;
+}
+
+.preview-positive {
+  background: rgba(6, 120, 10, 1);
+  box-shadow: 0 0 4px rgba(6, 120, 10, 0.9);
+}
+
+.preview-negative {
+  background: rgba(249, 23, 0, 0.9);
+  box-shadow: 0 0 4px rgba(249, 23, 0, 0.8);
+}
+
+@keyframes preview-pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
 
 .bar-flash-up {
   background: #4caf50 !important;

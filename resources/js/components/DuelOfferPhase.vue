@@ -54,7 +54,7 @@
               </div>
 
               <div class="outcome-section">
-                <p class="outcome-label">Always:</p>
+                <p class="outcome-label">On Failure:</p>
                 <div class="outcome-chips">
                   <span
                     v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
@@ -110,7 +110,7 @@
         </div>
 
         <div class="outcome-section">
-          <p class="outcome-label">Always:</p>
+          <p class="outcome-label">On Failure:</p>
           <div class="outcome-chips">
             <span
               v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
