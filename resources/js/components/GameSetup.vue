@@ -398,6 +398,43 @@
         <button class="back-btn back-btn-centered" @click="playSound('clickNav'); undoLastPick()">&#8592; Change Advisor</button>
       </div>
 
+      <!-- Picking in progress -->
+      <div v-else class="card-panel picker-panel">
+        <h2 class="section-title picking-header">
+          Player {{ currentPickingPlayer }}, choose your advisor
+        </h2>
+
+        <div class="advisor-grid">
+          <div
+            v-for="char in availableCharacters"
+            :key="char.id"
+            class="advisor-grid-card"
+            @click="selectCharacter(char.id)"
+          >
+            <div class="advisor-portrait-wrap">
+              <img :src="char.image_url || '/images/character.png'" :alt="char.name" class="advisor-portrait" />
+            </div>
+            <h3 class="advisor-name">{{ char.name }}</h3>
+            <p class="advisor-desc">{{ char.description }}</p>
+          </div>
+        </div>
+
+        <div v-if="lockedCharacters.length" class="locked-section">
+          <p class="locked-label">Locked Advisors</p>
+          <div class="locked-list">
+            <div v-for="c in lockedCharacters" :key="c.id" class="locked-card">
+              <img :src="c.image_url || '/images/character.png'" :alt="c.name" class="locked-portrait" />
+              <div class="locked-info">
+                <span class="locked-name">{{ c.name }}</span>
+                <span class="locked-req">{{ c.unlock_requirement }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button class="back-btn back-btn-centered" @click="playSound('clickNav'); goBack()">&#8592; Back</button>
+      </div>
+
       <!-- Advisor Preview Modal -->
       <CharacterInfoModal
         v-if="previewCharacter"
@@ -820,17 +857,14 @@ export default {
       if (index !== this.activeSlideIndex) return;
       const char = this.availableCharacters[index];
       if (!char) return;
+      this.selectCharacter(char.id);
+    },
+    selectCharacter(charId) {
       playSound('clickCard');
-      this.playerSelections[this.currentPickingPlayer] = char.id;
+      this.playerSelections[this.currentPickingPlayer] = charId;
       const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
       if (this.currentPickingPlayer < pickCount) {
         this.currentPickingPlayer++;
-        this.$nextTick(() => {
-          this.activeSlideIndex = 0;
-          if (this.swiperInstance) {
-            this.swiperInstance.slideTo(0, 0);
-          }
-        });
       }
     },
     undoLastPick() {
@@ -1611,6 +1645,62 @@ export default {
   opacity: 0.8;
 }
 
+/* Picker panel (grid-based) */
+.picker-panel {
+  padding: 30px 20px;
+}
+
+.advisor-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 14px;
+  max-width: 600px;
+  margin: 20px auto;
+}
+
+.advisor-grid-card {
+  background: linear-gradient(180deg, #3a2a1a, #2a1f14, #1a1209);
+  border: 2px solid var(--border-gold);
+  border-radius: 12px;
+  padding: 16px 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(212, 168, 67, 0.08);
+}
+
+.advisor-grid-card:hover {
+  transform: translateY(-4px) scale(1.02);
+  border-color: var(--accent-gold);
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.6),
+    0 0 15px rgba(212, 168, 67, 0.2);
+}
+
+.advisor-grid-card .advisor-portrait-wrap {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 10px;
+}
+
+.advisor-grid-card .advisor-name {
+  font-size: 1rem;
+  margin-bottom: 4px;
+}
+
+.advisor-grid-card .advisor-desc {
+  font-size: 0.78rem;
+  margin-bottom: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* Summary panel */
 .summary-panel {
     padding: 30px 20px;
@@ -2113,6 +2203,24 @@ export default {
 
   .tap-hint {
     font-size: 0.78rem;
+  }
+
+  .picker-panel {
+    padding: 20px 12px;
+  }
+
+  .advisor-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .advisor-grid-card .advisor-portrait-wrap {
+    width: 64px;
+    height: 64px;
+  }
+
+  .advisor-grid-card .advisor-name {
+    font-size: 0.9rem;
   }
 
   .summary-panel {
