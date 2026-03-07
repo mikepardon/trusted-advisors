@@ -1531,15 +1531,18 @@ class GameController extends Controller
         // Check game over conditions
         $gameOverReason = $game->checkStatBounds();
         if ($gameOverReason) {
-            $game->computeFinalScore();
             $game->update([
                 'status' => 'completed',
                 'round_phase' => 'complete',
                 'win' => false,
-                'final_score' => $game->final_score,
             ]);
 
             $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
+            // Re-compute final score after curse end-game effects are applied
+            $game->refresh();
+            $game->computeFinalScore();
+            $game->save();
 
             return response()->json([
                 'game_over' => true,
@@ -1562,15 +1565,18 @@ class GameController extends Controller
 
         // Check if we've completed all rounds
         if ($game->current_round >= $game->total_rounds) {
-            $game->computeFinalScore();
             $game->update([
                 'status' => 'completed',
                 'round_phase' => 'complete',
                 'win' => true,
-                'final_score' => $game->final_score,
             ]);
 
             $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
+            // Re-compute final score after curse end-game effects are applied
+            $game->refresh();
+            $game->computeFinalScore();
+            $game->save();
 
             return response()->json([
                 'game_over' => true,
