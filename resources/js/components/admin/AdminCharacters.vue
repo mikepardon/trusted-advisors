@@ -156,12 +156,8 @@
             <label>Character Image</label>
             <div class="image-upload-row">
               <img :src="editing.image_url || '/images/character.png'" class="image-preview" />
-              <label class="upload-btn">
-                Upload Image
-                <input type="file" accept="image/*" class="hidden-input" @change="uploadImage" />
-              </label>
-              <span v-if="imageUploading" class="upload-status">Uploading...</span>
-              <span v-if="imageUploaded" class="upload-success">Uploaded!</span>
+              <button type="button" class="upload-btn" @click="showMediaLibrary = true">Choose from Media Library</button>
+              <span v-if="imageUploaded" class="upload-success">Updated!</span>
             </div>
           </div>
 
@@ -232,6 +228,42 @@
             </template>
           </div>
 
+          <!-- Starting Bonus -->
+          <div style="border: 1px solid rgba(40, 160, 80, 0.3); background: rgba(40, 160, 80, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" v-model="form.hasStartingBonus" />
+              <span style="color: #5ab87a; font-weight: 700;">Starting Bonus</span>
+            </label>
+            <template v-if="form.hasStartingBonus">
+              <div class="form-group">
+                <label>Extra Dice (0 = none)</label>
+                <input v-model.number="form.bonusExtraDice" type="number" min="0" max="3" />
+              </div>
+              <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                  <input type="checkbox" v-model="form.bonusRandomItem" />
+                  <span>Starts with a Random Item</span>
+                </label>
+              </div>
+              <div class="form-group">
+                <label>Stat Boosts</label>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;">
+                  <div v-for="stat in ['wealth', 'influence', 'security', 'religion', 'food', 'happiness']" :key="stat" style="display: flex; align-items: center; gap: 4px;">
+                    <span style="font-size: 0.8rem; color: var(--text-secondary); min-width: 65px;">{{ stat.charAt(0).toUpperCase() + stat.slice(1) }}</span>
+                    <input
+                      type="number"
+                      :value="form.bonusStatBoosts[stat] || 0"
+                      @input="setStatBoost(stat, $event.target.value)"
+                      min="-10"
+                      max="10"
+                      style="width: 56px;"
+                    />
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+
           <div class="form-group">
             <label>Addon</label>
             <select v-model="form.addon_id">
@@ -285,6 +317,13 @@
         </div>
       </div>
     </div>
+    <!-- Media Library Modal for character image -->
+    <MediaLibraryModal
+      :visible="showMediaLibrary"
+      :selectMode="true"
+      @close="showMediaLibrary = false"
+      @select="onMediaSelected"
+    />
   </div>
 </template>
 
@@ -293,10 +332,11 @@ import axios from 'axios';
 import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
 import SortableHeader from './SortableHeader.vue';
+import MediaLibraryModal from './MediaLibraryModal.vue';
 
 export default {
   name: 'AdminCharacters',
-  components: { AdminSearchInput, SortableHeader },
+  components: { AdminSearchInput, SortableHeader, MediaLibraryModal },
   setup() { return { toast: useToast() }; },
   data() {
     return {
@@ -310,7 +350,8 @@ export default {
       editing: null,
       saving: false,
       formError: '',
-      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '' },
+      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '', hasStartingBonus: false, bonusExtraDice: 0, bonusRandomItem: false, bonusStatBoosts: {} },
+      showMediaLibrary: false,
       die1Input: '',
       die2Input: '',
       die3Input: '',
@@ -319,7 +360,6 @@ export default {
       die3DuelInput: '',
       diceRules: { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 },
       rulesSaved: false,
-      imageUploading: false,
       imageUploaded: false,
       showAiModal: false,
       aiPrompt: '',
@@ -428,7 +468,7 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '' };
+      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '', hasStartingBonus: false, bonusExtraDice: 0, bonusRandomItem: false, bonusStatBoosts: {} };
       this.die1Input = '';
       this.die2Input = '';
       this.die3Input = '';
@@ -436,15 +476,15 @@ export default {
       this.die2DuelInput = '';
       this.die3DuelInput = '';
       this.formError = '';
-      this.imageUploading = false;
       this.imageUploaded = false;
       this.showModal = true;
     },
     openEdit(c) {
       this.editing = c;
-      this.imageUploading = false;
       this.imageUploaded = false;
       const hasDuelDice = c.dice_duel != null || c.wild_value_duel != null;
+      const bonus = c.starting_bonus || {};
+      const hasBonus = !!(bonus.extra_dice || bonus.random_item || (bonus.stat_boosts && Object.keys(bonus.stat_boosts).length));
       this.form = {
         name: c.name,
         description: c.description,
@@ -459,6 +499,10 @@ export default {
         wild_value_duel: c.wild_value_duel ?? c.wild_value,
         wild_ability_duel: c.wild_ability_duel ?? c.wild_ability ?? '',
         wild_ability_description_duel: c.wild_ability_description_duel ?? c.wild_ability_description ?? '',
+        hasStartingBonus: hasBonus,
+        bonusExtraDice: bonus.extra_dice || 0,
+        bonusRandomItem: !!bonus.random_item,
+        bonusStatBoosts: { ...(bonus.stat_boosts || {}) },
       };
       this.die1Input = c.dice[0]?.join(', ') || '';
       this.die2Input = c.dice[1]?.join(', ') || '';
@@ -507,7 +551,21 @@ export default {
         wildAbilityDescDuel = this.form.wild_ability_description_duel || null;
       }
 
-      const { useDuelDice, wild_value_duel, wild_ability_duel, wild_ability_description_duel, ...formFields } = this.form;
+      // Build starting_bonus
+      let startingBonus = null;
+      if (this.form.hasStartingBonus) {
+        startingBonus = {};
+        if (this.form.bonusExtraDice > 0) startingBonus.extra_dice = this.form.bonusExtraDice;
+        if (this.form.bonusRandomItem) startingBonus.random_item = true;
+        const boosts = {};
+        for (const [stat, val] of Object.entries(this.form.bonusStatBoosts)) {
+          if (val && val !== 0) boosts[stat] = Number(val);
+        }
+        if (Object.keys(boosts).length) startingBonus.stat_boosts = boosts;
+        if (!Object.keys(startingBonus).length) startingBonus = null;
+      }
+
+      const { useDuelDice, wild_value_duel, wild_ability_duel, wild_ability_description_duel, hasStartingBonus, bonusExtraDice, bonusRandomItem, bonusStatBoosts, ...formFields } = this.form;
       const payload = {
         ...formFields,
         addon_id: this.form.addon_id || null,
@@ -516,6 +574,7 @@ export default {
         wild_value_duel: wildValueDuel,
         wild_ability_duel: wildAbilityDuel,
         wild_ability_description_duel: wildAbilityDescDuel,
+        starting_bonus: startingBonus,
       };
 
       this.saving = true;
@@ -531,30 +590,6 @@ export default {
         this.formError = e.response?.data?.message || 'Save failed';
       }
       this.saving = false;
-    },
-    async uploadImage(event) {
-      const file = event.target.files[0];
-      if (!file || !this.editing) return;
-
-      this.imageUploading = true;
-      this.imageUploaded = false;
-
-      const formData = new FormData();
-      formData.append('image', file);
-
-      try {
-        const res = await axios.post(`/api/admin/characters/${this.editing.id}/image`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        this.editing.image_url = res.data.image_url;
-        this.imageUploaded = true;
-        setTimeout(() => { this.imageUploaded = false; }, 2000);
-        await this.fetch();
-      } catch (e) {
-        this.formError = 'Image upload failed. Check S3 config.';
-      }
-      this.imageUploading = false;
-      event.target.value = '';
     },
     async generateWithAi() {
       this.aiError = '';
@@ -607,6 +642,25 @@ export default {
         this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
       }
       event.target.value = '';
+    },
+    setStatBoost(stat, value) {
+      const num = parseInt(value) || 0;
+      this.form.bonusStatBoosts = { ...this.form.bonusStatBoosts, [stat]: num };
+    },
+    async onMediaSelected(mediaItem) {
+      this.showMediaLibrary = false;
+      if (!this.editing || !mediaItem) return;
+      try {
+        const res = await axios.post(`/api/admin/characters/${this.editing.id}/image-from-media`, {
+          media_id: mediaItem.id,
+        });
+        this.editing.image_url = res.data.image_url;
+        this.imageUploaded = true;
+        setTimeout(() => { this.imageUploaded = false; }, 2000);
+        await this.fetch();
+      } catch (e) {
+        this.formError = 'Failed to update image: ' + (e.response?.data?.message || e.message);
+      }
     },
     async confirmDelete(c) {
       if (!confirm(`Delete character "${c.name}"? This cannot be undone.`)) return;

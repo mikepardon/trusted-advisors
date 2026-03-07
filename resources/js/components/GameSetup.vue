@@ -207,13 +207,12 @@
 
           <!-- Bot difficulty selector for single-player duel -->
           <div v-if="gameMode === 'single'" class="bot-difficulty-select">
-            <label>Bot Difficulty:</label>
             <div class="player-buttons">
               <button
                 v-for="d in ['easy', 'medium', 'hard']"
                 :key="d"
                 :class="{ 'btn-primary': botDifficulty === d }"
-                @click="playSound('clickToggle'); botDifficulty = d"
+                @click="playSound('clickToggle'); botDifficulty = d; gatherAdvisors()"
               >
                 {{ d.charAt(0).toUpperCase() + d.slice(1) }}
               </button>
@@ -347,6 +346,7 @@
         <div class="step-nav">
           <button class="back-btn" @click="playSound('clickNav'); goBack()">&#8592; Back</button>
           <button
+            v-if="!(gameMode === 'single' && gameType === 'duel')"
             class="btn-primary start-btn"
             @click="playSound('clickButton'); gatherAdvisors()"
             :disabled="loading || (gameMode === 'online' && gameType !== 'duel' && selectedFriendIds.length === 0) || (isPrivateGame && !lobbyPassword.trim())"
@@ -375,32 +375,34 @@
     <!-- STEP 3: Character selection carousel -->
     <div v-else-if="step === 'characters'" key="characters">
       <!-- All players have picked: show summary -->
-      <div v-if="allPlayersPicked" class="card-panel summary-panel">
+      <div v-if="allPlayersPicked" class="summary-panel">
         <h2 class="section-title">Your Council is Assembled</h2>
         <div class="summary-picks">
           <div v-for="(charId, playerNum) in playerSelections" :key="playerNum" class="summary-pick">
-            <div class="summary-card summary-card-clickable" @click="showAdvisorPreview(charId)">
+            <div class="summary-card">
               <img :src="getCharacterImage(charId)" alt="Advisor" class="summary-portrait" />
               <div class="summary-info">
                 <span class="summary-player">Player {{ playerNum }}</span>
                 <span class="summary-name">{{ getCharacterName(charId) }}</span>
-                <span v-if="playerBonuses[playerNum] && playerBonuses[playerNum] !== 'none'" class="summary-bonus">{{ getBonusLabel(playerBonuses[playerNum]) }}</span>
+                <span v-if="getCharacterBonusLabel(charId)" class="summary-bonus">{{ getCharacterBonusLabel(charId) }}</span>
               </div>
             </div>
           </div>
         </div>
-        <button
-          class="btn-primary start-btn"
-          :disabled="starting"
-          @click="playSound('clickButton'); startGame()"
-        >
-          {{ starting ? 'Beginning...' : 'Begin Campaign' }}
-        </button>
-        <button class="back-btn back-btn-centered" @click="playSound('clickNav'); undoLastPick()">&#8592; Change Advisor</button>
+        <div class="summary-actions">
+          <button class="back-btn" @click="playSound('clickNav'); undoLastPick()">&#8592; Back</button>
+          <button
+            class="btn-primary start-btn"
+            :disabled="starting"
+            @click="playSound('clickButton'); startGame()"
+          >
+            {{ starting ? 'Beginning...' : 'Begin' }}
+          </button>
+        </div>
       </div>
 
       <!-- Picking in progress -->
-      <div v-else class="card-panel picker-panel">
+      <div v-else class="picking-screen">
         <h2 class="section-title picking-header">
           Player {{ currentPickingPlayer }}, choose your advisor
         </h2>
@@ -416,72 +418,35 @@
             @slideChange="onSlideChange"
           >
             <SwiperSlide v-for="char in availableCharacters" :key="char.id">
-              <div class="advisor-card">
+              <div class="advisor-card" @click="selectCharacter(char.id)">
                 <div class="advisor-portrait-wrap">
                   <img :src="char.image_url || '/images/character.png'" :alt="char.name" class="advisor-portrait" />
                 </div>
                 <h3 class="advisor-name">{{ char.name }}</h3>
                 <p class="advisor-desc">{{ char.description }}</p>
-                <div class="advisor-actions">
-                  <button class="btn-view-stats" @click.stop="showAdvisorPreview(char.id)">View Stats</button>
-                  <button class="btn-primary btn-select-advisor" @click.stop="selectCharacter(char.id)">Select</button>
+                <div v-if="getCharacterBonusLabel(char.id)" class="advisor-bonus-badge">{{ getCharacterBonusLabel(char.id) }}</div>
+                <div class="advisor-stats">
+                  <div class="advisor-dice-rows">
+                    <div v-for="(die, dIdx) in char.dice" :key="dIdx" class="advisor-die-row">
+                      <span class="advisor-die-label">Die {{ dIdx + 1 }}</span>
+                      <div class="advisor-die-faces">
+                        <span v-for="(face, fIdx) in die" :key="fIdx" class="advisor-die-face" :class="{ 'face-wild': face === 'WILD' }">{{ face === 'WILD' ? 'W' : face }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="advisor-ability">
+                    <span class="advisor-wild-tag">WILD = {{ char.wild_value }}</span>
+                    <span class="advisor-ability-name">{{ char.wild_ability }}</span>
+                    <span v-if="char.wild_ability_description" class="advisor-ability-desc">{{ char.wild_ability_description }}</span>
+                  </div>
                 </div>
               </div>
             </SwiperSlide>
           </Swiper>
         </div>
 
-        <div class="bonus-section">
-          <p class="bonus-label">Starting Bonus</p>
-          <div class="bonus-options">
-            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'none' }">
-              <input type="radio" :value="'none'" v-model="playerBonuses[currentPickingPlayer]" />
-              <span class="bonus-icon">&#9744;</span>
-              <span class="bonus-text">No Bonus</span>
-            </label>
-            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'extra_die' }">
-              <input type="radio" :value="'extra_die'" v-model="playerBonuses[currentPickingPlayer]" />
-              <span class="bonus-icon">&#9858;</span>
-              <span class="bonus-text">+1 Extra Die</span>
-            </label>
-            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'random_item' }">
-              <input type="radio" :value="'random_item'" v-model="playerBonuses[currentPickingPlayer]" />
-              <span class="bonus-icon">&#9878;</span>
-              <span class="bonus-text">Random Item</span>
-            </label>
-            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'wealth_boost' }">
-              <input type="radio" :value="'wealth_boost'" v-model="playerBonuses[currentPickingPlayer]" />
-              <span class="bonus-icon">&#9737;</span>
-              <span class="bonus-text">Wealth +5</span>
-            </label>
-          </div>
-        </div>
-
-        <div v-if="lockedCharacters.length" class="locked-section">
-          <p class="locked-label">Locked Advisors</p>
-          <div class="locked-list">
-            <div v-for="c in lockedCharacters" :key="c.id" class="locked-card">
-              <img :src="c.image_url || '/images/character.png'" :alt="c.name" class="locked-portrait" />
-              <div class="locked-info">
-                <span class="locked-name">{{ c.name }}</span>
-                <span class="locked-req">{{ c.unlock_requirement }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
         <button class="back-btn back-btn-centered" @click="playSound('clickNav'); goBack()">&#8592; Back</button>
       </div>
-
-      <!-- Advisor Preview Modal -->
-      <CharacterInfoModal
-        v-if="previewCharacter"
-        :character="previewCharacter"
-        :activeDice="3"
-        :abilityUses="1"
-        :items="[]"
-        @close="previewCharacter = null"
-      />
     </div>
     </Transition>
     </template>
@@ -500,7 +465,6 @@ import RotatingEventBanner from './RotatingEventBanner.vue';
 import LoginRegister from './LoginRegister.vue';
 import MatchmakingQueue from './MatchmakingQueue.vue';
 import StoryIntro from './StoryIntro.vue';
-import CharacterInfoModal from './CharacterInfoModal.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
 import 'swiper/css';
@@ -508,7 +472,7 @@ import 'swiper/css/effect-cards';
 
 export default {
   name: 'GameSetup',
-  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, RotatingEventBanner, LoginRegister, MatchmakingQueue, StoryIntro, CharacterInfoModal, Swiper, SwiperSlide },
+  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, RotatingEventBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
   inject: {
     openNotifications: { default: () => () => {} },
     openRules: { default: () => () => {} },
@@ -533,7 +497,6 @@ export default {
       // Carousel state
       currentPickingPlayer: 1,
       playerSelections: {},
-      playerBonuses: {},
       swiperInstance: null,
       activeSlideIndex: 0,
       pendingInvites: [],
@@ -560,8 +523,6 @@ export default {
         random_starting_stats: false,
         hardcore_mode: false,
       },
-      // Advisor preview modal
-      previewCharacter: null,
       // Rotating event
       rotatingEventId: null,
       rotatingEventData: null,
@@ -601,9 +562,6 @@ export default {
       const selectedIds = Object.values(this.playerSelections);
       return this.characters.filter(c => !selectedIds.includes(c.id) && !c.is_locked_for_user);
     },
-    lockedCharacters() {
-      return this.characters.filter(c => c.is_locked_for_user);
-    },
     allPlayersPicked() {
       // Single-player duel: only 1 character needed (bot gets assigned automatically)
       const needed = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
@@ -620,14 +578,6 @@ export default {
         }
       }
     },
-    currentPickingPlayer: {
-      handler(num) {
-        if (!(num in this.playerBonuses)) {
-          this.playerBonuses[num] = 'none';
-        }
-      },
-      immediate: true,
-    },
   },
   async mounted() {
     if (this.auth.state.user) {
@@ -637,6 +587,10 @@ export default {
       // Check for rotating event query param
       if (this.$route?.query?.event_id) {
         this.handleEventParam(this.$route.query.event_id);
+      }
+      // Check for resume query param (game stuck in setup)
+      if (this.$route?.query?.resume) {
+        this.resumeSetup(this.$route.query.resume);
       }
     }
   },
@@ -653,7 +607,6 @@ export default {
       this.characters = [];
       this.currentPickingPlayer = 1;
       this.playerSelections = {};
-      this.playerBonuses = {};
       this.activeSlideIndex = 0;
       // Set event and fetch details
       this.rotatingEventId = parseInt(eventId);
@@ -889,7 +842,7 @@ export default {
           allChars = allChars.filter(c => allowedIds.includes(c.id));
         }
         this.characters = allChars;
-        this.step = 'story';
+        this.step = this.gameMode === 'single' ? 'characters' : 'story';
       } catch (e) {
         this.toast.error('Failed to create game: ' + (e.response?.data?.message || e.message));
       }
@@ -910,9 +863,6 @@ export default {
     selectCharacter(charId) {
       playSound('clickCard');
       this.playerSelections[this.currentPickingPlayer] = charId;
-      if (!this.playerBonuses[this.currentPickingPlayer]) {
-        this.playerBonuses[this.currentPickingPlayer] = 'none';
-      }
       const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
       if (this.currentPickingPlayer < pickCount) {
         this.currentPickingPlayer++;
@@ -936,15 +886,20 @@ export default {
         }
       });
     },
-    showAdvisorPreview(charId) {
+    getCharacterBonusLabel(charId) {
       const char = this.characters.find(c => c.id === charId);
-      if (char) {
-        this.previewCharacter = char;
+      if (!char?.starting_bonus) return '';
+      const parts = [];
+      const b = char.starting_bonus;
+      if (b.extra_dice) parts.push(`+${b.extra_dice} Extra ${b.extra_dice === 1 ? 'Die' : 'Dice'}`);
+      if (b.random_item) parts.push('Random Item');
+      if (b.stat_boosts) {
+        for (const [stat, val] of Object.entries(b.stat_boosts)) {
+          const label = stat.charAt(0).toUpperCase() + stat.slice(1);
+          parts.push(`${val > 0 ? '+' : ''}${val} ${label}`);
+        }
       }
-    },
-    getBonusLabel(bonus) {
-      const labels = { extra_die: '+1 Extra Die', random_item: 'Random Item', wealth_boost: 'Wealth +5' };
-      return labels[bonus] || '';
+      return parts.join(', ');
     },
     getCharacterName(charId) {
       const char = this.characters.find(c => c.id === charId);
@@ -987,8 +942,7 @@ export default {
           });
         } else {
           this.playerSelections = {};
-      this.playerBonuses = {};
-          this.step = 'story';
+          this.step = this.gameMode === 'single' ? 'settings' : 'story';
         }
       }
     },
@@ -998,11 +952,31 @@ export default {
       this.characters = [];
       this.currentPickingPlayer = 1;
       this.playerSelections = {};
-      this.playerBonuses = {};
       this.rotatingEventId = null;
       this.rotatingEventData = null;
       this.activeSlideIndex = 0;
       this.fetchHomeStats();
+    },
+    async resumeSetup(gameId) {
+      try {
+        const [gameRes, charsRes] = await Promise.all([
+          axios.get(`/api/games/${gameId}`),
+          axios.get('/api/characters'),
+        ]);
+        const game = gameRes.data.game;
+        if (game.status !== 'setup') return; // game already started
+        this.gameId = game.id;
+        this.gameMode = game.game_mode;
+        this.gameType = game.game_type || 'cooperative';
+        this.numPlayers = game.num_players;
+        this.totalRounds = game.total_rounds;
+        this.characters = charsRes.data;
+        this.currentPickingPlayer = 1;
+        this.playerSelections = {};
+        this.step = 'characters';
+      } catch {
+        // If resume fails, just stay on home
+      }
     },
     async startGame() {
       this.starting = true;
@@ -1012,11 +986,7 @@ export default {
         for (let i = 1; i <= pickCount; i++) {
           selectedIds.push(this.playerSelections[i]);
         }
-        const bonuses = [];
-        for (let i = 1; i <= pickCount; i++) {
-          bonuses.push(this.playerBonuses[i] || 'none');
-        }
-        const startPayload = { characters: selectedIds, bonuses };
+        const startPayload = { characters: selectedIds };
         if (this.gameMode === 'single' && this.gameType === 'duel') {
           startPayload.bot_difficulty = this.botDifficulty;
         }
@@ -1049,6 +1019,7 @@ export default {
   height: 100%;
   display: flex;
   flex-direction: column;
+    justify-content: center;
 }
 
 .story-step {
@@ -1505,11 +1476,6 @@ export default {
   letter-spacing: 2px;
 }
 
-/* Carousel panel */
-.carousel-panel {
-  padding: 30px 20px;
-}
-
 .picking-header {
   font-size: 1.4rem;
   margin-bottom: 5px;
@@ -1534,15 +1500,21 @@ export default {
   background: linear-gradient(180deg, #3a2a1a, #2a1f14, #1a1209);
   border: 2px solid var(--border-gold);
   border-radius: 12px;
-  padding: 20px;
+  padding: 16px;
   width: 320px;
-  min-height: 440px;
+  min-height: 480px;
   box-shadow:
     0 8px 32px rgba(0, 0, 0, 0.6),
     inset 0 1px 0 rgba(212, 168, 67, 0.1);
   display: flex;
   flex-direction: column;
   align-items: center;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.advisor-card:hover {
+  border-color: var(--accent-gold-bright);
 }
 
 .advisor-portrait-wrap {
@@ -1578,238 +1550,115 @@ export default {
   font-style: italic;
 }
 
-.advisor-dice {
-  width: 100%;
-  margin-bottom: 12px;
-}
 
-.dice-row {
+/* Picking screen — no panel wrapper, content centered */
+.picking-screen {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
-  margin-bottom: 4px;
-  justify-content: center;
 }
 
-.dice-label {
-  color: var(--text-secondary);
-  font-size: 0.8rem;
-  min-width: 42px;
-}
-
-.dice-face {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  background: rgba(212, 168, 67, 0.12);
-  border: 1px solid rgba(212, 168, 67, 0.3);
-  border-radius: 4px;
-  color: var(--text-bright);
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.advisor-wild {
+/* Inline stats on advisor card */
+.advisor-stats {
   width: 100%;
-  background: rgba(212, 168, 67, 0.08);
-  border-top: 1px solid rgba(212, 168, 67, 0.2);
-  border-radius: 0 0 8px 8px;
-  padding: 10px;
   margin-top: auto;
-  text-align: center;
+  border-top: 1px solid rgba(212, 168, 67, 0.15);
+  padding-top: 10px;
 }
 
-.wild-badge {
-  display: inline-block;
-  background: rgba(212, 168, 67, 0.2);
-  color: var(--accent-gold);
-  padding: 2px 10px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-
-.wild-desc {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 0.78rem;
-  font-style: italic;
-  line-height: 1.4;
-}
-
-.tap-hint {
-  text-align: center;
-  color: var(--text-secondary);
-  font-style: italic;
-  font-size: 0.85rem;
-  margin-top: 4px;
-  animation: hintPulse 2s ease-in-out infinite;
-}
-
-@keyframes hintPulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-/* Locked characters */
-.locked-section {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid rgba(138, 106, 46, 0.2);
-}
-
-.locked-label {
-  text-align: center;
-  font-family: 'Cinzel', serif;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  margin-bottom: 10px;
-  opacity: 0.6;
-}
-
-.locked-list {
+.advisor-dice-rows {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
-
-.locked-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(138, 106, 46, 0.15);
-  border-radius: 8px;
-  padding: 6px 12px;
-  opacity: 0.5;
-}
-
-.locked-portrait {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 1px solid rgba(138, 106, 46, 0.3);
-  filter: grayscale(1);
-}
-
-.locked-name {
-  color: var(--text-secondary);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.locked-req {
-  display: block;
-  color: var(--accent-gold);
-  font-size: 0.7rem;
-  opacity: 0.8;
-}
-
-/* Picker panel */
-.picker-panel {
-  padding: 30px 20px;
-}
-
-.advisor-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: auto;
-  padding-top: 12px;
-  width: 100%;
-}
-
-.btn-view-stats {
-  flex: 1;
-  padding: 8px 12px;
-  background: rgba(138, 106, 46, 0.2);
-  border: 1px solid var(--border-gold);
-  border-radius: 6px;
-  color: var(--accent-gold);
-  font-family: 'Cinzel', serif;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-view-stats:hover {
-  background: rgba(138, 106, 46, 0.35);
-  transform: none;
-  box-shadow: none;
-}
-
-.btn-select-advisor {
-  flex: 1;
-  font-size: 0.85rem !important;
-  padding: 8px 12px !important;
-}
-
-/* Bonus selection */
-.bonus-section {
-  max-width: 400px;
-  margin: 16px auto 0;
-}
-
-.bonus-label {
-  font-family: 'Cinzel', serif;
-  color: var(--text-secondary);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  text-align: center;
+  flex-direction: column;
+  gap: 4px;
   margin-bottom: 8px;
 }
 
-.bonus-options {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.bonus-option {
+.advisor-die-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
+  gap: 6px;
+  justify-content: center;
+}
+
+.advisor-die-label {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  min-width: 34px;
+  text-align: right;
+  font-family: 'Cinzel', serif;
+}
+
+.advisor-die-faces {
+  display: flex;
+  gap: 3px;
+}
+
+.advisor-die-face {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(138, 106, 46, 0.25);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  border: 1px solid rgba(138, 106, 46, 0.3);
+  border-radius: 3px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  color: var(--text-bright);
+  font-weight: 700;
 }
 
-.bonus-option:hover {
-  border-color: rgba(138, 106, 46, 0.5);
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.bonus-option.active {
-  border-color: var(--accent-gold);
-  background: rgba(212, 168, 67, 0.1);
-}
-
-.bonus-option input[type="radio"] {
-  display: none;
-}
-
-.bonus-icon {
-  font-size: 1.1rem;
-  line-height: 1;
-}
-
-.bonus-text {
-  font-size: 0.8rem;
-  color: var(--text-primary);
-}
-
-.bonus-option.active .bonus-text {
+.advisor-die-face.face-wild {
   color: var(--accent-gold);
+  border-color: var(--accent-gold);
+  background: rgba(212, 168, 67, 0.15);
+  font-size: 0.55rem;
+}
+
+.advisor-ability {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.advisor-wild-tag {
+  background: rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-family: 'Cinzel', serif;
+}
+
+.advisor-ability-name {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-style: italic;
+  text-transform: capitalize;
+}
+
+.advisor-ability-desc {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  opacity: 0.8;
+  width: 100%;
+  text-align: center;
+}
+
+/* Character bonus badge on advisor card */
+.advisor-bonus-badge {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(212, 168, 67, 0.4);
+  border-radius: 6px;
+  padding: 4px 10px;
+  color: var(--accent-gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 4px;
 }
 
 .summary-bonus {
@@ -1825,6 +1674,20 @@ export default {
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.summary-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    width: 100%;
+    max-width: 360px;
+}
+
+.summary-actions > button {
+    flex: 1;
 }
 
 .summary-picks {
@@ -1844,16 +1707,6 @@ export default {
   align-items: center;
   gap: 14px;
   box-shadow: 0 0 20px rgba(212, 168, 67, 0.15);
-}
-
-.summary-card-clickable {
-  cursor: pointer;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.summary-card-clickable:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 0 25px rgba(212, 168, 67, 0.3);
 }
 
 .summary-portrait {
@@ -2278,11 +2131,6 @@ export default {
     gap: 10px;
   }
 
-  .carousel-panel {
-    padding: 20px 12px;
-    overflow: hidden;
-  }
-
   .picking-header {
     font-size: 1.15rem;
   }
@@ -2300,44 +2148,33 @@ export default {
 
   .advisor-card {
     width: 280px;
-    min-height: 380px;
-    padding: 16px;
+    min-height: 350px;
+    padding: 14px;
   }
 
   .advisor-portrait-wrap {
-    width: 90px;
-    height: 90px;
-    margin-bottom: 10px;
-  }
-
-  .advisor-name {
-    font-size: 1.1rem;
-  }
-
-  .advisor-desc {
-    font-size: 0.82rem;
+    width: 80px;
+    height: 80px;
     margin-bottom: 8px;
   }
 
-  .tap-hint {
+  .advisor-name {
+    font-size: 1.05rem;
+  }
+
+  .advisor-desc {
     font-size: 0.78rem;
+    margin-bottom: 6px;
   }
 
-  .picker-panel {
-    padding: 20px 12px;
+  .advisor-die-face {
+    width: 22px;
+    height: 22px;
+    font-size: 0.65rem;
   }
 
-  .bonus-options {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 6px;
-  }
-
-  .bonus-option {
-    padding: 6px 10px;
-  }
-
-  .bonus-text {
-    font-size: 0.75rem;
+  .advisor-die-face.face-wild {
+    font-size: 0.5rem;
   }
 
   .summary-panel {

@@ -809,7 +809,7 @@ export default {
 
   .advisor-card {
     width: 280px;
-    min-height: 380px;
+    min-height: 350px;
     padding: 16px;
   }
 

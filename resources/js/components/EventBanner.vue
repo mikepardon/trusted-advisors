@@ -1,11 +1,10 @@
 <template>
   <div v-if="event" class="event-banner" :class="{ 'event-expanded': expanded }" @click="expanded = !expanded">
     <div class="event-header">
-      <div class="event-label">Current Event</div>
+      <p class="event-summary">{{ effectSummary }}</p>
       <span class="event-toggle">{{ expanded ? '&#9650;' : '&#9660;' }}</span>
     </div>
-    <h3 class="event-title">{{ event.title }}</h3>
-    <p class="event-summary">{{ effectSummary }}</p>
+    <h3 v-if="expanded" class="event-title">{{ event.title }}</h3>
     <p v-if="expanded" class="event-effect">{{ event.effect }}</p>
   </div>
 </template>
@@ -74,18 +73,16 @@ export default {
   align-items: center;
 }
 
-.event-label {
-  font-family: 'Cinzel', serif;
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  color: #c0392b;
-  margin-bottom: 4px;
-}
-
 .event-toggle {
   color: #c0392b;
   font-size: 0.7rem;
+}
+
+.event-summary {
+  color: var(--accent-gold);
+  font-weight: 600;
+  font-size: 0.85rem;
+  margin: 0;
 }
 
 .event-title {
@@ -93,12 +90,7 @@ export default {
   color: #e8a040;
   font-size: 1.1rem;
   margin-bottom: 6px;
-}
-
-.event-summary {
-  color: var(--accent-gold);
-  font-weight: 600;
-  font-size: 0.85rem;
+  margin-top: 8px;
 }
 
 .event-effect {

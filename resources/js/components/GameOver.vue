@@ -100,10 +100,7 @@
         </div>
 
         <div class="button-row">
-          <button class="btn-primary play-again" @click="rematch" :disabled="rematchLoading">
-            {{ rematchLoading ? 'Creating...' : 'Rematch' }}
-          </button>
-          <button class="play-again" @click="$router.push('/')">New Game</button>
+          <button class="btn-primary play-again" @click="$router.push('/')">Home</button>
           <button class="play-again share-btn" @click="shareReplay">
             {{ shareCopied ? 'Copied!' : 'Share Replay' }}
           </button>
@@ -253,18 +250,7 @@
       </div>
 
       <div class="button-row">
-        <template v-if="isSinglePlayer">
-          <button class="play-again" @click="$router.push('/')">Home</button>
-          <button class="btn-primary play-again" @click="rematch" :disabled="rematchLoading">
-            {{ rematchLoading ? 'Creating...' : 'New Game' }}
-          </button>
-        </template>
-        <template v-else>
-          <button class="btn-primary play-again" @click="rematch" :disabled="rematchLoading">
-            {{ rematchLoading ? 'Creating...' : 'Rematch' }}
-          </button>
-          <button class="play-again" @click="$router.push('/')">New Game</button>
-        </template>
+        <button class="btn-primary play-again" @click="$router.push('/')">Home</button>
         <button class="play-again share-btn" @click="shareReplay">
           {{ shareCopied ? 'Copied!' : 'Share Replay' }}
         </button>

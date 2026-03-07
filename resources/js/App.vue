@@ -44,7 +44,7 @@
     </main>
 
     <!-- Bottom nav -->
-    <nav v-if="!isAdmin && auth.state.user" class="bottom-nav">
+    <nav v-if="!isAdmin && auth.state.user && !isGamePage" class="bottom-nav">
       <router-link to="/shop" class="nav-item" :class="{ active: $route.path === '/shop' }" @click="navSound">
         <span class="nav-icon">&#128722;</span>
         <span class="nav-label">Shop</span>
@@ -620,7 +620,8 @@ button:disabled {
 
 .btn-primary:hover:not(:disabled) {
   background: linear-gradient(180deg, #fff0a0, var(--accent-gold-bright), var(--accent-gold));
-  box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(255,255,255,0.3);
+    color: #444;
 }
 
 .btn-primary:active:not(:disabled) {

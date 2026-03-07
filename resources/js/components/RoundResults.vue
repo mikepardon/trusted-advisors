@@ -2,7 +2,14 @@
   <div class="round-results">
     <!-- Action button at top for easy access -->
     <button
-      v-if="viewPhase === 'positive' && allRolled && !resultsAccepted"
+      v-if="viewPhase === 'positive' && !allRolled && nextToRoll && !isAnyRolling"
+      class="btn-roll action-btn-top"
+      @click="startRolling(nextToRoll)"
+    >
+      Roll!
+    </button>
+    <button
+      v-else-if="viewPhase === 'positive' && allRolled && !resultsAccepted"
       class="btn-primary action-btn-top"
       @click="acceptAndContinue"
     >
@@ -68,9 +75,7 @@
             </template>
 
             <template v-else>
-              <button class="btn-roll" @click="startRolling(pr)">
-                Roll!
-              </button>
+              <span class="roll-waiting">Awaiting roll...</span>
             </template>
           </div>
         </div>
@@ -239,10 +244,7 @@ export default {
     };
   },
   mounted() {
-    if (this.resumed) {
-      // On page refresh, skip dice animations — mark all as rolled
-      this.rolledPlayerNumbers = (this.positivePhase.dice_results || []).map(pr => pr.player_number);
-    }
+    // Even on refresh, let the user roll through dice animations
   },
   computed: {
     rolledCount() {
@@ -265,6 +267,14 @@ export default {
         }
       }
       return sum;
+    },
+    nextToRoll() {
+      return (this.positivePhase.dice_results || []).find(
+        pr => !this.rolledPlayerNumbers.includes(pr.player_number) && !this.rollingPlayerNumbers.includes(pr.player_number)
+      ) || null;
+    },
+    isAnyRolling() {
+      return this.rollingPlayerNumbers.length > 0;
     },
     positiveSpecialEffects() {
       return (this.specialEffects || []).filter(e => e.phase === 'positive');
@@ -604,6 +614,19 @@ export default {
 }
 
 .btn-roll:active { transform: scale(0.97); }
+
+.btn-roll.action-btn-top {
+  display: block;
+  margin: 0 auto 12px;
+  padding: 10px 36px;
+  font-size: 1rem;
+}
+
+.roll-waiting {
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.8rem;
+}
 
 .running-total {
   color: var(--text-secondary);

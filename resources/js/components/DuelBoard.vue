@@ -5,11 +5,6 @@
       {{ formattedTimeRemaining }}
     </div>
 
-
-
-    <!-- Event Banner -->
-    <EventBanner :event="currentEvent" />
-
     <!-- Kingdom Stats -->
     <DuelKingdomStats
       ref="kingdomStats"
@@ -27,6 +22,9 @@
       @show-character="openCharacterModal"
       @dice-animation-complete="onDiceAnimationComplete"
     />
+
+    <!-- Event Banner (below kingdoms) -->
+    <EventBanner v-if="showEventBanner" :event="currentEvent" />
 
     <!-- Character Info Modal -->
     <CharacterInfoModal
@@ -97,8 +95,15 @@
 
     <!-- === SIMULTANEOUS ROLLING === -->
     <template v-if="duelPhase === 'rolling' && !showHandoff && !showWaiting">
-      <!-- Continue button (between kingdom stats and roll tabs) -->
-      <div v-if="showContinueAboveStats" class="continue-above-stats">
+      <!-- Roll / Continue button (above tabs) -->
+      <button
+        v-if="!myRollData && itemDecided && !duelRolling"
+        class="btn-roll action-btn-top"
+        @click="$refs.myRollPhase?.startRolling()"
+      >
+        Roll!
+      </button>
+      <div v-else-if="showContinueAboveStats" class="continue-above-stats">
         <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
       </div>
 
@@ -110,6 +115,7 @@
 
       <!-- Your Roll (v-show to preserve dice animation state) -->
       <DuelRollPhase
+        ref="myRollPhase"
         v-show="rollTab === 'mine'"
         :cards="myCards"
         :playerName="isOfferer ? offererName : chooserName"
@@ -126,6 +132,7 @@
         :use3dDice="dddiceAvailable"
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
+        :hideRollButton="true"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -157,10 +164,18 @@
 
     <!-- === ROLLING OFFERER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_offerer' && !showHandoff && !showWaiting">
-      <div v-if="showContinueAboveStats" class="continue-above-stats">
+      <button
+        v-if="isOfferer && !offererRollData && itemDecided && !duelRolling"
+        class="btn-roll action-btn-top"
+        @click="$refs.offererRollPhase?.startRolling()"
+      >
+        Roll!
+      </button>
+      <div v-else-if="showContinueAboveStats" class="continue-above-stats">
         <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
       </div>
       <DuelRollPhase
+        ref="offererRollPhase"
         :cards="myCards"
         :playerName="offererName"
         :canRoll="isOfferer"
@@ -176,6 +191,7 @@
         :use3dDice="dddiceAvailable"
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
+        :hideRollButton="true"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -187,7 +203,14 @@
 
     <!-- === ROLLING CHOOSER (sequential: pass-and-play / single-player) === -->
     <template v-if="duelPhase === 'rolling_chooser' && !showHandoff && !showWaiting">
-      <div v-if="showContinueAboveStats" class="continue-above-stats">
+      <button
+        v-if="isChooser && !chooserRollData && itemDecided && !duelRolling"
+        class="btn-roll action-btn-top"
+        @click="$refs.chooserRollPhase?.startRolling()"
+      >
+        Roll!
+      </button>
+      <div v-else-if="showContinueAboveStats" class="continue-above-stats">
         <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
       </div>
       <!-- Show offerer's completed roll -->
@@ -201,6 +224,7 @@
       />
       <!-- Chooser's roll -->
       <DuelRollPhase
+        ref="chooserRollPhase"
         :cards="myCards"
         :playerName="chooserName"
         :canRoll="isChooser"
@@ -216,6 +240,7 @@
         :use3dDice="dddiceAvailable"
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
+        :hideRollButton="true"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -255,8 +280,9 @@ export default {
   props: {
     gameData: { type: Object, required: true },
     gameId: { type: [String, Number], required: true },
+    showEventBanner: { type: Boolean, default: true },
   },
-  emits: ['refresh', 'game-over', 'game-data-updated', 'phase-updated'],
+  emits: ['refresh', 'game-over', 'game-data-updated', 'phase-updated', 'items-updated', 'dice-updated'],
   data() {
     return {
       duelPhase: null,
@@ -297,6 +323,7 @@ export default {
       _diceAnimationResolve: null,
       // Item decision tracking
       itemDecided: false,
+      duelRolling: false,
       // Character info modal
       showCharacterModal: false,
       selectedCharacterData: null,
@@ -497,6 +524,16 @@ export default {
       if (newPhase !== 'choosing') {
         this.cardPreviewEffects = null;
       }
+    },
+    currentPlayerItems: {
+      handler(items) {
+        this.$emit('items-updated', (items || []).filter(pi => !pi.is_used).length);
+      },
+      deep: true,
+      immediate: true,
+    },
+    diceCount(val) {
+      this.$emit('dice-updated', val);
     },
     isCurrentTurnBot(isBotTurn) {
       // For simultaneous rolling, bot rolls when human rolls — don't pre-trigger
@@ -913,7 +950,7 @@ export default {
 
     currentDuelPendingCurse() {
       if (!this.pendingCurses || !this.pendingCurses.length) return null;
-      const player = this.players?.find(p => p.player_number === this.activePlayerNumber);
+      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
       if (!player) return null;
       return this.pendingCurses.find(pc => pc.player_id === player.id);
     },
@@ -988,6 +1025,7 @@ export default {
       }
     },
     async submitRoll() {
+      this.duelRolling = true;
       let rollResult;
       try {
         const res = await axios.post(`/api/games/${this.gameId}/duel-roll`);
@@ -996,9 +1034,11 @@ export default {
         if (e.response?.status === 422 && e.response?.data?.error?.includes('already rolled')) {
           // Player already rolled (e.g. page reload) — fetch existing state
           await this.recoverRollState();
+          this.duelRolling = false;
           return;
         }
         this.toast.error('Failed to roll: ' + (e.response?.data?.error || e.message));
+        this.duelRolling = false;
         return;
       }
 
@@ -1011,6 +1051,7 @@ export default {
 
       // Now show results, play sound, and adjust stats
       this.applyRollResult(rollResult);
+      this.duelRolling = false;
     },
 
     advanceAfterOffererRoll() {
@@ -1554,6 +1595,28 @@ export default {
   box-shadow: 0 0 12px rgba(212, 168, 67, 0.3);
 }
 
+.btn-roll.action-btn-top {
+  display: block;
+  margin: 0 auto 12px;
+  padding: 10px 36px;
+  font-size: 1rem;
+  color: #f5e6cc;
+  border: 2px solid #d4a843;
+  border-radius: 6px;
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all 0.2s ease;
+}
+
+.btn-roll.action-btn-top:hover {
+  background: linear-gradient(135deg, #b83030, #8b2020);
+  transform: scale(1.05);
+  box-shadow: 0 0 12px rgba(212, 168, 67, 0.4);
+}
+
 /* Roll Tab Nav */
 .duel-roll-tabs {
   display: flex;
@@ -1565,10 +1628,10 @@ export default {
 .roll-tab {
   flex: 1;
   max-width: 180px;
-  padding: 5px 12px;
-  border-radius: 6px;
+  padding: 5px 12px !important;
+  border-radius: 6px !important;
   font-family: 'Crimson Text',serif;
-  font-size: 0.7rem;
+  font-size: 0.7rem !important;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;

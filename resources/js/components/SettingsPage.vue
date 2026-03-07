@@ -66,19 +66,7 @@
           </button>
         </div>
 
-        <div class="setting-row">
-          <div class="setting-info">
-            <span class="setting-label">3D Dice</span>
-            <span class="setting-desc">Animated 3D dice rolling via dddice</span>
-          </div>
-          <button
-            class="toggle"
-            :class="{ active: dddiceEnabled }"
-            @click="toggleDddice"
-          >
-            <span class="toggle-knob"></span>
-          </button>
-        </div>
+
       </div>
 
       <div class="settings-group">

@@ -767,7 +767,7 @@ export default {
 /* ---- Mobile compact mode ---- */
 @media (max-width: 768px) {
   .kingdom-stats {
-    padding: 8px;
+    padding: 0 8px;
     margin-bottom: 10px;
   }
 

@@ -413,8 +413,6 @@ class GameController extends Controller
             'characters' => 'required|array|min:1|max:6',
             'characters.*' => 'required|integer|exists:characters,id',
             'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
-            'bonuses' => 'sometimes|array',
-            'bonuses.*' => 'sometimes|string|in:none,extra_die,random_item,wealth_boost',
         ]);
 
         // Single-player duel: only 1 character needed (bot gets assigned in player creation below)
@@ -645,31 +643,54 @@ class GameController extends Controller
             broadcast(new GameStarted($game->id));
         }
 
-        // Apply player starting bonuses
-        $bonuses = $validated['bonuses'] ?? [];
-        if (!empty($bonuses)) {
-            $game->load('players');
-            foreach ($game->players as $player) {
-                $bonus = $bonuses[$player->player_number - 1] ?? 'none';
-                if ($bonus === 'extra_die') {
-                    $player->update(['lost_dice' => -1]);
-                } elseif ($bonus === 'random_item') {
-                    $drawnItem = $this->drawItemFromDeck($game);
-                    if ($drawnItem) {
-                        GamePlayerItem::create([
-                            'game_player_id' => $player->id,
-                            'item_id' => $drawnItem->id,
-                            'acquired_round' => 0,
-                        ]);
-                    }
-                } elseif ($bonus === 'wealth_boost') {
-                    if ($game->isDuel()) {
-                        $kingdom = GamePlayerKingdom::where('game_player_id', $player->id)->first();
-                        if ($kingdom) {
-                            $kingdom->update(['wealth' => min(20, $kingdom->wealth + 5)]);
+        // Apply character starting bonuses
+        $game->load('players.character');
+        foreach ($game->players as $player) {
+            $bonus = $player->character->starting_bonus ?? [];
+            if (empty($bonus)) continue;
+
+            // Extra dice: set lost_dice to negative value to grant extra
+            if (!empty($bonus['extra_dice'])) {
+                $player->update(['lost_dice' => -1 * (int) $bonus['extra_dice']]);
+            }
+
+            // Random item: draw from item deck
+            if (!empty($bonus['random_item'])) {
+                $drawnItem = $this->drawItemFromDeck($game);
+                if ($drawnItem) {
+                    GamePlayerItem::create([
+                        'game_player_id' => $player->id,
+                        'item_id' => $drawnItem->id,
+                        'acquired_round' => 0,
+                    ]);
+                }
+            }
+
+            // Stat boosts: apply to kingdom (duel) or game stats (cooperative)
+            if (!empty($bonus['stat_boosts'])) {
+                $validStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+                if ($game->isDuel()) {
+                    $kingdom = GamePlayerKingdom::where('game_player_id', $player->id)->first();
+                    if ($kingdom) {
+                        $updates = [];
+                        foreach ($bonus['stat_boosts'] as $stat => $amount) {
+                            if (in_array($stat, $validStats)) {
+                                $updates[$stat] = max(0, min(20, $kingdom->$stat + (int) $amount));
+                            }
                         }
-                    } else {
-                        $game->update(['wealth' => min(20, $game->wealth + 5)]);
+                        if (!empty($updates)) {
+                            $kingdom->update($updates);
+                        }
+                    }
+                } else {
+                    $updates = [];
+                    foreach ($bonus['stat_boosts'] as $stat => $amount) {
+                        if (in_array($stat, $validStats)) {
+                            $updates[$stat] = max(0, min(20, $game->$stat + (int) $amount));
+                        }
+                    }
+                    if (!empty($updates)) {
+                        $game->update($updates);
                     }
                 }
             }
@@ -4017,6 +4038,55 @@ class GameController extends Controller
         ]);
 
         return response()->json(['message' => 'Game cancelled.']);
+    }
+
+    /**
+     * Forfeit an active online duel game. The quitting player loses and ELO is affected.
+     */
+    public function forfeitGame(Request $request, Game $game): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        $player = $game->players()->where('user_id', $userId)->first();
+        if (!$player) {
+            return response()->json(['error' => 'You are not part of this game.'], 403);
+        }
+
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active.'], 422);
+        }
+
+        if ($game->game_type !== 'duel' || !$game->isOnline()) {
+            return response()->json(['error' => 'Forfeit is only available for online duel games.'], 422);
+        }
+
+        $quitterNumber = $player->player_number;
+        $winnerNumber = $quitterNumber === 1 ? 2 : 1;
+
+        $game->update([
+            'status' => 'completed',
+            'round_phase' => 'complete',
+            'winner_player_number' => $winnerNumber,
+            'timed_out_player_number' => $quitterNumber,
+            'turn_started_at' => null,
+        ]);
+
+        $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+        $kingdoms = $game->playerKingdoms()->with('player')->get();
+
+        $gameOverData = [
+            'game_over' => true,
+            'winner_player_number' => $winnerNumber,
+            'timed_out_player_number' => $quitterNumber,
+            'reason' => 'Player ' . $quitterNumber . ' forfeited. Player ' . $winnerNumber . ' wins!',
+            'game' => $game->fresh(),
+            'player_kingdoms' => $kingdoms,
+            'completion' => $completionSummary,
+        ];
+
+        broadcast(new DuelGameOver($game->id, $gameOverData));
+
+        return response()->json($gameOverData);
     }
 
     /**

@@ -198,7 +198,7 @@
     <div class="card-panel">
       <h2 class="section-title">Account</h2>
       <div class="account-actions">
-        <a :href="authServiceUrl + '/settings'" target="_blank" rel="noopener" class="btn-primary account-link">
+        <a :href="authServiceUrl + '/dashboard'" target="_blank" rel="noopener" class="btn-primary account-link">
           Manage Account
         </a>
         <button class="btn-logout" @click="handleLogout">Logout</button>
@@ -314,9 +314,19 @@ export default {
       if (!this.referralCode) return;
       try {
         await navigator.clipboard.writeText(this.referralCode);
-        this.copied = true;
-        setTimeout(() => { this.copied = false; }, 2000);
-      } catch {}
+      } catch {
+        // Fallback for non-HTTPS or unsupported contexts
+        const ta = document.createElement('textarea');
+        ta.value = this.referralCode;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      this.copied = true;
+      setTimeout(() => { this.copied = false; }, 2000);
     },
     async shareCode() {
       if (!this.referralCode || !navigator.share) return;

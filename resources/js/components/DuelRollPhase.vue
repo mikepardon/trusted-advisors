@@ -30,7 +30,7 @@
     </template>
 
     <!-- Roll Dice button (manual) -->
-    <div v-if="canRoll && !hasRolled && !isRolling && itemDecided" class="roll-btn-section">
+    <div v-if="canRoll && !hasRolled && !isRolling && itemDecided && !hideRollButton" class="roll-btn-section">
       <button class="btn-roll-dice" @click="startRolling">Roll Dice</button>
     </div>
 
@@ -177,6 +177,7 @@ export default {
     use3dDice: { type: Boolean, default: false },
     playerItems: { type: Array, default: () => [] },
     itemDecided: { type: Boolean, default: false },
+    hideRollButton: { type: Boolean, default: false },
   },
   emits: ['roll', 'use-ability', 'reroll', 'continue', 'use-item', 'skip-item'],
   data() {
@@ -699,7 +700,7 @@ export default {
 
 @media (max-width: 768px) {
   .duel-roll { padding: 12px; }
-  .btn-ability, .btn-reroll { font-size: 0.75rem; padding: 8px 12px; }
+  .btn-ability, .btn-reroll { font-size: 0.75rem !important; padding: 8px 12px !important; }
   .roll-cards { flex-direction: column; align-items: center; }
   .roll-card { max-width: 100%; }
   .btn-roll-dice { padding: 10px 30px; font-size: 0.9rem; }

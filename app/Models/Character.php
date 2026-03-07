@@ -14,6 +14,7 @@ class Character extends Model
         'wild_ability', 'wild_ability_duel',
         'wild_ability_description', 'wild_ability_description_duel',
         'addon_id', 'available_cooperative', 'available_duel', 'is_available',
+        'starting_bonus',
     ];
 
     protected $casts = [
@@ -24,6 +25,7 @@ class Character extends Model
         'available_cooperative' => 'boolean',
         'available_duel' => 'boolean',
         'is_available' => 'boolean',
+        'starting_bonus' => 'array',
     ];
 
     protected $appends = ['image_url'];

@@ -133,6 +133,7 @@ Route::middleware('auth:web')->group(function () {
 
     // Cancel game
     Route::post('/games/{game}/cancel', [GameController::class, 'cancelGame']);
+    Route::post('/games/{game}/forfeit', [GameController::class, 'forfeitGame']);
 
     // Game replay
     Route::get('/games/{game}/replay', [ReplayController::class, 'show']);
@@ -273,6 +274,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::put('rules/{key}', [GameRuleController::class, 'update']);
     Route::delete('homepage-background', [GameRuleController::class, 'removeHomepageBackground']);
     Route::post('characters/{character}/image', [CharacterController::class, 'uploadImage']);
+    Route::post('characters/{character}/image-from-media', [CharacterController::class, 'setImageFromMedia']);
     Route::get('sound-assets', [SoundAssetController::class, 'index']);
     Route::post('sound-assets/{key}/upload', [SoundAssetController::class, 'upload']);
     Route::post('bot-simulate', [BotGameController::class, 'simulate']);

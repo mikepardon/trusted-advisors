@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Character;
+use App\Models\MediaLibraryItem;
 use App\Models\Unlockable;
 use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
@@ -58,6 +59,11 @@ class CharacterController extends Controller
             'wild_value_duel' => 'nullable|integer|min:1|max:10',
             'wild_ability_duel' => 'nullable|string|max:50',
             'wild_ability_description_duel' => 'nullable|string',
+            'starting_bonus' => 'nullable|array',
+            'starting_bonus.extra_dice' => 'nullable|integer|min:1|max:3',
+            'starting_bonus.random_item' => 'nullable|boolean',
+            'starting_bonus.stat_boosts' => 'nullable|array',
+            'starting_bonus.stat_boosts.*' => 'integer|min:-10|max:10',
         ]);
 
         $character = Character::create($validated);
@@ -85,6 +91,11 @@ class CharacterController extends Controller
             'wild_value_duel' => 'nullable|integer|min:1|max:10',
             'wild_ability_duel' => 'nullable|string|max:50',
             'wild_ability_description_duel' => 'nullable|string',
+            'starting_bonus' => 'nullable|array',
+            'starting_bonus.extra_dice' => 'nullable|integer|min:1|max:3',
+            'starting_bonus.random_item' => 'nullable|boolean',
+            'starting_bonus.stat_boosts' => 'nullable|array',
+            'starting_bonus.stat_boosts.*' => 'integer|min:-10|max:10',
         ]);
 
         $old = $character->only(array_keys($validated));
@@ -121,6 +132,18 @@ class CharacterController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => 'Upload failed: ' . $e->getMessage()], 500);
         }
+    }
+
+    public function setImageFromMedia(Request $request, Character $character): JsonResponse
+    {
+        $request->validate([
+            'media_id' => 'required|integer|exists:media_library_items,id',
+        ]);
+
+        $media = MediaLibraryItem::findOrFail($request->media_id);
+        $character->update(['image_path' => $media->path]);
+
+        return response()->json($character->fresh());
     }
 
     public function destroy(Character $character): JsonResponse

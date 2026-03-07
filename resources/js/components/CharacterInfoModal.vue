@@ -38,6 +38,12 @@
         </div>
       </div>
 
+      <!-- Starting Bonus -->
+      <div v-if="bonusLabel" class="char-section">
+        <h3 class="section-label">Starting Bonus</h3>
+        <div class="bonus-info">{{ bonusLabel }}</div>
+      </div>
+
       <!-- Items -->
       <div v-if="items.length" class="char-section">
         <h3 class="section-label">Items ({{ items.length }})</h3>
@@ -70,6 +76,20 @@ export default {
     abilityDisplayName() {
       const name = this.character.wild_ability || '';
       return name.charAt(0).toUpperCase() + name.slice(1);
+    },
+    bonusLabel() {
+      const b = this.character.starting_bonus;
+      if (!b) return '';
+      const parts = [];
+      if (b.extra_dice) parts.push(`+${b.extra_dice} Extra ${b.extra_dice === 1 ? 'Die' : 'Dice'}`);
+      if (b.random_item) parts.push('Starts with a Random Item');
+      if (b.stat_boosts) {
+        for (const [stat, val] of Object.entries(b.stat_boosts)) {
+          const label = stat.charAt(0).toUpperCase() + stat.slice(1);
+          parts.push(`${val > 0 ? '+' : ''}${val} ${label}`);
+        }
+      }
+      return parts.join(', ');
     },
   },
 };
@@ -283,6 +303,16 @@ export default {
   color: var(--text-secondary);
   font-size: 0.8rem;
   font-style: italic;
+}
+
+.bonus-info {
+  padding: 8px 10px;
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 6px;
+  color: var(--accent-gold);
+  font-size: 0.88rem;
+  font-weight: 600;
 }
 
 .no-items {

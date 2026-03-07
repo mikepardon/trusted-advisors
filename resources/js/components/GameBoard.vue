@@ -26,20 +26,36 @@
     <!-- DUEL MODE -->
     <template v-if="isDuel">
     <div class="time-bar">
-      <div class="time-info">
-        <span class="round-label">{{ monthLabel }}</span>
-        <span class="phase-label">{{ duelPhaseLabel }}</span>
-      </div>
-      <div class="time-bar-right">
-        <div class="progress-info">
-          <div class="progress-bar-bg">
-            <div
-              class="progress-bar"
-              :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
-            ></div>
-          </div>
+      <div class="time-bar-right" style="width: unset;">
+        <div class="time-bar-icons">
+          <button
+            class="bar-icon-btn"
+            title="View Inventory"
+            @click="$refs.duelBoard?.$refs.playerItems?.openOverlay()"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+              <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
+              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+            </svg>
+            <span class="bar-icon-badge">{{ duelItemCount }}</span>
+          </button>
+          <button class="bar-icon-btn" title="View Your Dice" @click="showDuelDiceViewer">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+              <rect x="3" y="3" width="18" height="18" rx="3"/>
+              <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
+              <circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
+              <circle cx="12" cy="12" r="1" fill="currentColor"/>
+              <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
+              <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
+            </svg>
+            <span class="bar-icon-badge">{{ duelDiceCount }}</span>
+          </button>
         </div>
       </div>
+      <div class="time-info">
+        <span class="round-label">Month {{ gameData.current_round }}/{{ gameData.total_rounds }}</span>
+      </div>
+      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu">&#9776;</button>
     </div>
     <DuelBoard
       ref="duelBoard"
@@ -49,6 +65,8 @@
       @game-data-updated="onGameDataUpdated"
       @phase-updated="onPhaseUpdated"
       @game-over="$router.replace(`/game/${id}/over`)"
+      @items-updated="count => duelItemCount = count"
+      @dice-updated="count => duelDiceCount = count"
     />
     </template>
 
@@ -56,14 +74,9 @@
     <template v-else>
     <!-- Round display -->
     <div class="time-bar">
-      <div class="time-info">
-        <span class="round-label">{{ monthLabel }}</span>
-        <span class="phase-label">{{ phaseLabel }}</span>
-      </div>
-      <div class="time-bar-right">
+      <div class="time-bar-right" style="width: unset;">
         <div class="time-bar-icons">
           <button
-            v-if="usableItems.length"
             class="bar-icon-btn"
             title="View Inventory"
             @click="$refs.playerItems?.openOverlay()"
@@ -74,7 +87,7 @@
             </svg>
             <span class="bar-icon-badge">{{ usableItems.length }}</span>
           </button>
-          <span class="bar-dice-count" title="View Your Dice" @click="showDiceViewer = true" style="cursor: pointer;">
+          <button class="bar-icon-btn" title="View Your Dice" @click="showDiceViewer = true">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
               <rect x="3" y="3" width="18" height="18" rx="3"/>
               <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
@@ -83,25 +96,14 @@
               <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
               <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
             </svg>
-            <span class="dice-num">{{ diceCount }}</span>
-          </span>
-        </div>
-        <div class="progress-info">
-          <div class="progress-bar-bg">
-            <div
-              class="progress-bar"
-              :style="{ width: (gameData.current_round / gameData.total_rounds * 100) + '%' }"
-            ></div>
-          </div>
+            <span class="bar-icon-badge">{{ diceCount }}</span>
+          </button>
         </div>
       </div>
-    </div>
-
-    <!-- Quick action button above stats for easy access (multi-player only) -->
-    <div v-if="gameData.round_phase === 'selecting' && gameData.all_assigned && allItemsDecided && !isSinglePlayer" class="action-btn-top-wrap">
-      <button class="btn-primary" :disabled="resolving" @click="resolveRound">
-        {{ resolving ? 'Rolling...' : 'Roll Dice' }}
-      </button>
+      <div class="time-info">
+        <span class="round-label">Month {{ gameData.current_round }}/{{ gameData.total_rounds }}</span>
+      </div>
+      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu">&#9776;</button>
     </div>
 
     <!-- Kingdom Stats -->
@@ -192,7 +194,7 @@
             <p class="item-prompt-title">{{ currentPlayerName }}'s Preparation</p>
             <p class="item-prompt-text" v-if="!itemDeciding">Do you want to use an item before the roll?</p>
             <div v-if="!itemDeciding" class="item-prompt-buttons">
-              <button class="btn-primary" @click="itemDeciding = true">Yes, choose an item</button>
+              <button class="btn-primary" @click="itemDeciding = true">Use Item</button>
               <button class="btn-secondary" :disabled="usingItem" @click="skipItem">No, skip</button>
             </div>
             <div v-else class="item-selection">
@@ -212,14 +214,15 @@
         </template>
       </div>
 
-      <!-- Roll Dice Button (multi-player only — single player auto-resolves) -->
-      <div v-if="gameData.all_assigned && allItemsDecided && !isSinglePlayer" class="resolve-prompt">
-        <p>The council is ready!</p>
-        <button class="btn-primary" :disabled="resolving" @click="resolveRound">
-          {{ resolving ? 'Rolling...' : 'Roll Dice' }}
-        </button>
-      </div>
     </template>
+
+    <!-- Roll Dice Button (multi-player only — single player auto-resolves) -->
+    <div v-if="gameData.round_phase === 'selecting' && gameData.all_assigned && allItemsDecided && !isSinglePlayer" class="resolve-prompt">
+      <p>The council is ready!</p>
+      <button class="btn-primary" :disabled="resolving" @click="resolveRound">
+        {{ resolving ? 'Rolling...' : 'Roll Dice' }}
+      </button>
+    </div>
 
     <!-- RESOLVING PHASE -->
     <template v-if="gameData.round_phase === 'resolving'">
@@ -241,6 +244,39 @@
     </template>
     </template>
     </template>
+
+    <!-- Game Burger Menu Overlay -->
+    <div v-if="showGameMenu" class="game-menu-overlay" @click.self="showGameMenu = false">
+      <div class="mobile-menu-panel">
+        <button class="mobile-menu-item" @click="showGameMenu = false; openRules()">Rules</button>
+        <button class="mobile-menu-item" @click="showGameMenu = false; openTutorial()">Tutorial</button>
+        <button class="mobile-menu-item" @click="showGameMenu = false; showSettingsModal = true">Settings</button>
+        <button
+          v-if="isSinglePlayer || isPassAndPlay || (isOnline && gameData.game.turn_time_limit >= 86400)"
+          class="mobile-menu-item game-menu-leave"
+          @click="showGameMenu = false; goHome()"
+        >Go Home</button>
+        <button
+          v-if="isOnline && gameData.game.turn_time_limit < 86400"
+          class="mobile-menu-item game-menu-quit"
+          @click="showGameMenu = false; showQuitConfirm = true"
+        >Quit Game</button>
+      </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <SettingsModal :visible="showSettingsModal" @close="showSettingsModal = false" />
+
+    <!-- Quit Game Confirmation -->
+    <ConfirmModal
+      :visible="showQuitConfirm"
+      title="Quit Game"
+      message="Are you sure? Your ELO will be affected."
+      confirm-text="Quit"
+      :dangerous="true"
+      @confirm="forfeitGame"
+      @cancel="showQuitConfirm = false"
+    />
 
     <!-- Dice Viewer Modal -->
     <div v-if="showDiceViewer && characterDice" class="dice-viewer-overlay" @click.self="showDiceViewer = false">
@@ -280,16 +316,23 @@ import ItemReveal from './ItemReveal.vue';
 import ItemDiscard from './ItemDiscard.vue';
 import DiceOverlay from './DiceOverlay.vue';
 import CurseSelectionOverlay from './CurseSelectionOverlay.vue';
+import ConfirmModal from './ConfirmModal.vue';
+import SettingsModal from './SettingsModal.vue';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/toast';
+import { playSound } from '../sounds';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard, DiceOverlay, CurseSelectionOverlay },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard, DiceOverlay, CurseSelectionOverlay, ConfirmModal, SettingsModal },
+  inject: {
+    openRules: { default: () => () => {} },
+    openTutorial: { default: () => () => {} },
+  },
   setup() {
     const auth = useAuth();
     const toast = useToast();
-    return { auth, toast };
+    return { auth, toast, playSound };
   },
   props: {
     id: { type: [String, Number], required: true },
@@ -317,6 +360,8 @@ export default {
       // Items & Dice
       currentPlayerItems: [],
       diceCount: 3,
+      duelItemCount: 0,
+      duelDiceCount: 4,
       showDiceViewer: false,
       characterDice: null,
       characterWildValue: null,
@@ -347,6 +392,10 @@ export default {
       showCurseDetails: false,
       // Card effect preview
       cardPreviewEffects: null,
+      // Burger menu
+      showGameMenu: false,
+      showSettingsModal: false,
+      showQuitConfirm: false,
     };
   },
   computed: {
@@ -543,6 +592,12 @@ export default {
 
         if (this.gameData.game.status === 'completed' || this.gameData.game.status === 'cancelled') {
           this.$router.replace(`/game/${this.id}/over`);
+          return;
+        }
+
+        // Game stuck in setup (non-online): redirect back to character selection
+        if (this.gameData.game.status === 'setup' && !this.isOnline) {
+          this.$router.replace(`/?resume=${this.id}`);
           return;
         }
 
@@ -1088,6 +1143,34 @@ export default {
         this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
       }
     },
+    showDuelDiceViewer() {
+      // Open the character modal for the active player's character in duel mode
+      const duelBoard = this.$refs.duelBoard;
+      if (duelBoard) {
+        const playerNum = duelBoard.activePlayerNumber;
+        const player = this.gameData?.game?.players?.find(p => p.player_number === playerNum);
+        if (player?.character) {
+          duelBoard.openCharacterModal(playerNum);
+        }
+      }
+    },
+    async goHome() {
+      try {
+        await axios.post(`/api/games/${this.id}/cancel`);
+      } catch {
+        // ignore cancel errors
+      }
+      this.$router.push('/');
+    },
+    async forfeitGame() {
+      this.showQuitConfirm = false;
+      try {
+        await axios.post(`/api/games/${this.id}/forfeit`);
+        this.$router.replace(`/game/${this.id}/over`);
+      } catch (e) {
+        this.toast.error('Failed to forfeit: ' + (e.response?.data?.error || e.message));
+      }
+    },
     onItemDiscarded(updatedOverLimit) {
       this.itemsOverLimit = updatedOverLimit || [];
     },
@@ -1240,24 +1323,24 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
-  border-radius: 8px;
-  padding: 6px 14px;
+  position: relative;
+  padding: 6px 0;
   margin-bottom: 14px;
+}
+
+.time-info {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .round-label {
   font-family: 'Cinzel', serif;
   font-size: 1rem;
   color: var(--accent-gold);
-}
-
-.phase-label {
-  margin-left: 10px;
-  color: var(--text-secondary);
-  font-style: italic;
-  font-size: 0.85rem;
+  white-space: nowrap;
 }
 
 .time-bar-right {
@@ -1302,20 +1385,6 @@ export default {
   margin-left: 3px;
 }
 
-.bar-dice-count {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--text-secondary, #a09080);
-  font-size: 0.85rem;
-}
-
-.dice-num {
-  font-family: 'Cinzel', serif;
-  font-weight: 700;
-  color: var(--text-bright, #f0e6d2);
-}
-
 .progress-info {
   min-width: 100px;
 }
@@ -1358,38 +1427,16 @@ export default {
 /* ---- Mobile compact ---- */
 @media (max-width: 768px) {
   .time-bar {
-    flex-direction: column;
-    gap: 4px;
-    padding: 5px 10px;
-    margin-bottom: 8px;
-  }
-
-  .time-bar-right {
-    width: 100%;
-    justify-content: space-between;
+    margin-bottom: 6px;
   }
 
   .round-label {
-    font-size: 0.7rem;
-  }
-
-  .phase-label {
-    margin-left: 6px;
     font-size: 0.75rem;
   }
 
   .bar-icon-svg {
     width: 15px;
     height: 15px;
-  }
-
-  .progress-info {
-    min-width: 80px;
-  }
-
-  .progress-info {
-    min-width: unset;
-    width: 100%;
   }
 
   .resolve-prompt {
@@ -1507,6 +1554,94 @@ export default {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Burger Menu Button */
+.burger-btn {
+  background: none;
+  border: 1px solid rgba(138, 106, 46, 0.4);
+  border-radius: 6px;
+  color: var(--text-secondary, #a09080);
+  font-size: 1.1rem;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  transition: all 0.2s;
+  letter-spacing: 0;
+  box-shadow: none;
+}
+
+.burger-btn:hover {
+  color: var(--accent-gold, #c9a84c);
+  border-color: var(--accent-gold, #c9a84c);
+  background: rgba(212, 168, 67, 0.08);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Game Menu Overlay */
+.game-menu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-menu-panel {
+  background: linear-gradient(180deg, var(--wood-light, #463220), var(--wood-dark, #1e160c));
+  border: 3px solid var(--border-gold, #c8952e);
+  border-radius: 14px;
+  padding: 10px 0;
+  min-width: 220px;
+  box-shadow: 0 4px 0 rgba(0,0,0,0.3), 0 10px 40px rgba(0,0,0,0.7);
+}
+
+.mobile-menu-item {
+  display: block;
+  width: 100%;
+  padding: 14px 28px;
+  background: none;
+  border: none;
+  border-radius: 0;
+  color: var(--text-primary, #f0e0c8);
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.2s, color 0.2s;
+  letter-spacing: 1px;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  box-shadow: none;
+}
+
+.mobile-menu-item:hover {
+  background: rgba(240,192,80,0.1);
+  color: var(--accent-gold, #f0c050);
+  transform: none;
+  box-shadow: none;
+}
+
+.game-menu-leave {
+  color: var(--accent-gold, #f0c050);
+}
+
+.game-menu-quit {
+  color: var(--accent-red, #d04030);
+}
+
+.game-menu-quit:hover {
+  background: rgba(160, 48, 32, 0.15);
+  color: #e05040;
 }
 
 /* Dice Viewer Modal */
