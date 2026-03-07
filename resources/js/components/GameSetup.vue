@@ -384,6 +384,7 @@
               <div class="summary-info">
                 <span class="summary-player">Player {{ playerNum }}</span>
                 <span class="summary-name">{{ getCharacterName(charId) }}</span>
+                <span v-if="playerBonuses[playerNum] && playerBonuses[playerNum] !== 'none'" class="summary-bonus">{{ getBonusLabel(playerBonuses[playerNum]) }}</span>
               </div>
             </div>
           </div>
@@ -404,18 +405,55 @@
           Player {{ currentPickingPlayer }}, choose your advisor
         </h2>
 
-        <div class="advisor-grid">
-          <div
-            v-for="char in availableCharacters"
-            :key="char.id"
-            class="advisor-grid-card"
-            @click="selectCharacter(char.id)"
+        <div class="carousel-wrapper">
+          <Swiper
+            :modules="swiperModules"
+            :effect="'cards'"
+            :grab-cursor="true"
+            :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
+            :style="{ overflow: 'visible' }"
+            @swiper="onSwiper"
+            @slideChange="onSlideChange"
           >
-            <div class="advisor-portrait-wrap">
-              <img :src="char.image_url || '/images/character.png'" :alt="char.name" class="advisor-portrait" />
-            </div>
-            <h3 class="advisor-name">{{ char.name }}</h3>
-            <p class="advisor-desc">{{ char.description }}</p>
+            <SwiperSlide v-for="char in availableCharacters" :key="char.id">
+              <div class="advisor-card">
+                <div class="advisor-portrait-wrap">
+                  <img :src="char.image_url || '/images/character.png'" :alt="char.name" class="advisor-portrait" />
+                </div>
+                <h3 class="advisor-name">{{ char.name }}</h3>
+                <p class="advisor-desc">{{ char.description }}</p>
+                <div class="advisor-actions">
+                  <button class="btn-view-stats" @click.stop="showAdvisorPreview(char.id)">View Stats</button>
+                  <button class="btn-primary btn-select-advisor" @click.stop="selectCharacter(char.id)">Select</button>
+                </div>
+              </div>
+            </SwiperSlide>
+          </Swiper>
+        </div>
+
+        <div class="bonus-section">
+          <p class="bonus-label">Starting Bonus</p>
+          <div class="bonus-options">
+            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'none' }">
+              <input type="radio" :value="'none'" v-model="playerBonuses[currentPickingPlayer]" />
+              <span class="bonus-icon">&#9744;</span>
+              <span class="bonus-text">No Bonus</span>
+            </label>
+            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'extra_die' }">
+              <input type="radio" :value="'extra_die'" v-model="playerBonuses[currentPickingPlayer]" />
+              <span class="bonus-icon">&#9858;</span>
+              <span class="bonus-text">+1 Extra Die</span>
+            </label>
+            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'random_item' }">
+              <input type="radio" :value="'random_item'" v-model="playerBonuses[currentPickingPlayer]" />
+              <span class="bonus-icon">&#9878;</span>
+              <span class="bonus-text">Random Item</span>
+            </label>
+            <label class="bonus-option" :class="{ active: playerBonuses[currentPickingPlayer] === 'wealth_boost' }">
+              <input type="radio" :value="'wealth_boost'" v-model="playerBonuses[currentPickingPlayer]" />
+              <span class="bonus-icon">&#9737;</span>
+              <span class="bonus-text">Wealth +5</span>
+            </label>
           </div>
         </div>
 
@@ -495,6 +533,7 @@ export default {
       // Carousel state
       currentPickingPlayer: 1,
       playerSelections: {},
+      playerBonuses: {},
       swiperInstance: null,
       activeSlideIndex: 0,
       pendingInvites: [],
@@ -581,6 +620,14 @@ export default {
         }
       }
     },
+    currentPickingPlayer: {
+      handler(num) {
+        if (!(num in this.playerBonuses)) {
+          this.playerBonuses[num] = 'none';
+        }
+      },
+      immediate: true,
+    },
   },
   async mounted() {
     if (this.auth.state.user) {
@@ -606,6 +653,7 @@ export default {
       this.characters = [];
       this.currentPickingPlayer = 1;
       this.playerSelections = {};
+      this.playerBonuses = {};
       this.activeSlideIndex = 0;
       // Set event and fetch details
       this.rotatingEventId = parseInt(eventId);
@@ -862,9 +910,18 @@ export default {
     selectCharacter(charId) {
       playSound('clickCard');
       this.playerSelections[this.currentPickingPlayer] = charId;
+      if (!this.playerBonuses[this.currentPickingPlayer]) {
+        this.playerBonuses[this.currentPickingPlayer] = 'none';
+      }
       const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
       if (this.currentPickingPlayer < pickCount) {
         this.currentPickingPlayer++;
+        this.$nextTick(() => {
+          this.activeSlideIndex = 0;
+          if (this.swiperInstance) {
+            this.swiperInstance.slideTo(0, 0);
+          }
+        });
       }
     },
     undoLastPick() {
@@ -884,6 +941,10 @@ export default {
       if (char) {
         this.previewCharacter = char;
       }
+    },
+    getBonusLabel(bonus) {
+      const labels = { extra_die: '+1 Extra Die', random_item: 'Random Item', wealth_boost: 'Wealth +5' };
+      return labels[bonus] || '';
     },
     getCharacterName(charId) {
       const char = this.characters.find(c => c.id === charId);
@@ -926,6 +987,7 @@ export default {
           });
         } else {
           this.playerSelections = {};
+      this.playerBonuses = {};
           this.step = 'story';
         }
       }
@@ -936,6 +998,7 @@ export default {
       this.characters = [];
       this.currentPickingPlayer = 1;
       this.playerSelections = {};
+      this.playerBonuses = {};
       this.rotatingEventId = null;
       this.rotatingEventData = null;
       this.activeSlideIndex = 0;
@@ -949,7 +1012,11 @@ export default {
         for (let i = 1; i <= pickCount; i++) {
           selectedIds.push(this.playerSelections[i]);
         }
-        const startPayload = { characters: selectedIds };
+        const bonuses = [];
+        for (let i = 1; i <= pickCount; i++) {
+          bonuses.push(this.playerBonuses[i] || 'none');
+        }
+        const startPayload = { characters: selectedIds, bonuses };
         if (this.gameMode === 'single' && this.gameType === 'duel') {
           startPayload.bot_difficulty = this.botDifficulty;
         }
@@ -1645,60 +1712,111 @@ export default {
   opacity: 0.8;
 }
 
-/* Picker panel (grid-based) */
+/* Picker panel */
 .picker-panel {
   padding: 30px 20px;
 }
 
-.advisor-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 14px;
-  max-width: 600px;
-  margin: 20px auto;
-}
-
-.advisor-grid-card {
-  background: linear-gradient(180deg, #3a2a1a, #2a1f14, #1a1209);
-  border: 2px solid var(--border-gold);
-  border-radius: 12px;
-  padding: 16px 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
+.advisor-actions {
   display: flex;
-  flex-direction: column;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 12px;
+  width: 100%;
+}
+
+.btn-view-stats {
+  flex: 1;
+  padding: 8px 12px;
+  background: rgba(138, 106, 46, 0.2);
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+  color: var(--accent-gold);
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-view-stats:hover {
+  background: rgba(138, 106, 46, 0.35);
+  transform: none;
+  box-shadow: none;
+}
+
+.btn-select-advisor {
+  flex: 1;
+  font-size: 0.85rem !important;
+  padding: 8px 12px !important;
+}
+
+/* Bonus selection */
+.bonus-section {
+  max-width: 400px;
+  margin: 16px auto 0;
+}
+
+.bonus-label {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.bonus-options {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.bonus-option {
+  display: flex;
   align-items: center;
-  box-shadow:
-    0 4px 16px rgba(0, 0, 0, 0.5),
-    inset 0 1px 0 rgba(212, 168, 67, 0.08);
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(138, 106, 46, 0.25);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.advisor-grid-card:hover {
-  transform: translateY(-4px) scale(1.02);
+.bonus-option:hover {
+  border-color: rgba(138, 106, 46, 0.5);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.bonus-option.active {
   border-color: var(--accent-gold);
-  box-shadow:
-    0 8px 30px rgba(0, 0, 0, 0.6),
-    0 0 15px rgba(212, 168, 67, 0.2);
+  background: rgba(212, 168, 67, 0.1);
 }
 
-.advisor-grid-card .advisor-portrait-wrap {
-  width: 80px;
-  height: 80px;
-  margin-bottom: 10px;
+.bonus-option input[type="radio"] {
+  display: none;
 }
 
-.advisor-grid-card .advisor-name {
-  font-size: 1rem;
-  margin-bottom: 4px;
+.bonus-icon {
+  font-size: 1.1rem;
+  line-height: 1;
 }
 
-.advisor-grid-card .advisor-desc {
-  font-size: 0.78rem;
-  margin-bottom: 0;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+.bonus-text {
+  font-size: 0.8rem;
+  color: var(--text-primary);
+}
+
+.bonus-option.active .bonus-text {
+  color: var(--accent-gold);
+}
+
+.summary-bonus {
+  font-size: 0.72rem;
+  color: var(--accent-gold);
+  font-style: italic;
+  opacity: 0.9;
 }
 
 /* Summary panel */
@@ -2209,18 +2327,17 @@ export default {
     padding: 20px 12px;
   }
 
-  .advisor-grid {
+  .bonus-options {
     grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
+    gap: 6px;
   }
 
-  .advisor-grid-card .advisor-portrait-wrap {
-    width: 64px;
-    height: 64px;
+  .bonus-option {
+    padding: 6px 10px;
   }
 
-  .advisor-grid-card .advisor-name {
-    font-size: 0.9rem;
+  .bonus-text {
+    font-size: 0.75rem;
   }
 
   .summary-panel {

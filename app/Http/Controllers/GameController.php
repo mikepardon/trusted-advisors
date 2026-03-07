@@ -413,6 +413,8 @@ class GameController extends Controller
             'characters' => 'required|array|min:1|max:6',
             'characters.*' => 'required|integer|exists:characters,id',
             'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
+            'bonuses' => 'sometimes|array',
+            'bonuses.*' => 'sometimes|string|in:none,extra_die,random_item,wealth_boost',
         ]);
 
         // Single-player duel: only 1 character needed (bot gets assigned in player creation below)
@@ -641,6 +643,36 @@ class GameController extends Controller
                 $this->dispatchTurnTimerJobs($game);
             }
             broadcast(new GameStarted($game->id));
+        }
+
+        // Apply player starting bonuses
+        $bonuses = $validated['bonuses'] ?? [];
+        if (!empty($bonuses)) {
+            $game->load('players');
+            foreach ($game->players as $player) {
+                $bonus = $bonuses[$player->player_number - 1] ?? 'none';
+                if ($bonus === 'extra_die') {
+                    $player->update(['lost_dice' => -1]);
+                } elseif ($bonus === 'random_item') {
+                    $drawnItem = $this->drawItemFromDeck($game);
+                    if ($drawnItem) {
+                        GamePlayerItem::create([
+                            'game_player_id' => $player->id,
+                            'item_id' => $drawnItem->id,
+                            'acquired_round' => 0,
+                        ]);
+                    }
+                } elseif ($bonus === 'wealth_boost') {
+                    if ($game->isDuel()) {
+                        $kingdom = GamePlayerKingdom::where('game_player_id', $player->id)->first();
+                        if ($kingdom) {
+                            $kingdom->update(['wealth' => min(20, $kingdom->wealth + 5)]);
+                        }
+                    } else {
+                        $game->update(['wealth' => min(20, $game->wealth + 5)]);
+                    }
+                }
+            }
         }
 
         return $this->show($game->fresh());
