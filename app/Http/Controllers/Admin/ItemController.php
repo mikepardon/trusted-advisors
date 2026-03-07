@@ -33,6 +33,7 @@ class ItemController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
+            'effect_duel' => 'nullable|array',
         ]);
 
         $item = Item::create($validated);
@@ -53,6 +54,7 @@ class ItemController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
+            'effect_duel' => 'nullable|array',
         ]);
 
         $old = $item->only(array_keys($validated));

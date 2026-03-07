@@ -40,6 +40,14 @@
     <!-- Player Items (overlay only, no floating button) -->
     <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
 
+    <!-- Curse Selection Overlay -->
+    <CurseSelectionOverlay
+      v-if="currentDuelPendingCurse()"
+      :curses="currentDuelPendingCurse().curse_details"
+      :playerName="players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
+      :isDuel="true"
+      @selected="onCurseSelected"
+    />
 
     <!-- Event Reveal Overlay -->
     <EventReveal
@@ -229,13 +237,14 @@ import PlayerItems from './PlayerItems.vue';
 import EventReveal from './EventReveal.vue';
 import EventBanner from './EventBanner.vue';
 import CharacterInfoModal from './CharacterInfoModal.vue';
+import CurseSelectionOverlay from './CurseSelectionOverlay.vue';
 import { isDddiceAvailable } from '../dddiceService';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/toast';
 
 export default {
   name: 'DuelBoard',
-  components: { DuelKingdomStats, DuelChoosePhase, DuelRollPhase, TurnHandoffOverlay, PlayerItems, EventReveal, EventBanner, CharacterInfoModal },
+  components: { DuelKingdomStats, DuelChoosePhase, DuelRollPhase, TurnHandoffOverlay, PlayerItems, EventReveal, EventBanner, CharacterInfoModal, CurseSelectionOverlay },
   setup() {
     const auth = useAuth();
     const toast = useToast();
@@ -267,7 +276,6 @@ export default {
       diceCount: 4,
       // Event reveal
       showEventReveal: false,
-      lastRevealedEventId: null,
       // Online waiting
       showWaiting: false,
       waitingMessage: '',
@@ -298,6 +306,9 @@ export default {
       showTimeoutOverlay: false,
       timeoutMessage: '',
       reportingTimeout: false,
+      // Curses
+      pendingCurses: null,
+      playerCurses: {},
     };
   },
   computed: {
@@ -565,10 +576,11 @@ export default {
     checkEventReveal() {
       const round = this.gameData?.current_round || this.gameData?.game?.current_round || 0;
       const event = this.currentEvent;
+      const gameId = this.gameId;
       if (event && (round - 1) % 3 === 0) {
-        const eventId = event.id;
-        if (this.lastRevealedEventId !== eventId) {
-          this.lastRevealedEventId = eventId;
+        const key = `game_${gameId}_event_${event.id}`;
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, '1');
           this.showEventReveal = true;
         }
       }
@@ -578,6 +590,10 @@ export default {
       this.duelPhase = data.duel_phase || data.game?.duel_phase;
       this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
       this.playerKingdoms = data.player_kingdoms || [];
+
+      // Sync curses
+      if (data.pending_curses) this.pendingCurses = data.pending_curses;
+      if (data.player_curses) this.playerCurses = data.player_curses;
 
       // Sync turn timer (don't restart if game-over timeout overlay is showing)
       if (data.turn_time_limit && !this.showTimeoutOverlay) {
@@ -872,6 +888,38 @@ export default {
       }
 
       this.pendingRerollDecision = true;
+
+      // Process pending curses from roll result
+      if (rollResult.pending_curses) {
+        this.pendingCurses = rollResult.pending_curses;
+      }
+      if (rollResult.player_curses) {
+        this.playerCurses = { ...this.playerCurses, [pn]: rollResult.player_curses };
+      }
+    },
+
+    currentDuelPendingCurse() {
+      if (!this.pendingCurses || !this.pendingCurses.length) return null;
+      const player = this.players?.find(p => p.player_number === this.activePlayerNumber);
+      if (!player) return null;
+      return this.pendingCurses.find(pc => pc.player_id === player.id);
+    },
+    async onCurseSelected(curseId) {
+      try {
+        const res = await axios.post(`/api/games/${this.gameId}/choose-curse`, {
+          curse_id: curseId,
+          player_number: this.activePlayerNumber,
+        });
+        this.pendingCurses = res.data.pending_curses || null;
+        if (res.data.player_curses) {
+          this.playerCurses = {
+            ...this.playerCurses,
+            [this.activePlayerNumber]: res.data.player_curses,
+          };
+        }
+      } catch (e) {
+        this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
+      }
     },
 
     async recoverRollState() {

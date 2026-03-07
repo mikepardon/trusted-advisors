@@ -22,6 +22,7 @@ import AdminCharacters from './components/admin/AdminCharacters.vue';
 import AdminCards from './components/admin/AdminCards.vue';
 import AdminEvents from './components/admin/AdminEvents.vue';
 import AdminItems from './components/admin/AdminItems.vue';
+import AdminCurses from './components/admin/AdminCurses.vue';
 import AdminSounds from './components/admin/AdminSounds.vue';
 import AdminBotGames from './components/admin/AdminBotGames.vue';
 import AdminSeasons from './components/admin/AdminSeasons.vue';
@@ -30,7 +31,6 @@ import AdminUnlockables from './components/admin/AdminUnlockables.vue';
 import AdminChallenges from './components/admin/AdminChallenges.vue';
 import AdminGames from './components/admin/AdminGames.vue';
 import AdminXp from './components/admin/AdminXp.vue';
-import AdminCoins from './components/admin/AdminCoins.vue';
 import AdminAddons from './components/admin/AdminAddons.vue';
 import AdminGifts from './components/admin/AdminGifts.vue';
 import AdminAnnouncements from './components/admin/AdminAnnouncements.vue';
@@ -87,13 +87,13 @@ const routes = [
             { path: 'cards', component: AdminCards },
             { path: 'events', component: AdminEvents },
             { path: 'items', component: AdminItems },
+            { path: 'curses', component: AdminCurses },
             { path: 'dice', component: AdminDice },
             { path: 'kingdom-styles', component: AdminKingdomStyles },
             { path: 'sounds', component: AdminSounds },
             { path: 'bot-games', component: AdminBotGames },
             { path: 'games', component: AdminGames },
             { path: 'xp', component: AdminXp },
-            { path: 'coins', component: AdminCoins },
             { path: 'addons', component: AdminAddons },
             { path: 'media', component: AdminMediaLibrary },
             { path: 'seasons', component: AdminSeasons },

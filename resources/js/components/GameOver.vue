@@ -153,9 +153,17 @@
             <span>Year Bonus</span>
             <span>+{{ scoreBreakdown.year_bonus }}</span>
           </div>
+          <div v-if="scoreBreakdown.stacking_bonus" class="breakdown-row">
+            <span>Stacking Bonus</span>
+            <span>+{{ scoreBreakdown.stacking_bonus }}</span>
+          </div>
           <div v-if="scoreBreakdown.bonus_score" class="breakdown-row">
             <span>Bonus Score</span>
             <span>+{{ scoreBreakdown.bonus_score }}</span>
+          </div>
+          <div v-if="scoreBreakdown.score_modifier" class="breakdown-row">
+            <span>Score Modifier</span>
+            <span :class="scoreBreakdown.score_modifier > 0 ? 'mod-positive' : 'mod-negative'">{{ scoreBreakdown.score_modifier > 0 ? '+' : '' }}{{ scoreBreakdown.score_modifier }}%</span>
           </div>
           <div class="breakdown-row breakdown-total">
             <span>Final Score</span>
@@ -408,14 +416,22 @@ export default {
       const stats = [g.wealth, g.influence, g.security, g.religion, g.food, g.happiness];
       const spread = Math.max(...stats) - Math.min(...stats);
       const balanceBonus = Math.max(0, 30 - spread * 3);
-      const years = Math.max(1, Math.ceil((g.current_round || 1) / 12));
+      const years = Math.floor((g.current_round || 0) / 12) + 1;
       const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
       const yearMult = multipliers[years] || 2.0;
       const yearsCompleted = Math.floor((g.current_round || 0) / 12);
       const yearBonus = yearsCompleted * 50;
       const bonusScore = g.bonus_score || 0;
-      const finalScore = g.final_score ?? (Math.floor(base * yearMult) + balanceBonus + yearBonus + bonusScore);
-      return { base_score: base, year_multiplier: yearMult, balance_bonus: balanceBonus, year_bonus: yearBonus, bonus_score: bonusScore, final_score: finalScore };
+      const statVals = stats;
+      let stackingBonus = 0;
+      statVals.forEach(v => {
+        if (v >= 15) stackingBonus += 10;
+        if (v >= 20) stackingBonus += 20;
+      });
+      const scoreModifier = g.score_modifier || 0;
+      const rawTotal = Math.floor(base * yearMult) + balanceBonus + yearBonus + stackingBonus + bonusScore;
+      const finalScore = g.final_score ?? Math.floor(rawTotal * (1 + scoreModifier / 100));
+      return { base_score: base, year_multiplier: yearMult, balance_bonus: balanceBonus, year_bonus: yearBonus, stacking_bonus: stackingBonus, bonus_score: bonusScore, score_modifier: scoreModifier, final_score: finalScore };
     },
     finalScore() {
       return this.scoreBreakdown?.final_score ?? this.totalScore;
@@ -851,6 +867,9 @@ export default {
   color: var(--accent-gold);
   font-weight: 900;
 }
+
+.mod-positive { color: #4caf50; }
+.mod-negative { color: #e74c3c; }
 
 .round-summary {
   margin-bottom: 20px;

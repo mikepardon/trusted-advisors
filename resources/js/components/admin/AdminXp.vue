@@ -5,38 +5,66 @@
     <div v-if="loading" class="loading">Loading...</div>
 
     <template v-else>
-      <!-- XP Sources Table -->
+      <!-- Game Settings -->
       <div class="section-panel">
-        <h3 class="section-title">XP Award Sources</h3>
-        <p class="section-desc">How XP is earned at the end of each game. Changes save automatically.</p>
+        <h3 class="section-title">Game Settings</h3>
+        <p class="section-desc">Default game configuration. Changes save automatically.</p>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Setting</th>
+              <th>Description</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="name-col">Default Total Rounds</td>
+              <td class="desc-col">Number of rounds for standard cooperative games (12 per year)</td>
+              <td><input type="number" v-model.number="defaultTotalRounds" class="xp-input" min="12" max="120" step="12" @change="saveDefaultRounds" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="roundsSaved" class="saved-msg">Saved!</p>
+      </div>
+
+      <!-- XP & Coin Sources Table -->
+      <div class="section-panel">
+        <h3 class="section-title">XP &amp; Coin Award Sources</h3>
+        <p class="section-desc">How XP and coins are earned at the end of each game. Changes save automatically.</p>
         <table class="admin-table">
           <thead>
             <tr>
               <th>Source</th>
               <th>Description</th>
-              <th>XP Value</th>
+              <th>XP</th>
+              <th>Coins</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td class="name-col">Base XP</td>
+              <td class="name-col">Base</td>
               <td class="desc-col">Awarded to every player who completes a game</td>
               <td><input type="number" v-model.number="config.base_xp" class="xp-input" min="0" @change="saveConfig" /></td>
+              <td><input type="number" v-model.number="coinConfig.base_coins" class="xp-input" min="0" @change="saveCoinConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Win Bonus (Cooperative)</td>
-              <td class="desc-col">Extra XP for winning a cooperative game</td>
+              <td class="desc-col">Extra reward for winning a cooperative game</td>
               <td><input type="number" v-model.number="config.coop_win_bonus" class="xp-input" min="0" @change="saveConfig" /></td>
+              <td><input type="number" v-model.number="coinConfig.coop_win_bonus" class="xp-input" min="0" @change="saveCoinConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Win Bonus (Duel)</td>
-              <td class="desc-col">Extra XP for winning a duel game</td>
+              <td class="desc-col">Extra reward for winning a duel game</td>
               <td><input type="number" v-model.number="config.duel_win_bonus" class="xp-input" min="0" @change="saveConfig" /></td>
+              <td><input type="number" v-model.number="coinConfig.duel_win_bonus" class="xp-input" min="0" @change="saveCoinConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Online Multiplier</td>
-              <td class="desc-col">Multiplier applied to all XP for online games</td>
+              <td class="desc-col">Multiplier applied for online games</td>
               <td><input type="number" v-model.number="config.online_multiplier" class="xp-input" min="1" max="5" step="0.1" @change="saveConfig" /></td>
+              <td><input type="number" v-model.number="coinConfig.online_multiplier" class="xp-input" min="1" max="5" step="0.1" @change="saveCoinConfig" /></td>
             </tr>
           </tbody>
         </table>
@@ -46,23 +74,29 @@
         <h4 class="sub-title">Computed Awards</h4>
         <table class="admin-table compact">
           <thead>
-            <tr><th>Scenario</th><th>Offline</th><th>Online</th></tr>
+            <tr><th>Scenario</th><th>Offline XP</th><th>Online XP</th><th>Offline Coins</th><th>Online Coins</th></tr>
           </thead>
           <tbody>
             <tr>
               <td>Loss (any mode)</td>
-              <td>{{ config.base_xp }} XP</td>
-              <td>{{ Math.round(config.base_xp * config.online_multiplier) }} XP</td>
+              <td>{{ config.base_xp }}</td>
+              <td>{{ Math.round(config.base_xp * config.online_multiplier) }}</td>
+              <td>{{ coinConfig.base_coins }}</td>
+              <td>{{ Math.round(coinConfig.base_coins * coinConfig.online_multiplier) }}</td>
             </tr>
             <tr>
               <td>Cooperative Win</td>
-              <td>{{ config.base_xp + config.coop_win_bonus }} XP</td>
-              <td>{{ Math.round((config.base_xp + config.coop_win_bonus) * config.online_multiplier) }} XP</td>
+              <td>{{ config.base_xp + config.coop_win_bonus }}</td>
+              <td>{{ Math.round((config.base_xp + config.coop_win_bonus) * config.online_multiplier) }}</td>
+              <td>{{ coinConfig.base_coins + coinConfig.coop_win_bonus }}</td>
+              <td>{{ Math.round((coinConfig.base_coins + coinConfig.coop_win_bonus) * coinConfig.online_multiplier) }}</td>
             </tr>
             <tr>
               <td>Duel Win</td>
-              <td>{{ config.base_xp + config.duel_win_bonus }} XP</td>
-              <td>{{ Math.round((config.base_xp + config.duel_win_bonus) * config.online_multiplier) }} XP</td>
+              <td>{{ config.base_xp + config.duel_win_bonus }}</td>
+              <td>{{ Math.round((config.base_xp + config.duel_win_bonus) * config.online_multiplier) }}</td>
+              <td>{{ coinConfig.base_coins + coinConfig.duel_win_bonus }}</td>
+              <td>{{ Math.round((coinConfig.base_coins + coinConfig.duel_win_bonus) * coinConfig.online_multiplier) }}</td>
             </tr>
           </tbody>
         </table>
@@ -172,9 +206,17 @@ export default {
         duel_win_bonus: 150,
         online_multiplier: 1.5,
       },
+      coinConfig: {
+        base_coins: 10,
+        coop_win_bonus: 15,
+        duel_win_bonus: 25,
+        online_multiplier: 1.5,
+      },
       levels: [],
       characters: [],
       items: [],
+      defaultTotalRounds: 60,
+      roundsSaved: false,
       showUnlockModal: false,
       unlockForm: { level: 1, type: 'character', entity_id: '' },
       unlockError: '',
@@ -186,7 +228,7 @@ export default {
     },
   },
   async mounted() {
-    await Promise.all([this.loadConfig(), this.loadLevels(), this.loadEntities()]);
+    await Promise.all([this.loadConfig(), this.loadCoinConfig(), this.loadLevels(), this.loadEntities(), this.loadDefaultRounds()]);
     this.loading = false;
   },
   methods: {
@@ -198,6 +240,25 @@ export default {
         }
       } catch {
         // use defaults
+      }
+    },
+    async loadCoinConfig() {
+      try {
+        const res = await axios.get('/api/admin/rules');
+        if (res.data.coin_config) {
+          this.coinConfig = { ...this.coinConfig, ...res.data.coin_config };
+        }
+      } catch {
+        // use defaults
+      }
+    },
+    async saveCoinConfig() {
+      try {
+        await axios.put('/api/admin/rules/coin_config', { value: { ...this.coinConfig } });
+        this.saved = true;
+        setTimeout(() => { this.saved = false; }, 1500);
+      } catch {
+        // silently fail
       }
     },
     async loadLevels() {
@@ -222,6 +283,25 @@ export default {
         await axios.put('/api/admin/rules/xp_config', { value: { ...this.config } });
         this.saved = true;
         setTimeout(() => { this.saved = false; }, 1500);
+      } catch {
+        // silently fail
+      }
+    },
+    async loadDefaultRounds() {
+      try {
+        const res = await axios.get('/api/admin/rules');
+        if (res.data.default_total_rounds != null) {
+          this.defaultTotalRounds = res.data.default_total_rounds;
+        }
+      } catch {
+        // use default
+      }
+    },
+    async saveDefaultRounds() {
+      try {
+        await axios.put('/api/admin/rules/default_total_rounds', { value: this.defaultTotalRounds });
+        this.roundsSaved = true;
+        setTimeout(() => { this.roundsSaved = false; }, 1500);
       } catch {
         // silently fail
       }

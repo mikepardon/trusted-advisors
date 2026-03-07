@@ -44,7 +44,11 @@
         <span class="bonus-label">Renown</span>
         <span class="bonus-value">+{{ game.bonus_score }}</span>
       </div>
-      <div class="live-score-indicator">
+      <div v-if="game.score_modifier" class="bonus-score-indicator modifier-indicator">
+        <span class="bonus-label">Modifier</span>
+        <span class="bonus-value" :class="game.score_modifier > 0 ? 'mod-positive' : 'mod-negative'">{{ game.score_modifier > 0 ? '+' : '' }}{{ game.score_modifier }}%</span>
+      </div>
+      <div class="live-score-indicator clickable-score" @click="showBreakdown = true">
         <span class="score-label">Score</span>
         <span class="score-value">{{ liveScore }}</span>
         <span class="score-rank" :class="'rank-' + liveRank.toLowerCase()">{{ liveRank }}</span>
@@ -53,6 +57,58 @@
     <div v-else-if="game.bonus_score" class="bonus-score-indicator">
       <span class="bonus-label">Renown</span>
       <span class="bonus-value">+{{ game.bonus_score }}</span>
+    </div>
+
+    <!-- Score Breakdown Modal -->
+    <div v-if="showBreakdown" class="breakdown-overlay" @click.self="showBreakdown = false">
+      <div class="breakdown-modal">
+        <div class="breakdown-header">
+          <h3 class="breakdown-title">Score Breakdown</h3>
+          <button class="breakdown-close" @click="showBreakdown = false">&times;</button>
+        </div>
+        <div class="breakdown-body">
+          <div class="breakdown-row">
+            <span>Kingdom Total</span>
+            <span>{{ liveBreakdown.base }}</span>
+          </div>
+          <div class="breakdown-row">
+            <span>Year Multiplier</span>
+            <span>&times;{{ liveBreakdown.yearMultiplier }}</span>
+          </div>
+          <div class="breakdown-row breakdown-subtotal">
+            <span>Subtotal</span>
+            <span>{{ liveBreakdown.multiplied }}</span>
+          </div>
+          <div class="breakdown-row">
+            <span>Balance Bonus</span>
+            <span>+{{ liveBreakdown.balance }}</span>
+          </div>
+          <div v-if="liveBreakdown.stacking" class="breakdown-row">
+            <span>Stacking Bonus</span>
+            <span>+{{ liveBreakdown.stacking }}</span>
+          </div>
+          <div v-if="liveBreakdown.yearBonus" class="breakdown-row">
+            <span>Year Bonus</span>
+            <span>+{{ liveBreakdown.yearBonus }}</span>
+          </div>
+          <div v-if="liveBreakdown.bonus" class="breakdown-row">
+            <span>Renown</span>
+            <span>+{{ liveBreakdown.bonus }}</span>
+          </div>
+          <div v-if="liveBreakdown.curseBonus" class="breakdown-row">
+            <span>Curse Rewards</span>
+            <span>+{{ liveBreakdown.curseBonus }}</span>
+          </div>
+          <div v-if="liveBreakdown.modifier" class="breakdown-row">
+            <span>Score Modifier</span>
+            <span :class="liveBreakdown.modifier > 0 ? 'mod-positive' : 'mod-negative'">{{ liveBreakdown.modifier > 0 ? '+' : '' }}{{ liveBreakdown.modifier }}%</span>
+          </div>
+          <div class="breakdown-row breakdown-final">
+            <span>Final Score</span>
+            <span>{{ liveBreakdown.final }}</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -83,6 +139,7 @@ export default {
       barFlashClass: {},
       flashTimers: {},
       tweenTimers: {},
+      showBreakdown: false,
     };
   },
   computed: {
@@ -124,17 +181,44 @@ export default {
     showLiveScore() {
       return this.game.game_type !== 'duel' && this.game.status !== 'completed' && this.game.status !== 'cancelled';
     },
-    liveScore() {
+    liveBreakdown() {
       const g = this.game;
-      const base = (g.wealth || 0) + (g.influence || 0) + (g.security || 0) + (g.religion || 0) + (g.food || 0) + (g.happiness || 0);
-      const years = Math.max(1, Math.floor((g.total_rounds || 12) / 12));
+      const statVals = [g.wealth || 0, g.influence || 0, g.security || 0, g.religion || 0, g.food || 0, g.happiness || 0];
+      const base = statVals.reduce((s, v) => s + v, 0);
+      const yearsCompleted = Math.floor((g.current_round || 0) / 12);
+      const years = yearsCompleted + 1;
       const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
-      const mult = multipliers[years] || 1.0;
-      const stats = [g.wealth || 0, g.influence || 0, g.security || 0, g.religion || 0, g.food || 0, g.happiness || 0];
-      const spread = Math.max(...stats) - Math.min(...stats);
+      const yearMultiplier = multipliers[years] || 2.0;
+      const multiplied = Math.floor(base * yearMultiplier);
+      const spread = Math.max(...statVals) - Math.min(...statVals);
       const balance = Math.max(0, 30 - spread * 3);
+      const yearBonus = yearsCompleted * 50;
+      let stacking = 0;
+      statVals.forEach(v => {
+        if (v >= 15) stacking += 10;
+        if (v >= 20) stacking += 20;
+      });
       const bonus = g.bonus_score || 0;
-      return Math.floor(base * mult) + balance + bonus;
+      const modifier = g.score_modifier || 0;
+
+      // Calculate curse end-game bonuses (preview)
+      let curseBonus = 0;
+      const isDuel = g.game_type === 'duel';
+      if (g.players) {
+        for (const player of g.players) {
+          for (const pc of (player.curses || [])) {
+            const pos = isDuel ? (pc.curse?.positive_effect_duel || pc.curse?.positive_effect) : pc.curse?.positive_effect;
+            if (pos?.type === 'score_bonus') curseBonus += (pos.value || 0);
+          }
+        }
+      }
+
+      const rawTotal = multiplied + balance + stacking + yearBonus + bonus + curseBonus;
+      const final_ = Math.floor(rawTotal * (1 + modifier / 100));
+      return { base, yearMultiplier, multiplied, balance, stacking, yearBonus, bonus, curseBonus, modifier, final: final_ };
+    },
+    liveScore() {
+      return this.liveBreakdown.final;
     },
     liveRank() {
       const s = this.liveScore;
@@ -470,6 +554,110 @@ export default {
 .bonus-value {
   color: var(--accent-gold);
   font-weight: 700;
+}
+
+.modifier-indicator {
+  background: rgba(138, 58, 185, 0.1);
+  border-color: rgba(138, 58, 185, 0.3);
+}
+
+.mod-positive { color: #4caf50; }
+.mod-negative { color: #e74c3c; }
+
+.clickable-score {
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.clickable-score:hover {
+  background: rgba(39, 174, 96, 0.2);
+  border-color: rgba(39, 174, 96, 0.5);
+}
+
+/* Score Breakdown Modal */
+.breakdown-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+}
+
+.breakdown-modal {
+  background: var(--bg-secondary, #1a1209);
+  border: 2px solid var(--accent-gold, #d4a843);
+  border-radius: 10px;
+  padding: 0;
+  min-width: 280px;
+  max-width: 360px;
+  box-shadow: 0 0 30px rgba(212, 168, 67, 0.2);
+}
+
+.breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px 10px;
+  border-bottom: 1px solid rgba(184, 148, 46, 0.2);
+}
+
+.breakdown-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold, #d4a843);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.breakdown-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.breakdown-close:hover {
+  color: var(--text-bright);
+}
+
+.breakdown-body {
+  padding: 12px 18px 16px;
+}
+
+.breakdown-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.breakdown-row span:last-child {
+  color: var(--text-bright);
+  font-weight: 600;
+}
+
+.breakdown-subtotal {
+  border-bottom: 1px solid rgba(184, 148, 46, 0.15);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+
+.breakdown-final {
+  border-top: 1px solid rgba(184, 148, 46, 0.3);
+  margin-top: 6px;
+  padding-top: 8px;
+  font-size: 1rem;
+}
+
+.breakdown-final span:last-child {
+  color: var(--accent-gold, #d4a843);
+  font-weight: 900;
+  font-family: 'Cinzel', serif;
 }
 
 /* ---- Mobile compact mode ---- */

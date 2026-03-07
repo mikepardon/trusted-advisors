@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Card;
 use App\Models\Character;
+use App\Models\Curse;
 use App\Models\Event;
 use App\Models\Item;
 use Illuminate\Http\Request;
@@ -20,8 +21,13 @@ class CsvController extends Controller
         $this->typeConfig = [
             'characters' => [
                 'model' => Character::class,
-                'columns' => ['id', 'name', 'description', 'dice', 'wild_value', 'wild_ability', 'wild_ability_description', 'addon_id', 'available_cooperative', 'available_duel', 'is_available'],
-                'json_fields' => ['dice'],
+                'columns' => [
+                    'id', 'name', 'description',
+                    'dice', 'wild_value', 'wild_ability', 'wild_ability_description',
+                    'dice_duel', 'wild_value_duel', 'wild_ability_duel', 'wild_ability_description_duel',
+                    'addon_id', 'available_cooperative', 'available_duel', 'is_available',
+                ],
+                'json_fields' => ['dice', 'dice_duel'],
                 'bool_fields' => ['available_cooperative', 'available_duel', 'is_available'],
                 'rules' => [
                     'name' => 'required|string|max:255',
@@ -30,6 +36,10 @@ class CsvController extends Controller
                     'wild_value' => 'required|integer|min:1|max:10',
                     'wild_ability' => 'required|string|max:50',
                     'wild_ability_description' => 'nullable|string',
+                    'dice_duel' => 'nullable|array',
+                    'wild_value_duel' => 'nullable|integer|min:1|max:10',
+                    'wild_ability_duel' => 'nullable|string|max:50',
+                    'wild_ability_description_duel' => 'nullable|string',
                     'addon_id' => 'nullable|integer|exists:addons,id',
                     'available_cooperative' => 'boolean',
                     'available_duel' => 'boolean',
@@ -38,8 +48,14 @@ class CsvController extends Controller
             ],
             'cards' => [
                 'model' => Card::class,
-                'columns' => ['id', 'title', 'description', 'sort_order', 'difficulty', 'positive_effects', 'negative_effects', 'positive_flavor', 'negative_flavor', 'category', 'available_cooperative', 'available_duel'],
-                'json_fields' => ['positive_effects', 'negative_effects'],
+                'columns' => [
+                    'id', 'title', 'description', 'sort_order',
+                    'difficulty', 'positive_effects', 'negative_effects',
+                    'difficulty_duel', 'positive_effects_duel', 'negative_effects_duel',
+                    'positive_flavor', 'negative_flavor', 'category',
+                    'available_cooperative', 'available_duel',
+                ],
+                'json_fields' => ['positive_effects', 'negative_effects', 'positive_effects_duel', 'negative_effects_duel'],
                 'bool_fields' => ['available_cooperative', 'available_duel'],
                 'rules' => [
                     'title' => 'required|string|max:255',
@@ -48,6 +64,9 @@ class CsvController extends Controller
                     'difficulty' => 'required|integer|min:1|max:20',
                     'positive_effects' => 'required|array',
                     'negative_effects' => 'required|array',
+                    'difficulty_duel' => 'nullable|integer|min:1|max:20',
+                    'positive_effects_duel' => 'nullable|array',
+                    'negative_effects_duel' => 'nullable|array',
                     'positive_flavor' => 'nullable|string',
                     'negative_flavor' => 'nullable|string',
                     'category' => 'nullable|string|max:100',
@@ -57,8 +76,13 @@ class CsvController extends Controller
             ],
             'events' => [
                 'model' => Event::class,
-                'columns' => ['id', 'title', 'effect', 'stat_modifiers', 'mechanic', 'mechanic_data', 'addon_id', 'available_cooperative', 'available_duel'],
-                'json_fields' => ['stat_modifiers', 'mechanic_data'],
+                'columns' => [
+                    'id', 'title', 'effect',
+                    'stat_modifiers', 'mechanic', 'mechanic_data',
+                    'stat_modifiers_duel', 'mechanic_duel', 'mechanic_data_duel',
+                    'addon_id', 'available_cooperative', 'available_duel',
+                ],
+                'json_fields' => ['stat_modifiers', 'mechanic_data', 'stat_modifiers_duel', 'mechanic_data_duel'],
                 'bool_fields' => ['available_cooperative', 'available_duel'],
                 'rules' => [
                     'title' => 'required|string|max:255',
@@ -66,6 +90,9 @@ class CsvController extends Controller
                     'stat_modifiers' => 'nullable|array',
                     'mechanic' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal,score_event',
                     'mechanic_data' => 'nullable|array',
+                    'stat_modifiers_duel' => 'nullable|array',
+                    'mechanic_duel' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal,score_event',
+                    'mechanic_data_duel' => 'nullable|array',
                     'addon_id' => 'nullable|integer|exists:addons,id',
                     'available_cooperative' => 'boolean',
                     'available_duel' => 'boolean',
@@ -73,19 +100,47 @@ class CsvController extends Controller
             ],
             'items' => [
                 'model' => Item::class,
-                'columns' => ['id', 'name', 'description', 'effect', 'effect_type', 'is_negative', 'is_consumable', 'addon_id', 'available_cooperative', 'available_duel'],
-                'json_fields' => ['effect'],
+                'columns' => [
+                    'id', 'name', 'description',
+                    'effect', 'effect_duel',
+                    'effect_type', 'target',
+                    'is_negative', 'is_consumable',
+                    'addon_id', 'available_cooperative', 'available_duel',
+                ],
+                'json_fields' => ['effect', 'effect_duel'],
                 'bool_fields' => ['is_negative', 'is_consumable', 'available_cooperative', 'available_duel'],
                 'rules' => [
                     'name' => 'required|string|max:255',
                     'description' => 'required|string',
                     'effect' => 'required|array',
+                    'effect_duel' => 'nullable|array',
                     'effect_type' => 'required|string|in:passive,active',
+                    'target' => 'nullable|string',
                     'is_negative' => 'boolean',
                     'is_consumable' => 'boolean',
                     'addon_id' => 'nullable|integer|exists:addons,id',
                     'available_cooperative' => 'boolean',
                     'available_duel' => 'boolean',
+                ],
+            ],
+            'curses' => [
+                'model' => Curse::class,
+                'columns' => [
+                    'id', 'name', 'description',
+                    'negative_effect', 'positive_effect',
+                    'negative_effect_duel', 'positive_effect_duel',
+                    'is_available',
+                ],
+                'json_fields' => ['negative_effect', 'positive_effect', 'negative_effect_duel', 'positive_effect_duel'],
+                'bool_fields' => ['is_available'],
+                'rules' => [
+                    'name' => 'required|string|max:255',
+                    'description' => 'required|string',
+                    'negative_effect' => 'required|array',
+                    'positive_effect' => 'required|array',
+                    'negative_effect_duel' => 'nullable|array',
+                    'positive_effect_duel' => 'nullable|array',
+                    'is_available' => 'boolean',
                 ],
             ],
         ];

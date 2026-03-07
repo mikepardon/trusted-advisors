@@ -14,10 +14,13 @@ use App\Models\Character;
 use App\Models\Event;
 use App\Models\Game;
 use App\Models\GameCardDeck;
+use App\Models\GameCurseDeck;
 use App\Models\GameItemDeck;
 use App\Models\GamePlayer;
+use App\Models\GamePlayerCurse;
 use App\Models\GamePlayerHand;
 use App\Models\GamePlayerItem;
+use App\Models\Curse;
 use App\Models\GamePlayerKingdom;
 use App\Models\GameRoundResult;
 use App\Models\GameRule;
@@ -165,7 +168,7 @@ class GameController extends Controller
         $validated = $request->validate([
             'game_mode' => 'required|string|in:single,pass_and_play,online',
             'num_players' => 'required|integer|min:1|max:6',
-            'total_rounds' => 'sometimes|integer|in:12,24,36,48,60',
+            'total_rounds' => 'sometimes|nullable|integer|min:12|max:120',
             'game_type' => 'sometimes|string|in:cooperative,duel',
             'bot_difficulty' => 'sometimes|string|in:easy,medium,hard',
             'rotating_event_id' => 'nullable|integer|exists:rotating_events,id',
@@ -211,6 +214,19 @@ class GameController extends Controller
             if (!$rotatingEvent) {
                 return response()->json(['error' => 'Event is not currently active'], 422);
             }
+            // Override total rounds if the event specifies it
+            if ($rotatingEvent->total_rounds) {
+                $validated['total_rounds'] = $rotatingEvent->total_rounds;
+            }
+            // Enforce max attempts limit
+            if ($rotatingEvent->max_attempts) {
+                $attemptCount = \App\Models\RotatingEventEntry::where('rotating_event_id', $rotatingEventId)
+                    ->where('user_id', $request->user()->id)
+                    ->count();
+                if ($attemptCount >= $rotatingEvent->max_attempts) {
+                    return response()->json(['error' => "You've reached the maximum of {$rotatingEvent->max_attempts} attempts for this event."], 422);
+                }
+            }
         }
 
         // Assign active season if applicable (skip for event games)
@@ -253,12 +269,25 @@ class GameController extends Controller
             }
         }
 
+        // Apply rotating event modifiers (starting stats, house rules) to custom_rules
+        if ($rotatingEventId && isset($rotatingEvent) && $rotatingEvent->modifiers) {
+            $mods = $rotatingEvent->modifiers;
+            if (!empty($mods['starting_stats'])) {
+                $customRules = $customRules ?? [];
+                $customRules['starting_stats'] = $mods['starting_stats'];
+            }
+            if (!empty($mods['house_rules'])) {
+                $customRules = $customRules ?? [];
+                $customRules['house_rules'] = $mods['house_rules'];
+            }
+        }
+
         $game = Game::create([
             'status' => 'setup',
             'game_mode' => $validated['game_mode'],
             'game_type' => $gameType,
             'num_players' => $validated['num_players'],
-            'total_rounds' => $validated['total_rounds'] ?? 24,
+            'total_rounds' => $validated['total_rounds'] ?? (int) GameRule::getValue('default_total_rounds', 60),
             'user_id' => $request->user()?->id,
             'season_id' => $seasonId,
             'rotating_event_id' => $rotatingEventId,
@@ -284,7 +313,7 @@ class GameController extends Controller
 
     public function show(Game $game): JsonResponse
     {
-        $game->load(['players.character', 'players.user.activeKingdomStyle', 'players.items.item']);
+        $game->load(['players.character', 'players.user.activeKingdomStyle', 'players.items.item', 'players.curses.curse']);
 
         $data = [
             'game' => $game,
@@ -321,6 +350,18 @@ class GameController extends Controller
         // Get current event
         $event = $this->getCurrentEvent($game);
         $data['current_event'] = $event;
+
+        // Include pending curses and active curses
+        if (!empty($game->pending_curses)) {
+            $data['pending_curses'] = $game->pending_curses;
+        }
+        $data['player_curses'] = $game->players->mapWithKeys(fn ($p) => [
+            $p->player_number => $p->curses->map(fn ($c) => [
+                'id' => $c->id,
+                'curse' => $c->curse,
+                'acquired_round' => $c->acquired_round,
+            ]),
+        ]);
 
         // During selecting phase, include hand info (which players have assigned roles)
         if ($game->round_phase === 'selecting') {
@@ -400,6 +441,15 @@ class GameController extends Controller
             }
         }
 
+        // Validate character pool restriction from rotating event
+        $rotatingEvent = $game->rotating_event_id ? $game->rotatingEvent : null;
+        if ($rotatingEvent && $rotatingEvent->character_pool) {
+            $invalidChars = array_diff($validated['characters'], $rotatingEvent->character_pool);
+            if (!empty($invalidChars)) {
+                return response()->json(['error' => 'One or more selected characters are not allowed in this event'], 422);
+            }
+        }
+
         // Duel mode: 4 cards per round (2 per player, no events)
         if ($game->isDuel()) {
             $totalCardsNeeded = 4 * $game->total_rounds;
@@ -434,7 +484,9 @@ class GameController extends Controller
 
             // Single-player duel: create bot as player 2
             if ($game->game_mode === 'single' && $game->isDuel()) {
-                $botDifficulty = $request->input('bot_difficulty', 'medium');
+                $botDifficulty = $request->input('bot_difficulty')
+                    ?? $game->rotatingEvent?->modifiers['bot_difficulty']
+                    ?? 'medium';
                 // Pick a random character not chosen by the player
                 $usedCharacterIds = $validated['characters'];
                 $botCharacter = Character::whereNotIn('id', $usedCharacterIds)->inRandomOrder()->first()
@@ -456,6 +508,8 @@ class GameController extends Controller
         // Create shuffled deck (recycle cards if more needed than available)
         if (!empty($customRules['card_pool'])) {
             $allCards = Card::whereIn('id', $customRules['card_pool'])->inRandomOrder()->get();
+        } elseif ($rotatingEvent && $rotatingEvent->card_pool) {
+            $allCards = Card::whereIn('id', $rotatingEvent->card_pool)->inRandomOrder()->get();
         } else {
             $allCards = Card::where($availCol, true)->inRandomOrder()->get();
         }
@@ -483,6 +537,8 @@ class GameController extends Controller
             // Create shuffled item deck (recycle items if needed)
             if (!empty($customRules['item_pool'])) {
                 $allItems = Item::whereIn('id', $customRules['item_pool'])->inRandomOrder()->get();
+            } elseif ($rotatingEvent && $rotatingEvent->item_pool) {
+                $allItems = Item::whereIn('id', $rotatingEvent->item_pool)->inRandomOrder()->get();
             } else {
                 $allItems = Item::where($availCol, true)->inRandomOrder()->get();
             }
@@ -506,9 +562,17 @@ class GameController extends Controller
             GameItemDeck::insert($itemRows);
         }
 
+        // Initialize curse deck (both modes)
+        $this->initCurseDeck($game);
+
         // Shuffle event order per game so every game is unique
-        if (!empty($customRules['event_pool'])) {
+        if ($rotatingEvent && $rotatingEvent->fixed_event_id) {
+            // Fixed event: repeat the same event for every round
+            $eventOrder = array_fill(0, $game->total_rounds, $rotatingEvent->fixed_event_id);
+        } elseif (!empty($customRules['event_pool'])) {
             $eventOrder = collect($customRules['event_pool'])->shuffle()->values()->toArray();
+        } elseif ($rotatingEvent && $rotatingEvent->event_pool) {
+            $eventOrder = collect($rotatingEvent->event_pool)->shuffle()->values()->toArray();
         } else {
             $eventOrder = Event::where($availCol, true)->pluck('id')->shuffle()->values()->toArray();
         }
@@ -594,7 +658,7 @@ class GameController extends Controller
             return response()->json(['error' => 'Game is not active'], 422);
         }
 
-        $player = $game->players()->where('player_number', $playerNumber)->first();
+        $player = $game->players()->with('character')->where('player_number', $playerNumber)->first();
         if (!$player) {
             return response()->json(['error' => 'Invalid player number'], 422);
         }
@@ -664,13 +728,21 @@ class GameController extends Controller
             }
         }
 
+        $isDuel = $game->isDuel();
+
         return response()->json([
             'player_number' => $playerNumber,
             'round' => $game->current_round,
-            'cards' => $hands->map(function ($h) use ($scaling, $allDiceFaces, $totalRollMod, $totalDiffMod) {
+            'cards' => $hands->map(function ($h) use ($scaling, $allDiceFaces, $totalRollMod, $totalDiffMod, $isDuel) {
                 $cardData = $h->card->toArray();
-                $cardData['difficulty'] = $h->card->difficulty + $scaling;
-                $target = $h->card->difficulty + $scaling + $totalDiffMod;
+                if ($isDuel) {
+                    $cardData['difficulty'] = $h->card->getDuelDifficulty() + $scaling;
+                    $cardData['positive_effects'] = $h->card->getDuelPositiveEffects();
+                    $cardData['negative_effects'] = $h->card->getDuelNegativeEffects();
+                } else {
+                    $cardData['difficulty'] = $h->card->difficulty + $scaling;
+                }
+                $target = $cardData['difficulty'] + $totalDiffMod;
                 return [
                     'hand_id' => $h->id,
                     'card' => $cardData,
@@ -683,6 +755,10 @@ class GameController extends Controller
             'items' => $items,
             'dice_count' => $diceCount,
             'item_decided' => $player->item_decided,
+            'character_dice' => $isDuel ? $player->character->getDuelDice() : $player->character->dice,
+            'character_wild_value' => $isDuel ? $player->character->getDuelWildValue() : $player->character->wild_value,
+            'character_wild_ability' => $isDuel ? $player->character->getDuelWildAbilityDescription() : $player->character->wild_ability_description,
+            'player_curses' => GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get(),
         ]);
     }
 
@@ -816,7 +892,7 @@ class GameController extends Controller
             return response()->json(['error' => 'Not all players have assigned roles'], 422);
         }
 
-        $players = $game->players()->with(['character', 'items.item'])->get();
+        $players = $game->players()->with(['character', 'items.item', 'curses.curse'])->get();
 
         // Get positive and negative role hands
         $positiveHands = $game->playerHands()
@@ -864,6 +940,10 @@ class GameController extends Controller
                 }
             }
         }
+        // Apply curse difficulty modifiers
+        $curseDifficultyMod = $this->getCurseDifficultyModifier($players, $game);
+        $totalDifficulty += $curseDifficultyMod;
+
         $totalDifficulty = max(1, $totalDifficulty);
 
         // Check event reduce_dice for temporary dice reduction
@@ -961,6 +1041,7 @@ class GameController extends Controller
         $positiveEffects = [];
         $itemGrants = [];
         $specialEffects = [];
+        $pendingCurses = [];
 
         if ($positiveSuccess) {
             foreach ($positiveHands as $hand) {
@@ -1004,30 +1085,48 @@ class GameController extends Controller
                         continue;
                     }
                     if ($stat === 'remove_curse') {
-                        // Remove a cursed item from a random player
-                        $playersWithCurses = $players->filter(function ($p) {
-                            return $p->items->contains(fn ($pi) => $pi->is_cursed);
-                        });
-                        if ($playersWithCurses->isNotEmpty()) {
-                            $target = $playersWithCurses->random();
-                            $cursedItem = $target->items->filter(fn ($pi) => $pi->is_cursed)->random();
-                            $itemName = $cursedItem->item->name;
+                        // Priority: remove a curse card first, then fall back to cursed items
+                        $playersWithCurseCards = $players->filter(fn ($p) => $p->curses->isNotEmpty());
+                        if ($playersWithCurseCards->isNotEmpty()) {
+                            $target = $playersWithCurseCards->random();
+                            $curseRecord = $target->curses->random();
+                            $curseName = $curseRecord->curse->name;
                             $charName = $target->character->name;
-                            $cursedItem->delete();
+                            $curseRecord->delete();
                             $specialEffects[] = [
                                 'type' => 'remove_curse',
                                 'phase' => 'positive',
                                 'player' => $charName,
-                                'item' => $itemName,
-                                'description' => "{$charName} was freed from {$itemName}!",
+                                'item' => $curseName,
+                                'description' => "{$charName} was freed from the curse of {$curseName}!",
                             ];
                         } else {
-                            $specialEffects[] = [
-                                'type' => 'remove_curse',
-                                'phase' => 'positive',
-                                'player' => null,
-                                'description' => 'No cursed items to remove.',
-                            ];
+                            // Fall back to cursed items
+                            $playersWithCursedItems = $players->filter(function ($p) {
+                                return $p->items->contains(fn ($pi) => $pi->is_cursed);
+                            });
+                            if ($playersWithCursedItems->isNotEmpty()) {
+                                $target = $playersWithCursedItems->random();
+                                $cursedItem = $target->items->filter(fn ($pi) => $pi->is_cursed)->random();
+                                $itemName = $cursedItem->item->name;
+                                $charName = $target->character->name;
+                                $cursedItem->delete();
+                                $specialEffects[] = [
+                                    'type' => 'remove_curse',
+                                    'phase' => 'positive',
+                                    'player' => $charName,
+                                    'item' => $itemName,
+                                    'description' => "{$charName} was freed from {$itemName}!",
+                                ];
+                            }
+                        }
+                        continue;
+                    }
+                    if ($stat === 'draw_curse') {
+                        $curseResult = $this->drawCursesFromDeck($game, $hand->game_player_id, $hand->player->character->name);
+                        if ($curseResult) {
+                            $pendingCurses[] = $curseResult['pending'];
+                            $specialEffects[] = $curseResult['effect'];
                         }
                         continue;
                     }
@@ -1060,6 +1159,16 @@ class GameController extends Controller
                             'phase' => 'positive',
                             'value' => (int) $change,
                             'description' => "Kingdom renown increased by +{$change}!",
+                        ];
+                        continue;
+                    }
+                    if ($stat === 'end_game_modifier') {
+                        $game->score_modifier = ($game->score_modifier ?? 0) + (float) $change;
+                        $specialEffects[] = [
+                            'type' => 'end_game_modifier',
+                            'phase' => 'positive',
+                            'value' => (float) $change,
+                            'description' => "Final score modifier increased by +{$change}%!",
                         ];
                         continue;
                     }
@@ -1136,6 +1245,14 @@ class GameController extends Controller
                     }
                     continue;
                 }
+                if ($stat === 'draw_curse') {
+                    $curseResult = $this->drawCursesFromDeck($game, $hand->game_player_id, $hand->player->character->name);
+                    if ($curseResult) {
+                        $pendingCurses[] = $curseResult['pending'];
+                        $specialEffects[] = $curseResult['effect'];
+                    }
+                    continue;
+                }
                 if ($stat === 'discard_item') {
                     // Find a random player who has items and discard one
                     $playersWithItems = $players->filter(function ($p) {
@@ -1167,7 +1284,44 @@ class GameController extends Controller
                     ];
                     continue;
                 }
+                if ($stat === 'end_game_modifier') {
+                    $game->score_modifier = ($game->score_modifier ?? 0) + (float) $change;
+                    $specialEffects[] = [
+                        'type' => 'end_game_modifier',
+                        'phase' => 'negative',
+                        'value' => (float) $change,
+                        'description' => "Final score modifier decreased by {$change}%!",
+                    ];
+                    continue;
+                }
                 $negativeEffects[$stat] = ($negativeEffects[$stat] ?? 0) + $change;
+            }
+        }
+
+        // Apply double_negative curse: double all negative stat effects
+        if ($this->hasDoublNegativeCurse($players, $game)) {
+            foreach ($negativeEffects as $stat => $change) {
+                if ($change < 0) {
+                    $negativeEffects[$stat] = $change * 2;
+                }
+            }
+        }
+
+        // Apply curse per-round stat effects (cooperative)
+        $cursePerRoundEffects = $this->applyCursePerRoundEffects($players, $game);
+        foreach ($cursePerRoundEffects['stat_changes'] as $stat => $change) {
+            $negativeEffects[$stat] = ($negativeEffects[$stat] ?? 0) + $change;
+        }
+        $specialEffects = array_merge($specialEffects, $cursePerRoundEffects['effects']);
+
+        // House rule: draw_curse_per_round — trigger curse draw for a random player each round
+        if (!empty($houseRules['draw_curse_per_round'])) {
+            $target = $players->random();
+            $charName = $target->character->name;
+            $curseResult = $this->drawCursesFromDeck($game, $target->id, $charName);
+            if ($curseResult) {
+                $pendingCurses[] = $curseResult['pending'];
+                $specialEffects[] = $curseResult['effect'];
             }
         }
 
@@ -1263,6 +1417,12 @@ class GameController extends Controller
         // No passive score_per_round or score_multiplier processing needed
 
         $game->round_phase = 'resolving';
+
+        // Save pending curses if any
+        if (!empty($pendingCurses)) {
+            $game->pending_curses = $pendingCurses;
+        }
+
         $game->save();
 
         // Reset item_decided for all players after resolution
@@ -1330,6 +1490,14 @@ class GameController extends Controller
                 $p->player_number => $p->items,
             ]),
             'items_over_limit' => $this->getPlayersOverItemLimit($game),
+            'pending_curses' => !empty($pendingCurses) ? $pendingCurses : null,
+            'player_curses' => $game->players()->with('curses.curse')->get()->mapWithKeys(fn ($p) => [
+                $p->player_number => $p->curses->map(fn ($c) => [
+                    'id' => $c->id,
+                    'curse' => $c->curse,
+                    'acquired_round' => $c->acquired_round,
+                ]),
+            ]),
         ]);
     }
 
@@ -1347,6 +1515,11 @@ class GameController extends Controller
         // Online mode: only host can advance
         if ($game->isOnline() && $request->user()->id !== $game->user_id) {
             return response()->json(['error' => 'Only the host can advance the round'], 403);
+        }
+
+        // Block advancement until all pending curses are chosen
+        if (!empty($game->pending_curses)) {
+            return response()->json(['error' => 'Pending curse choices must be resolved first'], 422);
         }
 
         // === DUEL MODE ===
@@ -1379,7 +1552,9 @@ class GameController extends Controller
                     'year_multiplier' => $game->yearMultiplier(),
                     'balance_bonus' => $game->balanceBonus(),
                     'year_bonus' => $game->yearBonus(),
+                    'stacking_bonus' => $game->stackingBonus(),
                     'bonus_score' => $game->bonus_score,
+                    'score_modifier' => $game->score_modifier,
                     'final_score' => $game->final_score,
                 ],
             ]);
@@ -1408,7 +1583,9 @@ class GameController extends Controller
                     'year_multiplier' => $game->yearMultiplier(),
                     'balance_bonus' => $game->balanceBonus(),
                     'year_bonus' => $game->yearBonus(),
+                    'stacking_bonus' => $game->stackingBonus(),
                     'bonus_score' => $game->bonus_score,
+                    'score_modifier' => $game->score_modifier,
                     'final_score' => $game->final_score,
                 ],
             ]);
@@ -1633,29 +1810,35 @@ class GameController extends Controller
             ->with('item')
             ->get();
 
-        // Calculate active dice count for duel (base 4, no event reduction)
-        $diceCount = max(1, 4 - $player->lost_dice);
+        // Calculate active dice count for duel (base 4, with event reduce_dice using duel override)
+        $duelHandEvent = $this->getCurrentEvent($game);
+        $duelHandTempReduction = 0;
+        if ($duelHandEvent && $duelHandEvent->getDuelMechanic() === 'reduce_dice') {
+            $duelHandTempReduction = $duelHandEvent->getDuelMechanicData()['amount'] ?? 0;
+        }
+        $diceCount = max(1, 4 - $player->lost_dice - $duelHandTempReduction);
 
         // No difficulty scaling in duel mode (co-op only)
         $scaling = 0;
 
-        // Gather this player's dice faces for odds calculation
+        // Gather this player's dice faces for odds calculation (using duel stats)
         $player->load(['character', 'items.item']);
         $allDiceFaces = [];
         $activeDice = $diceCount;
-        $pDice = $player->character->dice;
+        $pDice = $player->character->getDuelDice();
+        $pWildValue = $player->character->getDuelWildValue();
         for ($di = 0; $di < $activeDice; $di++) {
             $die = $pDice[$di % count($pDice)];
-            $faces = array_map(fn ($f) => $f === 'WILD' ? $player->character->wild_value : (int) $f, $die);
+            $faces = array_map(fn ($f) => $f === 'WILD' ? $pWildValue : (int) $f, $die);
             $allDiceFaces[] = $faces;
         }
 
-        // Sum roll modifiers from items used this round (single-use system)
+        // Sum roll modifiers from items used this round (single-use system, using duel effects)
         $totalRollMod = 0;
         $totalDiffMod = 0;
         $usedItem = $player->items->firstWhere('used_round', $game->current_round);
         if ($usedItem) {
-            $eff = $usedItem->item->effect ?? [];
+            $eff = $usedItem->item->getDuelEffect() ?? [];
             $bt = $eff['bonus_type'] ?? '';
             $bv = (int) ($eff['bonus_value'] ?? 0);
             if ($bt === 'roll_bonus' || $bt === 'roll_penalty') {
@@ -1667,12 +1850,15 @@ class GameController extends Controller
             }
         }
 
-        // Apply scaling and odds to cards
+        // Apply scaling and odds to cards (using duel stats)
         $cardsWithOdds = array_map(function ($c) use ($scaling, $allDiceFaces, $totalRollMod, $totalDiffMod) {
             if (isset($c['card']) && is_object($c['card'])) {
-                $cardData = $c['card']->toArray();
-                $baseDiff = $c['card']->difficulty;
+                $card = $c['card'];
+                $cardData = $card->toArray();
+                $baseDiff = $card->getDuelDifficulty();
                 $cardData['difficulty'] = $baseDiff + $scaling;
+                $cardData['positive_effects'] = $card->getDuelPositiveEffects();
+                $cardData['negative_effects'] = $card->getDuelNegativeEffects();
                 $target = $baseDiff + $scaling + $totalDiffMod;
                 $c['card'] = $cardData;
                 $c['success_odds'] = $this->calculateSuccessOdds($allDiceFaces, $totalRollMod, $target);
@@ -1688,6 +1874,9 @@ class GameController extends Controller
             'cards' => $cardsWithOdds,
             'items' => $items,
             'dice_count' => $diceCount,
+            'character_dice' => $player->character->getDuelDice(),
+            'character_wild_value' => $player->character->getDuelWildValue(),
+            'character_wild_ability' => $player->character->getDuelWildAbilityDescription(),
         ]);
     }
 
@@ -1884,7 +2073,7 @@ class GameController extends Controller
             }
         }
 
-        $rollingPlayer->load(['character', 'items.item']);
+        $rollingPlayer->load(['character', 'items.item', 'curses.curse']);
 
         // Get BOTH of the player's cards for this round
         $hands = $game->playerHands()
@@ -1897,11 +2086,11 @@ class GameController extends Controller
             return response()->json(['error' => 'No cards assigned to rolling player'], 422);
         }
 
-        // Calculate single-use item modifiers (items used this round by rolling player)
+        // Calculate single-use item modifiers (items used this round by rolling player, using duel effects)
         $difficultyReduction = 0;
         $usedItem = $rollingPlayer->items->firstWhere('used_round', $game->current_round);
         if ($usedItem) {
-            $effect = $usedItem->item->effect;
+            $effect = $usedItem->item->getDuelEffect() ?? [];
             $bonusType = $effect['bonus_type'] ?? '';
             if ($bonusType === 'difficulty_reduction') {
                 $difficultyReduction += abs((int) ($effect['bonus_value'] ?? 0));
@@ -1917,17 +2106,29 @@ class GameController extends Controller
             ->where('used_round', $game->current_round)
             ->filter(fn ($pi) => ($pi->item->target ?? null) === 'opponent');
         foreach ($opponentDebuffs as $debuffItem) {
-            $dEffect = $debuffItem->item->effect;
+            $dEffect = $debuffItem->item->getDuelEffect() ?? [];
             $dBonusType = $dEffect['bonus_type'] ?? '';
             if ($dBonusType === 'increase_difficulty') {
                 $difficultyReduction -= abs((int) ($dEffect['bonus_value'] ?? 0));
             }
         }
 
-        // Roll dice ONCE
+        // Roll dice ONCE (use duel-specific dice if available)
         $character = $rollingPlayer->character;
-        $dice = $character->dice;
-        $activeDice = max(1, 4 - $rollingPlayer->lost_dice);
+        $dice = $character->getDuelDice();
+        $wildValue = $character->getDuelWildValue();
+        $wildAbility = $character->getDuelWildAbility();
+        $wildAbilityDesc = $character->getDuelWildAbilityDescription();
+
+        // Check event reduce_dice for temporary dice reduction (using duel override)
+        $duelTempDiceReduction = 0;
+        $duelEvent = $this->getCurrentEvent($game);
+        $duelEventMechanic = $duelEvent ? $duelEvent->getDuelMechanic() : null;
+        $duelEventMechanicData = $duelEvent ? $duelEvent->getDuelMechanicData() : null;
+        if ($duelEventMechanic === 'reduce_dice') {
+            $duelTempDiceReduction = $duelEventMechanicData['amount'] ?? 0;
+        }
+        $activeDice = max(1, 4 - $rollingPlayer->lost_dice - $duelTempDiceReduction);
 
         $totalRoll = 0;
         $playerRolls = [];
@@ -1941,41 +2142,43 @@ class GameController extends Controller
                 'die' => $dieIndex + 1,
                 'face' => $face,
                 'face_index' => $faceIndex,
-                'value' => $face === 'WILD' ? $character->wild_value : (int) $face,
+                'value' => $face === 'WILD' ? $wildValue : (int) $face,
             ];
 
             if ($face === 'WILD') {
-                $totalRoll += $character->wild_value;
+                $totalRoll += $wildValue;
                 $wildTriggers[] = [
                     'player_number' => $rollingPlayer->player_number,
                     'character_name' => $character->name,
-                    'wild_value' => $character->wild_value,
-                    'ability' => $character->wild_ability,
-                    'ability_description' => $character->wild_ability_description,
+                    'wild_value' => $wildValue,
+                    'ability' => $wildAbility,
+                    'ability_description' => $wildAbilityDesc,
                 ];
             } else {
                 $totalRoll += (int) $face;
             }
         }
 
-        // Apply single-use item roll bonuses (items used this round)
+        // Apply single-use item roll bonuses (items used this round, using duel effects)
         if ($usedItem) {
-            $uBonusType = ($usedItem->item->effect['bonus_type'] ?? '');
+            $uEffect = $usedItem->item->getDuelEffect() ?? [];
+            $uBonusType = ($uEffect['bonus_type'] ?? '');
             if ($uBonusType === 'roll_bonus' || $uBonusType === 'roll_penalty') {
-                $totalRoll += (int) ($usedItem->item->effect['bonus_value'] ?? 0);
+                $totalRoll += (int) ($uEffect['bonus_value'] ?? 0);
             }
         }
 
         // Apply opponent debuff_roll items
         foreach ($opponentDebuffs as $debuffItem) {
-            $dBonusType = $debuffItem->item->effect['bonus_type'] ?? '';
+            $dEffect = $debuffItem->item->getDuelEffect() ?? [];
+            $dBonusType = $dEffect['bonus_type'] ?? '';
             if ($dBonusType === 'debuff_roll') {
-                $totalRoll += (int) ($debuffItem->item->effect['bonus_value'] ?? 0);
+                $totalRoll += (int) ($dEffect['bonus_value'] ?? 0);
             }
         }
 
         // Check for shield_negative item
-        $hasShield = $usedItem && ($usedItem->item->effect['bonus_type'] ?? '') === 'shield_negative';
+        $hasShield = $usedItem && (($usedItem->item->getDuelEffect() ?? [])['bonus_type'] ?? '') === 'shield_negative';
 
         // Process wild abilities
         $abilityEffects = $this->processDuelWildAbilities($wildTriggers, $totalRoll);
@@ -1997,12 +2200,29 @@ class GameController extends Controller
         // No difficulty scaling in duel mode (co-op only)
         $scaling = 0;
 
-        // Calculate combined difficulty from all cards
+        // Calculate curse difficulty modifiers for this player
+        $curseDiffMod = 0;
+        foreach ($rollingPlayer->curses as $pc) {
+            $neg = $pc->curse->getDuelNegativeEffect();
+            if (($neg['type'] ?? '') === 'difficulty_modifier') {
+                $curseDiffMod += (int) ($neg['value'] ?? 1);
+            }
+        }
+        // Check opponent's curses for opponent_difficulty (positive effect that hurts us)
+        $otherPlayer->load('curses.curse');
+        foreach ($otherPlayer->curses as $pc) {
+            $pos = $pc->curse->getDuelPositiveEffect();
+            if (($pos['type'] ?? '') === 'opponent_difficulty') {
+                $curseDiffMod += (int) ($pos['value'] ?? 1);
+            }
+        }
+
+        // Calculate combined difficulty from all cards (using duel stats)
         $totalDifficulty = 0;
         $cardData = [];
         foreach ($hands as $hand) {
             $card = $hand->card;
-            $difficulty = max(1, $card->difficulty + $scaling - $difficultyReduction);
+            $difficulty = max(1, $card->getDuelDifficulty() + $scaling - $difficultyReduction + $curseDiffMod);
             $totalDifficulty += $difficulty;
             $cardData[] = ['card' => $card, 'difficulty' => $difficulty];
         }
@@ -2011,6 +2231,8 @@ class GameController extends Controller
         $success = $totalRoll >= $totalDifficulty;
 
         $duelHouseRules = $game->custom_rules['house_rules'] ?? [];
+        $duelPendingCurses = [];
+        $duelSpecialEffects = [];
         foreach ($cardData as $cd) {
             $card = $cd['card'];
             $difficulty = $cd['difficulty'];
@@ -2018,7 +2240,15 @@ class GameController extends Controller
             $cardEffects = [];
             // Negative effects ALWAYS apply (unless shielded or no_negative_effects house rule)
             if (!$hasShield && empty($duelHouseRules['no_negative_effects'])) {
-                foreach (($card->negative_effects ?? []) as $stat => $change) {
+                foreach (($card->getDuelNegativeEffects() ?? []) as $stat => $change) {
+                    if ($stat === 'draw_curse') {
+                        $curseResult = $this->drawCursesFromDeck($game, $rollingPlayer->id, $character->name);
+                        if ($curseResult) {
+                            $duelPendingCurses[] = $curseResult['pending'];
+                            $duelSpecialEffects[] = $curseResult['effect'];
+                        }
+                        continue;
+                    }
                     if (in_array($stat, $statKeys)) {
                         $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $change;
                     }
@@ -2026,7 +2256,15 @@ class GameController extends Controller
             }
             // Positive effects only on success (all-or-nothing)
             if ($success) {
-                foreach (($card->positive_effects ?? []) as $stat => $change) {
+                foreach (($card->getDuelPositiveEffects() ?? []) as $stat => $change) {
+                    if ($stat === 'draw_curse') {
+                        $curseResult = $this->drawCursesFromDeck($game, $rollingPlayer->id, $character->name);
+                        if ($curseResult) {
+                            $duelPendingCurses[] = $curseResult['pending'];
+                            $duelSpecialEffects[] = $curseResult['effect'];
+                        }
+                        continue;
+                    }
                     if (in_array($stat, $statKeys)) {
                         $val = !empty($duelHouseRules['double_positive_effects']) && $change > 0 ? $change * 2 : $change;
                         $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $val;
@@ -2047,6 +2285,57 @@ class GameController extends Controller
             }
         }
 
+        // Apply double_negative curse for duel: double negative stat effects
+        $hasDoubleNeg = $rollingPlayer->curses->contains(fn ($pc) =>
+            ($pc->curse->getDuelNegativeEffect()['type'] ?? '') === 'double_negative'
+        );
+        if ($hasDoubleNeg) {
+            foreach ($combinedEffects as $stat => $change) {
+                if ($change < 0) {
+                    $combinedEffects[$stat] = $change * 2;
+                }
+            }
+        }
+
+        // Apply curse per-round stat effects for this player (duel)
+        $duelCurseEffects = [];
+        foreach ($rollingPlayer->curses as $pc) {
+            $isDuel = true;
+            $neg = $pc->curse->getDuelNegativeEffect();
+            $pos = $pc->curse->getDuelPositiveEffect();
+            if (($neg['type'] ?? '') === 'stat_per_round' && isset($neg['stat'], $neg['value'])) {
+                $duelCurseEffects[$neg['stat']] = ($duelCurseEffects[$neg['stat']] ?? 0) + (int) $neg['value'];
+            }
+            if (($pos['type'] ?? '') === 'stat_per_round' && isset($pos['stat'], $pos['value'])) {
+                $duelCurseEffects[$pos['stat']] = ($duelCurseEffects[$pos['stat']] ?? 0) + (int) $pos['value'];
+            }
+        }
+        foreach ($duelCurseEffects as $stat => $change) {
+            $combinedEffects[$stat] = ($combinedEffects[$stat] ?? 0) + $change;
+        }
+
+        // House rule: draw_curse_per_round — trigger curse draw for the rolling player each roll
+        $duelHouseRulesForCurse = $game->custom_rules['house_rules'] ?? [];
+        if (!empty($duelHouseRulesForCurse['draw_curse_per_round'])) {
+            $curseResult = $this->drawCursesFromDeck($game, $rollingPlayer->id, $character->name);
+            if ($curseResult) {
+                $duelPendingCurses[] = $curseResult['pending'];
+                $duelSpecialEffects[] = $curseResult['effect'];
+            }
+        }
+
+        // Apply duel event stat modifiers (using duel override)
+        if ($duelEvent) {
+            $duelEventMods = $duelEvent->getDuelStatModifiers();
+            if ($duelEventMods) {
+                foreach ($duelEventMods as $stat => $change) {
+                    if (in_array($stat, $statKeys) && is_numeric($change)) {
+                        $combinedEffects[$stat] = ($combinedEffects[$stat] ?? 0) + $change;
+                    }
+                }
+            }
+        }
+
         // Apply combined effects to kingdom
         $kingdom = GamePlayerKingdom::where('game_id', $game->id)
             ->where('game_player_id', $rollingPlayer->id)
@@ -2057,7 +2346,6 @@ class GameController extends Controller
         }
 
         // Save round result
-        $duelEvent = $this->getCurrentEvent($game);
         $anySuccess = collect($cardResults)->contains('success', true);
         GameRoundResult::create([
             'game_id' => $game->id,
@@ -2076,10 +2364,17 @@ class GameController extends Controller
             'stat_totals' => ['total_roll' => $totalRoll],
             'effects_applied' => $combinedEffects,
             'wild_triggers' => $wildTriggers,
-            'special_effects' => [],
+            'special_effects' => $duelSpecialEffects,
             'kingdom_snapshot' => $kingdom ? $kingdom->fresh()->only($statKeys) : null,
             'event_data' => $duelEvent ? ['id' => $duelEvent->id, 'name' => $duelEvent->name, 'description' => $duelEvent->description] : null,
         ]);
+
+        // Save pending curses if any
+        if (!empty($duelPendingCurses)) {
+            $existing = $game->pending_curses ?? [];
+            $game->pending_curses = array_merge($existing, $duelPendingCurses);
+            $game->save();
+        }
 
         // Check instant win/loss after roll
         $kingdom->refresh();
@@ -2124,6 +2419,9 @@ class GameController extends Controller
             'ability_effects' => $abilityEffects['descriptions'],
             'kingdom' => $kingdom->fresh(),
             'duel_result' => $duelResult,
+            'special_effects' => $duelSpecialEffects,
+            'pending_curses' => !empty($duelPendingCurses) ? $duelPendingCurses : null,
+            'player_curses' => GamePlayerCurse::where('game_player_id', $rollingPlayer->id)->with('curse')->get(),
         ];
 
         if ($game->isOnline()) {
@@ -2908,6 +3206,13 @@ class GameController extends Controller
             $game->save();
             $sign = $bonusValue > 0 ? '+' : '';
             return "{$sign}{$bonusValue} renown";
+        }
+
+        if ($bonusType === 'end_game_multiplier') {
+            $game->score_modifier = ($game->score_modifier ?? 0) + $bonusValue;
+            $game->save();
+            $sign = $bonusValue > 0 ? '+' : '';
+            return "{$sign}{$bonusValue}% final score modifier";
         }
 
         return null;
@@ -3738,7 +4043,7 @@ class GameController extends Controller
         // Apply immediate effects for stat_boost/heal_die/score_bonus/steal_stat
         $immediateDesc = null;
         $bonusType = $playerItem->item->effect['bonus_type'] ?? '';
-        if (in_array($bonusType, ['stat_boost', 'heal_die', 'score_bonus'])) {
+        if (in_array($bonusType, ['stat_boost', 'heal_die', 'score_bonus', 'end_game_multiplier'])) {
             $immediateDesc = $this->applyImmediateItemEffect($game, $player, $playerItem->item);
         } elseif ($bonusType === 'steal_stat' && $game->isDuel()) {
             // Steal stat from opponent's kingdom
@@ -3900,5 +4205,230 @@ class GameController extends Controller
             'events' => $events,
             'items' => $items,
         ]);
+    }
+
+    /**
+     * Choose a curse from the pending curse options.
+     */
+    public function chooseCurse(Game $game, Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'curse_id' => 'required|integer',
+            'player_number' => 'required|integer',
+        ]);
+
+        $pending = $game->pending_curses;
+        if (empty($pending)) {
+            return response()->json(['error' => 'No pending curses'], 422);
+        }
+
+        // Find the pending entry for this player
+        $player = $game->players()->where('player_number', $validated['player_number'])->first();
+        if (!$player) {
+            return response()->json(['error' => 'Invalid player number'], 422);
+        }
+
+        // Online mode: verify user
+        if ($game->isOnline() && $request->user()) {
+            if ($request->user()->id !== $player->user_id) {
+                return response()->json(['error' => 'Not your player'], 403);
+            }
+        }
+
+        $entryIndex = null;
+        foreach ($pending as $i => $entry) {
+            if ((int) $entry['player_id'] === $player->id) {
+                $entryIndex = $i;
+                break;
+            }
+        }
+
+        if ($entryIndex === null) {
+            return response()->json(['error' => 'No pending curse for this player'], 422);
+        }
+
+        $entry = $pending[$entryIndex];
+        $allowedIds = array_map('intval', $entry['curse_options']);
+        if (!in_array((int) $validated['curse_id'], $allowedIds)) {
+            return response()->json(['error' => 'Invalid curse choice'], 422);
+        }
+
+        $curse = Curse::find($validated['curse_id']);
+        if (!$curse) {
+            return response()->json(['error' => 'Curse not found'], 404);
+        }
+
+        // Create the player curse record
+        $playerCurse = GamePlayerCurse::create([
+            'game_player_id' => $player->id,
+            'curse_id' => $curse->id,
+            'acquired_round' => $game->current_round,
+        ]);
+
+        // Apply immediate effects (e.g. lose_die)
+        $isDuel = $game->isDuel();
+        $neg = $isDuel ? $curse->getDuelNegativeEffect() : $curse->negative_effect;
+        $immediateDesc = null;
+        if (($neg['type'] ?? '') === 'lose_die') {
+            $dieLoss = (int) ($neg['value'] ?? 1);
+            $player->increment('lost_dice', $dieLoss);
+            $immediateDesc = "{$player->character->name} lost {$dieLoss} die from the curse!";
+        }
+
+        // Remove this entry from pending
+        array_splice($pending, $entryIndex, 1);
+        $game->pending_curses = empty($pending) ? null : array_values($pending);
+        $game->save();
+
+        return response()->json([
+            'chosen_curse' => $curse,
+            'immediate_effect' => $immediateDesc,
+            'pending_curses' => $game->pending_curses,
+            'player_curses' => GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get(),
+        ]);
+    }
+
+    /**
+     * Initialize the curse deck for a game.
+     */
+    private function initCurseDeck(Game $game): void
+    {
+        $rotatingEvent = $game->rotating_event_id ? $game->rotatingEvent : null;
+
+        if ($rotatingEvent && $rotatingEvent->curse_pool) {
+            $allCurses = Curse::whereIn('id', $rotatingEvent->curse_pool)->inRandomOrder()->get();
+        } else {
+            $allCurses = Curse::where('is_available', true)->inRandomOrder()->get();
+        }
+
+        if ($allCurses->isEmpty()) {
+            return;
+        }
+
+        $curseRows = [];
+        $now = now();
+        foreach ($allCurses as $i => $curse) {
+            $curseRows[] = [
+                'game_id' => $game->id,
+                'curse_id' => $curse->id,
+                'position' => $i,
+                'is_drawn' => false,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        GameCurseDeck::insert($curseRows);
+    }
+
+    /**
+     * Draw 2 curses from the deck for a player to choose from.
+     */
+    private function drawCursesFromDeck(Game $game, int $gamePlayerId, string $charName): ?array
+    {
+        $available = $game->curseDeck()
+            ->where('is_drawn', false)
+            ->orderBy('position')
+            ->limit(2)
+            ->get();
+
+        if ($available->isEmpty()) {
+            return null;
+        }
+
+        $curseIds = [];
+        foreach ($available as $deckEntry) {
+            $deckEntry->update(['is_drawn' => true]);
+            $curseIds[] = $deckEntry->curse_id;
+        }
+
+        $curses = Curse::whereIn('id', $curseIds)->get();
+
+        return [
+            'pending' => [
+                'player_id' => $gamePlayerId,
+                'curse_options' => $curseIds,
+                'curse_details' => $curses->toArray(),
+            ],
+            'effect' => [
+                'type' => 'draw_curse',
+                'player' => $charName,
+                'description' => "{$charName} must choose a curse!",
+            ],
+        ];
+    }
+
+    /**
+     * Get total curse difficulty modifier for all players (cooperative).
+     */
+    private function getCurseDifficultyModifier($players, Game $game): int
+    {
+        $mod = 0;
+        foreach ($players as $player) {
+            foreach ($player->curses as $pc) {
+                $neg = $game->isDuel() ? $pc->curse->getDuelNegativeEffect() : $pc->curse->negative_effect;
+                if (($neg['type'] ?? '') === 'difficulty_modifier') {
+                    $mod += (int) ($neg['value'] ?? 1);
+                }
+            }
+        }
+        return $mod;
+    }
+
+    /**
+     * Check if any player has the double_negative curse.
+     */
+    private function hasDoublNegativeCurse($players, Game $game): bool
+    {
+        foreach ($players as $player) {
+            foreach ($player->curses as $pc) {
+                $neg = $game->isDuel() ? $pc->curse->getDuelNegativeEffect() : $pc->curse->negative_effect;
+                if (($neg['type'] ?? '') === 'double_negative') {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Apply per-round curse stat effects (cooperative mode).
+     */
+    private function applyCursePerRoundEffects($players, Game $game): array
+    {
+        $statChanges = [];
+        $effects = [];
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+
+        foreach ($players as $player) {
+            foreach ($player->curses as $pc) {
+                $neg = $pc->curse->negative_effect;
+                $pos = $pc->curse->positive_effect;
+
+                if (($neg['type'] ?? '') === 'stat_per_round' && isset($neg['stat'], $neg['value'])) {
+                    if (in_array($neg['stat'], $stats)) {
+                        $statChanges[$neg['stat']] = ($statChanges[$neg['stat']] ?? 0) + (int) $neg['value'];
+                        $effects[] = [
+                            'type' => 'curse_effect',
+                            'player' => $player->character->name,
+                            'description' => "{$player->character->name}'s curse: {$neg['value']} {$neg['stat']}",
+                        ];
+                    }
+                }
+
+                if (($pos['type'] ?? '') === 'stat_per_round' && isset($pos['stat'], $pos['value'])) {
+                    if (in_array($pos['stat'], $stats)) {
+                        $statChanges[$pos['stat']] = ($statChanges[$pos['stat']] ?? 0) + (int) $pos['value'];
+                        $effects[] = [
+                            'type' => 'curse_reward',
+                            'player' => $player->character->name,
+                            'description' => "{$player->character->name}'s curse reward: +{$pos['value']} {$pos['stat']}",
+                        ];
+                    }
+                }
+            }
+        }
+
+        return ['stat_changes' => $statChanges, 'effects' => $effects];
     }
 }

@@ -30,6 +30,9 @@ class EventController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
             'mechanic' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal,score_event',
             'mechanic_data' => 'nullable|array',
+            'stat_modifiers_duel' => 'nullable|array',
+            'mechanic_duel' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal,score_event',
+            'mechanic_data_duel' => 'nullable|array',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
         ]);
@@ -49,6 +52,9 @@ class EventController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
             'mechanic' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal,score_event',
             'mechanic_data' => 'nullable|array',
+            'stat_modifiers_duel' => 'nullable|array',
+            'mechanic_duel' => 'nullable|string|in:stat_modifier,reduce_dice,grant_items,altered_deal,score_event',
+            'mechanic_data_duel' => 'nullable|array',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
         ]);

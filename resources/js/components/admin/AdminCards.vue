@@ -204,10 +204,20 @@
                 <input type="checkbox" v-model="form.positiveRemoveCurse" />
                 <span class="variant-label">Remove a curse</span>
               </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.positiveDrawCurse" />
+                <span class="variant-label">Draw a curse</span>
+              </label>
             </div>
-            <div class="form-group" style="margin-top: 8px;">
-              <label>Bonus Score (on success)</label>
-              <input type="number" v-model.number="form.positiveBonusScore" placeholder="0" style="width: 80px;" />
+            <div class="form-row" style="margin-top: 8px;">
+              <div class="form-group">
+                <label>Bonus Score (on success)</label>
+                <input type="number" v-model.number="form.positiveBonusScore" placeholder="0" style="width: 80px;" />
+              </div>
+              <div class="form-group">
+                <label>End-Game Modifier %</label>
+                <input type="number" v-model.number="form.positiveEndGameModifier" placeholder="0" style="width: 80px;" />
+              </div>
             </div>
           </div>
 
@@ -243,11 +253,105 @@
                 <input type="checkbox" v-model="form.negativeDrawItem" />
                 <span class="variant-label">Draw cursed item</span>
               </label>
+              <label class="variant-check">
+                <input type="checkbox" v-model="form.negativeDrawCurse" />
+                <span class="variant-label">Draw a curse</span>
+              </label>
             </div>
-            <div class="form-group" style="margin-top: 8px;">
-              <label>Bonus Score Penalty (on failure)</label>
-              <input type="number" v-model.number="form.negativeBonusScore" placeholder="0" style="width: 80px;" />
+            <div class="form-row" style="margin-top: 8px;">
+              <div class="form-group">
+                <label>Bonus Score Penalty (on failure)</label>
+                <input type="number" v-model.number="form.negativeBonusScore" placeholder="0" style="width: 80px;" />
+              </div>
+              <div class="form-group">
+                <label>End-Game Modifier %</label>
+                <input type="number" v-model.number="form.negativeEndGameModifier" placeholder="0" style="width: 80px;" />
+              </div>
             </div>
+          </div>
+
+          <!-- Duel Stats Override -->
+          <div class="effects-section" style="border: 1px solid rgba(138, 58, 185, 0.3); background: rgba(138, 58, 185, 0.05);">
+            <label class="variant-check" style="margin-bottom: 8px;">
+              <input type="checkbox" v-model="form.useDuelStats" />
+              <span class="variant-label" style="color: #c890e0; font-weight: 700;">Use different stats for Duel mode</span>
+            </label>
+            <template v-if="form.useDuelStats">
+              <div class="form-group">
+                <label>Duel Difficulty</label>
+                <input v-model.number="form.difficulty_duel" type="number" min="1" max="20" />
+              </div>
+              <h4 class="effects-title" style="color: #c890e0;">Duel Positive Effects</h4>
+              <div class="stat-grid">
+                <div v-for="stat in stats" :key="'dpos-' + stat.key" class="stat-cell">
+                  <span class="stat-icon" :title="stat.label">{{ stat.icon }}</span>
+                  <input type="number" :value="form.positive_duel[stat.key] || ''" @input="setEffect('positive_duel', stat.key, $event.target.value)" class="stat-input" :placeholder="0" />
+                </div>
+              </div>
+              <div class="variant-rules">
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelPositiveRecoverDie" />
+                  <span class="variant-label">Recover a lost die</span>
+                </label>
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelPositiveDrawItem" />
+                  <span class="variant-label">Draw an item</span>
+                </label>
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelPositiveRemoveCurse" />
+                  <span class="variant-label">Remove a curse</span>
+                </label>
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelPositiveDrawCurse" />
+                  <span class="variant-label">Draw a curse</span>
+                </label>
+              </div>
+              <div class="form-row" style="margin-top: 8px;">
+                <div class="form-group">
+                  <label>Bonus Score (on success)</label>
+                  <input type="number" v-model.number="form.duelPositiveBonusScore" placeholder="0" style="width: 80px;" />
+                </div>
+                <div class="form-group">
+                  <label>End-Game Modifier %</label>
+                  <input type="number" v-model.number="form.duelPositiveEndGameModifier" placeholder="0" style="width: 80px;" />
+                </div>
+              </div>
+              <h4 class="effects-title" style="color: #c890e0;">Duel Negative Effects</h4>
+              <div class="stat-grid">
+                <div v-for="stat in stats" :key="'dneg-' + stat.key" class="stat-cell">
+                  <span class="stat-icon" :title="stat.label">{{ stat.icon }}</span>
+                  <input type="number" :value="form.negative_duel[stat.key] || ''" @input="setEffect('negative_duel', stat.key, $event.target.value)" class="stat-input" :placeholder="0" />
+                </div>
+              </div>
+              <div class="variant-rules">
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelNegativeLoseDie" />
+                  <span class="variant-label">Lose a die</span>
+                </label>
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelNegativeDiscardItem" />
+                  <span class="variant-label">Discard an item</span>
+                </label>
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelNegativeDrawItem" />
+                  <span class="variant-label">Draw cursed item</span>
+                </label>
+                <label class="variant-check">
+                  <input type="checkbox" v-model="form.duelNegativeDrawCurse" />
+                  <span class="variant-label">Draw a curse</span>
+                </label>
+              </div>
+              <div class="form-row" style="margin-top: 8px;">
+                <div class="form-group">
+                  <label>Bonus Score Penalty (on failure)</label>
+                  <input type="number" v-model.number="form.duelNegativeBonusScore" placeholder="0" style="width: 80px;" />
+                </div>
+                <div class="form-group">
+                  <label>End-Game Modifier %</label>
+                  <input type="number" v-model.number="form.duelNegativeEndGameModifier" placeholder="0" style="width: 80px;" />
+                </div>
+              </div>
+            </template>
           </div>
 
           <!-- Availability -->
@@ -356,13 +460,32 @@ export default {
         positiveRecoverDie: false,
         positiveDrawItem: false,
         positiveRemoveCurse: false,
+        positiveDrawCurse: false,
         negativeLoseDie: false,
         negativeDiscardItem: false,
         negativeDrawItem: false,
+        negativeDrawCurse: false,
         positiveBonusScore: 0,
+        positiveEndGameModifier: 0,
         negativeBonusScore: 0,
+        negativeEndGameModifier: 0,
         available_cooperative: true,
         available_duel: true,
+        useDuelStats: false,
+        difficulty_duel: 6,
+        positive_duel: {},
+        negative_duel: {},
+        duelPositiveRecoverDie: false,
+        duelPositiveDrawItem: false,
+        duelPositiveRemoveCurse: false,
+        duelPositiveDrawCurse: false,
+        duelPositiveBonusScore: 0,
+        duelPositiveEndGameModifier: 0,
+        duelNegativeLoseDie: false,
+        duelNegativeDiscardItem: false,
+        duelNegativeDrawItem: false,
+        duelNegativeDrawCurse: false,
+        duelNegativeBonusScore: 0,
       },
     };
   },
@@ -482,6 +605,14 @@ export default {
       if (difficulty <= 8) return 'diff-medium';
       return 'diff-hard';
     },
+    buildDuelEffects(effects) {
+      if (!effects) return null;
+      const obj = {};
+      for (const [key, val] of Object.entries(effects)) {
+        if (val && val !== 0) obj[key] = val;
+      }
+      return Object.keys(obj).length > 0 ? obj : null;
+    },
     setEffect(side, key, value) {
       const num = value === '' ? null : parseInt(value);
       if (num === null || num === 0 || isNaN(num)) {
@@ -499,13 +630,33 @@ export default {
         if (form.positiveRecoverDie) obj['recover_die'] = 1;
         if (form.positiveDrawItem) obj['draw_item'] = 1;
         if (form.positiveRemoveCurse) obj['remove_curse'] = 1;
+        if (form.positiveDrawCurse) obj['draw_curse'] = 1;
         if (form.positiveBonusScore) obj['bonus_score'] = form.positiveBonusScore;
+        if (form.positiveEndGameModifier) obj['end_game_modifier'] = form.positiveEndGameModifier;
       }
       if (side === 'negative') {
         if (form.negativeLoseDie) obj['lose_die'] = 1;
         if (form.negativeDiscardItem) obj['discard_item'] = 1;
         if (form.negativeDrawItem) obj['draw_item'] = 1;
+        if (form.negativeDrawCurse) obj['draw_curse'] = 1;
         if (form.negativeBonusScore) obj['bonus_score'] = form.negativeBonusScore;
+        if (form.negativeEndGameModifier) obj['end_game_modifier'] = form.negativeEndGameModifier;
+      }
+      if (side === 'positive_duel') {
+        if (form.duelPositiveRecoverDie) obj['recover_die'] = 1;
+        if (form.duelPositiveDrawItem) obj['draw_item'] = 1;
+        if (form.duelPositiveRemoveCurse) obj['remove_curse'] = 1;
+        if (form.duelPositiveDrawCurse) obj['draw_curse'] = 1;
+        if (form.duelPositiveBonusScore) obj['bonus_score'] = form.duelPositiveBonusScore;
+        if (form.duelPositiveEndGameModifier) obj['end_game_modifier'] = form.duelPositiveEndGameModifier;
+      }
+      if (side === 'negative_duel') {
+        if (form.duelNegativeLoseDie) obj['lose_die'] = 1;
+        if (form.duelNegativeDiscardItem) obj['discard_item'] = 1;
+        if (form.duelNegativeDrawItem) obj['draw_item'] = 1;
+        if (form.duelNegativeDrawCurse) obj['draw_curse'] = 1;
+        if (form.duelNegativeBonusScore) obj['bonus_score'] = form.duelNegativeBonusScore;
+        if (form.duelNegativeEndGameModifier) obj['end_game_modifier'] = form.duelNegativeEndGameModifier;
       }
       return obj;
     },
@@ -516,17 +667,21 @@ export default {
       let drawItem = false;
       let discardItem = false;
       let removeCurse = false;
+      let drawCurse = false;
       let bonusScore = 0;
+      let endGameModifier = 0;
       for (const [key, val] of Object.entries(effects || {})) {
         if (key === 'recover_die') recoverDie = true;
         else if (key === 'lose_die') loseDie = true;
         else if (key === 'draw_item') drawItem = true;
         else if (key === 'discard_item') discardItem = true;
         else if (key === 'remove_curse') removeCurse = true;
+        else if (key === 'draw_curse') drawCurse = true;
         else if (key === 'bonus_score') bonusScore = val;
+        else if (key === 'end_game_modifier') endGameModifier = val;
         else obj[key] = val;
       }
-      return { stats: obj, recoverDie, loseDie, drawItem, discardItem, removeCurse, bonusScore };
+      return { stats: obj, recoverDie, loseDie, drawItem, discardItem, removeCurse, drawCurse, bonusScore, endGameModifier };
     },
 
     openCreate() {
@@ -545,13 +700,33 @@ export default {
         positiveRecoverDie: false,
         positiveDrawItem: false,
         positiveRemoveCurse: false,
+        positiveDrawCurse: false,
         negativeLoseDie: false,
         negativeDiscardItem: false,
         negativeDrawItem: false,
+        negativeDrawCurse: false,
         positiveBonusScore: 0,
+        positiveEndGameModifier: 0,
         negativeBonusScore: 0,
+        negativeEndGameModifier: 0,
         available_cooperative: true,
         available_duel: true,
+        useDuelStats: false,
+        difficulty_duel: 6,
+        positive_duel: {},
+        negative_duel: {},
+        duelPositiveRecoverDie: false,
+        duelPositiveDrawItem: false,
+        duelPositiveRemoveCurse: false,
+        duelPositiveDrawCurse: false,
+        duelPositiveBonusScore: 0,
+        duelPositiveEndGameModifier: 0,
+        duelNegativeLoseDie: false,
+        duelNegativeDiscardItem: false,
+        duelNegativeDrawItem: false,
+        duelNegativeDrawCurse: false,
+        duelNegativeBonusScore: 0,
+        duelNegativeEndGameModifier: 0,
       };
       this.formError = '';
       this.showModal = true;
@@ -560,6 +735,9 @@ export default {
       this.editing = card;
       const pos = this.objToForm(card.positive_effects);
       const neg = this.objToForm(card.negative_effects);
+      const hasDuelStats = card.difficulty_duel != null || card.positive_effects_duel != null || card.negative_effects_duel != null;
+      const posDuel = hasDuelStats ? this.objToForm(card.positive_effects_duel) : { stats: {} };
+      const negDuel = hasDuelStats ? this.objToForm(card.negative_effects_duel) : { stats: {} };
       this.form = {
         title: card.title,
         description: card.description,
@@ -573,13 +751,33 @@ export default {
         positiveRecoverDie: pos.recoverDie,
         positiveDrawItem: pos.drawItem,
         positiveRemoveCurse: pos.removeCurse,
+        positiveDrawCurse: pos.drawCurse,
         negativeLoseDie: neg.loseDie,
         negativeDiscardItem: neg.discardItem,
         negativeDrawItem: neg.drawItem,
+        negativeDrawCurse: neg.drawCurse,
         positiveBonusScore: pos.bonusScore || 0,
+        positiveEndGameModifier: pos.endGameModifier || 0,
         negativeBonusScore: neg.bonusScore || 0,
+        negativeEndGameModifier: neg.endGameModifier || 0,
         available_cooperative: card.available_cooperative ?? true,
         available_duel: card.available_duel ?? true,
+        useDuelStats: hasDuelStats,
+        difficulty_duel: card.difficulty_duel ?? card.difficulty,
+        positive_duel: { ...posDuel.stats },
+        negative_duel: { ...negDuel.stats },
+        duelPositiveRecoverDie: posDuel.recoverDie || false,
+        duelPositiveDrawItem: posDuel.drawItem || false,
+        duelPositiveRemoveCurse: posDuel.removeCurse || false,
+        duelPositiveDrawCurse: posDuel.drawCurse || false,
+        duelPositiveBonusScore: posDuel.bonusScore || 0,
+        duelPositiveEndGameModifier: posDuel.endGameModifier || 0,
+        duelNegativeLoseDie: negDuel.loseDie || false,
+        duelNegativeDiscardItem: negDuel.discardItem || false,
+        duelNegativeDrawItem: negDuel.drawItem || false,
+        duelNegativeDrawCurse: negDuel.drawCurse || false,
+        duelNegativeBonusScore: negDuel.bonusScore || 0,
+        duelNegativeEndGameModifier: negDuel.endGameModifier || 0,
       };
       this.formError = '';
       this.showModal = true;
@@ -602,6 +800,9 @@ export default {
         negative_flavor: this.form.negative_flavor || null,
         available_cooperative: this.form.available_cooperative,
         available_duel: this.form.available_duel,
+        difficulty_duel: this.form.useDuelStats ? this.form.difficulty_duel : null,
+        positive_effects_duel: this.form.useDuelStats ? this.effectsToObj(this.form.positive_duel, this.form, 'positive_duel') : null,
+        negative_effects_duel: this.form.useDuelStats ? this.effectsToObj(this.form.negative_duel, this.form, 'negative_duel') : null,
       };
 
       this.saving = true;

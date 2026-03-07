@@ -198,6 +198,40 @@
             <input v-model="die3Input" placeholder="2, 3, 3, 2, 3, WILD" required />
           </div>
 
+          <!-- Duel Dice Override -->
+          <div style="border: 1px solid rgba(138, 58, 185, 0.3); background: rgba(138, 58, 185, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" v-model="form.useDuelDice" />
+              <span style="color: #c890e0; font-weight: 700;">Use different dice for Duel mode</span>
+            </label>
+            <template v-if="form.useDuelDice">
+              <div class="form-group">
+                <label>Duel Wild Value</label>
+                <input v-model.number="form.wild_value_duel" type="number" min="1" max="10" />
+              </div>
+              <div class="form-group">
+                <label>Duel Wild Ability</label>
+                <input v-model="form.wild_ability_duel" />
+              </div>
+              <div class="form-group">
+                <label>Duel Wild Ability Description</label>
+                <input v-model="form.wild_ability_description_duel" />
+              </div>
+              <div class="form-group">
+                <label>Duel Die 1 (6 faces, comma-separated)</label>
+                <input v-model="die1DuelInput" placeholder="3, 3, 4, 2, 2, WILD" />
+              </div>
+              <div class="form-group">
+                <label>Duel Die 2 (6 faces)</label>
+                <input v-model="die2DuelInput" placeholder="4, 4, 3, 1, 1, WILD" />
+              </div>
+              <div class="form-group">
+                <label>Duel Die 3 (6 faces)</label>
+                <input v-model="die3DuelInput" placeholder="2, 3, 3, 2, 3, WILD" />
+              </div>
+            </template>
+          </div>
+
           <div class="form-group">
             <label>Addon</label>
             <select v-model="form.addon_id">
@@ -276,10 +310,13 @@ export default {
       editing: null,
       saving: false,
       formError: '',
-      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true },
+      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '' },
       die1Input: '',
       die2Input: '',
       die3Input: '',
+      die1DuelInput: '',
+      die2DuelInput: '',
+      die3DuelInput: '',
       diceRules: { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 },
       rulesSaved: false,
       imageUploading: false,
@@ -391,10 +428,13 @@ export default {
     },
     openCreate() {
       this.editing = null;
-      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true };
+      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '' };
       this.die1Input = '';
       this.die2Input = '';
       this.die3Input = '';
+      this.die1DuelInput = '';
+      this.die2DuelInput = '';
+      this.die3DuelInput = '';
       this.formError = '';
       this.imageUploading = false;
       this.imageUploaded = false;
@@ -404,6 +444,7 @@ export default {
       this.editing = c;
       this.imageUploading = false;
       this.imageUploaded = false;
+      const hasDuelDice = c.dice_duel != null || c.wild_value_duel != null;
       this.form = {
         name: c.name,
         description: c.description,
@@ -414,10 +455,17 @@ export default {
         available_cooperative: c.available_cooperative ?? true,
         available_duel: c.available_duel ?? true,
         is_available: c.is_available ?? true,
+        useDuelDice: hasDuelDice,
+        wild_value_duel: c.wild_value_duel ?? c.wild_value,
+        wild_ability_duel: c.wild_ability_duel ?? c.wild_ability ?? '',
+        wild_ability_description_duel: c.wild_ability_description_duel ?? c.wild_ability_description ?? '',
       };
       this.die1Input = c.dice[0]?.join(', ') || '';
       this.die2Input = c.dice[1]?.join(', ') || '';
       this.die3Input = c.dice[2]?.join(', ') || '';
+      this.die1DuelInput = hasDuelDice ? (c.dice_duel?.[0]?.join(', ') || '') : '';
+      this.die2DuelInput = hasDuelDice ? (c.dice_duel?.[1]?.join(', ') || '') : '';
+      this.die3DuelInput = hasDuelDice ? (c.dice_duel?.[2]?.join(', ') || '') : '';
       this.formError = '';
       this.showModal = true;
     },
@@ -443,10 +491,31 @@ export default {
       // Convert numeric strings to numbers, keep WILD as string
       const processDie = (die) => die.map(f => f === 'WILD' ? 'WILD' : Number(f));
 
+      let diceDuel = null;
+      let wildValueDuel = null;
+      let wildAbilityDuel = null;
+      let wildAbilityDescDuel = null;
+      if (this.form.useDuelDice) {
+        const dDie1 = this.parseDie(this.die1DuelInput);
+        const dDie2 = this.parseDie(this.die2DuelInput);
+        const dDie3 = this.parseDie(this.die3DuelInput);
+        if (dDie1.length === 6 && dDie2.length === 6 && dDie3.length === 6) {
+          diceDuel = [processDie(dDie1), processDie(dDie2), processDie(dDie3)];
+        }
+        wildValueDuel = this.form.wild_value_duel || null;
+        wildAbilityDuel = this.form.wild_ability_duel || null;
+        wildAbilityDescDuel = this.form.wild_ability_description_duel || null;
+      }
+
+      const { useDuelDice, wild_value_duel, wild_ability_duel, wild_ability_description_duel, ...formFields } = this.form;
       const payload = {
-        ...this.form,
+        ...formFields,
         addon_id: this.form.addon_id || null,
         dice: [processDie(die1), processDie(die2), processDie(die3)],
+        dice_duel: diceDuel,
+        wild_value_duel: wildValueDuel,
+        wild_ability_duel: wildAbilityDuel,
+        wild_ability_description_duel: wildAbilityDescDuel,
       };
 
       this.saving = true;

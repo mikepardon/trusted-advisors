@@ -102,6 +102,13 @@
           <strong>Mechanic:</strong>
           <span class="mechanic-badge">{{ mechanicLabel(ev.mechanic) }}</span>
         </div>
+        <div class="item-meta" v-if="ev.stat_modifiers_duel || ev.mechanic_duel">
+          <span class="duel-badge">Duel Override</span>
+          <span v-for="(val, stat) in ev.stat_modifiers_duel" :key="'d-' + stat" class="mod-badge" :class="val > 0 ? 'mod-pos' : 'mod-neg'">
+            {{ statIcon(stat) }} {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+          </span>
+          <span v-if="ev.mechanic_duel" class="mechanic-badge">{{ mechanicLabel(ev.mechanic_duel) }}</span>
+        </div>
       </div>
     </div>
 
@@ -169,6 +176,68 @@
           <div v-if="form.mechanic === 'score_event'" class="form-group">
             <label>Score Per Round</label>
             <input type="number" v-model.number="form.mechanic_data.score_per_round" placeholder="5" />
+          </div>
+
+          <!-- Duel Override -->
+          <div class="form-group duel-override-toggle">
+            <label>
+              <input type="checkbox" v-model="form.useDuelOverride" />
+              Use different settings for Duel mode
+            </label>
+          </div>
+
+          <div v-if="form.useDuelOverride" class="duel-override-section">
+            <div class="form-group">
+              <label>Duel Stat Modifiers</label>
+              <div class="stat-grid">
+                <div v-for="stat in stats" :key="'duel-' + stat.key" class="stat-cell">
+                  <span class="stat-icon-label" :title="stat.label">{{ stat.icon }}</span>
+                  <input
+                    type="number"
+                    :value="form.modifiers_duel[stat.key] || ''"
+                    @input="setDuelModifier(stat.key, $event.target.value)"
+                    class="stat-input"
+                    :placeholder="0"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Duel Mechanic</label>
+              <select v-model="form.mechanic_duel">
+                <option :value="null">None</option>
+                <option value="stat_modifier">Stat Modifier Only</option>
+                <option value="reduce_dice">Reduce Dice</option>
+                <option value="grant_items">Grant Items</option>
+                <option value="altered_deal">Altered Deal</option>
+                <option value="score_event">Score Event</option>
+              </select>
+            </div>
+
+            <div v-if="form.mechanic_duel === 'reduce_dice'" class="form-group">
+              <label>Dice to Remove (Duel)</label>
+              <input type="number" v-model.number="form.mechanic_data_duel.amount" min="1" max="5" placeholder="1" />
+            </div>
+
+            <div v-if="form.mechanic_duel === 'grant_items'" class="form-group mechanic-checkbox">
+              <label>
+                <input type="checkbox" v-model="form.mechanic_data_duel.random" />
+                Grant random item to each player (Duel)
+              </label>
+            </div>
+
+            <div v-if="form.mechanic_duel === 'altered_deal'" class="form-group">
+              <label>Positive Cards (Duel)</label>
+              <input type="number" v-model.number="form.mechanic_data_duel.positive_cards" min="0" max="10" placeholder="2" />
+              <label class="mt-label">Negative Cards (Duel)</label>
+              <input type="number" v-model.number="form.mechanic_data_duel.negative_cards" min="0" max="10" placeholder="2" />
+            </div>
+
+            <div v-if="form.mechanic_duel === 'score_event'" class="form-group">
+              <label>Score Per Round (Duel)</label>
+              <input type="number" v-model.number="form.mechanic_data_duel.score_per_round" placeholder="5" />
+            </div>
           </div>
 
           <div class="form-group">
@@ -251,7 +320,11 @@ export default {
         { key: 'food', label: 'Food', icon: '\u{1F33E}' },
         { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
       ],
-      form: { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {}, available_cooperative: true, available_duel: true },
+      form: {
+        title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {},
+        useDuelOverride: false, modifiers_duel: {}, mechanic_duel: null, mechanic_data_duel: {},
+        available_cooperative: true, available_duel: true,
+      },
     };
   },
   computed: {
@@ -353,14 +426,27 @@ export default {
         this.form.modifiers[key] = num;
       }
     },
+    setDuelModifier(key, value) {
+      const num = value === '' ? null : parseInt(value);
+      if (num === null || num === 0 || isNaN(num)) {
+        delete this.form.modifiers_duel[key];
+      } else {
+        this.form.modifiers_duel[key] = num;
+      }
+    },
     openCreate() {
       this.editing = null;
-      this.form = { title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {}, available_cooperative: true, available_duel: true };
+      this.form = {
+        title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {},
+        useDuelOverride: false, modifiers_duel: {}, mechanic_duel: null, mechanic_data_duel: {},
+        available_cooperative: true, available_duel: true,
+      };
       this.formError = '';
       this.showModal = true;
     },
     openEdit(ev) {
       this.editing = ev;
+      const hasDuelOverride = ev.stat_modifiers_duel != null || ev.mechanic_duel != null;
       this.form = {
         title: ev.title,
         effect: ev.effect,
@@ -368,6 +454,10 @@ export default {
         addon_id: ev.addon_id || null,
         mechanic: ev.mechanic || null,
         mechanic_data: { ...(ev.mechanic_data || {}) },
+        useDuelOverride: hasDuelOverride,
+        modifiers_duel: { ...(ev.stat_modifiers_duel || {}) },
+        mechanic_duel: ev.mechanic_duel || null,
+        mechanic_data_duel: { ...(ev.mechanic_data_duel || {}) },
         available_cooperative: ev.available_cooperative ?? true,
         available_duel: ev.available_duel ?? true,
       };
@@ -386,6 +476,20 @@ export default {
         ? { ...this.form.mechanic_data }
         : null;
 
+      // Duel overrides
+      let stat_modifiers_duel = null;
+      let mechanic_duel = null;
+      let mechanic_data_duel = null;
+      if (this.form.useDuelOverride) {
+        stat_modifiers_duel = Object.keys(this.form.modifiers_duel).length > 0
+          ? { ...this.form.modifiers_duel }
+          : null;
+        mechanic_duel = this.form.mechanic_duel || null;
+        mechanic_data_duel = mechanic_duel && Object.keys(this.form.mechanic_data_duel).length > 0
+          ? { ...this.form.mechanic_data_duel }
+          : null;
+      }
+
       const payload = {
         title: this.form.title,
         effect: this.form.effect,
@@ -393,6 +497,9 @@ export default {
         addon_id: this.form.addon_id || null,
         mechanic,
         mechanic_data,
+        stat_modifiers_duel,
+        mechanic_duel,
+        mechanic_data_duel,
         available_cooperative: this.form.available_cooperative,
         available_duel: this.form.available_duel,
       };
@@ -428,6 +535,14 @@ export default {
           effect: data.effect || '',
           modifiers: { ...(data.stat_modifiers || {}) },
           addon_id: null,
+          mechanic: null,
+          mechanic_data: {},
+          useDuelOverride: false,
+          modifiers_duel: {},
+          mechanic_duel: null,
+          mechanic_data_duel: {},
+          available_cooperative: true,
+          available_duel: true,
         };
         this.formError = '';
         this.showModal = true;
@@ -833,5 +948,46 @@ export default {
 .name-col {
   color: var(--text-bright);
   font-weight: 600;
+}
+
+/* Duel Override */
+.duel-override-toggle label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #b080e0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.duel-override-toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #b080e0;
+}
+
+.duel-override-section {
+  border: 1px solid rgba(100, 60, 180, 0.3);
+  border-radius: 8px;
+  padding: 14px;
+  margin-bottom: 14px;
+  background: rgba(100, 60, 180, 0.06);
+}
+
+.duel-override-section .form-group label {
+  color: #b080e0;
+}
+
+.duel-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: rgba(100, 60, 180, 0.2);
+  color: #b080e0;
+  border: 1px solid rgba(100, 60, 180, 0.3);
 }
 </style>

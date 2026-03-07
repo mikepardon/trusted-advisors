@@ -117,13 +117,6 @@
           <span class="mode-subtitle">Solo campaign</span>
         </div>
         <div
-          class="mode-card"
-          @click="playSound('clickCard'); gameMode = 'pass_and_play'; selectMode()"
-        >
-          <h3 class="mode-title">Pass and Play</h3>
-          <span class="mode-subtitle">Share the screen</span>
-        </div>
-        <div
           v-if="auth.state.user?.tournaments_enabled"
           class="mode-card"
           @click="playSound('clickCard'); $router.push('/tournaments')"
@@ -205,8 +198,8 @@
           </div>
         </template>
 
-        <!-- Duel mode info -->
-        <template v-if="gameType === 'duel'">
+        <!-- Duel mode info (hide all options for event games) -->
+        <template v-if="gameType === 'duel' && !rotatingEventId">
           <h2 class="section-title">Duel Mode</h2>
           <p class="flavor-text">
             {{ gameMode === 'single' ? 'Challenge a bot to build rival kingdoms. Pick a card to keep and send the other to your rival.' : 'Two advisors compete to build rival kingdoms. Pick a card to keep and send the other to your rival. 2 players locked.' }}
@@ -309,31 +302,16 @@
           </div>
         </template>
 
-        <!-- Single player heading -->
-        <template v-if="gameMode === 'single'">
-          <h2 class="section-title">Campaign Settings</h2>
+        <!-- Single player heading (hide for event games) -->
+        <template v-if="gameMode === 'single' && gameType !== 'duel' && !rotatingEventId">
+          <h2 class="section-title">The King's 5-Year Plan</h2>
           <p class="flavor-text">
-            Choose how long your campaign shall last.
+            You have been appointed by the King to guide the realm through a 5-year plan. Survive — that is all that matters.
           </p>
         </template>
 
-        <!-- Game length (cooperative only — duels are always 24 rounds) -->
-        <div v-if="gameType !== 'duel'" class="length-select">
-          <label>Campaign Length:</label>
-          <div class="length-buttons">
-            <button
-              v-for="opt in gameLengthOptions"
-              :key="opt.rounds"
-              :class="['length-btn', { 'btn-primary': totalRounds === opt.rounds }]"
-              @click="playSound('clickToggle'); totalRounds = opt.rounds"
-            >
-              {{ opt.label }}
-            </button>
-          </div>
-        </div>
-
-        <!-- Custom Game (premium only) -->
-        <div v-if="auth.state.user?.is_premium" class="custom-game-section">
+        <!-- Custom Game (premium only, hidden for event games) -->
+        <div v-if="auth.state.user?.is_premium && !rotatingEventId" class="custom-game-section">
           <label class="custom-toggle">
             <input type="checkbox" v-model="isCustomGame" @change="onCustomToggle" />
             <span class="custom-toggle-label">Custom Game</span>
@@ -520,7 +498,7 @@ export default {
       gameMode: 'single',
       gameType: 'cooperative',
       numPlayers: 2,
-      totalRounds: 24,
+      totalRounds: null,
       gameId: null,
       characters: [],
       loading: false,
@@ -554,18 +532,14 @@ export default {
         random_starting_stats: false,
         hardcore_mode: false,
       },
+      // Rotating event
+      rotatingEventId: null,
+      rotatingEventData: null,
       // Private lobby
       isPrivateGame: false,
       lobbyPassword: '',
       // Lobby browser
-      // Game length options
-      gameLengthOptions: [
-        { label: '1 Year', rounds: 12 },
-        { label: '2 Years', rounds: 24 },
-        { label: '3 Years', rounds: 36 },
-        { label: '4 Years', rounds: 48 },
-        { label: '5 Years', rounds: 60 },
-      ],
+      // (game length is now controlled by GameRule on the backend)
     };
   },
   computed: {
@@ -609,7 +583,11 @@ export default {
   watch: {
     '$route'(to) {
       if (to.path === '/') {
-        this.resetToHome();
+        if (to.query?.event_id) {
+          this.handleEventParam(to.query.event_id);
+        } else {
+          this.resetToHome();
+        }
       }
     },
   },
@@ -618,6 +596,10 @@ export default {
       await this.fetchPendingInvites();
       this.subscribeToInvites();
       this.fetchHomeStats();
+      // Check for rotating event query param
+      if (this.$route?.query?.event_id) {
+        this.handleEventParam(this.$route.query.event_id);
+      }
     }
   },
   beforeUnmount() {
@@ -626,6 +608,34 @@ export default {
     }
   },
   methods: {
+    handleEventParam(eventId) {
+      // Reset state but preserve event context
+      this.step = 'mode';
+      this.gameId = null;
+      this.characters = [];
+      this.currentPickingPlayer = 1;
+      this.playerSelections = {};
+      this.activeSlideIndex = 0;
+      // Set event and fetch details
+      this.rotatingEventId = parseInt(eventId);
+      this.rotatingEventData = null;
+      this.fetchRotatingEvent(this.rotatingEventId);
+    },
+    async fetchRotatingEvent(eventId) {
+      try {
+        const res = await axios.get(`/api/rotating-events/${eventId}`);
+        this.rotatingEventData = res.data.event;
+        // Auto-set game type and mode from event
+        if (this.rotatingEventData.game_type) this.gameType = this.rotatingEventData.game_type;
+        if (this.rotatingEventData.game_mode) this.gameMode = this.rotatingEventData.game_mode;
+        // Override total rounds if event specifies it
+        if (this.rotatingEventData.total_rounds) {
+          this.totalRounds = this.rotatingEventData.total_rounds;
+        }
+        // Auto-advance to settings step
+        this.step = 'settings';
+      } catch {}
+    },
     async fetchHomeStats() {
       try {
         const [statsRes, achRes, historyRes, unreadRes] = await Promise.allSettled([
@@ -698,17 +708,21 @@ export default {
       }
     },
     selectMode() {
+      if (this.gameMode === 'online') {
+        // Online goes straight to duel
+        this.numPlayers = 2;
+        this.gameType = 'duel';
+        this.totalRounds = 24;
+        this.step = 'settings';
+        return;
+      }
       if (this.gameMode === 'single') {
         this.numPlayers = 1;
         this.gameType = 'cooperative';
       } else {
         this.numPlayers = 2;
         this.gameType = 'cooperative';
-        if (this.gameMode === 'online') {
-          this.fetchFriendsForPicker();
-        }
       }
-      // All modes can choose game type (single player duel = vs bot)
       this.step = 'gameType';
     },
     async fetchFriendsForPicker() {
@@ -782,6 +796,9 @@ export default {
             num_players: this.numPlayers,
             total_rounds: this.totalRounds,
           };
+          if (this.rotatingEventId) {
+            onlinePayload.rotating_event_id = this.rotatingEventId;
+          }
           if (this.isCustomGame) {
             onlinePayload.is_custom = true;
             onlinePayload.starting_stats = this.customStartingStats;
@@ -810,6 +827,9 @@ export default {
           num_players: this.numPlayers,
           total_rounds: this.totalRounds,
         };
+        if (this.rotatingEventId) {
+          gamePayload.rotating_event_id = this.rotatingEventId;
+        }
         if (this.gameMode === 'single' && this.gameType === 'duel') {
           gamePayload.bot_difficulty = this.botDifficulty;
         }
@@ -823,7 +843,13 @@ export default {
           axios.get('/api/characters'),
         ]);
         this.gameId = gameRes.data.id;
-        this.characters = charsRes.data;
+        let allChars = charsRes.data;
+        // Filter characters if rotating event has character_pool
+        if (this.rotatingEventData?.character_pool) {
+          const allowedIds = this.rotatingEventData.character_pool;
+          allChars = allChars.filter(c => allowedIds.includes(c.id));
+        }
+        this.characters = allChars;
         this.step = 'story';
       } catch (e) {
         this.toast.error('Failed to create game: ' + (e.response?.data?.message || e.message));
@@ -865,7 +891,14 @@ export default {
       if (this.step === 'gameType') {
         this.step = 'mode';
       } else if (this.step === 'settings') {
-        if (this.gameMode === 'single') {
+        if (this.rotatingEventId) {
+          // Event game: go back to home and clear event
+          this.rotatingEventId = null;
+          this.rotatingEventData = null;
+          this.$router.replace('/');
+          this.step = 'mode';
+        } else if (this.gameMode === 'online' || this.gameMode === 'single') {
+          // Online skips gameType (goes straight to duel), single also goes to mode
           this.step = 'mode';
         } else {
           this.step = 'gameType';
@@ -897,6 +930,8 @@ export default {
       this.characters = [];
       this.currentPickingPlayer = 1;
       this.playerSelections = {};
+      this.rotatingEventId = null;
+      this.rotatingEventData = null;
       this.activeSlideIndex = 0;
       this.fetchHomeStats();
     },
@@ -1200,39 +1235,6 @@ export default {
   font-size: 0.8rem;
 }
 
-/* Game length selector */
-.length-select {
-  text-align: center;
-  margin-bottom: 20px;
-  margin-top: 20px;
-}
-
-.length-select label {
-  display: block;
-  margin-bottom: 10px;
-  font-family: 'Cinzel', serif;
-  color: var(--text-bright);
-}
-
-.length-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  flex-wrap: wrap;
-}
-
-.length-btn {
-  padding: 6px 16px;
-  font-size: 0.8rem;
-  white-space: nowrap;
-}
-
-.length-btn.btn-primary {
-  background: var(--accent-gold);
-  border-color: var(--accent-gold);
-  color: black;
-  box-shadow: 0 4px 0 #7a5a14, inset 0 1px 0 rgba(255,255,255,0.2);
-}
 
 /* Friends picker */
 .friends-loading {
@@ -2143,11 +2145,6 @@ export default {
   .summary-portrait {
     width: 44px;
     height: 44px;
-  }
-
-  .length-btn {
-    padding: 6px 12px;
-    font-size: 0.8rem;
   }
 
   .friend-pick-row {

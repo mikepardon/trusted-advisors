@@ -74,7 +74,7 @@
             </svg>
             <span class="bar-icon-badge">{{ usableItems.length }}</span>
           </button>
-          <span class="bar-dice-count" title="Active Dice">
+          <span class="bar-dice-count" title="View Your Dice" @click="showDiceViewer = true" style="cursor: pointer;">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
               <rect x="3" y="3" width="18" height="18" rx="3"/>
               <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
@@ -110,6 +110,20 @@
     <!-- Player Items (overlay only, button in top bar) -->
     <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
 
+    <!-- Active Curses Indicator -->
+    <div v-if="activeCurseCount > 0" class="curse-indicator" @click="showCurseDetails = !showCurseDetails">
+      &#9760; {{ activeCurseCount }} curse{{ activeCurseCount > 1 ? 's' : '' }}
+    </div>
+    <div v-if="showCurseDetails && activeCurseCount > 0" class="curse-details-panel">
+      <div v-for="(curses, pn) in playerCurses" :key="pn">
+        <div v-for="c in curses" :key="c.id" class="curse-detail-row">
+          <span class="curse-detail-name">{{ c.curse?.name || 'Curse' }}</span>
+          <span class="curse-detail-neg">{{ c.curse?.negative_effect?.type }}</span>
+          <span class="curse-detail-pos">{{ c.curse?.positive_effect?.type }}</span>
+        </div>
+      </div>
+    </div>
+
     <!-- Event Banner -->
     <EventBanner :event="gameData.current_event" />
 
@@ -125,6 +139,15 @@
       v-if="showItemReveal && itemRevealQueue.length"
       :item="itemRevealQueue[0]"
       @dismiss="onItemRevealDismiss"
+    />
+
+    <!-- Curse Selection Overlay -->
+    <CurseSelectionOverlay
+      v-if="currentPendingCurse()"
+      :curses="currentPendingCurse().curse_details"
+      :playerName="gameData?.game?.players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
+      :isDuel="false"
+      @selected="onCurseSelected"
     />
 
     <!-- Item Discard Overlay (when over 2-item limit) -->
@@ -210,12 +233,32 @@
         :gameOver="isGameOver"
         :canAdvance="!isOnline || isHost"
         :players="gameData.game?.players"
+        :resumed="resolveResumed"
         @phase-complete="onPhaseComplete"
         @next-round="advanceRound"
       />
     </template>
     </template>
     </template>
+
+    <!-- Dice Viewer Modal -->
+    <div v-if="showDiceViewer && characterDice" class="dice-viewer-overlay" @click.self="showDiceViewer = false">
+      <div class="dice-viewer-modal">
+        <h3 class="dice-viewer-title">Your Dice</h3>
+        <div v-for="(die, i) in characterDice" :key="i" class="dice-viewer-row">
+          <span class="dice-viewer-label">Die {{ i + 1 }}</span>
+          <div class="dice-viewer-faces">
+            <span v-for="(face, j) in die" :key="j" class="dice-viewer-face"
+                  :class="{ 'dice-viewer-face-wild': face === 'WILD' }">
+              {{ face === 'WILD' ? 'W' : face }}
+            </span>
+          </div>
+        </div>
+        <p v-if="characterWildValue" class="dice-viewer-wild-info">
+          WILD = {{ characterWildValue }}{{ characterWildAbility ? ' + triggers ' + characterWildAbility : '' }}
+        </p>
+      </div>
+    </div>
 
   </div>
 </template>
@@ -235,12 +278,13 @@ import EventReveal from './EventReveal.vue';
 import ItemReveal from './ItemReveal.vue';
 import ItemDiscard from './ItemDiscard.vue';
 import DiceOverlay from './DiceOverlay.vue';
+import CurseSelectionOverlay from './CurseSelectionOverlay.vue';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/toast';
 
 export default {
   name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard, DiceOverlay },
+  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard, DiceOverlay, CurseSelectionOverlay },
   setup() {
     const auth = useAuth();
     const toast = useToast();
@@ -272,9 +316,14 @@ export default {
       // Items & Dice
       currentPlayerItems: [],
       diceCount: 3,
+      showDiceViewer: false,
+      characterDice: null,
+      characterWildValue: null,
+      characterWildAbility: null,
       // Event reveal
       showEventReveal: false,
-      lastRevealedEventId: null,
+      // Resolve restoration
+      resolveResumed: false,
       // Item reveal
       itemRevealQueue: [],
       showItemReveal: false,
@@ -291,10 +340,22 @@ export default {
       myPlayerNumber: null,
       waitingForOthers: false,
       echoChannel: null,
+      // Curses
+      pendingCurses: null,
+      playerCurses: {},
+      showCurseDetails: false,
       // In-game alerts
     };
   },
   computed: {
+    activeCurseCount() {
+      let count = 0;
+      for (const pn in this.playerCurses) {
+        const curses = this.playerCurses[pn];
+        if (Array.isArray(curses)) count += curses.length;
+      }
+      return count;
+    },
     monthLabel() {
       const months = [
         'January', 'February', 'March', 'April', 'May', 'June',
@@ -474,6 +535,10 @@ export default {
         const res = await axios.get(`/api/games/${this.id}`);
         this.gameData = res.data;
 
+        // Restore pending curses and active curses from server state
+        this.pendingCurses = res.data.pending_curses || null;
+        this.playerCurses = res.data.player_curses || {};
+
         if (this.gameData.game.status === 'completed' || this.gameData.game.status === 'cancelled') {
           this.$router.replace(`/game/${this.id}/over`);
           return;
@@ -532,9 +597,12 @@ export default {
           }
         }
 
-        // If in resolving phase, load round results
+        // If in resolving phase, restore full resolve state or reconstruct from server
         if (this.gameData.round_phase === 'resolving') {
-          await this.loadRoundResults();
+          if (!this.restoreResolveState()) {
+            await this.loadRoundResults();
+            this.resolveResumed = true;
+          }
         }
       } catch (e) {
         this.toast.error('Failed to load game: ' + (e.response?.data?.message || e.message));
@@ -548,6 +616,9 @@ export default {
         this.currentHand = res.data.cards;
         this.currentPlayerItems = res.data.items || [];
         this.diceCount = res.data.dice_count ?? 3;
+        this.characterDice = res.data.character_dice || null;
+        this.characterWildValue = res.data.character_wild_value || null;
+        this.characterWildAbility = res.data.character_wild_ability || null;
       } catch (e) {
         this.currentHand = [];
         this.currentPlayerItems = [];
@@ -600,6 +671,7 @@ export default {
             this.gameData.game = data.game;
             this.gameData.round_phase = 'resolving';
             this.waitingForOthers = false;
+            this.saveResolveState();
           } else {
             // Show waiting overlay
             this.waitingForOthers = true;
@@ -671,10 +743,55 @@ export default {
         this.itemsOverLimit = res.data.items_over_limit || [];
         // Queue item reveals for any draw_item special effects
         this.queueItemReveals(this.specialEffects);
+        // Process pending curses
+        this.pendingCurses = res.data.pending_curses || null;
+        this.playerCurses = res.data.player_curses || {};
+        // Persist resolve state for page refresh recovery
+        this.saveResolveState();
       } catch (e) {
         this.toast.error('Failed to resolve: ' + (e.response?.data?.error || e.message));
       }
       this.resolving = false;
+    },
+    saveResolveState() {
+      try {
+        const round = this.gameData.current_round || this.gameData.game.current_round;
+        sessionStorage.setItem(`game_${this.id}_resolve_${round}`, JSON.stringify({
+          positivePhase: this.positivePhase,
+          negativePhase: this.negativePhase,
+          combinedEffects: this.combinedEffects,
+          eventEffects: this.eventEffects,
+          specialEffects: this.specialEffects,
+          isGameOver: this.isGameOver,
+          gameAfterPositive: this.gameAfterPositive,
+          gameAfterNegative: this.gameAfterNegative,
+        }));
+      } catch { /* sessionStorage full or unavailable */ }
+    },
+    restoreResolveState() {
+      try {
+        const round = this.gameData.current_round || this.gameData.game?.current_round;
+        const saved = sessionStorage.getItem(`game_${this.id}_resolve_${round}`);
+        if (saved) {
+          const data = JSON.parse(saved);
+          this.positivePhase = data.positivePhase;
+          this.negativePhase = data.negativePhase;
+          this.combinedEffects = data.combinedEffects;
+          this.eventEffects = data.eventEffects;
+          this.specialEffects = data.specialEffects;
+          this.isGameOver = data.isGameOver;
+          this.gameAfterPositive = data.gameAfterPositive;
+          this.gameAfterNegative = data.gameAfterNegative;
+          this.resolveResumed = true;
+          return true;
+        }
+      } catch { /* ignore */ }
+      return false;
+    },
+    clearResolveState(round) {
+      try {
+        sessionStorage.removeItem(`game_${this.id}_resolve_${round}`);
+      } catch { /* ignore */ }
     },
     startItemPhase() {
       // Determine which player needs to decide on items
@@ -850,6 +967,7 @@ export default {
           this.queueItemReveals(data.special_effects || []);
           this.waitingForOthers = false;
           this.resolving = false;
+          this.saveResolveState();
         })
         .listen('NextRoundStarted', (data) => {
           if (this.isDuel && this.$refs.duelBoard) {
@@ -857,6 +975,8 @@ export default {
             this.$refs.duelBoard.handleNextRoundStarted(data);
             return;
           }
+          // Clear saved resolve state for the round being advanced from
+          this.clearResolveState(this.gameData.current_round || this.gameData.game?.current_round);
           // Non-host auto-transitions to next round
           this.positivePhase = {};
           this.negativePhase = {};
@@ -872,6 +992,7 @@ export default {
           this.itemDeciding = false;
           this.usingItem = false;
           this.allItemsDecided = false;
+          this.resolveResumed = false;
           this.gameData = data;
           this.checkEventReveal();
           if (this.myPlayerNumber) {
@@ -933,6 +1054,34 @@ export default {
         this.showItemReveal = false;
       }
     },
+    currentPendingCurse() {
+      if (!this.pendingCurses || !this.pendingCurses.length) return null;
+      // Find the first pending curse for the active player
+      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
+      if (!player) return null;
+      return this.pendingCurses.find(pc => pc.player_id === player.id);
+    },
+    async onCurseSelected(curseId) {
+      try {
+        const res = await axios.post(`/api/games/${this.id}/choose-curse`, {
+          curse_id: curseId,
+          player_number: this.activePlayerNumber,
+        });
+        this.pendingCurses = res.data.pending_curses || null;
+        if (res.data.player_curses) {
+          this.playerCurses = {
+            ...this.playerCurses,
+            [this.activePlayerNumber]: res.data.player_curses,
+          };
+        }
+        // Refresh game state if no more pending
+        if (!this.pendingCurses || this.pendingCurses.length === 0) {
+          await this.fetchGame();
+        }
+      } catch (e) {
+        this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
+      }
+    },
     onItemDiscarded(updatedOverLimit) {
       this.itemsOverLimit = updatedOverLimit || [];
     },
@@ -940,10 +1089,9 @@ export default {
       const round = this.gameData?.current_round || 0;
       const event = this.gameData?.current_event;
       if (event && (round - 1) % 3 === 0) {
-        // Only show if we haven't already revealed this event
-        const eventId = event.id;
-        if (this.lastRevealedEventId !== eventId) {
-          this.lastRevealedEventId = eventId;
+        const key = `game_${this.id}_event_${event.id}`;
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, '1');
           this.showEventReveal = true;
         }
       }
@@ -970,6 +1118,9 @@ export default {
           return;
         }
 
+        // Clear saved resolve state for this round before resetting
+        this.clearResolveState(this.gameData.current_round || this.gameData.game?.current_round);
+
         // Reset state for next round
         this.positivePhase = {};
         this.negativePhase = {};
@@ -987,6 +1138,7 @@ export default {
         this.itemDeciding = false;
         this.usingItem = false;
         this.allItemsDecided = false;
+        this.resolveResumed = false;
         this.gameData = res.data;
         this.activePlayerNumber = 1;
         this.checkEventReveal();
@@ -1006,6 +1158,48 @@ export default {
 </script>
 
 <style scoped>
+/* Curse indicator */
+.curse-indicator {
+  position: fixed;
+  bottom: 80px;
+  right: 16px;
+  background: rgba(40, 0, 60, 0.9);
+  border: 1px solid rgba(155, 89, 182, 0.5);
+  color: #c890e0;
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  z-index: 50;
+  transition: all 0.2s;
+}
+.curse-indicator:hover {
+  border-color: #9b59b6;
+  background: rgba(60, 0, 90, 0.95);
+}
+.curse-details-panel {
+  position: fixed;
+  bottom: 120px;
+  right: 16px;
+  background: rgba(20, 5, 30, 0.95);
+  border: 1px solid rgba(155, 89, 182, 0.4);
+  border-radius: 8px;
+  padding: 12px;
+  z-index: 50;
+  max-width: 280px;
+  font-size: 0.8rem;
+}
+.curse-detail-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(155, 89, 182, 0.15);
+}
+.curse-detail-name { color: #c890e0; font-weight: 700; flex: 1; }
+.curse-detail-neg { color: #c0392b; font-size: 0.7rem; }
+.curse-detail-pos { color: #d4a843; font-size: 0.7rem; }
+
 .connection-banner {
   text-align: center;
   padding: 6px 12px;
@@ -1307,5 +1501,84 @@ export default {
 .btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Dice Viewer Modal */
+.dice-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dice-viewer-modal {
+  background: linear-gradient(180deg, #3a2a1a, #2a1f14, #1a1209);
+  border: 3px solid var(--border-gold, #8a6a2e);
+  border-radius: 14px;
+  padding: 24px 28px;
+  min-width: 260px;
+  max-width: 360px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 168, 67, 0.15);
+}
+
+.dice-viewer-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold, #c9a84c);
+  font-size: 1.3rem;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.dice-viewer-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dice-viewer-label {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary, #a09080);
+  font-size: 0.85rem;
+  min-width: 42px;
+}
+
+.dice-viewer-faces {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.dice-viewer-face {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  background: rgba(212, 168, 67, 0.12);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  border-radius: 6px;
+  color: var(--text-bright, #f0e6d2);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.dice-viewer-face-wild {
+  background: rgba(212, 168, 67, 0.25);
+  border-color: var(--accent-gold, #c9a84c);
+  color: var(--accent-gold, #c9a84c);
+}
+
+.dice-viewer-wild-info {
+  text-align: center;
+  color: var(--text-secondary, #a09080);
+  font-size: 0.8rem;
+  font-style: italic;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(138, 106, 46, 0.2);
 }
 </style>

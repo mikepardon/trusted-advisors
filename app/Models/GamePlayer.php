@@ -38,6 +38,11 @@ class GamePlayer extends Model
         return $this->hasMany(GamePlayerItem::class);
     }
 
+    public function curses(): HasMany
+    {
+        return $this->hasMany(GamePlayerCurse::class);
+    }
+
     public function kingdom(): \Illuminate\Database\Eloquent\Relations\HasOne
     {
         return $this->hasOne(GamePlayerKingdom::class);

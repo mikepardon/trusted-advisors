@@ -226,6 +226,7 @@ export default {
     gameOver: { type: Boolean, default: false },
     canAdvance: { type: Boolean, default: true },
     players: { type: Array, default: () => [] },
+    resumed: { type: Boolean, default: false },
   },
   emits: ['next-round', 'phase-complete'],
   data() {
@@ -236,6 +237,12 @@ export default {
       viewPhase: 'positive',
       resultsAccepted: false,
     };
+  },
+  mounted() {
+    if (this.resumed) {
+      // On page refresh, skip dice animations — mark all as rolled
+      this.rolledPlayerNumbers = (this.positivePhase.dice_results || []).map(pr => pr.player_number);
+    }
   },
   computed: {
     rolledCount() {

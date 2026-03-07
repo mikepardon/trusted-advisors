@@ -37,6 +37,9 @@ class CardController extends Controller
             'category' => 'nullable|string|max:100',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
+            'difficulty_duel' => 'nullable|integer|min:1|max:20',
+            'positive_effects_duel' => 'nullable|array',
+            'negative_effects_duel' => 'nullable|array',
         ]);
 
         $card = Card::create($validated);
@@ -59,6 +62,9 @@ class CardController extends Controller
             'category' => 'nullable|string|max:100',
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
+            'difficulty_duel' => 'nullable|integer|min:1|max:20',
+            'positive_effects_duel' => 'nullable|array',
+            'negative_effects_duel' => 'nullable|array',
         ]);
 
         $old = $card->only(array_keys($validated));

@@ -369,6 +369,7 @@ body {
   background: linear-gradient(180deg, rgba(70, 50, 32, 0.6) 0%, rgba(30, 22, 12, 0.8) 100%);
   flex-shrink: 0;
   box-shadow: 0 3px 12px rgba(0,0,0,0.4);
+    z-index: 1;
 }
 
 .header-top-bar {

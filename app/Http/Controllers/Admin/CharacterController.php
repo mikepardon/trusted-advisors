@@ -53,6 +53,11 @@ class CharacterController extends Controller
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
             'is_available' => 'boolean',
+            'dice_duel' => 'nullable|array',
+            'dice_duel.*' => 'array|size:6',
+            'wild_value_duel' => 'nullable|integer|min:1|max:10',
+            'wild_ability_duel' => 'nullable|string|max:50',
+            'wild_ability_description_duel' => 'nullable|string',
         ]);
 
         $character = Character::create($validated);
@@ -75,6 +80,11 @@ class CharacterController extends Controller
             'available_cooperative' => 'boolean',
             'available_duel' => 'boolean',
             'is_available' => 'boolean',
+            'dice_duel' => 'nullable|array',
+            'dice_duel.*' => 'array|size:6',
+            'wild_value_duel' => 'nullable|integer|min:1|max:10',
+            'wild_ability_duel' => 'nullable|string|max:50',
+            'wild_ability_description_duel' => 'nullable|string',
         ]);
 
         $old = $character->only(array_keys($validated));

@@ -18,6 +18,8 @@ use App\Models\ReferralReward;
 use App\Models\RotatingEventEntry;
 use App\Models\WeeklyChallenge;
 use App\Models\WeeklyChallengeEntry;
+use App\Models\GamePlayerCurse;
+use App\Models\GamePlayerKingdom;
 use App\Models\UserNotification;
 use App\Events\UserNotificationReceived;
 use Carbon\Carbon;
@@ -52,8 +54,11 @@ class GameCompletionService
         }
 
         // Gather all users who participated
-        $players = $game->players()->with('user')->get();
+        $players = $game->players()->with(['user', 'curses.curse'])->get();
         $users = $players->pluck('user')->filter();
+
+        // Apply end-game curse effects before scoring
+        $this->applyCurseEndGameEffects($game, $players);
 
         foreach ($users as $user) {
             if (!$user) continue;
@@ -122,9 +127,12 @@ class GameCompletionService
             }
         }
 
-        // ELO (online duel only)
+        // ELO (online duel only, skip if rotating event has affects_elo=false)
         if ($game->isOnline() && $game->isDuel()) {
-            $summary['elo_changes'] = $this->updateElo($game, $players);
+            $skipElo = $game->rotating_event_id && $game->rotatingEvent && !$game->rotatingEvent->affects_elo;
+            if (!$skipElo) {
+                $summary['elo_changes'] = $this->updateElo($game, $players);
+            }
         }
 
         // Rotating event entry
@@ -298,30 +306,47 @@ class GameCompletionService
 
     private function awardXp(User $user, Game $game, $players): array
     {
-        $xpConfig = GameRule::getValue('xp_config', [
+        $globalXpConfig = GameRule::getValue('xp_config', [
             'base_xp' => 50,
             'coop_win_bonus' => 100,
             'duel_win_bonus' => 150,
             'online_multiplier' => 1.5,
         ]);
 
-        $base = $xpConfig['base_xp'] ?? 50;
+        // Rotating event XP override
+        $eventXpConfig = $game->rotating_event_id ? $game->rotatingEvent?->xp_config : null;
+
+        $base = $eventXpConfig['base_xp'] ?? $globalXpConfig['base_xp'] ?? 50;
         $bonus = 0;
 
         // Determine if this user won
         $isWinner = $this->isWinner($user, $game, $players);
 
         if ($isWinner) {
-            $bonus = $game->isDuel()
-                ? ($xpConfig['duel_win_bonus'] ?? 150)
-                : ($xpConfig['coop_win_bonus'] ?? 100);
+            if ($eventXpConfig && isset($eventXpConfig['win_bonus'])) {
+                $bonus = $eventXpConfig['win_bonus'];
+            } else {
+                $bonus = $game->isDuel()
+                    ? ($globalXpConfig['duel_win_bonus'] ?? 150)
+                    : ($globalXpConfig['coop_win_bonus'] ?? 100);
+            }
         }
 
         $total = $base + $bonus;
 
         // Online multiplier
+        $onlineMultiplier = $eventXpConfig['online_multiplier'] ?? $globalXpConfig['online_multiplier'] ?? 1.5;
         if ($game->isOnline()) {
-            $total = (int) ($total * ($xpConfig['online_multiplier'] ?? 1.5));
+            $total = (int) ($total * $onlineMultiplier);
+        }
+
+        // Curse XP multiplier
+        $player = $players->firstWhere('user_id', $user->id);
+        if ($player) {
+            $curseXpMult = $this->getCurseXpMultiplier($player, $game);
+            if ($curseXpMult > 1.0) {
+                $total = (int) ($total * $curseXpMult);
+            }
         }
 
         $oldLevel = $user->level;
@@ -1396,5 +1421,67 @@ class GameCompletionService
                 $notification->title,
             ));
         } catch (\Throwable) {}
+    }
+
+    /**
+     * Get XP multiplier from curse positive effects for a player.
+     */
+    private function getCurseXpMultiplier(GamePlayer $player, Game $game): float
+    {
+        $multiplier = 1.0;
+        $curses = GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get();
+
+        foreach ($curses as $pc) {
+            $pos = $game->isDuel() ? $pc->curse->getDuelPositiveEffect() : $pc->curse->positive_effect;
+            if (($pos['type'] ?? '') === 'xp_multiplier') {
+                $multiplier *= (float) ($pos['value'] ?? 1.0);
+            }
+        }
+
+        return $multiplier;
+    }
+
+    /**
+     * Apply end-game curse effects: auto_max_stat and score_bonus.
+     */
+    private function applyCurseEndGameEffects(Game $game, $players): void
+    {
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+
+        foreach ($players as $player) {
+            foreach ($player->curses as $pc) {
+                $pos = $game->isDuel() ? $pc->curse->getDuelPositiveEffect() : $pc->curse->positive_effect;
+
+                // auto_max_stat: set N random non-max stats to 20
+                if (($pos['type'] ?? '') === 'auto_max_stat') {
+                    $count = (int) ($pos['count'] ?? 1);
+                    if ($game->isDuel()) {
+                        $kingdom = GamePlayerKingdom::where('game_id', $game->id)
+                            ->where('game_player_id', $player->id)
+                            ->first();
+                        if ($kingdom) {
+                            $nonMax = collect($stats)->filter(fn ($s) => $kingdom->{$s} < 20)->shuffle()->take($count);
+                            foreach ($nonMax as $stat) {
+                                $kingdom->{$stat} = 20;
+                            }
+                            $kingdom->save();
+                        }
+                    } else {
+                        $nonMax = collect($stats)->filter(fn ($s) => $game->{$s} < 20)->shuffle()->take($count);
+                        foreach ($nonMax as $stat) {
+                            $game->{$stat} = 20;
+                        }
+                        $game->save();
+                    }
+                }
+
+                // score_bonus: add to game bonus_score
+                if (($pos['type'] ?? '') === 'score_bonus') {
+                    $bonus = (int) ($pos['value'] ?? 0);
+                    $game->bonus_score = ($game->bonus_score ?? 0) + $bonus;
+                    $game->save();
+                }
+            }
+        }
     }
 }

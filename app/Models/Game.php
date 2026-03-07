@@ -14,9 +14,10 @@ class Game extends Model
         'user_id', 'season_id', 'rotating_event_id',
         'game_type', 'offerer_player_number', 'duel_phase', 'winner_player_number', 'timed_out_player_number',
         'event_order', 'share_token',
-        'bonus_score', 'final_score',
+        'bonus_score', 'score_modifier', 'final_score',
         'turn_time_limit', 'turn_started_at', 'cancelled_at',
         'is_custom', 'custom_rules', 'is_private', 'lobby_password', 'tournament_match_id',
+        'pending_curses',
     ];
 
     protected $casts = [
@@ -29,10 +30,12 @@ class Game extends Model
         'timed_out_player_number' => 'integer',
         'event_order' => 'array',
         'bonus_score' => 'integer',
+        'score_modifier' => 'float',
         'final_score' => 'integer',
         'turn_time_limit' => 'integer',
         'turn_started_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'pending_curses' => 'array',
     ];
 
     public function user(): BelongsTo
@@ -63,6 +66,11 @@ class Game extends Model
     public function itemDeck(): HasMany
     {
         return $this->hasMany(GameItemDeck::class);
+    }
+
+    public function curseDeck(): HasMany
+    {
+        return $this->hasMany(GameCurseDeck::class);
     }
 
     public function playerHands(): HasMany
@@ -244,7 +252,7 @@ class Game extends Model
             5 => 2.0,
         ];
 
-        $years = max(1, (int) ceil($this->current_round / 12));
+        $years = $this->yearsCompleted() + 1;
         return $multipliers[$years] ?? 2.0;
     }
 
@@ -286,6 +294,23 @@ class Game extends Model
     }
 
     /**
+     * Stacking bonus: rewards high individual stats.
+     * +10 per stat >= 15, +20 additional per stat = 20.
+     * Max 180 if all 6 stats are at 20 (6 * (10 + 20)).
+     */
+    public function stackingBonus(): int
+    {
+        $stats = [$this->wealth, $this->influence, $this->security,
+                  $this->religion, $this->food, $this->happiness];
+        $bonus = 0;
+        foreach ($stats as $val) {
+            if ($val >= 15) $bonus += 10;
+            if ($val >= 20) $bonus += 20;
+        }
+        return $bonus;
+    }
+
+    /**
      * Compute and store the final composite score (cooperative only).
      */
     public function computeFinalScore(): int
@@ -294,9 +319,12 @@ class Game extends Model
         $multiplied = (int) floor($base * $this->yearMultiplier());
         $balance = $this->balanceBonus();
         $yearBonus = $this->yearBonus();
+        $stacking = $this->stackingBonus();
         $bonus = $this->bonus_score ?? 0;
+        $modifier = $this->score_modifier ?? 0;
 
-        $this->final_score = $multiplied + $balance + $yearBonus + $bonus;
+        $rawTotal = $multiplied + $balance + $yearBonus + $stacking + $bonus;
+        $this->final_score = (int) floor($rawTotal * (1 + $modifier / 100));
         return $this->final_score;
     }
 }

@@ -33,6 +33,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\WebhookController;
 use App\Http\Controllers\Admin\AdminGiftController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
+use App\Http\Controllers\Admin\CurseController;
 use App\Http\Controllers\Admin\RotatingEventController as AdminRotatingEventController;
 use App\Http\Controllers\Admin\WeeklyChallengeController;
 use App\Http\Controllers\ReferralController;
@@ -117,6 +118,9 @@ Route::middleware('auth:web')->group(function () {
 
     // Character ability
     Route::post('/games/{game}/use-ability', [GameController::class, 'useAbility']);
+
+    // Curse selection
+    Route::post('/games/{game}/choose-curse', [GameController::class, 'chooseCurse']);
 
     // Item management
     Route::post('/games/{game}/use-item', [GameController::class, 'useItem']);
@@ -246,13 +250,15 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('dashboard-stats', [DashboardController::class, 'stats']);
 
     // CSV export/import (must be before apiResource to avoid {id} catch)
-    Route::get('{type}/export-csv', [CsvController::class, 'export'])->where('type', 'characters|cards|events|items');
-    Route::post('{type}/import-csv', [CsvController::class, 'import'])->where('type', 'characters|cards|events|items');
+    Route::get('{type}/export-csv', [CsvController::class, 'export'])->where('type', 'characters|cards|events|items|curses');
+    Route::post('{type}/import-csv', [CsvController::class, 'import'])->where('type', 'characters|cards|events|items|curses');
 
     Route::apiResource('characters', CharacterController::class);
     Route::apiResource('cards', CardController::class);
     Route::apiResource('events', EventController::class);
     Route::apiResource('items', ItemController::class);
+    Route::apiResource('curses', CurseController::class);
+    Route::post('curses/{curse}/image', [CurseController::class, 'uploadImage']);
     Route::apiResource('seasons', SeasonController::class);
     Route::get('seasons/{season}/rewards', [SeasonController::class, 'rewards']);
     Route::post('seasons/{season}/rewards', [SeasonController::class, 'storeReward']);

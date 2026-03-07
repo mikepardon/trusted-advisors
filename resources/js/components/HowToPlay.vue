@@ -71,6 +71,19 @@
             <li>You can hold up to <strong>2 items</strong> at a time. If you gain a third, you must discard one.</li>
             <li><span class="hl-neg">Cursed items</span> cannot be discarded and impose penalties each round.</li>
             <li>Some cards grant the <em>Remove Curse</em> effect to cleanse cursed items.</li>
+            <li>Some items grant an <strong>end-game score modifier</strong> that adjusts your final score by a percentage.</li>
+          </ul>
+        </div>
+
+        <div class="htp-section">
+          <h3>Curses</h3>
+          <p>
+            Certain cards and events can inflict <span class="hl-neg">Curses</span> on your advisors.
+            Curses are persistent debuffs that apply negative effects each round until removed.
+          </p>
+          <ul>
+            <li>When cursed, the advisor must choose which curse to take from a selection.</li>
+            <li>Use <em>Remove Curse</em> card effects to cleanse an advisor's curse.</li>
           </ul>
         </div>
 
@@ -127,6 +140,7 @@
             <li>Coordinate with other advisors &mdash; you roll together!</li>
             <li>Items with roll bonuses stack &mdash; equip wisely before tough months.</li>
             <li>Keep your stats balanced &mdash; the Balance Bonus rewards even kingdoms.</li>
+            <li>Push stats above 15 for the Stacking Bonus &mdash; and max them at 20 for even bigger rewards.</li>
           </ul>
         </div>
       </div>
@@ -138,8 +152,7 @@
           <p>
             In <span class="hl-wild">Duel</span> mode, two rival kingdoms compete head-to-head.
             Each player has their own kingdom stats, all starting at 8.
-            Outsmart your opponent by choosing the right cards to keep &mdash; the card
-            you don't want gets sent to your rival.
+            Outsmart your opponent by choosing which cards to keep and which to send their way.
           </p>
         </div>
 
@@ -148,24 +161,21 @@
           <ol>
             <li>
               <strong>Select Cards</strong> &mdash; Both players are dealt 2 cards each.
-              You pick <strong>1 card to keep</strong>; the other is automatically
-              sent to your opponent. Both players choose simultaneously.
+              You pick <strong>1 card to keep</strong> for yourself; the other is
+              <strong>sent to your opponent</strong>. Both players choose simultaneously.
             </li>
             <li>
-              <strong>Roll</strong> &mdash; Each player rolls their dice against the
-              <strong>combined difficulty</strong> of both cards they hold (the one they kept
-              + the one sent to them by their opponent).
+              <strong>Roll</strong> &mdash; Each player rolls their dice independently against
+              the difficulty of the card they ended up with.
             </li>
             <li>
               <strong>Resolve</strong> &mdash; <span class="hl-neg">Negative effects</span>
-              from both cards <em>always</em> apply, regardless of the roll.
-              <span class="hl-pos">Positive effects</span> from both cards only apply
-              if you beat the combined difficulty.
+              from each player's card <em>always</em> apply, regardless of the roll.
+              <span class="hl-pos">Positive effects</span> only apply if the roll succeeds.
             </li>
           </ol>
           <p>
-            Card difficulty does <strong>not</strong> scale up over time in Duel mode &mdash;
-            it stays flat for the whole game, unlike Classic.
+            Card difficulty does <strong>not</strong> scale over time in Duel mode.
           </p>
         </div>
 
@@ -220,10 +230,9 @@
         <div class="htp-section">
           <h3>Strategy Tips</h3>
           <ul>
-            <li>Keep cards with strong positive effects and low difficulty.</li>
+            <li>Keep cards with strong positive effects and low difficulty for yourself.</li>
             <li>Send cards with harsh negative effects to your opponent.</li>
-            <li>Watch the combined difficulty &mdash; keeping two high-difficulty cards makes success unlikely.</li>
-            <li>Target your opponent's weakest stats with the cards you send.</li>
+            <li>Target your opponent's weakest stats with the cards you send them.</li>
             <li>Race to 20 in 3 stats while keeping your lowest stat safe from 0.</li>
             <li>Online duels affect your <strong>ELO rating</strong> &mdash; play to win!</li>
           </ul>
@@ -235,10 +244,12 @@
         <div class="htp-section">
           <h3>Classic Scoring</h3>
           <p>
-            Your final score in Classic mode is calculated from multiple components:
+            Your final score in Classic mode is calculated from multiple components.
+            Click the <strong>Score</strong> indicator during gameplay to see a live breakdown.
           </p>
           <div class="formula-box">
-            <div class="formula">Final Score = (Base &times; Year Multiplier) + Balance Bonus + Renown</div>
+            <div class="formula">Raw Total = (Base &times; Year Mult) + Balance + Stacking + Year Bonus + Renown</div>
+            <div class="formula" style="margin-top: 6px;">Final Score = Raw Total &times; (1 + Score Modifier%)</div>
           </div>
         </div>
 
@@ -252,16 +263,19 @@
 
         <div class="htp-section">
           <h3>Year Multiplier</h3>
-          <p>Longer campaigns are rewarded with a higher multiplier based on game length:</p>
+          <p>
+            The multiplier increases each time you complete a full year (12 months).
+            Completing month 12 bumps you to year 2, and so on:
+          </p>
           <div class="score-table">
             <div class="table-row table-header">
-              <span>Months</span><span>Years</span><span>Multiplier</span>
+              <span>Year</span><span>After Month</span><span>Multiplier</span>
             </div>
-            <div class="table-row"><span>12</span><span>1</span><span>1.0&times;</span></div>
-            <div class="table-row"><span>24</span><span>2</span><span>1.4&times;</span></div>
-            <div class="table-row"><span>36</span><span>3</span><span>1.7&times;</span></div>
-            <div class="table-row"><span>48</span><span>4</span><span>1.9&times;</span></div>
-            <div class="table-row"><span>60</span><span>5</span><span>2.0&times;</span></div>
+            <div class="table-row"><span>1</span><span>0&ndash;11</span><span>1.0&times;</span></div>
+            <div class="table-row"><span>2</span><span>12&ndash;23</span><span>1.4&times;</span></div>
+            <div class="table-row"><span>3</span><span>24&ndash;35</span><span>1.7&times;</span></div>
+            <div class="table-row"><span>4</span><span>36&ndash;47</span><span>1.9&times;</span></div>
+            <div class="table-row"><span>5</span><span>48+</span><span>2.0&times;</span></div>
           </div>
         </div>
 
@@ -280,11 +294,46 @@
         </div>
 
         <div class="htp-section">
+          <h3>Stacking Bonus</h3>
+          <p>
+            High individual stats are rewarded with bonus points:
+          </p>
+          <ul>
+            <li><strong>+10</strong> for each stat at <strong>15 or above</strong></li>
+            <li><strong>+20 additional</strong> for each stat at exactly <strong>20</strong> (total +30 per maxed stat)</li>
+          </ul>
+          <p>
+            Maximum stacking bonus is <strong>180</strong> if all 6 stats are at 20.
+            This rewards pushing stats high alongside keeping them balanced.
+          </p>
+        </div>
+
+        <div class="htp-section">
+          <h3>Year Bonus</h3>
+          <p>
+            Earn <strong>+50 points</strong> for each full year (12 months) completed.
+            Surviving 24 months grants +50, surviving 36 months grants +100, and so on.
+          </p>
+        </div>
+
+        <div class="htp-section">
           <h3>Renown (Bonus Score)</h3>
           <p>
             Extra points accumulated during the game from special items, card effects, and events.
             Look for items like <span class="hl-wild">Chronicler's Quill</span> (+2/round)
             and cards with bonus score effects.
+          </p>
+        </div>
+
+        <div class="htp-section">
+          <h3>Score Modifier</h3>
+          <p>
+            Some cards and items can grant a <strong>percentage modifier</strong> that adjusts
+            your final score at the end of the game. These stack additively &mdash; for example,
+            two +5% modifiers give a total +10% boost to your raw total.
+          </p>
+          <p>
+            Negative modifiers also exist, so be careful which negative cards you choose!
           </p>
         </div>
 
@@ -305,9 +354,13 @@
         <div class="htp-section">
           <h3>Duel Scoring</h3>
           <p>
-            Duel mode uses a different system. There is no composite score &mdash; victory is based on
-            reaching <strong>20 in 3 stats</strong> first, or having the highest total stats when rounds expire.
+            Duel mode uses a different system. There is no composite score &mdash; victory is based on:
           </p>
+          <ul>
+            <li><span class="hl-pos">Win</span> by reaching <strong>20 in 3 stats</strong>.</li>
+            <li><span class="hl-neg">Lose</span> if <strong>any stat hits 0</strong>.</li>
+            <li>If all rounds pass, the player with the <strong>higher total stat score</strong> wins.</li>
+          </ul>
         </div>
 
         <div class="htp-section">
@@ -333,6 +386,7 @@
             <li><strong>50 XP</strong> base for completing a game.</li>
             <li><strong>+100 XP</strong> bonus for winning (Classic) or <strong>+150 XP</strong> for winning (Duel).</li>
             <li><strong>1.5&times; multiplier</strong> for online games.</li>
+            <li>Earn <strong>coins</strong> from games and achievements, spend them in the shop.</li>
             <li>Complete <strong>achievements</strong> for bonus XP and coin rewards.</li>
             <li>Check the <strong>daily challenge</strong> for a special task each day.</li>
           </ul>

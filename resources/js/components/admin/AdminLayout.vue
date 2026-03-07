@@ -34,17 +34,37 @@
         <router-link to="/admin/items" class="nav-item" active-class="active">
           <span class="nav-icon">&#9878;</span> Items
         </router-link>
+        <router-link to="/admin/curses" class="nav-item" active-class="active">
+          <span class="nav-icon">&#9760;</span> Curses
+        </router-link>
+      </div>
+
+      <div class="nav-section" v-if="canSee('content')">
+        <span class="nav-group-label">Cosmetics</span>
         <router-link to="/admin/dice" class="nav-item" active-class="active">
           <span class="nav-icon">&#127922;</span> Dice
         </router-link>
         <router-link to="/admin/kingdom-styles" class="nav-item" active-class="active">
           <span class="nav-icon">&#127984;</span> Kingdom Styles
         </router-link>
+        <router-link to="/admin/addons" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128230;</span> Addons
+        </router-link>
+      </div>
+
+      <div class="nav-section" v-if="canSee('content')">
+        <span class="nav-group-label">Site Functionality</span>
+        <router-link to="/admin/announcements" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128227;</span> Announcements
+        </router-link>
         <router-link to="/admin/sounds" class="nav-item" active-class="active">
           <span class="nav-icon">&#9835;</span> Sounds
         </router-link>
-        <router-link to="/admin/addons" class="nav-item" active-class="active">
-          <span class="nav-icon">&#128230;</span> Addons
+        <router-link to="/admin/payments" class="nav-item" active-class="active">
+          <span class="nav-icon">&#128179;</span> Payments
+        </router-link>
+        <router-link to="/admin/rotating-events" class="nav-item" active-class="active">
+          <span class="nav-icon">&#9889;</span> Rotating Events
         </router-link>
         <router-link to="/admin/media" class="nav-item" active-class="active">
           <span class="nav-icon">&#128444;</span> Media Library
@@ -59,9 +79,6 @@
         <router-link to="/admin/xp" class="nav-item" active-class="active">
           <span class="nav-icon">&#11088;</span> XP &amp; Levels
         </router-link>
-        <router-link to="/admin/coins" class="nav-item" active-class="active">
-          <span class="nav-icon">&#129689;</span> Coin Rewards
-        </router-link>
         <router-link to="/admin/achievements" class="nav-item" active-class="active">
           <span class="nav-icon">&#127942;</span> Achievements
         </router-link>
@@ -74,27 +91,15 @@
       </div>
 
       <div class="nav-section" v-if="canSee('management')">
-        <span class="nav-group-label">Management</span>
-        <router-link to="/admin/announcements" class="nav-item" active-class="active" v-if="canSee('content')">
-          <span class="nav-icon">&#128227;</span> Announcements
-        </router-link>
-        <router-link to="/admin/rotating-events" class="nav-item" active-class="active" v-if="canSee('content')">
-          <span class="nav-icon">&#9889;</span> Rotating Events
-        </router-link>
-        <router-link to="/admin/gifts" class="nav-item" active-class="active">
-          <span class="nav-icon">&#127873;</span> Gifts
-        </router-link>
+        <span class="nav-group-label">Users</span>
         <router-link to="/admin/users" class="nav-item" active-class="active">
           <span class="nav-icon">&#128100;</span> Users
         </router-link>
-        <router-link to="/admin/payments" class="nav-item" active-class="active">
-          <span class="nav-icon">&#128179;</span> Payments
+        <router-link to="/admin/roles" class="nav-item" active-class="active" v-if="canSee('system')">
+          <span class="nav-icon">&#128101;</span> Roles
         </router-link>
-        <router-link to="/admin/games" class="nav-item" active-class="active">
-          <span class="nav-icon">&#127918;</span> Games
-        </router-link>
-        <router-link to="/admin/bot-games" class="nav-item" active-class="active" v-if="canSee('content')">
-          <span class="nav-icon">&#129302;</span> Bot Games
+        <router-link to="/admin/gifts" class="nav-item" active-class="active">
+          <span class="nav-icon">&#127873;</span> Gifts
         </router-link>
       </div>
 
@@ -106,15 +111,14 @@
         <router-link to="/admin/retention" class="nav-item" active-class="active">
           <span class="nav-icon">&#128200;</span> Retention
         </router-link>
-      </div>
-
-      <div class="nav-section" v-if="canSee('system')">
-        <span class="nav-group-label">System</span>
         <router-link to="/admin/audit-log" class="nav-item" active-class="active">
           <span class="nav-icon">&#128220;</span> Audit Log
         </router-link>
-        <router-link to="/admin/roles" class="nav-item" active-class="active">
-          <span class="nav-icon">&#128101;</span> Roles
+        <router-link to="/admin/games" class="nav-item" active-class="active">
+          <span class="nav-icon">&#127918;</span> Games
+        </router-link>
+        <router-link to="/admin/bot-games" class="nav-item" active-class="active" v-if="canSee('content')">
+          <span class="nav-icon">&#129302;</span> Bot Games
         </router-link>
       </div>
 

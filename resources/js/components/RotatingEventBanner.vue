@@ -4,6 +4,7 @@
       v-for="event in events"
       :key="event.id"
       class="event-banner"
+      :style="bannerStyle(event)"
       @click="$router.push('/events/' + event.id)"
     >
       <div class="event-banner-left">
@@ -13,7 +14,7 @@
           <span class="event-countdown">{{ timeLeft(event) }}</span>
         </div>
       </div>
-      <button class="event-play-btn" @click.stop="$router.push('/events/' + event.id)">Play Now</button>
+      <button class="event-play-btn" :style="event.theme_color ? { borderColor: event.theme_color, color: event.theme_color } : {}" @click.stop="$router.push('/events/' + event.id)">Play Now</button>
     </div>
   </div>
 </template>
@@ -41,6 +42,20 @@ export default {
     if (this.timer) clearInterval(this.timer);
   },
   methods: {
+    bannerStyle(event) {
+      if (!event.theme_color) return {};
+      return {
+        borderColor: event.theme_color,
+        background: `rgba(${this.hexToRgb(event.theme_color)}, 0.1)`,
+      };
+    },
+    hexToRgb(hex) {
+      const h = hex.replace('#', '');
+      const r = parseInt(h.substring(0, 2), 16);
+      const g = parseInt(h.substring(2, 4), 16);
+      const b = parseInt(h.substring(4, 6), 16);
+      return `${r}, ${g}, ${b}`;
+    },
     timeLeft(event) {
       const end = new Date(event.ends_at);
       const now = new Date();

@@ -132,6 +132,7 @@
               <option value="stat_boost">Stat Boost (Immediate)</option>
               <option value="heal_die">Heal Die (Immediate)</option>
               <option value="score_bonus">Score Bonus (Immediate)</option>
+              <option value="end_game_multiplier">End-Game Modifier % (Immediate)</option>
               <option value="score_per_round">Score Per Round (Passive)</option>
               <option value="score_multiplier">Score Multiplier (Passive)</option>
             </select>
@@ -170,6 +171,45 @@
               <option :value="null">Base Game</option>
               <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
+          </div>
+
+          <!-- Duel Effect Override -->
+          <div style="border: 1px solid rgba(138, 58, 185, 0.3); background: rgba(138, 58, 185, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
+            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
+              <input type="checkbox" v-model="form.useDuelEffect" />
+              <span style="color: #c890e0; font-weight: 700;">Use different effect for Duel mode</span>
+            </label>
+            <template v-if="form.useDuelEffect">
+              <div class="form-group">
+                <label>Duel Bonus Type</label>
+                <select v-model="form.bonus_type_duel">
+                  <option value="roll_bonus">Roll Bonus (+)</option>
+                  <option value="roll_penalty">Roll Penalty (-)</option>
+                  <option value="difficulty_reduction">Difficulty Reduction (-)</option>
+                  <option value="difficulty_increase">Difficulty Increase (+)</option>
+                  <option value="reroll">Reroll</option>
+                  <option value="stat_boost">Stat Boost (Immediate)</option>
+                  <option value="heal_die">Heal Die (Immediate)</option>
+                  <option value="score_bonus">Score Bonus (Immediate)</option>
+                  <option value="end_game_multiplier">End-Game Modifier % (Immediate)</option>
+                </select>
+              </div>
+              <div v-if="form.bonus_type_duel === 'stat_boost'" class="form-group">
+                <label>Duel Target Stat</label>
+                <select v-model="form.stat_duel">
+                  <option value="wealth">Wealth</option>
+                  <option value="influence">Influence</option>
+                  <option value="security">Security</option>
+                  <option value="religion">Religion</option>
+                  <option value="food">Food</option>
+                  <option value="happiness">Happiness</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Duel Bonus Value</label>
+                <input v-model.number="form.bonus_value_duel" type="number" />
+              </div>
+            </template>
           </div>
 
           <div class="form-group">
@@ -227,6 +267,10 @@ export default {
         addon_id: null,
         available_cooperative: true,
         available_duel: true,
+        useDuelEffect: false,
+        bonus_type_duel: 'roll_bonus',
+        bonus_value_duel: 1,
+        stat_duel: 'food',
       },
     };
   },
@@ -314,12 +358,17 @@ export default {
         addon_id: null,
         available_cooperative: true,
         available_duel: true,
+        useDuelEffect: false,
+        bonus_type_duel: 'roll_bonus',
+        bonus_value_duel: 1,
+        stat_duel: 'food',
       };
       this.formError = '';
       this.showModal = true;
     },
     openEdit(item) {
       this.editing = item;
+      const hasDuelEffect = item.effect_duel != null;
       this.form = {
         name: item.name,
         description: item.description,
@@ -332,6 +381,10 @@ export default {
         addon_id: item.addon_id || null,
         available_cooperative: item.available_cooperative ?? true,
         available_duel: item.available_duel ?? true,
+        useDuelEffect: hasDuelEffect,
+        bonus_type_duel: item.effect_duel?.bonus_type || item.effect?.bonus_type || 'roll_bonus',
+        bonus_value_duel: item.effect_duel?.bonus_value ?? item.effect?.bonus_value ?? 1,
+        stat_duel: item.effect_duel?.stat || item.effect?.stat || 'food',
       };
       this.formError = '';
       this.showModal = true;
@@ -352,6 +405,11 @@ export default {
           bonus_value: this.form.bonus_value,
           ...(this.form.bonus_type === 'stat_boost' ? { stat: this.form.stat } : {}),
         },
+        effect_duel: this.form.useDuelEffect ? {
+          bonus_type: this.form.bonus_type_duel,
+          bonus_value: this.form.bonus_value_duel,
+          ...(this.form.bonus_type_duel === 'stat_boost' ? { stat: this.form.stat_duel } : {}),
+        } : null,
       };
 
       this.saving = true;
