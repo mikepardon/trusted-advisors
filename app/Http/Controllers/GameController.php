@@ -1667,16 +1667,12 @@ class GameController extends Controller
                 }
                 $drawnItem = $this->drawItemFromDeck($game);
                 if ($drawnItem) {
-                    $isConsumed = $drawnItem->is_consumable;
-                    if ($isConsumed) {
-                        $this->applyImmediateItemEffect($game, $player, $drawnItem);
-                    }
                     GamePlayerItem::create([
                         'game_player_id' => $player->id,
                         'item_id' => $drawnItem->id,
                         'acquired_round' => $game->current_round,
                         'is_cursed' => false,
-                        'is_used' => $isConsumed,
+                        'is_used' => false,
                     ]);
                 }
             }
