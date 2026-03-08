@@ -1499,7 +1499,7 @@ class GameController extends Controller
             'wild_triggers' => $wildTriggers,
             'special_effects' => $specialEffects,
             'kingdom_snapshot' => $game->fresh()->only($stats),
-            'event_data' => $event ? ['id' => $event->id, 'name' => $event->name, 'description' => $event->description] : null,
+            'event_data' => $event ? ['id' => $event->id, 'name' => $event->title, 'description' => $event->effect, 'stat_modifiers' => $event->stat_modifiers] : null,
         ]);
 
         // Check game over
@@ -2510,7 +2510,7 @@ class GameController extends Controller
             'wild_triggers' => $wildTriggers,
             'special_effects' => $duelSpecialEffects,
             'kingdom_snapshot' => $kingdom ? $kingdom->fresh()->only($statKeys) : null,
-            'event_data' => $duelEvent ? ['id' => $duelEvent->id, 'name' => $duelEvent->name, 'description' => $duelEvent->description] : null,
+            'event_data' => $duelEvent ? ['id' => $duelEvent->id, 'name' => $duelEvent->title, 'description' => $duelEvent->effect, 'stat_modifiers' => $duelEvent->stat_modifiers] : null,
         ]);
 
         // Save pending curses if any

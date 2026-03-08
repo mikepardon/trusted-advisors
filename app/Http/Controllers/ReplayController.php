@@ -52,6 +52,7 @@ class ReplayController extends Controller
         $game->load([
             'players.character',
             'players.items.item',
+            'players.curses.curse',
             'roundResults.card',
             'roundResults.player.character',
             'playerKingdoms.player.character',
