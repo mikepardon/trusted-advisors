@@ -375,7 +375,9 @@ class GameController extends Controller
             foreach ($game->players as $player) {
                 $playerHands = $hands->where('game_player_id', $player->id);
                 $assignedCount = $playerHands->whereNotNull('role')->count();
-                $hasItems = $player->items->where('is_used', false)->isNotEmpty();
+                $hasItems = $player->items->where('is_used', false)
+                    ->filter(fn ($pi) => $pi->used_round !== $game->current_round)
+                    ->isNotEmpty();
                 $playerStatus[] = [
                     'player_number' => $player->player_number,
                     'character_name' => $player->character->name,
@@ -4225,9 +4227,10 @@ class GameController extends Controller
             return response()->json(['error' => 'Already used an item this round'], 422);
         }
 
-        // Mark item as used
+        // Mark item as used (only permanently consumed if consumable)
+        $isConsumable = $playerItem->item->is_consumable ?? false;
         $playerItem->update([
-            'is_used' => true,
+            'is_used' => $isConsumable,
             'used_round' => $game->current_round,
         ]);
 
@@ -4335,8 +4338,9 @@ class GameController extends Controller
         $players = $game->players()->with(['items' => fn ($q) => $q->where('is_used', false)])->get();
 
         foreach ($players as $player) {
-            // Players with no usable items are auto-decided
-            if ($player->items->isEmpty()) {
+            // Players with no usable items (or all on cooldown) are auto-decided
+            $usable = $player->items->filter(fn ($pi) => $pi->used_round !== $game->current_round);
+            if ($usable->isEmpty()) {
                 continue;
             }
             if (!$player->item_decided) {

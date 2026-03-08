@@ -37,11 +37,11 @@
     />
 
     <!-- Player Items (overlay only, no floating button) -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" :currentRound="currentRound" />
 
     <!-- Curse Selection Overlay -->
     <CurseSelectionOverlay
-      v-if="currentDuelPendingCurse()"
+      v-if="showCurseSelection && currentDuelPendingCurse()"
       :curses="currentDuelPendingCurse().curse_details"
       :playerName="players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
       :isDuel="true"
@@ -133,6 +133,7 @@
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
         :hideRollButton="true"
+        :currentRound="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -192,6 +193,7 @@
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
         :hideRollButton="true"
+        :currentRound="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -241,6 +243,7 @@
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
         :hideRollButton="true"
+        :currentRound="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -337,12 +340,16 @@ export default {
       reportingTimeout: false,
       // Curses
       pendingCurses: null,
+      showCurseSelection: false,
       playerCurses: {},
       // Card effect preview
       cardPreviewEffects: null,
     };
   },
   computed: {
+    currentRound() {
+      return this.gameData?.current_round || this.gameData?.game?.current_round || 0;
+    },
     isOnline() {
       return this.gameData?.game_mode === 'online';
     },
@@ -527,7 +534,8 @@ export default {
     },
     currentPlayerItems: {
       handler(items) {
-        this.$emit('items-updated', (items || []).filter(pi => !pi.is_used).length);
+        const round = this.currentRound;
+        this.$emit('items-updated', (items || []).filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round)).length);
       },
       deep: true,
       immediate: true,
@@ -715,8 +723,9 @@ export default {
         this.currentCards = res.data.cards || [];
         this.currentPlayerItems = res.data.items || [];
         this.diceCount = res.data.dice_count ?? 4;
-        // Auto-decide if player has no usable items
-        const usable = this.currentPlayerItems.filter(pi => !pi.is_used);
+        // Auto-decide if player has no usable items (exclude items on cooldown this round)
+        const round = this.currentRound;
+        const usable = this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
         if (usable.length === 0) {
           this.itemDecided = true;
         }
@@ -809,7 +818,8 @@ export default {
         }
         // Update items so the roll button / item prompt shows correctly
         this.currentPlayerItems = res.data.items || [];
-        const usable = this.currentPlayerItems.filter(pi => !pi.is_used);
+        const round = this.currentRound;
+        const usable = this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
         if (usable.length === 0) {
           this.itemDecided = true;
         }
@@ -966,6 +976,11 @@ export default {
             ...this.playerCurses,
             [this.activePlayerNumber]: res.data.player_curses,
           };
+        }
+        // When all curses resolved, continue the flow
+        if (!this.pendingCurses || this.pendingCurses.length === 0) {
+          this.showCurseSelection = false;
+          this._continueAfterCurses();
         }
       } catch (e) {
         this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
@@ -1126,6 +1141,16 @@ export default {
     handleContinueAfterRoll() {
       this.pendingRerollDecision = false;
 
+      // Show curse selection if there are pending curses before continuing
+      if (this.pendingCurses && this.pendingCurses.length > 0) {
+        this.showCurseSelection = true;
+        return;
+      }
+
+      this._continueAfterCurses();
+    },
+
+    _continueAfterCurses() {
       if (this.duelPhase === 'rolling') {
         if (this.offererRollData && this.chooserRollData) {
           // Both rolled — skip resolving, advance directly to next round
@@ -1448,6 +1473,7 @@ export default {
       this.playerRollResults = {};
       this.diceAnimationTrigger = null;
       this.itemDecided = false;
+      this.showCurseSelection = false;
       this._opponentTurnPending = false;
       this.syncFromGameData(data);
       this.$emit('game-data-updated', data);

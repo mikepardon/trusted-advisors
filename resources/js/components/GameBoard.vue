@@ -110,7 +110,7 @@
     <KingdomStats :game="displayGame" :kingdomStyleSlug="myKingdomStyleSlug" :kingdomStyleData="myKingdomStyleData" :previewEffects="cardPreviewEffects" />
 
     <!-- Player Items (overlay only, button in top bar) -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" :currentRound="gameData.current_round || 0" />
 
     <!-- Active Curses Indicator -->
     <div v-if="activeCurseCount > 0" class="curse-indicator" @click="showCurseDetails = !showCurseDetails">
@@ -145,7 +145,7 @@
 
     <!-- Curse Selection Overlay -->
     <CurseSelectionOverlay
-      v-if="currentPendingCurse()"
+      v-if="showCurseSelection && currentPendingCurse()"
       :curses="currentPendingCurse().curse_details"
       :playerName="gameData?.game?.players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
       :isDuel="false"
@@ -391,6 +391,7 @@ export default {
       pendingCurses: null,
       playerCurses: {},
       showCurseDetails: false,
+      showCurseSelection: false,
       // Card effect preview
       cardPreviewEffects: null,
       // Burger menu
@@ -493,10 +494,13 @@ export default {
       if (!ps) return false;
       if (ps.item_decided) return false;
       if (!ps.has_items) return false;
+      // Also check client-side that there are usable items
+      if (this.usableItems.length === 0) return false;
       return true;
     },
     usableItems() {
-      return this.currentPlayerItems.filter(pi => !pi.is_used);
+      const round = this.gameData?.current_round || 0;
+      return this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
     },
     displayGame() {
       // Before any phase is accepted, show pre-resolution stats
@@ -1138,9 +1142,10 @@ export default {
             [this.activePlayerNumber]: res.data.player_curses,
           };
         }
-        // Refresh game state if no more pending
+        // When all curses resolved, proceed to next round
         if (!this.pendingCurses || this.pendingCurses.length === 0) {
-          await this.fetchGame();
+          this.showCurseSelection = false;
+          await this.advanceRound();
         }
       } catch (e) {
         this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
@@ -1196,6 +1201,11 @@ export default {
       this.currentStatPhase = phase;
     },
     async advanceRound() {
+      // Show curse selection first if there are pending curses
+      if (this.pendingCurses && this.pendingCurses.length > 0) {
+        this.showCurseSelection = true;
+        return;
+      }
       try {
         const res = await axios.post(`/api/games/${this.id}/next-round`);
 
@@ -1227,6 +1237,7 @@ export default {
         this.gameAfterNegative = null;
         this.preResolveGame = null;
         this.currentStatPhase = null;
+        this.showCurseSelection = false;
         this.itemDeciding = false;
         this.usingItem = false;
         this.allItemsDecided = false;

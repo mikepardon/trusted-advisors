@@ -178,6 +178,7 @@ export default {
     playerItems: { type: Array, default: () => [] },
     itemDecided: { type: Boolean, default: false },
     hideRollButton: { type: Boolean, default: false },
+    currentRound: { type: Number, default: 0 },
   },
   emits: ['roll', 'use-ability', 'reroll', 'continue', 'use-item', 'skip-item'],
   data() {
@@ -259,7 +260,7 @@ export default {
       return {};
     },
     usableItems() {
-      return (this.playerItems || []).filter(pi => !pi.is_used);
+      return (this.playerItems || []).filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === this.currentRound));
     },
   },
   methods: {

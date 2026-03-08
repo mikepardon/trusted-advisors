@@ -1132,7 +1132,6 @@ class GameContentSeeder extends Seeder
             Card::create($card);
         }
     }
-
     private function seedEvents(): void
     {
         Event::truncate();

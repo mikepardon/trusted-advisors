@@ -21,14 +21,16 @@
           <p class="items-heading">Inventory</p>
 
           <!-- Parchment card display -->
-          <div class="parchment-card" :class="{ used: currentItem.is_used }">
+          <div class="parchment-card" :class="{ used: currentItem.is_used, cooldown: isOnCooldown(currentItem) }">
             <div class="card-ornament">&#9876;</div>
             <h3 class="parchment-title">{{ currentItem.item?.name || 'Unknown Item' }}</h3>
 
             <!-- Tags row -->
             <div class="tag-row">
-              <span v-if="!currentItem.is_used" class="type-tag ongoing-tag">Single Use</span>
-              <span v-if="currentItem.is_used" class="type-tag used-tag">Used</span>
+              <span v-if="isOnCooldown(currentItem)" class="type-tag cooldown-tag">Used This Round</span>
+              <span v-else-if="currentItem.is_used" class="type-tag used-tag">Consumed</span>
+              <span v-else-if="currentItem.item?.is_consumable" class="type-tag ongoing-tag">Consumable</span>
+              <span v-else class="type-tag reusable-tag">Reusable</span>
               <span v-if="currentItem.item?.target === 'opponent'" class="type-tag opponent-tag">Targets Opponent</span>
             </div>
 
@@ -68,6 +70,7 @@ export default {
   props: {
     items: { type: Array, default: () => [] },
     showButton: { type: Boolean, default: true },
+    currentRound: { type: Number, default: 0 },
   },
   data() {
     return {
@@ -139,6 +142,9 @@ export default {
         default:
           return item.description || 'Single-use effect';
       }
+    },
+    isOnCooldown(pi) {
+      return !pi.is_used && pi.used_round && pi.used_round === this.currentRound;
     },
     effectChipClass(pi) {
       const type = pi.item?.effect?.bonus_type || '';
@@ -276,6 +282,21 @@ export default {
 
 .parchment-card.used {
   opacity: 0.5;
+}
+
+.parchment-card.cooldown {
+  opacity: 0.6;
+  border-color: rgba(107, 91, 58, 0.5);
+}
+
+.cooldown-tag {
+  color: #e6a23c;
+  border: 1px solid #e6a23c;
+}
+
+.reusable-tag {
+  color: #67c23a;
+  border: 1px solid #67c23a;
 }
 
 .card-ornament {
