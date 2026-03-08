@@ -1,7 +1,6 @@
 <template>
   <div v-if="loading" class="loading">Loading game state...</div>
-  <div v-else-if="gameData" class="game-board" :style="gameBgStyle">
-    <div v-if="gameBgUrl" class="game-bg-overlay"></div>
+  <div v-else-if="gameData" class="game-board">
     <!-- Connection status banner -->
     <div v-if="isOnline && connectionStatus !== 'connected'" class="connection-banner" :class="connectionStatus">
       <span v-if="connectionStatus === 'connecting'">Reconnecting...</span>
@@ -56,7 +55,7 @@
       <div class="time-info">
         <span class="round-label">Month {{ gameData.current_round }}/{{ gameData.total_rounds }}</span>
       </div>
-      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu">&#9776;</button>
+      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:block;min-width:15px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
     </div>
     <DuelBoard
       ref="duelBoard"
@@ -104,7 +103,7 @@
       <div class="time-info">
         <span class="round-label">Month {{ gameData.current_round }}/{{ gameData.total_rounds }}</span>
       </div>
-      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu">&#9776;</button>
+      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:block;min-width:15px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
     </div>
 
     <!-- Kingdom Stats -->
@@ -329,6 +328,7 @@ export default {
   inject: {
     openRules: { default: () => () => {} },
     openTutorial: { default: () => () => {} },
+    setActiveGameType: { default: () => () => {} },
   },
   setup() {
     const auth = useAuth();
@@ -397,26 +397,9 @@ export default {
       showGameMenu: false,
       showSettingsModal: false,
       showQuitConfirm: false,
-      // Game backgrounds
-      classicGameBgUrl: null,
-      duelGameBgUrl: null,
     };
   },
   computed: {
-    gameBgUrl() {
-      const bgEnabled = localStorage.getItem('game_bg_enabled') !== 'false';
-      if (!bgEnabled) return null;
-      return this.isDuel ? this.duelGameBgUrl : this.classicGameBgUrl;
-    },
-    gameBgStyle() {
-      if (!this.gameBgUrl) return {};
-      return {
-        backgroundImage: `url(${this.gameBgUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        position: 'relative',
-      };
-    },
     activeCurseCount() {
       let count = 0;
       for (const pn in this.playerCurses) {
@@ -530,13 +513,8 @@ export default {
     },
   },
   async mounted() {
-    // Fetch game backgrounds
-    axios.get('/api/site-settings').then(res => {
-      this.classicGameBgUrl = res.data?.classic_game_background_url || null;
-      this.duelGameBgUrl = res.data?.duel_game_background_url || null;
-    }).catch(() => {});
-
     await this.fetchGame();
+    this.setActiveGameType(this.isDuel ? 'duel' : 'cooperative');
     if (this.isOnline && !this.echoChannel) {
       this.setupOnlinePlayer();
       this.subscribeToGameChannel();
@@ -547,6 +525,7 @@ export default {
     this.setupConnectionMonitoring();
   },
   beforeUnmount() {
+    this.setActiveGameType(null);
     if (this.echoChannel) {
       window.Echo.leave(`game.${this.id}`);
       this.echoChannel = null;
@@ -1271,15 +1250,6 @@ export default {
 </script>
 
 <style scoped>
-/* Game background overlay */
-.game-bg-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(13, 10, 6, 0.7);
-  pointer-events: none;
-  z-index: -1;
-}
-
 /* Curse indicator */
 .curse-indicator {
   position: fixed;
@@ -1596,8 +1566,6 @@ export default {
   border-radius: 6px;
   color: var(--text-secondary, #a09080);
   font-size: 1.1rem;
-  width: 32px;
-  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;

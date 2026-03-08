@@ -1642,9 +1642,8 @@ export default {
 }
 
 .roll-tab.active {
-  background: rgba(212, 168, 67, 0.12);
-  border-color: var(--accent-gold);
-  color: var(--accent-gold);
+    background: var(--accent-gold);
+    color: #FFF;
 }
 
 .roll-tab.tab-success {
@@ -1653,7 +1652,8 @@ export default {
 }
 
 .roll-tab.tab-success.active {
-  background: rgba(74, 138, 58, 0.12);
+    background: #4a8a3a;
+    color: #FFF;
 }
 
 .roll-tab.tab-failure {
@@ -1662,10 +1662,11 @@ export default {
 }
 
 .roll-tab.tab-failure.active {
-  background: rgba(160, 48, 32, 0.12);
+    background: #a03020;
+    color: #FFF;
 }
 
-.roll-tab.tab-waiting {
+.roll-tab.tab-waiting:not(.active) {
   opacity: 0.6;
   animation: tabPulse 2s ease-in-out infinite;
 }

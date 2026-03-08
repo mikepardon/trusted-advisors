@@ -39,7 +39,7 @@
     </header>
 
     <main :style="mainBgStyle">
-      <div v-if="homepageBgUrl && isHomePage" class="main-bg-overlay"></div>
+      <div v-if="(homepageBgUrl && isHomePage) || (gameBgUrl && isGamePage)" class="main-bg-overlay"></div>
       <router-view />
     </main>
 
@@ -123,6 +123,7 @@ export default {
       openNotifications: () => { this.showNotifications = true; },
       openRules: () => { this.showHowToPlay = true; },
       openTutorial: () => { this.showTutorial = true; },
+      setActiveGameType: (type) => { this.activeGameType = type; },
     };
   },
   data() {
@@ -138,6 +139,7 @@ export default {
       homepageBgUrl: null,
       classicGameBgUrl: null,
       duelGameBgUrl: null,
+      activeGameType: null,
     };
   },
   watch: {
@@ -146,6 +148,11 @@ export default {
         this.streakToast = val;
         this.auth.state.streakNotification = null;
         setTimeout(() => { this.streakToast = null; }, 4000);
+      }
+    },
+    '$route.path'() {
+      if (!this.isGamePage) {
+        this.activeGameType = null;
       }
     },
   },
@@ -176,10 +183,15 @@ export default {
     isHomePage() {
       return !this.isAdmin && !this.isGamePage && ['/', '/collection', '/shop', '/friends', '/profile', '/leaderboard'].includes(this.$route.path);
     },
+    gameBgUrl() {
+      if (!this.isGamePage || localStorage.getItem('game_bg_enabled') === 'false') return null;
+      return this.activeGameType === 'duel' ? this.duelGameBgUrl : this.classicGameBgUrl;
+    },
     mainBgStyle() {
-      if (!this.homepageBgUrl || !this.isHomePage) return {};
+      const bgUrl = this.isHomePage ? this.homepageBgUrl : (this.isGamePage ? this.gameBgUrl : null);
+      if (!bgUrl) return {};
       return {
-        backgroundImage: `url(${this.homepageBgUrl})`,
+        backgroundImage: `url(${bgUrl})`,
         backgroundSize: 'cover',
         backgroundPosition: 'center',
         backgroundAttachment: 'scroll',
