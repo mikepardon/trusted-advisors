@@ -1685,7 +1685,7 @@ export default {
   font-weight: 700;
   color: var(--accent-gold);
   background: rgba(0, 0, 0, 0.6);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   padding: 4px 10px;
   z-index: 10;

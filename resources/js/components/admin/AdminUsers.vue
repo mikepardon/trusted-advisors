@@ -428,7 +428,7 @@ export default {
   max-width: 400px;
   padding: 10px 14px;
   background: var(--bg-primary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--text-primary);
   font-family: 'Crimson Text', serif;

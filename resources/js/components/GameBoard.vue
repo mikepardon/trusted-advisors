@@ -1,6 +1,7 @@
 <template>
   <div v-if="loading" class="loading">Loading game state...</div>
-  <div v-else-if="gameData" class="game-board">
+  <div v-else-if="gameData" class="game-board" :style="gameBgStyle">
+    <div v-if="gameBgUrl" class="game-bg-overlay"></div>
     <!-- Connection status banner -->
     <div v-if="isOnline && connectionStatus !== 'connected'" class="connection-banner" :class="connectionStatus">
       <span v-if="connectionStatus === 'connecting'">Reconnecting...</span>
@@ -396,9 +397,26 @@ export default {
       showGameMenu: false,
       showSettingsModal: false,
       showQuitConfirm: false,
+      // Game backgrounds
+      classicGameBgUrl: null,
+      duelGameBgUrl: null,
     };
   },
   computed: {
+    gameBgUrl() {
+      const bgEnabled = localStorage.getItem('game_bg_enabled') !== 'false';
+      if (!bgEnabled) return null;
+      return this.isDuel ? this.duelGameBgUrl : this.classicGameBgUrl;
+    },
+    gameBgStyle() {
+      if (!this.gameBgUrl) return {};
+      return {
+        backgroundImage: `url(${this.gameBgUrl})`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        position: 'relative',
+      };
+    },
     activeCurseCount() {
       let count = 0;
       for (const pn in this.playerCurses) {
@@ -512,6 +530,12 @@ export default {
     },
   },
   async mounted() {
+    // Fetch game backgrounds
+    axios.get('/api/site-settings').then(res => {
+      this.classicGameBgUrl = res.data?.classic_game_background_url || null;
+      this.duelGameBgUrl = res.data?.duel_game_background_url || null;
+    }).catch(() => {});
+
     await this.fetchGame();
     if (this.isOnline && !this.echoChannel) {
       this.setupOnlinePlayer();
@@ -1247,6 +1271,15 @@ export default {
 </script>
 
 <style scoped>
+/* Game background overlay */
+.game-bg-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(13, 10, 6, 0.7);
+  pointer-events: none;
+  z-index: -1;
+}
+
 /* Curse indicator */
 .curse-indicator {
   position: fixed;

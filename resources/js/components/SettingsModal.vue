@@ -70,7 +70,19 @@
               </button>
             </div>
 
-
+            <div class="setting-row">
+              <div class="setting-info">
+                <span class="setting-label">Game Background</span>
+                <span class="setting-desc">Show background image during games</span>
+              </div>
+              <button
+                class="toggle"
+                :class="{ active: gameBgEnabled }"
+                @click="toggleGameBg"
+              >
+                <span class="toggle-knob"></span>
+              </button>
+            </div>
           </div>
 
           <div class="settings-group">
@@ -187,6 +199,7 @@ export default {
       settings: getSoundSettings(),
       hintsEnabled: getHintsSetting(),
       dddiceEnabled: localStorage.getItem('dddice_enabled') !== 'false',
+      gameBgEnabled: localStorage.getItem('game_bg_enabled') !== 'false',
       notifPrefs: {
         push_game: true,
         push_social: true,
@@ -203,6 +216,7 @@ export default {
         this.settings = getSoundSettings();
         this.hintsEnabled = getHintsSetting();
         this.dddiceEnabled = localStorage.getItem('dddice_enabled') !== 'false';
+        this.gameBgEnabled = localStorage.getItem('game_bg_enabled') !== 'false';
         const prefs = this.auth.state.user?.notification_preferences;
         if (prefs) {
           Object.keys(this.notifPrefs).forEach(key => {
@@ -243,6 +257,13 @@ export default {
       this.dddiceEnabled = !this.dddiceEnabled;
       localStorage.setItem('dddice_enabled', this.dddiceEnabled ? 'true' : 'false');
       if (this.dddiceEnabled) {
+        playSound('clickToggle');
+      }
+    },
+    toggleGameBg() {
+      this.gameBgEnabled = !this.gameBgEnabled;
+      localStorage.setItem('game_bg_enabled', this.gameBgEnabled ? 'true' : 'false');
+      if (this.gameBgEnabled) {
         playSound('clickToggle');
       }
     },

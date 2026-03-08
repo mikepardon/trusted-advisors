@@ -198,7 +198,7 @@ export default {
 .friend-input {
   flex: 1;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--text-primary);
   font-family: 'Crimson Text', Georgia, serif;

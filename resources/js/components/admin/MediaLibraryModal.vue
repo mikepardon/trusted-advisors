@@ -354,7 +354,7 @@ export default {
   position: relative;
   z-index: 1;
   background: var(--bg-primary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 10px;
   width: 960px;
   max-width: 95vw;
@@ -484,7 +484,7 @@ export default {
 .filter-select {
   padding: 8px 12px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--text-bright);
   font-size: 0.9rem;
@@ -583,7 +583,7 @@ export default {
   margin: 10px auto 0;
   padding: 8px 24px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--accent-gold);
   cursor: pointer;
@@ -604,7 +604,7 @@ export default {
   width: 240px;
   flex-shrink: 0;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 14px;
   display: flex;
@@ -619,7 +619,7 @@ export default {
   object-fit: contain;
   border-radius: 6px;
   background: var(--bg-primary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
 }
 
 .detail-fields {
@@ -645,7 +645,7 @@ export default {
 .detail-input {
   padding: 6px 10px;
   background: var(--bg-primary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 4px;
   color: var(--text-bright);
   font-size: 0.85rem;
@@ -722,7 +722,7 @@ export default {
 .btn-secondary {
   padding: 8px 20px;
   background: none;
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--text-secondary);
   font-size: 0.9rem;

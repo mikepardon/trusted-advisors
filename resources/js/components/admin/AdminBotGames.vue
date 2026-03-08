@@ -416,7 +416,7 @@ export default {
   display: flex;
   gap: 0;
   margin-bottom: 20px;
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   overflow: hidden;
   width: fit-content;
@@ -458,7 +458,7 @@ export default {
   margin-bottom: 30px;
   padding: 16px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
 }
 
@@ -479,7 +479,7 @@ export default {
 .control-group input,
 .control-group select {
   background: var(--bg-primary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   color: var(--text-bright);
   padding: 8px 12px;
   border-radius: 4px;
@@ -520,7 +520,7 @@ export default {
 
 .summary-card {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 16px;
   text-align: center;

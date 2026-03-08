@@ -374,7 +374,7 @@ export default {
   gap: 10px;
   margin-bottom: 16px;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 10px;
 }

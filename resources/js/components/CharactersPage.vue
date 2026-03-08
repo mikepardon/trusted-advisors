@@ -339,7 +339,7 @@ export default {
   gap: 6px;
   padding: 12px 8px;
   background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 10px;
   cursor: pointer;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -384,7 +384,7 @@ export default {
   flex-direction: column;
   align-items: center;
   background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 0;
   padding: 8px;
 }

@@ -776,7 +776,7 @@ export default {
 
 .total-summary {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 15px;
   text-align: center;

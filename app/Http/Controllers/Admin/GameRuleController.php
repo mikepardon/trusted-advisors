@@ -52,10 +52,16 @@ class GameRuleController extends Controller
 
     public static function siteSettings(): JsonResponse
     {
-        $bg = GameRule::where('key', 'homepage_background_image')->first();
+        $bgs = GameRule::whereIn('key', [
+            'homepage_background_image',
+            'classic_game_background_image',
+            'duel_game_background_image',
+        ])->pluck('value', 'key');
 
         return response()->json([
-            'homepage_background_url' => $bg && $bg->value ? '/api/storage/' . $bg->value : null,
+            'homepage_background_url' => ($bgs['homepage_background_image'] ?? null) ? '/api/storage/' . $bgs['homepage_background_image'] : null,
+            'classic_game_background_url' => ($bgs['classic_game_background_image'] ?? null) ? '/api/storage/' . $bgs['classic_game_background_image'] : null,
+            'duel_game_background_url' => ($bgs['duel_game_background_image'] ?? null) ? '/api/storage/' . $bgs['duel_game_background_image'] : null,
         ]);
     }
 }

@@ -527,7 +527,7 @@ export default {
   font-size: 1.6rem;
   color: var(--text-bright);
   background: rgba(26, 18, 9, 0.8);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 6px 20px;
   width: fit-content;

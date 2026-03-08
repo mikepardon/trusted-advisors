@@ -744,7 +744,7 @@ export default {
 .modal-content h3 { font-family: 'Cinzel', serif; color: var(--accent-gold); margin-bottom: 16px; }
 .form-group { margin-bottom: 12px; }
 .form-group label { display: block; font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 4px; }
-.form-group input, .form-group textarea, .form-group select { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid var(--border-gold); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.9rem; padding: 8px 10px; outline: none; box-sizing: border-box; }
+.form-group input, .form-group textarea, .form-group select { width: 100%; background: rgba(0,0,0,0.3); border: 2px solid var(--border-gold); border-radius: 6px; color: var(--text-primary); font-family: inherit; font-size: 0.9rem; padding: 8px 10px; outline: none; box-sizing: border-box; }
 .form-group input:focus, .form-group textarea:focus, .form-group select:focus { border-color: var(--accent-gold); }
 .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .form-grid-3 { grid-template-columns: 1fr 1fr 1fr; }
@@ -787,6 +787,6 @@ export default {
 .tile-char-thumb { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
 .tile-name { white-space: nowrap; }
 .color-picker-row { display: flex; gap: 8px; align-items: center; }
-.color-input { width: 40px; height: 34px; padding: 2px; border: 1px solid var(--border-gold); border-radius: 4px; background: rgba(0,0,0,0.3); cursor: pointer; }
+.color-input { width: 40px; height: 34px; padding: 2px; border: 2px solid var(--border-gold); border-radius: 4px; background: rgba(0,0,0,0.3); cursor: pointer; }
 .color-text { flex: 1; }
 </style>

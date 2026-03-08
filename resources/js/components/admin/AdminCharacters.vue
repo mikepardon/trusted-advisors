@@ -719,7 +719,7 @@ export default {
 /* Rules panel */
 .rules-panel {
   background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 18px 22px;
   margin-bottom: 24px;

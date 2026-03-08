@@ -80,7 +80,7 @@
     <div v-if="showLiveScore" class="live-score-row">
       <div v-if="game.bonus_score" class="bonus-score-indicator">
         <span class="bonus-label">Renown</span>
-        <span class="bonus-value">+{{ game.bonus_score }}</span>
+        <span class="bonus-value">{{ game.bonus_score > 0 ? '+' : '' }}{{ game.bonus_score }}</span>
       </div>
       <div v-if="game.score_modifier" class="bonus-score-indicator modifier-indicator">
         <span class="bonus-label">Modifier</span>
@@ -94,7 +94,7 @@
     </div>
     <div v-else-if="game.bonus_score" class="bonus-score-indicator">
       <span class="bonus-label">Renown</span>
-      <span class="bonus-value">+{{ game.bonus_score }}</span>
+      <span class="bonus-value">{{ game.bonus_score > 0 ? '+' : '' }}{{ game.bonus_score }}</span>
     </div>
 
     <!-- Score Breakdown Modal -->

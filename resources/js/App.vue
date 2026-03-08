@@ -136,6 +136,8 @@ export default {
       streakToast: null,
       showTutorial: false,
       homepageBgUrl: null,
+      classicGameBgUrl: null,
+      duelGameBgUrl: null,
     };
   },
   watch: {
@@ -200,6 +202,8 @@ export default {
     // Fetch site settings (homepage background)
     axios.get('/api/site-settings').then(res => {
       this.homepageBgUrl = res.data?.homepage_background_url || null;
+      this.classicGameBgUrl = res.data?.classic_game_background_url || null;
+      this.duelGameBgUrl = res.data?.duel_game_background_url || null;
     }).catch(() => {});
     // fetchUser() is already called in app.js router guard; just wait for it
     const check = () => {
@@ -365,7 +369,7 @@ body {
 /* ---- Full header (non-game pages) ---- */
 .game-header {
   padding: 10px 12px;
-  border-bottom: 3px solid var(--border-gold);
+  border-bottom: 1px solid var(--border-gold);
   background: linear-gradient(180deg, rgba(70, 50, 32, 0.6) 0%, rgba(30, 22, 12, 0.8) 100%);
   flex-shrink: 0;
   box-shadow: 0 3px 12px rgba(0,0,0,0.4);
@@ -580,14 +584,14 @@ button:not(.nav-item):not(.mobile-menu-item) {
   font-family: 'Cinzel', serif;
   background: linear-gradient(180deg, var(--wood-light), var(--wood-medium), var(--wood-dark));
   color: var(--accent-gold);
-  border: 3px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   padding: 10px;
   font-size: 1rem;
   cursor: pointer;
   transition: all 0.15s;
   letter-spacing: 1px;
   border-radius: 10px;
-  box-shadow: 0 4px 0 #1a1006, inset 0 1px 0 rgba(255,220,140,0.15);
+  /*box-shadow: 0 4px 0 #1a1006, inset 0 1px 0 rgba(255,220,140,0.15);*/
   text-shadow: 0 1px 2px rgba(0,0,0,0.5);
 }
 
@@ -654,7 +658,7 @@ box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(
 
 .card-panel {
   background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
-  border: 3px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 20px;
@@ -742,7 +746,7 @@ box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(
   display: flex;
   justify-content: space-around;
   align-items: center;
-  border-top: 3px solid var(--border-gold);
+  border-top: 1px solid var(--border-gold);
   background: linear-gradient(180deg, var(--wood-light), var(--wood-medium), var(--wood-dark));
   padding: 8px 0;
   padding-bottom: calc(8px + env(safe-area-inset-bottom));

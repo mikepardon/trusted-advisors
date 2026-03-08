@@ -314,7 +314,7 @@ export default {
   left: 10px;
   z-index: 150;
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   color: var(--accent-gold);
   width: 40px;
   height: 40px;

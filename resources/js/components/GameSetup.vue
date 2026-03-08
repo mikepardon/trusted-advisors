@@ -1082,8 +1082,7 @@ export default {
 
 .mode-card {
   background: linear-gradient(180deg, var(--wood-light), var(--wood-medium), var(--wood-dark));
-  border: 3px solid var(--border-gold);
-  border-bottom-width: 5px;
+  border: 2px solid var(--border-gold);
   border-radius: 12px;
   padding: 16px 14px;
   cursor: pointer;
@@ -1140,7 +1139,7 @@ export default {
 .invites-panel {
   margin-top: 20px;
   background: linear-gradient(180deg, var(--wood-light), var(--wood-dark));
-  border: 3px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 14px;
   box-shadow: 0 4px 0 rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,220,140,0.08);
 }
@@ -1301,7 +1300,7 @@ export default {
 .friend-input {
   flex: 1;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--text-primary);
   font-family: 'Crimson Text', Georgia, serif;
@@ -1773,7 +1772,7 @@ export default {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 3px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   box-shadow: 0 2px 8px rgba(240,192,80,0.35), inset 0 -2px 4px rgba(0,0,0,0.2);
   flex-shrink: 0;
   position: absolute;
@@ -1981,7 +1980,7 @@ export default {
 
 .mobile-menu-panel {
   background: linear-gradient(180deg, var(--wood-light), var(--wood-dark));
-  border: 3px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 14px;
   padding: 10px 0;
   min-width: 220px;
@@ -2320,7 +2319,7 @@ export default {
 .lobby-password-input {
   width: 100%;
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   color: var(--text-primary);
   font-family: 'Crimson Text', Georgia, serif;

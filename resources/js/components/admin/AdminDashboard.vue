@@ -152,8 +152,34 @@
             <button class="btn-remove-bg" @click="removeHomepageBg">Remove</button>
           </div>
           <div class="bg-upload-wrap">
-            <button class="btn-upload-bg" @click="showMediaPicker = true">
+            <button class="btn-upload-bg" @click="mediaPickerTarget = 'homepage'; showMediaPicker = true">
               {{ homepageBgUrl ? 'Choose Different Image' : 'Choose Image' }}
+            </button>
+          </div>
+        </div>
+        <div class="appearance-row">
+          <span class="toggle-label">Classic Game Background</span>
+          <span class="toggle-desc" style="padding-left:0">Background image during cooperative games.</span>
+          <div class="bg-preview-wrap" v-if="classicBgUrl">
+            <img :src="classicBgUrl" class="bg-preview" alt="Classic game background" />
+            <button class="btn-remove-bg" @click="removeGameBg('classic')">Remove</button>
+          </div>
+          <div class="bg-upload-wrap">
+            <button class="btn-upload-bg" @click="mediaPickerTarget = 'classic'; showMediaPicker = true">
+              {{ classicBgUrl ? 'Choose Different Image' : 'Choose Image' }}
+            </button>
+          </div>
+        </div>
+        <div class="appearance-row">
+          <span class="toggle-label">Duel Game Background</span>
+          <span class="toggle-desc" style="padding-left:0">Background image during duel games.</span>
+          <div class="bg-preview-wrap" v-if="duelBgUrl">
+            <img :src="duelBgUrl" class="bg-preview" alt="Duel game background" />
+            <button class="btn-remove-bg" @click="removeGameBg('duel')">Remove</button>
+          </div>
+          <div class="bg-upload-wrap">
+            <button class="btn-upload-bg" @click="mediaPickerTarget = 'duel'; showMediaPicker = true">
+              {{ duelBgUrl ? 'Choose Different Image' : 'Choose Image' }}
             </button>
           </div>
         </div>
@@ -187,7 +213,10 @@ export default {
       stats: {},
       tournamentsEnabled: false,
       homepageBgUrl: null,
+      classicBgUrl: null,
+      duelBgUrl: null,
       showMediaPicker: false,
+      mediaPickerTarget: 'homepage',
     };
   },
   computed: {
@@ -271,6 +300,8 @@ export default {
       this.stats = statsRes.data;
       this.tournamentsEnabled = !!rulesRes.data?.tournaments_enabled;
       this.homepageBgUrl = siteRes.data?.homepage_background_url || null;
+      this.classicBgUrl = siteRes.data?.classic_game_background_url || null;
+      this.duelBgUrl = siteRes.data?.duel_game_background_url || null;
     } catch (e) {
       console.error('Failed to load dashboard stats', e);
     }
@@ -286,9 +317,21 @@ export default {
     },
     async onMediaSelected(item) {
       this.showMediaPicker = false;
+      const keyMap = {
+        homepage: 'homepage_background_image',
+        classic: 'classic_game_background_image',
+        duel: 'duel_game_background_image',
+      };
+      const urlMap = {
+        homepage: 'homepageBgUrl',
+        classic: 'classicBgUrl',
+        duel: 'duelBgUrl',
+      };
+      const key = keyMap[this.mediaPickerTarget] || keyMap.homepage;
+      const urlProp = urlMap[this.mediaPickerTarget] || urlMap.homepage;
       try {
-        await axios.put('/api/admin/rules/homepage_background_image', { value: item.path });
-        this.homepageBgUrl = item.url;
+        await axios.put(`/api/admin/rules/${key}`, { value: item.path });
+        this[urlProp] = item.url;
         this.toast.success('Background updated');
       } catch {
         this.toast.error('Failed to set background');
@@ -298,6 +341,20 @@ export default {
       try {
         await axios.delete('/api/admin/homepage-background');
         this.homepageBgUrl = null;
+        this.toast.success('Background removed');
+      } catch {
+        this.toast.error('Failed to remove background');
+      }
+    },
+    async removeGameBg(type) {
+      const key = type === 'classic' ? 'classic_game_background_image' : 'duel_game_background_image';
+      try {
+        const existing = await axios.get('/api/admin/rules');
+        if (existing.data?.[key]) {
+          await axios.put(`/api/admin/rules/${key}`, { value: '' });
+        }
+        if (type === 'classic') this.classicBgUrl = null;
+        else this.duelBgUrl = null;
         this.toast.success('Background removed');
       } catch {
         this.toast.error('Failed to remove background');
@@ -337,7 +394,7 @@ export default {
 
 .stat-card {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 20px;
   text-align: center;
@@ -383,7 +440,7 @@ export default {
 
 .chart-card {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 18px;
   text-align: center;
@@ -399,7 +456,7 @@ export default {
 /* Feature Toggles */
 .toggles-panel {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 16px 20px;
 }
@@ -452,7 +509,7 @@ export default {
   height: 90px;
   object-fit: cover;
   border-radius: 6px;
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
 }
 
 .btn-upload-bg,

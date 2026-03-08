@@ -616,7 +616,7 @@ export default {
 
 .referral-code-display {
   background: rgba(0, 0, 0, 0.3);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 6px;
   padding: 10px 14px;
   text-align: center;

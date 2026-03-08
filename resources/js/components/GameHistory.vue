@@ -216,7 +216,7 @@ export default {
 
 .active-card {
   background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-left: 4px solid var(--accent-gold);
   border-radius: 8px;
   padding: 12px 14px;

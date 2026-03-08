@@ -121,7 +121,7 @@ export default {
 
 .section-panel {
   background: var(--bg-secondary);
-  border: 1px solid var(--border-gold);
+  border: 2px solid var(--border-gold);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
