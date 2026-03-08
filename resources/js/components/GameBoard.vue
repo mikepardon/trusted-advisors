@@ -113,18 +113,60 @@
     <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" :currentRound="gameData.current_round || 0" />
 
     <!-- Active Curses Indicator -->
-    <div v-if="activeCurseCount > 0" class="curse-indicator" @click="showCurseDetails = !showCurseDetails">
+    <div v-if="activeCurseCount > 0" class="curse-indicator" @click="showCurseDetails = true">
       &#9760; {{ activeCurseCount }} curse{{ activeCurseCount > 1 ? 's' : '' }}
     </div>
-    <div v-if="showCurseDetails && activeCurseCount > 0" class="curse-details-panel">
-      <div v-for="(curses, pn) in playerCurses" :key="pn">
-        <div v-for="c in curses" :key="c.id" class="curse-detail-row">
-          <span class="curse-detail-name">{{ c.curse?.name || 'Curse' }}</span>
-          <span class="curse-detail-neg">{{ c.curse?.negative_effect?.type }}</span>
-          <span class="curse-detail-pos">{{ c.curse?.positive_effect?.type }}</span>
+
+    <!-- Active Curses Overlay -->
+    <teleport to="body">
+      <transition name="curse-viewer">
+        <div v-if="showCurseDetails && activeCurseCount > 0" class="curse-viewer-overlay" @click.self="showCurseDetails = false">
+          <div class="curse-viewer-container">
+            <button class="curse-viewer-close" @click="showCurseDetails = false">&times;</button>
+
+            <div class="curse-viewer-header">
+              <h2 class="curse-viewer-title">Active Curses</h2>
+              <p class="curse-viewer-subtitle">{{ activeCurseCount }} curse{{ activeCurseCount > 1 ? 's' : '' }} afflicting the kingdom</p>
+            </div>
+
+            <div class="curse-viewer-cards">
+              <template v-for="(curses, pn) in playerCurses" :key="pn">
+                <div v-for="c in curses" :key="c.id" class="curse-viewer-parchment">
+                  <img v-if="c.curse?.image_path" :src="`/api/storage/${c.curse.image_path}`" class="curse-viewer-image" />
+                  <div v-else class="curse-viewer-icon">&#9760;</div>
+
+                  <h3 class="curse-viewer-name">{{ c.curse?.name || 'Unknown Curse' }}</h3>
+                  <p v-if="c.curse?.description" class="curse-viewer-flavor">{{ c.curse.description }}</p>
+
+                  <div class="curse-viewer-divider"><span class="curse-viewer-divider-gem">&#9830;</span></div>
+
+                  <div class="curse-viewer-effect curse-viewer-penalty">
+                    <span class="curse-viewer-effect-icon">&#9888;</span>
+                    <div>
+                      <span class="curse-viewer-effect-label">Penalty</span>
+                      <p class="curse-viewer-effect-desc">{{ describeCurseEffect(c.curse?.negative_effect, 'negative') }}</p>
+                    </div>
+                  </div>
+
+                  <div class="curse-viewer-effect curse-viewer-reward">
+                    <span class="curse-viewer-effect-icon">&#10022;</span>
+                    <div>
+                      <span class="curse-viewer-effect-label">Reward</span>
+                      <p class="curse-viewer-effect-desc">{{ describeCurseEffect(c.curse?.positive_effect, 'positive') }}</p>
+                    </div>
+                  </div>
+
+                  <div class="curse-viewer-meta">
+                    <span class="curse-viewer-player">{{ getPlayerNameForCurse(pn) }}</span>
+                    <span v-if="c.acquired_round" class="curse-viewer-round">Round {{ c.acquired_round }}</span>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </transition>
+    </teleport>
 
     <!-- Event Banner -->
     <EventBanner :event="gameData.current_event" />
@@ -1122,6 +1164,26 @@ export default {
         this.showItemReveal = false;
       }
     },
+    describeCurseEffect(effect, phase) {
+      if (!effect) return 'Unknown';
+      const t = effect.type;
+      if (t === 'lose_die') return `Permanently lose ${effect.value || 1} die`;
+      if (t === 'stat_per_round' && phase === 'negative') return `${effect.value} ${effect.stat} each round`;
+      if (t === 'stat_per_round' && phase === 'positive') return `+${effect.value} ${effect.stat} each round`;
+      if (t === 'difficulty_modifier') return `All cards +${effect.value || 1} difficulty`;
+      if (t === 'double_negative') return 'Negative card effects are doubled';
+      if (t === 'xp_multiplier') return `${effect.value}x XP at game end`;
+      if (t === 'auto_max_stat') return `${effect.count || 1} stat(s) set to max at game end`;
+      if (t === 'score_bonus') return `+${effect.value} score at game end`;
+      if (t === 'opponent_difficulty') return `Opponent's cards +${effect.value} difficulty`;
+      if (t === 'opponent_lose_die') return `Opponent loses a die for ${effect.rounds || 1} round(s)`;
+      return JSON.stringify(effect);
+    },
+    getPlayerNameForCurse(playerNumber) {
+      const pn = parseInt(playerNumber, 10);
+      const player = this.gameData?.game?.players?.find(p => p.player_number === pn);
+      return player?.character?.name || `Player ${pn}`;
+    },
     currentPendingCurse() {
       if (!this.pendingCurses || !this.pendingCurses.length) return null;
       // Find the first pending curse for the active player
@@ -1280,28 +1342,194 @@ export default {
   border-color: #9b59b6;
   background: rgba(60, 0, 90, 0.95);
 }
-.curse-details-panel {
+
+/* Curse Viewer Overlay */
+.curse-viewer-overlay {
   position: fixed;
-  bottom: 120px;
-  right: 16px;
-  background: rgba(20, 5, 30, 0.95);
-  border: 1px solid rgba(155, 89, 182, 0.4);
-  border-radius: 8px;
-  padding: 12px;
-  z-index: 50;
-  max-width: 280px;
-  font-size: 0.8rem;
-}
-.curse-detail-row {
+  inset: 0;
+  z-index: 1100;
   display: flex;
-  gap: 8px;
   align-items: center;
-  padding: 4px 0;
-  border-bottom: 1px solid rgba(155, 89, 182, 0.15);
+  justify-content: center;
+  background: radial-gradient(ellipse at center, rgba(40, 0, 60, 0.92) 0%, rgba(10, 0, 15, 0.97) 100%);
 }
-.curse-detail-name { color: #c890e0; font-weight: 700; flex: 1; }
-.curse-detail-neg { color: #c0392b; font-size: 0.7rem; }
-.curse-detail-pos { color: #d4a843; font-size: 0.7rem; }
+.curse-viewer-container {
+  position: relative;
+  width: 95%;
+  max-width: 720px;
+  max-height: 90vh;
+  overflow-y: auto;
+  padding: 28px 20px;
+  text-align: center;
+}
+.curse-viewer-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(155, 89, 182, 0.5);
+  color: rgba(200, 144, 224, 0.8);
+  font-size: 1.5rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  transition: color 0.2s, border-color 0.2s;
+}
+.curse-viewer-close:hover {
+  color: #c890e0;
+  border-color: #9b59b6;
+}
+.curse-viewer-header { margin-bottom: 24px; }
+.curse-viewer-title {
+  font-family: 'Cinzel', serif;
+  color: #9b59b6;
+  font-size: 1.8rem;
+  text-shadow: 0 0 20px rgba(155, 89, 182, 0.5);
+  margin-bottom: 6px;
+}
+.curse-viewer-subtitle {
+  color: rgba(200, 144, 224, 0.7);
+  font-size: 0.9rem;
+}
+.curse-viewer-cards {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+.curse-viewer-parchment {
+  background: linear-gradient(180deg, #2a1530, #1e0e28, #140820);
+  border: 2px solid rgba(128, 0, 128, 0.35);
+  border-radius: 12px;
+  padding: 24px 20px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(155, 89, 182, 0.08);
+}
+.curse-viewer-image {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid rgba(155, 89, 182, 0.4);
+  margin-bottom: 12px;
+}
+.curse-viewer-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.8rem;
+  color: #9b59b6;
+  background: rgba(155, 89, 182, 0.1);
+  border-radius: 50%;
+  border: 2px solid rgba(155, 89, 182, 0.3);
+  margin-bottom: 12px;
+}
+.curse-viewer-name {
+  font-family: 'Cinzel', serif;
+  color: #c890e0;
+  font-size: 1.1rem;
+  text-align: center;
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+.curse-viewer-flavor {
+  color: rgba(200, 144, 224, 0.5);
+  font-size: 0.82rem;
+  font-style: italic;
+  line-height: 1.5;
+  text-align: center;
+  margin-bottom: 8px;
+}
+.curse-viewer-divider {
+  position: relative;
+  height: 1px;
+  width: 100%;
+  background: linear-gradient(90deg, transparent, rgba(155, 89, 182, 0.4), transparent);
+  margin: 8px 0;
+}
+.curse-viewer-divider-gem {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1e0e28;
+  color: #9b59b6;
+  padding: 0 8px;
+  font-size: 0.7rem;
+}
+.curse-viewer-effect {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  text-align: left;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.curse-viewer-penalty {
+  background: rgba(192, 57, 43, 0.1);
+  border: 1px solid rgba(192, 57, 43, 0.25);
+}
+.curse-viewer-reward {
+  background: rgba(212, 168, 67, 0.08);
+  border: 1px solid rgba(212, 168, 67, 0.2);
+}
+.curse-viewer-effect-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.curse-viewer-penalty .curse-viewer-effect-icon { color: #e74c3c; }
+.curse-viewer-reward .curse-viewer-effect-icon { color: #d4a843; }
+.curse-viewer-effect-label {
+  font-weight: 700;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.curse-viewer-penalty .curse-viewer-effect-label { color: #e74c3c; }
+.curse-viewer-reward .curse-viewer-effect-label { color: #d4a843; }
+.curse-viewer-effect-desc {
+  font-size: 0.82rem;
+  color: var(--text-secondary, #a09080);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+.curse-viewer-meta {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-top: 10px;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: rgba(200, 144, 224, 0.45);
+}
+/* Transitions */
+.curse-viewer-enter-active { transition: opacity 0.25s ease; }
+.curse-viewer-leave-active { transition: opacity 0.2s ease; }
+.curse-viewer-enter-from, .curse-viewer-leave-to { opacity: 0; }
+
+@media (max-width: 768px) {
+  .curse-viewer-parchment {
+    width: 100%;
+    max-width: 320px;
+    padding: 18px 16px;
+  }
+  .curse-viewer-name { font-size: 1rem; }
+  .curse-viewer-title { font-size: 1.4rem; }
+}
 
 .connection-banner {
   text-align: center;
