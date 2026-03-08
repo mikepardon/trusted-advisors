@@ -135,9 +135,14 @@
               <option value="end_game_multiplier">End-Game Modifier % (Immediate)</option>
               <option value="score_per_round">Score Per Round (Passive)</option>
               <option value="score_multiplier">Score Multiplier (Passive)</option>
+              <option value="debuff_roll">Debuff Opponent Roll (Duel)</option>
+              <option value="increase_difficulty">Increase Opponent Difficulty (Duel)</option>
+              <option value="shield_negative">Shield Negative Effects</option>
+              <option value="peek_cards">Peek at Cards (Duel)</option>
+              <option value="steal_stat">Steal Stat Point (Duel)</option>
             </select>
           </div>
-          <div v-if="form.bonus_type === 'stat_boost'" class="form-group">
+          <div v-if="form.bonus_type === 'stat_boost' || form.bonus_type === 'steal_stat'" class="form-group">
             <label>Target Stat</label>
             <select v-model="form.stat" required>
               <option value="wealth">Wealth</option>
@@ -151,6 +156,13 @@
           <div class="form-group">
             <label>Bonus Value</label>
             <input v-model.number="form.bonus_value" type="number" required />
+          </div>
+          <div class="form-group">
+            <label>Target</label>
+            <select v-model="form.target">
+              <option :value="null">Self</option>
+              <option value="opponent">Opponent</option>
+            </select>
           </div>
           <div class="form-group">
             <label>
@@ -192,6 +204,11 @@
                   <option value="heal_die">Heal Die (Immediate)</option>
                   <option value="score_bonus">Score Bonus (Immediate)</option>
                   <option value="end_game_multiplier">End-Game Modifier % (Immediate)</option>
+                  <option value="debuff_roll">Debuff Opponent Roll</option>
+                  <option value="increase_difficulty">Increase Opponent Difficulty</option>
+                  <option value="shield_negative">Shield Negative Effects</option>
+                  <option value="peek_cards">Peek at Cards</option>
+                  <option value="steal_stat">Steal Stat Point</option>
                 </select>
               </div>
               <div v-if="form.bonus_type_duel === 'stat_boost'" class="form-group">
@@ -264,6 +281,7 @@ export default {
         stat: 'food',
         is_negative: false,
         is_consumable: false,
+        target: null,
         addon_id: null,
         available_cooperative: true,
         available_duel: true,
@@ -355,6 +373,7 @@ export default {
         stat: 'food',
         is_negative: false,
         is_consumable: false,
+        target: null,
         addon_id: null,
         available_cooperative: true,
         available_duel: true,
@@ -378,6 +397,7 @@ export default {
         stat: item.effect?.stat || 'food',
         is_negative: item.is_negative || false,
         is_consumable: item.is_consumable || false,
+        target: item.target || null,
         addon_id: item.addon_id || null,
         available_cooperative: item.available_cooperative ?? true,
         available_duel: item.available_duel ?? true,
@@ -397,6 +417,7 @@ export default {
         effect_type: this.form.effect_type,
         is_negative: this.form.is_negative,
         is_consumable: this.form.is_consumable,
+        target: this.form.target || null,
         addon_id: this.form.addon_id || null,
         available_cooperative: this.form.available_cooperative,
         available_duel: this.form.available_duel,
