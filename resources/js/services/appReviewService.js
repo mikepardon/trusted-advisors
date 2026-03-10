@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { isWebToNative } from './paymentService';
+import { isNativeApp, showInAppReview } from 'webtonative';
 
 /**
  * Check with the server if we should prompt for app review,
@@ -7,7 +7,7 @@ import { isWebToNative } from './paymentService';
  */
 export async function checkAndPromptReview() {
     // Only prompt in native app context
-    if (!isWebToNative() || !window.WTN?.appReview) {
+    if (!isNativeApp) {
         return false;
     }
 
@@ -17,8 +17,8 @@ export async function checkAndPromptReview() {
             return false;
         }
 
-        // Trigger native review prompt
-        window.WTN.appReview.prompt();
+        // Trigger native review prompt via WTN SDK
+        showInAppReview();
 
         // Mark as prompted on the server
         await axios.post('/api/app-review/prompted');

@@ -1,41 +1,37 @@
 import axios from 'axios';
+import { isIosApp, isAndroidApp, isNativeApp } from 'webtonative';
+import { inAppPurchase, getReceiptData, getAllPurchases } from 'webtonative/InAppPurchase';
 
 /**
- * Detect if running inside a WebToNative (WTN) wrapper app.
+ * Detect if running inside a WebToNative wrapper app.
  */
 export function isWebToNative() {
-    return !!(window.WTN);
+    return isNativeApp;
 }
 
 export function isIOS() {
-    return isWebToNative() && /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    return isIosApp;
 }
 
 export function isAndroid() {
-    return isWebToNative() && /Android/i.test(navigator.userAgent);
+    return isAndroidApp;
 }
 
 /**
  * Get the appropriate payment platform for the current environment.
  */
 export function getPaymentPlatform() {
-    if (isIOS()) return 'apple';
-    if (isAndroid()) return 'google';
+    if (isIosApp) return 'apple';
+    if (isAndroidApp) return 'google';
     return 'stripe';
 }
 
 /**
- * Purchase an item via IAP (WebToNative wrapper).
- * Uses the actual WTN.inAppPurchase({ productId, callback }) API.
+ * Purchase an item via IAP (WebToNative SDK).
  * Returns a promise that resolves with { receiptData, transactionId }.
  */
 export function purchaseIAP(productId, isSubscription = false) {
     return new Promise((resolve, reject) => {
-        if (!window.WTN?.inAppPurchase) {
-            reject(new Error('IAP not available'));
-            return;
-        }
-
         const params = {
             productId,
             callback: (data) => {
@@ -53,12 +49,12 @@ export function purchaseIAP(productId, isSubscription = false) {
         };
 
         // Android requires additional params
-        if (isAndroid()) {
+        if (isAndroidApp) {
             params.productType = isSubscription ? 'SUBS' : 'INAPP';
             params.isConsumable = false;
         }
 
-        window.WTN.inAppPurchase(params);
+        inAppPurchase(params);
     });
 }
 
@@ -71,21 +67,15 @@ export function subscribePremiumIAP(productId) {
 
 /**
  * Restore purchases via IAP.
- * iOS: WTN.getReceiptData({ callback })
- * Android: WTN.getAllPurchases({ callback })
+ * iOS: getReceiptData()
+ * Android: getAllPurchases()
  */
 export function restorePurchases() {
     return new Promise((resolve, reject) => {
-        if (!window.WTN) {
-            reject(new Error('IAP not available'));
-            return;
-        }
-
-        if (isAndroid() && window.WTN.getAllPurchases) {
-            window.WTN.getAllPurchases({
+        if (isAndroidApp) {
+            getAllPurchases({
                 callback: (data) => {
                     if (data.isSuccess) {
-                        // Android returns purchaseData array
                         const purchases = (data.purchaseData || []).map(p => ({
                             product_id: p.productId || p.product_id,
                             transaction_id: p.orderId || p.transactionId || ('wtn_restore_' + Date.now()),
@@ -97,9 +87,8 @@ export function restorePurchases() {
                     }
                 },
             });
-        } else if (window.WTN.getReceiptData) {
-            // iOS: returns a single receipt covering all transactions
-            window.WTN.getReceiptData({
+        } else if (isIosApp) {
+            getReceiptData({
                 callback: (data) => {
                     if (data.isSuccess && data.receiptData) {
                         resolve([{
@@ -115,28 +104,6 @@ export function restorePurchases() {
         } else {
             reject(new Error('Restore not available'));
         }
-    });
-}
-
-/**
- * Get receipt data for verification (iOS).
- */
-export function getReceiptData() {
-    return new Promise((resolve, reject) => {
-        if (!window.WTN?.getReceiptData) {
-            reject(new Error('Receipt data not available'));
-            return;
-        }
-
-        window.WTN.getReceiptData({
-            callback: (data) => {
-                if (data.isSuccess) {
-                    resolve(data.receiptData);
-                } else {
-                    reject(new Error(data.error || 'Failed to get receipt'));
-                }
-            },
-        });
     });
 }
 
@@ -190,7 +157,7 @@ export async function getManageSubscriptionUrl() {
 export async function completePurchaseIAP(productId, isSubscription = false) {
     const platform = getPaymentPlatform();
 
-    // Do the IAP purchase via WTN
+    // Do the IAP purchase via WTN SDK
     const purchaseResult = await purchaseIAP(productId, isSubscription);
 
     // Verify with backend
