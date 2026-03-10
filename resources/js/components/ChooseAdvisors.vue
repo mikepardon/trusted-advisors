@@ -177,6 +177,18 @@ export default {
         [id]: !this.expandedUpgrades[id],
       };
     },
+    upgradeIconEmoji(icon) {
+      const map = {
+        'dice': '\u{1F3B2}', 'dice-multiple': '\u{1F3B2}',
+        'crown': '\u{1F451}', 'coins': '\u{1FA99}',
+        'shield': '\u{1F6E1}', 'church': '\u{26EA}',
+        'wheat': '\u{1F33E}', 'smile': '\u{1F60A}',
+        'star': '\u{2B50}', 'eye': '\u{1F441}',
+        'backpack': '\u{1F392}', 'bag': '\u{1F45C}',
+        'skull': '\u{1F480}',
+      };
+      return map[icon] || icon;
+    },
     sortedLevels(levelOptions) {
       if (!levelOptions) return [];
       return Object.keys(levelOptions)
@@ -536,7 +548,7 @@ export default {
 }
 .expand-enter-to,
 .expand-leave-from {
-  max-height: 800px;
+  max-height: 2000px;
   opacity: 1;
 }
 
