@@ -139,6 +139,9 @@ class AuthController extends Controller
         if (!$user->username_chosen) {
             $response['needs_username'] = true;
         }
+        if ($user->needsAdvisors()) {
+            $response['needs_advisors'] = true;
+        }
 
         return response()->json($response);
     }
@@ -164,6 +167,9 @@ class AuthController extends Controller
 
         if (!$user->username_chosen) {
             $data['needs_username'] = true;
+        }
+        if ($user->needsAdvisors()) {
+            $data['needs_advisors'] = true;
         }
 
         $impersonatorId = $request->session()->get('impersonator_id');

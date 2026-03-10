@@ -46,11 +46,14 @@ use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\Admin\AdminPaymentController;
 use App\Http\Controllers\Admin\AdminRoleController;
 use App\Http\Controllers\Admin\AdminAuditLogController;
+use App\Http\Controllers\Admin\AppIconController;
 use App\Http\Controllers\Admin\BalanceDashboardController;
 use App\Http\Controllers\Admin\RetentionDashboardController;
 use App\Http\Controllers\Admin\MediaLibraryController;
+use App\Http\Controllers\CharacterProgressionController;
 use App\Http\Controllers\StatsController;
 use App\Http\Controllers\TournamentController;
+use App\Http\Controllers\Admin\CharacterLevelOptionController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -81,6 +84,7 @@ Route::get('/storage/{path}', function (string $path) {
         ->header('Cache-Control', 'public, max-age=86400');
 })->where('path', '.*');
 Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
+Route::get('/app-icons', [AppIconController::class, 'publicIndex']);
 Route::get('/site-settings', [GameRuleController::class, 'siteSettings']);
 Route::get('/auth/me', [AuthController::class, 'me']);
 Route::post('/auth/callback', [AuthController::class, 'handleOAuthCallback']);
@@ -168,6 +172,19 @@ Route::middleware('auth:web')->group(function () {
     Route::delete('/notifications/{notification}', [NotificationController::class, 'destroy']);
 
     Route::get('/my-characters', [GameController::class, 'myCharacters']);
+
+    // Starter advisor selection
+    Route::get('/starter-advisors', [CharacterProgressionController::class, 'starterOptions']);
+    Route::post('/choose-starter-advisors', [CharacterProgressionController::class, 'chooseStarters']);
+
+    // Advisor progression
+    Route::get('/my-advisors', [CharacterProgressionController::class, 'index']);
+    Route::get('/my-advisors/{userCharacter}/level-options', [CharacterProgressionController::class, 'levelOptions']);
+    Route::post('/my-advisors/{userCharacter}/choose-upgrade', [CharacterProgressionController::class, 'chooseUpgrade']);
+    Route::post('/my-advisors/{userCharacter}/immortalise', [CharacterProgressionController::class, 'immortalise']);
+
+    // Card redraw (in-game)
+    Route::post('/games/{game}/card-redraw', [GameController::class, 'cardRedraw']);
     Route::get('/users/{user}/profile', [UserProfileController::class, 'show']);
 
     // Coin shop
@@ -266,6 +283,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::put('seasons/{season}/rewards/{reward}', [SeasonController::class, 'updateReward']);
     Route::delete('seasons/{season}/rewards/{reward}', [SeasonController::class, 'destroyReward']);
     Route::apiResource('achievements', AchievementController::class);
+    Route::apiResource('character-level-options', CharacterLevelOptionController::class);
     Route::apiResource('unlockables', UnlockableController::class);
     Route::post('daily-challenges/generate', [DailyChallengeController::class, 'generateRange']);
     Route::apiResource('daily-challenges', DailyChallengeController::class);
@@ -313,6 +331,10 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('dice-themes', [AdminDiceController::class, 'index']);
     Route::put('dice-themes/{diceTheme}', [AdminDiceController::class, 'update']);
     Route::post('dice-themes/sync', [AdminDiceController::class, 'sync']);
+
+    // App icons
+    Route::get('app-icons', [AppIconController::class, 'index']);
+    Route::put('app-icons/{appIcon}', [AppIconController::class, 'update']);
 
     // Media library
     Route::apiResource('media-library', MediaLibraryController::class);

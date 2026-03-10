@@ -1599,7 +1599,7 @@ export default {
 
 /* Continue button above kingdom stats */
 .continue-above-stats {
-  text-align: center;
+  text-align: centThe er;
   margin-bottom: 10px;
 }
 

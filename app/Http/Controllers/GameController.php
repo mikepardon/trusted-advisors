@@ -37,6 +37,8 @@ use App\Jobs\ForfeitExpiredTurn;
 use App\Jobs\ProcessBotTurn;
 use App\Services\BotService;
 use App\Services\DuelForfeitService;
+use App\Models\UserCharacter;
+use App\Services\CharacterProgressionService;
 use App\Services\GameCompletionService;
 use App\Services\OneSignalService;
 use Carbon\Carbon;
@@ -115,6 +117,7 @@ class GameController extends Controller
 
         $charUnlockables = Unlockable::where('type', 'character')->get()->keyBy('entity_id');
         $userUnlockables = UserUnlockable::where('user_id', $user->id)->get()->keyBy('unlockable_id');
+        $userCharacters = UserCharacter::where('user_id', $user->id)->get()->keyBy('character_id');
 
         $result = $characters->filter(function ($c) use ($charUnlockables, $userUnlockables) {
             // Hide unavailable characters unless user owns them
@@ -124,16 +127,23 @@ class GameController extends Controller
                 return isset($userUnlockables[$unlockable->id]);
             }
             return true;
-        })->map(function ($c) use ($charUnlockables, $userUnlockables) {
+        })->map(function ($c) use ($charUnlockables, $userUnlockables, $userCharacters) {
+            $uc = $userCharacters[$c->id] ?? null;
             $data = [
                 'id' => $c->id,
                 'name' => $c->name,
                 'image_url' => $c->image_url,
                 'description' => $c->description,
-                'dice' => $c->dice,
+                'dice' => $uc ? $uc->getModifiedDice(false) : $c->dice,
+                'base_dice' => $c->dice,
                 'wild_value' => $c->wild_value,
                 'wild_ability' => $c->wild_ability,
                 'wild_ability_description' => $c->wild_ability_description,
+                'level' => $uc?->level ?? 0,
+                'xp' => $uc?->xp ?? 0,
+                'incarnation' => $uc?->incarnation ?? 1,
+                'display_name' => $uc?->getDisplayName() ?? $c->name,
+                'pending_upgrades' => $uc?->pendingLevelUpCount() ?? 0,
             ];
 
             $unlockable = $charUnlockables[$c->id] ?? null;
@@ -698,6 +708,105 @@ class GameController extends Controller
             }
         }
 
+        // Apply advisor leveling upgrades
+        foreach ($game->players as $player) {
+            if (!$player->user_id || !$player->character_id || $player->is_bot) continue;
+
+            $userCharacter = UserCharacter::where('user_id', $player->user_id)
+                ->where('character_id', $player->character_id)
+                ->first();
+
+            if (!$userCharacter) continue;
+
+            $isDuel = $game->isDuel();
+
+            // Compute modified dice
+            $modifiedDice = $userCharacter->getModifiedDice($isDuel);
+            $player->dice_overrides = $modifiedDice;
+
+            // Extra item slots
+            $extraSlots = $userCharacter->getExtraItemSlots();
+            $player->extra_item_slots = $extraSlots;
+
+            // Card redraws
+            $redraws = $userCharacter->getCardRedraws();
+            $player->card_redraw_uses = $redraws;
+
+            // Passive stat bonuses
+            $passiveBonuses = $userCharacter->getPassiveBonuses();
+            $player->passive_bonuses = !empty($passiveBonuses) ? $passiveBonuses : null;
+            $player->save();
+
+            // Grant starting items
+            $startingItems = $userCharacter->getStartingItems();
+            foreach ($startingItems as $si) {
+                if ($si['type'] === 'random') {
+                    $drawnItem = $this->drawItemFromDeck($game);
+                    if ($drawnItem) {
+                        GamePlayerItem::create([
+                            'game_player_id' => $player->id,
+                            'item_id' => $drawnItem->id,
+                            'acquired_round' => 0,
+                        ]);
+                    }
+                } elseif ($si['type'] === 'specific' && !empty($si['item_id'])) {
+                    GamePlayerItem::create([
+                        'game_player_id' => $player->id,
+                        'item_id' => $si['item_id'],
+                        'acquired_round' => 0,
+                    ]);
+                }
+            }
+
+            // Grant starting curses
+            $startingCurses = $userCharacter->getStartingCurses();
+            foreach ($startingCurses as $sc) {
+                $curseId = null;
+                if ($sc['type'] === 'random') {
+                    $curse = \App\Models\Curse::where('is_available', true)->inRandomOrder()->first();
+                    $curseId = $curse?->id;
+                } elseif ($sc['type'] === 'specific' && !empty($sc['curse_id'])) {
+                    $curseId = $sc['curse_id'];
+                }
+                if ($curseId) {
+                    GamePlayerCurse::create([
+                        'game_player_id' => $player->id,
+                        'curse_id' => $curseId,
+                        'acquired_round' => 0,
+                    ]);
+                }
+            }
+
+            // Apply passive stat bonuses to kingdom (duel) or game stats (coop)
+            if (!empty($passiveBonuses)) {
+                $validStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+                if ($isDuel) {
+                    $kingdom = GamePlayerKingdom::where('game_player_id', $player->id)->first();
+                    if ($kingdom) {
+                        $updates = [];
+                        foreach ($passiveBonuses as $stat => $amount) {
+                            if (in_array($stat, $validStats)) {
+                                $updates[$stat] = max(0, min(20, $kingdom->$stat + (int) $amount));
+                            }
+                        }
+                        if (!empty($updates)) {
+                            $kingdom->update($updates);
+                        }
+                    }
+                } else {
+                    $updates = [];
+                    foreach ($passiveBonuses as $stat => $amount) {
+                        if (in_array($stat, $validStats)) {
+                            $updates[$stat] = max(0, min(20, $game->$stat + (int) $amount));
+                        }
+                    }
+                    if (!empty($updates)) {
+                        $game->update($updates);
+                    }
+                }
+            }
+        }
+
         return $this->show($game->fresh());
     }
 
@@ -752,7 +861,7 @@ class GameController extends Controller
         $allPlayers = $game->players()->with(['character', 'items.item'])->get();
         $allDiceFaces = [];
         foreach ($allPlayers as $p) {
-            $pDice = $p->character->dice;
+            $pDice = $p->dice_overrides ?? $p->character->dice;
             $pTempReduction = $tempDiceReduction;
             $pActiveDice = max(1, $baseDice - $p->lost_dice - $pTempReduction);
             foreach (array_slice($pDice, 0, $pActiveDice) as $die) {
@@ -807,10 +916,11 @@ class GameController extends Controller
             'items' => $items,
             'dice_count' => $diceCount,
             'item_decided' => $player->item_decided,
-            'character_dice' => $isDuel ? $player->character->getDuelDice() : $player->character->dice,
+            'character_dice' => $player->dice_overrides ?? ($isDuel ? $player->character->getDuelDice() : $player->character->dice),
             'character_wild_value' => $isDuel ? $player->character->getDuelWildValue() : $player->character->wild_value,
             'character_wild_ability' => $isDuel ? $player->character->getDuelWildAbilityDescription() : $player->character->wild_ability_description,
             'player_curses' => GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get(),
+            'card_redraws_remaining' => max(0, ($player->card_redraw_uses ?? 0) - ($player->card_redraws_used ?? 0)),
         ]);
     }
 
@@ -1015,7 +1125,7 @@ class GameController extends Controller
         $baseDice = $diceRules[(string) $playerCount] ?? 3;
 
         foreach ($players as $player) {
-            $dice = $player->character->dice;
+            $dice = $player->dice_overrides ?? $player->character->dice;
             $activeDice = $baseDice - $player->lost_dice - $tempDiceReduction;
             $activeDice = max(1, $activeDice);
             $playerRolls = [];
@@ -2169,7 +2279,7 @@ class GameController extends Controller
 
         // Roll dice ONCE (use duel-specific dice if available)
         $character = $rollingPlayer->character;
-        $dice = $character->getDuelDice();
+        $dice = $rollingPlayer->dice_overrides ?? $character->getDuelDice();
         $wildValue = $character->getDuelWildValue();
         $wildAbility = $character->getDuelWildAbility();
         $wildAbilityDesc = $character->getDuelWildAbilityDescription();
@@ -2676,7 +2786,7 @@ class GameController extends Controller
 
         // Get the original dice results
         $character = $rollingPlayer->character;
-        $dice = $character->dice;
+        $dice = $rollingPlayer->dice_overrides ?? $character->dice;
         $activeDice = max(1, 4 - $rollingPlayer->lost_dice);
         $oldDiceResults = $roundResult->dice_results[0] ?? [];
         $oldRolls = $oldDiceResults['rolls'] ?? [];
@@ -4138,7 +4248,7 @@ class GameController extends Controller
             ->where('is_used', false)
             ->count();
 
-        return $activeItems < 2;
+        return $activeItems < 2 + ($player->extra_item_slots ?? 0);
     }
 
     private function getPlayersOverItemLimit(Game $game): array
@@ -4148,7 +4258,7 @@ class GameController extends Controller
 
         foreach ($players as $player) {
             $activeItems = $player->items->where('is_used', false);
-            if ($activeItems->count() > 2) {
+            if ($activeItems->count() > 2 + ($player->extra_item_slots ?? 0)) {
                 $overLimit[] = [
                     'player_number' => $player->player_number,
                     'character_name' => $player->character->name ?? 'Player ' . $player->player_number,
@@ -4382,6 +4492,75 @@ class GameController extends Controller
         return response()->json([
             'discarded' => true,
             'items_over_limit' => $this->getPlayersOverItemLimit($game),
+        ]);
+    }
+
+    /**
+     * Use a card redraw (from advisor upgrade).
+     */
+    public function cardRedraw(Game $game, Request $request): JsonResponse
+    {
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active'], 422);
+        }
+
+        $user = $request->user();
+        $player = $game->players()->where('user_id', $user->id)->first();
+
+        if (!$player) {
+            return response()->json(['error' => 'You are not in this game'], 403);
+        }
+
+        if ($player->card_redraw_uses <= $player->card_redraws_used) {
+            return response()->json(['error' => 'No redraws remaining'], 422);
+        }
+
+        $validated = $request->validate([
+            'hand_id' => 'required|integer',
+        ]);
+
+        $hand = GamePlayerHand::where('id', $validated['hand_id'])
+            ->where('game_player_id', $player->id)
+            ->where('round_number', $game->current_round)
+            ->first();
+
+        if (!$hand) {
+            return response()->json(['error' => 'Hand entry not found'], 404);
+        }
+
+        $oldCardId = $hand->card_id;
+
+        // Draw a replacement card from the deck
+        $newDeckCard = GameCardDeck::where('game_id', $game->id)
+            ->where('is_drawn', false)
+            ->inRandomOrder()
+            ->first();
+
+        if (!$newDeckCard) {
+            return response()->json(['error' => 'No cards remaining in deck'], 422);
+        }
+
+        // Replace the card
+        $newDeckCard->update(['is_drawn' => true]);
+        $hand->update(['card_id' => $newDeckCard->card_id]);
+
+        // Put the old card back in the deck (optional: shuffle back)
+        GameCardDeck::where('game_id', $game->id)
+            ->where('card_id', $oldCardId)
+            ->where('is_drawn', true)
+            ->limit(1)
+            ->update(['is_drawn' => false]);
+
+        // Increment redraws used
+        $player->card_redraws_used++;
+        $player->save();
+
+        $newCard = Card::find($newDeckCard->card_id);
+
+        return response()->json([
+            'new_card' => $newCard,
+            'hand_id' => $hand->id,
+            'redraws_remaining' => $player->card_redraw_uses - $player->card_redraws_used,
         ]);
     }
 

@@ -51,14 +51,19 @@ import AdminRoles from './components/admin/AdminRoles.vue';
 import AdminAuditLog from './components/admin/AdminAuditLog.vue';
 import AdminBalance from './components/admin/AdminBalance.vue';
 import AdminRetention from './components/admin/AdminRetention.vue';
+import AdminIcons from './components/admin/AdminIcons.vue';
+import AdminCharacterLevelOptions from './components/admin/AdminCharacterLevelOptions.vue';
 import AuthCallback from './components/AuthCallback.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
+import ChooseAdvisors from './components/ChooseAdvisors.vue';
 import { fetchSoundUrls } from './sounds';
+import { useIcons } from './stores/icons';
 
 const routes = [
     { path: '/', component: GameSetup },
     { path: '/auth/callback', component: AuthCallback },
     { path: '/choose-username', component: ChooseUsername, meta: { auth: true } },
+    { path: '/choose-advisors', component: ChooseAdvisors, meta: { auth: true } },
     { path: '/campaigns', component: GameHistory, meta: { auth: true } },
     { path: '/friends', component: FriendsList, meta: { auth: true } },
     { path: '/profile', component: ProfilePage, meta: { auth: true } },
@@ -109,6 +114,8 @@ const routes = [
             { path: 'audit-log', component: AdminAuditLog },
             { path: 'balance', component: AdminBalance },
             { path: 'retention', component: AdminRetention },
+            { path: 'icons', component: AdminIcons },
+            { path: 'advisor-levels', component: AdminCharacterLevelOptions },
         ],
     },
 ];
@@ -136,12 +143,15 @@ router.beforeEach(async (to, from, next) => {
         next('/');
     } else if (auth.state.user?.needs_username && to.path !== '/choose-username') {
         next('/choose-username');
+    } else if (auth.state.user?.needs_advisors && to.path !== '/choose-advisors' && !requiresAdmin) {
+        next('/choose-advisors');
     } else {
         next();
     }
 });
 
 fetchSoundUrls();
+useIcons().fetchIcons();
 
 const app = createApp(App);
 

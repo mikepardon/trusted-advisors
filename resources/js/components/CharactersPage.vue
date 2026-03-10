@@ -18,21 +18,12 @@
 
     <!-- Advisors Tab -->
     <div v-if="collectionTab === 'advisors'">
-      <div v-if="charsLoading" class="loading-text">Loading advisors...</div>
-      <div v-else-if="!unlockedCharacters.length" class="loading-text">No advisors unlocked yet.</div>
-      <div v-else class="char-grid">
-        <div
-          v-for="c in unlockedCharacters"
-          :key="c.id"
-          class="char-card"
-          @click="selected = c"
-        >
-          <div class="char-img-wrap">
-            <img :src="c.image_url || '/images/character.png'" :alt="c.name" class="char-img" />
-          </div>
-          <span class="char-name">{{ c.name }}</span>
-        </div>
-      </div>
+      <AdvisorManagement
+        :advisors="myAdvisors"
+        :loading="advisorsLoading"
+        @select="openAdvisorDetail"
+        @level-up="openLevelUp"
+      />
     </div>
 
     <!-- Dice Tab -->
@@ -95,34 +86,22 @@
       </div>
     </div>
 
-    <!-- Character Detail Modal -->
-    <div v-if="selected" class="char-modal-overlay" @click.self="selected = null">
-      <div class="char-modal">
-        <button class="char-modal-close" @click="selected = null">&times;</button>
-        <div class="char-modal-portrait-wrap">
-          <img :src="selected.image_url || '/images/character.png'" :alt="selected.name" class="char-modal-portrait" />
-        </div>
-        <h3 class="char-modal-name">{{ selected.name }}</h3>
-        <p class="char-modal-desc">{{ selected.description }}</p>
+    <!-- Advisor Detail Modal -->
+    <AdvisorDetailModal
+      v-if="selectedAdvisor"
+      :advisor="selectedAdvisor"
+      @close="selectedAdvisor = null"
+      @level-up="openLevelUp"
+      @updated="reloadAdvisors"
+    />
 
-        <div v-if="selected.dice" class="char-modal-dice">
-          <div v-for="(die, di) in selected.dice" :key="di" class="char-dice-row">
-            <span class="char-dice-label">Die {{ di + 1 }}:</span>
-            <span v-for="(face, fi) in die" :key="fi" class="char-dice-face">{{ face === 'WILD' ? 'W' : face }}</span>
-          </div>
-        </div>
-
-        <div class="char-modal-wild">
-          <span class="char-wild-badge">W = {{ selected.wild_value }}</span>
-          <span class="char-wild-desc">{{ selected.wild_ability }}: {{ selected.wild_ability_description }}</span>
-        </div>
-
-        <div v-if="!selected.is_unlocked" class="char-modal-locked">
-          <span class="char-lock-icon">&#128274;</span>
-          <span>{{ selected.unlock_requirement }}</span>
-        </div>
-      </div>
-    </div>
+    <!-- Level Up Modal -->
+    <LevelUpChoice
+      v-if="levelUpAdvisor"
+      :advisor="levelUpAdvisor"
+      @close="levelUpAdvisor = null"
+      @chosen="onUpgradeChosen"
+    />
 
     <!-- Persistent dice canvas -->
     <canvas ref="diceCanvas" class="dice-canvas-persistent"></canvas>
@@ -133,22 +112,27 @@
 import axios from 'axios';
 import { createDddiceInstance, isDddiceAvailable } from '../dddiceService';
 import { useToast } from '../stores/toast';
+import AdvisorManagement from './AdvisorManagement.vue';
+import AdvisorDetailModal from './AdvisorDetailModal.vue';
+import LevelUpChoice from './LevelUpChoice.vue';
 import '../styles/kingdom-styles.css';
 
 export default {
   name: 'CollectionPage',
+  components: { AdvisorManagement, AdvisorDetailModal, LevelUpChoice },
   setup() {
     return { toast: useToast() };
   },
   data() {
     return {
-      characters: [],
-      charsLoading: true,
+      myAdvisors: [],
+      advisorsLoading: true,
+      selectedAdvisor: null,
+      levelUpAdvisor: null,
       myDice: [],
       diceLoading: true,
       myStyles: [],
       stylesLoading: true,
-      selected: null,
       collectionTab: 'advisors',
       activatingDice: false,
       activatingStyle: false,
@@ -156,13 +140,10 @@ export default {
     };
   },
   computed: {
-    unlockedCharacters() {
-      return this.characters.filter(c => c.is_unlocked);
-    },
     collectionTabs() {
       const tabs = [];
-      const advisorCount = this.unlockedCharacters.length;
-      if (advisorCount > 0 || this.charsLoading) {
+      const advisorCount = this.myAdvisors.length;
+      if (advisorCount > 0 || this.advisorsLoading) {
         tabs.push({ key: 'advisors', icon: '\u{1F9D9}', label: 'Advisors', count: advisorCount });
       }
       const diceCount = this.myDice.length;
@@ -177,13 +158,13 @@ export default {
     },
   },
   async mounted() {
-    const [charsRes, diceRes, ksRes] = await Promise.allSettled([
-      axios.get('/api/my-characters'),
+    const [advisorRes, diceRes, ksRes] = await Promise.allSettled([
+      axios.get('/api/my-advisors'),
       axios.get('/api/my-dice'),
       axios.get('/api/my-kingdom-styles'),
     ]);
-    this.characters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
-    this.charsLoading = false;
+    this.myAdvisors = advisorRes.status === 'fulfilled' ? advisorRes.value.data : [];
+    this.advisorsLoading = false;
     this.myDice = diceRes.status === 'fulfilled' ? diceRes.value.data : [];
     this.diceLoading = false;
     this.myStyles = ksRes.status === 'fulfilled' ? ksRes.value.data : [];
@@ -221,6 +202,29 @@ export default {
         this.toast.error(e.response?.data?.error || 'Failed to activate kingdom style.');
       }
       this.activatingStyle = false;
+    },
+    openAdvisorDetail(advisor) {
+      this.selectedAdvisor = advisor;
+    },
+    openLevelUp(advisor) {
+      this.selectedAdvisor = null;
+      this.levelUpAdvisor = advisor;
+    },
+    async onUpgradeChosen() {
+      this.levelUpAdvisor = null;
+      await this.reloadAdvisors();
+    },
+    async reloadAdvisors() {
+      try {
+        const res = await axios.get('/api/my-advisors');
+        this.myAdvisors = res.data;
+        // If we had a selected advisor, refresh it
+        if (this.selectedAdvisor) {
+          this.selectedAdvisor = this.myAdvisors.find(a => a.id === this.selectedAdvisor.id) || null;
+        }
+      } catch (e) {
+        // silent
+      }
     },
     async activateDice(dice) {
       this.activatingDice = true;

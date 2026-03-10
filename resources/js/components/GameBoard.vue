@@ -224,8 +224,10 @@
           :cards="currentHand"
           :hasAssigned="currentPlayerHasAssigned"
           :loading="handLoading"
+          :redraws="cardRedraws"
           @assign="assignRoles"
           @preview="onCardPreview"
+          @redraw="onCardRedraw"
         />
       </template>
 
@@ -407,6 +409,7 @@ export default {
       duelDiceCount: 4,
       showDiceViewer: false,
       characterDice: null,
+      cardRedraws: 0,
       characterWildValue: null,
       characterWildAbility: null,
       // Event reveal
@@ -725,6 +728,7 @@ export default {
         this.characterDice = res.data.character_dice || null;
         this.characterWildValue = res.data.character_wild_value || null;
         this.characterWildAbility = res.data.character_wild_ability || null;
+        this.cardRedraws = res.data.card_redraws_remaining ?? 0;
       } catch (e) {
         this.currentHand = [];
         this.currentPlayerItems = [];
@@ -753,6 +757,20 @@ export default {
     },
     onCardPreview(effects) {
       this.cardPreviewEffects = effects;
+    },
+    async onCardRedraw(handId) {
+      try {
+        const res = await axios.post(`/api/games/${this.id}/card-redraw`, { hand_id: handId });
+        this.cardRedraws = res.data.redraws_remaining ?? 0;
+        // Replace the redrawn card in the current hand
+        const idx = this.currentHand.findIndex(c => c.hand_id === handId);
+        if (idx >= 0 && res.data.new_card) {
+          this.currentHand[idx] = { hand_id: res.data.hand_id, card: res.data.new_card };
+        }
+        this.toast.success('Card redrawn!');
+      } catch (e) {
+        this.toast.error(e.response?.data?.error || 'Failed to redraw card');
+      }
     },
     async assignRoles({ positive_hand_id, negative_hand_ids }) {
       this.cardPreviewEffects = null;

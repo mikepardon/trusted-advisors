@@ -416,6 +416,7 @@ import axios from 'axios';
 import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
 import SortableHeader from './SortableHeader.vue';
+import { useIcons } from '../../stores/icons';
 
 export default {
   name: 'AdminCards',
@@ -439,14 +440,7 @@ export default {
       aiError: '',
       importResult: null,
       showBalanceStats: false,
-      stats: [
-        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
-        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
-        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
-        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
-        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
-        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
-      ],
+      stats: useIcons().getStatIcons(),
       form: {
         title: '',
         description: '',

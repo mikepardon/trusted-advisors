@@ -13,6 +13,7 @@ use App\Models\GameRule;
 use App\Models\User;
 use App\Models\UserAchievement;
 use App\Models\UserEloHistory;
+use App\Models\UserCharacter;
 use App\Models\UserUnlockable;
 use App\Models\ReferralReward;
 use App\Models\RotatingEventEntry;
@@ -42,6 +43,7 @@ class GameCompletionService
             'achievements_unlocked' => [],
             'challenge_completed' => null,
             'weekly_challenge_completed' => null,
+            'character_xp_awards' => [],
         ];
 
         // Custom games do not award XP, coins, ELO, achievements, or challenges
@@ -88,6 +90,13 @@ class GameCompletionService
             // Referral reward: if user just reached level 2 and was referred
             if ($xpResult['leveled_up'] && $user->level >= 2 && $xpResult['old_level'] < 2 && $user->referred_by) {
                 $this->processReferralReward($user);
+            }
+
+            // Character XP
+            $charXpResult = app(CharacterProgressionService::class)
+                ->awardCharacterXp($user, $game, $players, $this->isWinner($user, $game, $players));
+            if ($charXpResult) {
+                $summary['character_xp_awards'][$user->id] = $charXpResult;
             }
 
             // Coins
@@ -758,11 +767,20 @@ class GameCompletionService
             ->exists();
 
         if (!$exists) {
-            UserUnlockable::create([
+            $userUnlockable = UserUnlockable::create([
                 'user_id' => $user->id,
                 'unlockable_id' => $unlockableId,
                 'unlocked_at' => now(),
             ]);
+
+            // Auto-create UserCharacter when a character is unlocked
+            $unlockable = Unlockable::find($unlockableId);
+            if ($unlockable && $unlockable->type === 'character' && $unlockable->entity_id) {
+                UserCharacter::firstOrCreate([
+                    'user_id' => $user->id,
+                    'character_id' => $unlockable->entity_id,
+                ]);
+            }
         }
     }
 

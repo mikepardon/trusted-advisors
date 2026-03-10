@@ -69,6 +69,13 @@
                   </span>
                 </div>
               </div>
+
+              <!-- Card redraw button -->
+              <button
+                v-if="redraws > 0 && selectedPositive === null"
+                class="btn-redraw"
+                @click.stop="$emit('redraw', item.hand_id)"
+              >Redraw</button>
             </div>
           </SwiperSlide>
         </Swiper>
@@ -133,7 +140,19 @@
             </span>
           </div>
         </div>
+
+        <!-- Card redraw button -->
+        <button
+          v-if="redraws > 0 && selectedPositive === null"
+          class="btn-redraw"
+          @click.stop="$emit('redraw', item.hand_id)"
+        >Redraw</button>
       </div>
+    </div>
+
+    <!-- Redraws remaining indicator -->
+    <div v-if="redraws > 0 && selectedPositive === null" class="redraws-remaining">
+      {{ redraws }} redraw{{ redraws > 1 ? 's' : '' }} remaining
     </div>
   </div>
 </template>
@@ -152,8 +171,9 @@ export default {
     cards: { type: Array, default: () => [] },
     hasAssigned: { type: Boolean, default: false },
     loading: { type: Boolean, default: false },
+    redraws: { type: Number, default: 0 },
   },
-  emits: ['assign', 'preview'],
+  emits: ['assign', 'preview', 'redraw'],
   data() {
     return {
       selectedPositive: null,
@@ -587,5 +607,37 @@ export default {
     font-size: 0.85rem;
   }
 
+}
+
+/* Card redraw */
+.btn-redraw {
+  display: block;
+  margin: 10px auto 0;
+  padding: 5px 16px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  background: rgba(138, 106, 200, 0.15);
+  border: 1px solid rgba(138, 106, 200, 0.4);
+  color: #b896e8;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-redraw:hover {
+  background: rgba(138, 106, 200, 0.25);
+  border-color: #b896e8;
+  box-shadow: 0 0 8px rgba(138, 106, 200, 0.3);
+}
+
+.redraws-remaining {
+  text-align: center;
+  color: #b896e8;
+  font-size: 0.72rem;
+  font-style: italic;
+  margin-top: 8px;
 }
 </style>

@@ -54,7 +54,12 @@
             </div>
             <div class="form-group">
               <label>Icon</label>
-              <input v-model="form.icon" placeholder="trophy" />
+              <IconPicker
+                :model-value="iconPickerValue"
+                :icon-type="iconPickerType"
+                @update:model-value="onIconValueChange"
+                @update:icon-type="onIconTypeChange"
+              />
             </div>
             <div class="form-group">
               <label>Category</label>
@@ -113,10 +118,11 @@
 <script>
 import axios from 'axios';
 import AdminSearchInput from './AdminSearchInput.vue';
+import IconPicker from './IconPicker.vue';
 
 export default {
   name: 'AdminAchievements',
-  components: { AdminSearchInput },
+  components: { AdminSearchInput, IconPicker },
   data() {
     return {
       achievements: [],
@@ -132,6 +138,13 @@ export default {
     };
   },
   computed: {
+    iconPickerType() {
+      return this.form.icon?.startsWith('image:') ? 'image' : 'emoji';
+    },
+    iconPickerValue() {
+      if (this.form.icon?.startsWith('image:')) return this.form.icon.slice(6);
+      return this.form.icon || '';
+    },
     criteriaUsesValue() {
       return ['elo_reached', 'level_reached'].includes(this.form.criteria_type);
     },
@@ -149,6 +162,20 @@ export default {
   },
   async mounted() { this.load(); },
   methods: {
+    onIconValueChange(val) {
+      if (this.iconPickerType === 'image') {
+        this.form.icon = 'image:' + val;
+      } else {
+        this.form.icon = val;
+      }
+    },
+    onIconTypeChange(type) {
+      if (type === 'image' && !this.form.icon?.startsWith('image:')) {
+        this.form.icon = '';
+      } else if (type === 'emoji' && this.form.icon?.startsWith('image:')) {
+        this.form.icon = '';
+      }
+    },
     async load() {
       const res = await axios.get('/api/admin/achievements');
       this.achievements = res.data;

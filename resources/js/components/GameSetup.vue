@@ -421,8 +421,9 @@
               <div class="advisor-card" @click="selectCharacter(char.id)">
                 <div class="advisor-portrait-wrap">
                   <img :src="char.image_url || '/images/character.png'" :alt="char.name" class="advisor-portrait" />
+                  <span v-if="char.level > 0" class="advisor-level-pip">{{ char.level }}</span>
                 </div>
-                <h3 class="advisor-name">{{ char.name }}</h3>
+                <h3 class="advisor-name">{{ char.display_name || char.name }}</h3>
                 <p class="advisor-desc">{{ char.description }}</p>
                 <div v-if="getCharacterBonusLabel(char.id)" class="advisor-bonus-badge">{{ getCharacterBonusLabel(char.id) }}</div>
                 <div class="advisor-stats">
@@ -1520,10 +1521,30 @@ export default {
   width: 120px;
   height: 120px;
   border-radius: 50%;
-  overflow: hidden;
+  overflow: visible;
   border: 3px solid var(--accent-gold);
   box-shadow: 0 0 20px rgba(212, 168, 67, 0.3);
   margin-bottom: 15px;
+  position: relative;
+}
+
+.advisor-level-pip {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  background: linear-gradient(135deg, var(--accent-gold), #b08830);
+  color: #1a0f05;
+  font-size: 0.7rem;
+  font-weight: 800;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #1a1209;
+  font-family: 'Cinzel', serif;
+  z-index: 1;
 }
 
 .advisor-portrait {

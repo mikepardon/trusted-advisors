@@ -36,7 +36,7 @@
             </div>
             <div class="stats-grid">
               <div v-for="stat in stats" :key="stat.key" class="final-stat">
-                <span class="stat-icon">{{ stat.icon }}</span>
+                <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
                 <span class="stat-label">{{ stat.label }}</span>
                 <span class="stat-val" :class="getValClass(kingdom[stat.key])">
                   {{ kingdom[stat.key] }}
@@ -99,6 +99,18 @@
           </div>
         </div>
 
+        <!-- Character XP -->
+        <div v-if="myCharXp" class="char-xp-section">
+          <div class="char-xp-row">
+            <span class="char-xp-name">{{ myCharXp.character_name }}</span>
+            <span class="char-xp-earned">+{{ myCharXp.xp_earned }} Advisor XP</span>
+            <span v-if="myCharXp.leveled_up" class="char-xp-lvlup">Lv.{{ myCharXp.new_level }}!</span>
+          </div>
+          <div v-if="myCharXp.pending_upgrades > 0" class="char-xp-pending">
+            <button class="btn-char-upgrade" @click="$router.push('/collection')">Level Up Available!</button>
+          </div>
+        </div>
+
         <div class="button-row">
           <button class="btn-primary play-again" @click="$router.push('/')">Home</button>
           <button class="play-again share-btn" @click="shareReplay">
@@ -120,7 +132,7 @@
         <h3>Final Kingdom Status</h3>
         <div class="stats-grid">
           <div v-for="stat in stats" :key="stat.key" class="final-stat">
-            <span class="stat-icon">{{ stat.icon }}</span>
+            <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
             <span class="stat-label">{{ stat.label }}</span>
             <span class="stat-val" :class="getValClass(gameData.game[stat.key])">
               {{ gameData.game[stat.key] }}
@@ -249,6 +261,18 @@
         </div>
       </div>
 
+      <!-- Character XP -->
+      <div v-if="myCharXp" class="char-xp-section">
+        <div class="char-xp-row">
+          <span class="char-xp-name">{{ myCharXp.character_name }}</span>
+          <span class="char-xp-earned">+{{ myCharXp.xp_earned }} Advisor XP</span>
+          <span v-if="myCharXp.leveled_up" class="char-xp-lvlup">Lv.{{ myCharXp.new_level }}!</span>
+        </div>
+        <div v-if="myCharXp.pending_upgrades > 0" class="char-xp-pending">
+          <button class="btn-char-upgrade" @click="$router.push('/collection')">Level Up Available!</button>
+        </div>
+      </div>
+
       <div class="button-row">
         <button class="btn-primary play-again" @click="$router.push('/')">Home</button>
         <button class="play-again share-btn" @click="shareReplay">
@@ -268,11 +292,13 @@ import { playSound } from '../sounds';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/toast';
 import { checkAndPromptReview } from '../services/appReviewService';
+import AppIcon from './AppIcon.vue';
+import { useIcons } from '../stores/icons';
 import PlayerProfile from './PlayerProfile.vue';
 
 export default {
   name: 'GameOver',
-  components: { PlayerProfile },
+  components: { AppIcon, PlayerProfile },
   props: {
     id: { type: [String, Number], required: true },
   },
@@ -294,14 +320,7 @@ export default {
       xpBarLevel: 0,
       xpBarDisplayXp: 0,
       showLevelUp: false,
-      stats: [
-        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
-        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
-        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
-        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
-        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
-        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
-      ],
+      stats: useIcons().getStatIcons(),
     };
   },
   computed: {
@@ -488,6 +507,11 @@ export default {
       if (!this.completion?.coin_awards) return null;
       const vals = Object.values(this.completion.coin_awards);
       return vals.length > 0 ? vals[0]?.coins : null;
+    },
+    myCharXp() {
+      if (!this.completion?.character_xp_awards) return null;
+      const vals = Object.values(this.completion.character_xp_awards);
+      return vals.length > 0 ? vals[0] : null;
     },
     myUnlocks() {
       if (!this.completion?.new_unlocks) return [];
@@ -1383,5 +1407,66 @@ export default {
     grid-template-columns: 1fr;
     gap: 10px;
   }
+}
+
+/* Character XP Section */
+.char-xp-section {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(212, 168, 67, 0.06);
+  border: 1px solid rgba(212, 168, 67, 0.15);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.char-xp-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.char-xp-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.char-xp-earned {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.char-xp-lvlup {
+  background: rgba(90, 184, 122, 0.15);
+  border: 1px solid rgba(90, 184, 122, 0.3);
+  color: #5ab87a;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.char-xp-pending {
+  margin-top: 6px;
+}
+
+.btn-char-upgrade {
+  padding: 6px 16px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: linear-gradient(180deg, #2a6e3a, #1a4a26);
+  border: 2px solid #5ab87a;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-char-upgrade:hover {
+  box-shadow: 0 0 10px rgba(90, 184, 122, 0.3);
 }
 </style>

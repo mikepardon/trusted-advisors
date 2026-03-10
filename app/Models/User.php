@@ -169,6 +169,16 @@ class User extends Authenticatable
         return $this->hasMany(UserUnlockable::class);
     }
 
+    public function userCharacters(): HasMany
+    {
+        return $this->hasMany(UserCharacter::class);
+    }
+
+    public function ownsCharacter(int $characterId): bool
+    {
+        return $this->userCharacters()->where('character_id', $characterId)->exists();
+    }
+
     public function eloHistory(): HasMany
     {
         return $this->hasMany(UserEloHistory::class);
@@ -213,6 +223,12 @@ class User extends Authenticatable
         }
 
         return true;
+    }
+
+    public function needsAdvisors(): bool
+    {
+        if ($this->is_bot) return false;
+        return $this->userCharacters()->count() === 0;
     }
 
     public function hasAdminRole(string ...$roles): bool

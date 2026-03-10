@@ -40,7 +40,7 @@
 
       <div class="kingdom-stats">
         <div v-for="stat in stats" :key="stat.key" class="stat-row">
-          <span class="stat-icon">{{ stat.icon }}</span>
+          <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
           <div class="stat-bar-wrap">
             <div class="stat-bar-bg">
               <div
@@ -84,11 +84,14 @@
 </template>
 
 <script>
+import AppIcon from './AppIcon.vue';
+import { useIcons } from '../stores/icons';
 import { createDddiceInstance, isDddiceAvailable } from '../dddiceService';
 import '../styles/kingdom-styles.css';
 
 export default {
   name: 'DuelKingdomStats',
+  components: { AppIcon },
   props: {
     playerKingdoms: { type: Array, default: () => [] },
     myPlayerNumber: { type: Number, default: 1 },
@@ -105,14 +108,7 @@ export default {
   emits: ['show-character', 'dice-animation-complete'],
   data() {
     return {
-      stats: [
-        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
-        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
-        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
-        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
-        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
-        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
-      ],
+      stats: useIcons().getStatIcons(),
       prevValues: {},
       tweenedValues: {},
       flashClass: {},

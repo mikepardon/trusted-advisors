@@ -69,6 +69,9 @@
         <router-link to="/admin/media" class="nav-item" active-class="active">
           <span class="nav-icon">&#128444;</span> Media Library
         </router-link>
+        <router-link to="/admin/icons" class="nav-item" active-class="active">
+          <span class="nav-icon">&#127912;</span> Icons
+        </router-link>
       </div>
 
       <div class="nav-section" v-if="canSee('content')">
@@ -87,6 +90,9 @@
         </router-link>
         <router-link to="/admin/challenges" class="nav-item" active-class="active">
           <span class="nav-icon">&#128203;</span> Challenges
+        </router-link>
+        <router-link to="/admin/advisor-levels" class="nav-item" active-class="active">
+          <span class="nav-icon">&#9876;</span> Advisor Levels
         </router-link>
       </div>
 

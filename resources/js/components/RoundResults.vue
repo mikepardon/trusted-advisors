@@ -217,6 +217,7 @@
 <script>
 import { playSound } from '../sounds';
 import dddiceService from '../dddiceService';
+import { useIcons } from '../stores/icons';
 
 export default {
   name: 'RoundResults',
@@ -387,15 +388,9 @@ export default {
       });
     },
     statIcon(stat) {
-      const icons = {
-        wealth: '\u{1FA99}',
-        influence: '\u{1F3DB}',
-        security: '\u{1F6E1}',
-        religion: '\u{1F54C}',
-        food: '\u{1F33E}',
-        happiness: '\u{1F3AD}',
-      };
-      return icons[stat] || '';
+      const statIcons = useIcons().getStatIcons();
+      const s = statIcons.find(s => s.key === stat);
+      return s ? s.icon : '';
     },
     filterStatEffects(effects) {
       if (!effects) return {};

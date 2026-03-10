@@ -9,7 +9,7 @@
     <div class="stats-grid">
       <div v-for="stat in stats" :key="stat.key" class="stat-item">
         <div class="stat-header">
-          <span class="stat-icon">{{ stat.icon }}</span>
+          <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
           <span class="stat-name">{{ stat.label }}</span>
           <span class="stat-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
         </div>
@@ -152,10 +152,13 @@
 </template>
 
 <script>
+import AppIcon from './AppIcon.vue';
+import { useIcons } from '../stores/icons';
 import '../styles/kingdom-styles.css';
 
 export default {
   name: 'KingdomStats',
+  components: { AppIcon },
   props: {
     game: { type: Object, required: true },
     kingdomStyleSlug: { type: String, default: 'classic' },
@@ -164,14 +167,7 @@ export default {
   },
   data() {
     return {
-      stats: [
-        { key: 'wealth', label: 'Wealth', short: 'W', icon: '\u{1FA99}' },
-        { key: 'influence', label: 'Influence', short: 'INF', icon: '\u{1F3DB}' },
-        { key: 'security', label: 'Security', short: 'SEC', icon: '\u{1F6E1}' },
-        { key: 'religion', label: 'Religion', short: 'REL', icon: '\u{1F54C}' },
-        { key: 'food', label: 'Food', short: 'FD', icon: '\u{1F33E}' },
-        { key: 'happiness', label: 'Happiness', short: 'HAP', icon: '\u{1F3AD}' },
-      ],
+      stats: useIcons().getStatIcons(),
       prevValues: {},
       tweenedValues: {},
       flashClass: {},

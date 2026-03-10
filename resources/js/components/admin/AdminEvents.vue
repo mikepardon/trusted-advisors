@@ -291,6 +291,7 @@
 import axios from 'axios';
 import { useToast } from '../../stores/toast';
 import AdminSearchInput from './AdminSearchInput.vue';
+import { useIcons } from '../../stores/icons';
 
 export default {
   name: 'AdminEvents',
@@ -312,14 +313,7 @@ export default {
       aiError: '',
       importResult: null,
       showBalanceStats: false,
-      stats: [
-        { key: 'wealth', label: 'Wealth', icon: '\u{1FA99}' },
-        { key: 'influence', label: 'Influence', icon: '\u{1F3DB}' },
-        { key: 'security', label: 'Security', icon: '\u{1F6E1}' },
-        { key: 'religion', label: 'Religion', icon: '\u{1F54C}' },
-        { key: 'food', label: 'Food', icon: '\u{1F33E}' },
-        { key: 'happiness', label: 'Happiness', icon: '\u{1F3AD}' },
-      ],
+      stats: useIcons().getStatIcons(),
       form: {
         title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {},
         useDuelOverride: false, modifiers_duel: {}, mechanic_duel: null, mechanic_data_duel: {},
@@ -416,7 +410,7 @@ export default {
     },
     statIcon(stat) {
       const s = this.stats.find(s => s.key === stat);
-      return s ? s.icon : '';
+      return s ? (s.icon || s.value) : '';
     },
     setModifier(key, value) {
       const num = value === '' ? null : parseInt(value);

@@ -32,8 +32,8 @@
           @click="$router.push('/')"
         />
         <div v-if="auth.state.user" class="header-right-icons">
-          <span class="header-elo" @click="navSound(); $router.push('/leaderboard')">&#127942; {{ auth.state.user.elo_rating ?? 1000 }}</span>
-          <span class="header-coins" @click="navSound(); $router.push('/shop')">&#129689; {{ auth.state.user.coins ?? 0 }}</span>
+          <span class="header-elo" @click="navSound(); $router.push('/leaderboard')"><AppIcon icon-key="ui_elo_trophy" /> {{ auth.state.user.elo_rating ?? 1000 }}</span>
+          <span class="header-coins" @click="navSound(); $router.push('/shop')"><AppIcon icon-key="ui_coins" /> {{ auth.state.user.coins ?? 0 }}</span>
         </div>
       </div>
     </header>
@@ -46,23 +46,23 @@
     <!-- Bottom nav -->
     <nav v-if="!isAdmin && auth.state.user && !isGamePage" class="bottom-nav">
       <router-link to="/shop" class="nav-item" :class="{ active: $route.path === '/shop' }" @click="navSound">
-        <span class="nav-icon">&#128722;</span>
+        <span class="nav-icon"><AppIcon icon-key="nav_shop" /></span>
         <span class="nav-label">Shop</span>
       </router-link>
       <router-link to="/collection" class="nav-item" :class="{ active: $route.path === '/collection' }" @click="navSound">
-        <span class="nav-icon">&#127183;</span>
+        <span class="nav-icon"><AppIcon icon-key="nav_collection" /></span>
         <span class="nav-label">Collection</span>
       </router-link>
       <button class="nav-item" :class="{ active: $route.path === '/' }" @click="goHome">
-        <span class="nav-icon">&#9876;</span>
+        <span class="nav-icon"><AppIcon icon-key="nav_campaigns" /></span>
         <span class="nav-label">Campaigns</span>
       </button>
       <router-link to="/friends" class="nav-item" :class="{ active: $route.path === '/friends' }" @click="navSound">
-        <span class="nav-icon">&#128101;</span>
+        <span class="nav-icon"><AppIcon icon-key="nav_friends" /></span>
         <span class="nav-label">Friends</span>
       </router-link>
       <router-link to="/profile" class="nav-item" :class="{ active: $route.path === '/profile' }" @click="navSound">
-        <span class="nav-icon">&#128100;</span>
+        <span class="nav-icon"><AppIcon icon-key="nav_profile" /></span>
         <span class="nav-label">Profile</span>
       </router-link>
     </nav>
@@ -99,6 +99,7 @@
 
 <script>
 import axios from 'axios';
+import AppIcon from './components/AppIcon.vue';
 import ConfirmModal from './components/ConfirmModal.vue';
 import HowToPlay from './components/HowToPlay.vue';
 import NotificationsDrawer from './components/NotificationsDrawer.vue';
@@ -106,17 +107,19 @@ import SplashScreen from './components/SplashScreen.vue';
 import ToastContainer from './components/ToastContainer.vue';
 import Tutorial from './components/Tutorial.vue';
 import { useAuth } from './stores/auth';
+import { useIcons } from './stores/icons';
 import { useToast } from './stores/toast';
 import { playSound } from './sounds';
 import { initOneSignal, promptPushPermission } from './onesignal';
 
 export default {
   name: 'App',
-  components: { ConfirmModal, HowToPlay, NotificationsDrawer, SplashScreen, ToastContainer, Tutorial },
+  components: { AppIcon, ConfirmModal, HowToPlay, NotificationsDrawer, SplashScreen, ToastContainer, Tutorial },
   setup() {
     const auth = useAuth();
+    const { getIcon } = useIcons();
     const toast = useToast();
-    return { auth, toast };
+    return { auth, getIcon, toast };
   },
   provide() {
     return {
@@ -830,9 +833,10 @@ box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(
 
 .nav-label {
   font-size: 0.6rem;
-  font-weight: 700;
+  font-weight: 00;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+    display: none;
 }
 
 /* ---- Notification badge ---- */

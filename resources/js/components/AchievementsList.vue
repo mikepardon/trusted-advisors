@@ -19,7 +19,7 @@
           locked: !ach.earned,
         }"
       >
-        <div class="ach-icon">{{ iconMap[ach.icon] || '?' }}</div>
+        <div class="ach-icon"><AppIcon v-bind="resolveAchievementIcon(ach.icon)" /></div>
         <div class="ach-info">
           <div class="ach-header">
             <h3 class="ach-name">{{ ach.name }}</h3>
@@ -80,12 +80,14 @@
 <script>
 import axios from 'axios';
 import AchievementClaim from './AchievementClaim.vue';
+import AppIcon from './AppIcon.vue';
 import HintBubble from './HintBubble.vue';
 import { useAuth } from '../stores/auth';
+import { resolveAchievementIcon } from '../utils/achievementIcons';
 
 export default {
   name: 'AchievementsList',
-  components: { AchievementClaim, HintBubble },
+  components: { AchievementClaim, AppIcon, HintBubble },
   data() {
     return {
       achievements: [],
@@ -94,28 +96,6 @@ export default {
       claimingAll: false,
       claimOverlay: null,
       batchClaimOverlay: null,
-      iconMap: {
-        trophy: '\u{1F3C6}',
-        shield: '\u{1F6E1}',
-        crown: '\u{1F451}',
-        flame: '\u{1F525}',
-        lightning: '\u{26A1}',
-        star: '\u{2B50}',
-        swords: '\u{2694}',
-        crossed_swords: '\u{2694}',
-        scroll: '\u{1F4DC}',
-        arrow_up: '\u{2B06}',
-        diamond: '\u{1F48E}',
-        book: '\u{1F4D6}',
-        wizard: '\u{1F9D9}',
-        castle: '\u{1F3F0}',
-        people: '\u{1F465}',
-        calendar: '\u{1F4C5}',
-        handshake: '\u{1F91D}',
-        globe: '\u{1F30D}',
-        muscle: '\u{1F4AA}',
-        sparkles: '\u{2728}',
-      },
     };
   },
   computed: {
@@ -127,6 +107,7 @@ export default {
     await this.fetchAchievements();
   },
   methods: {
+    resolveAchievementIcon,
     claimLabel(ach) {
       const parts = [];
       if (ach.reward_xp) parts.push(`+${ach.reward_xp} XP`);

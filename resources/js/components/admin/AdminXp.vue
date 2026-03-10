@@ -28,6 +28,53 @@
         <p v-if="roundsSaved" class="saved-msg">Saved!</p>
       </div>
 
+      <!-- Advisor Leveling -->
+      <div class="section-panel">
+        <h3 class="section-title">Advisor Leveling</h3>
+        <p class="section-desc">Configure how much XP advisors need per level. Changes save automatically.</p>
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Setting</th>
+              <th>Description</th>
+              <th>Value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="name-col">XP Per Level</td>
+              <td class="desc-col">Multiplier for the advisor level formula: XP = value &times; (L&minus;1) &times; L / 2</td>
+              <td><input type="number" v-model.number="advisorConfig.xp_per_level" class="xp-input" min="10" step="10" @change="saveAdvisorConfig" /></td>
+            </tr>
+            <tr>
+              <td class="name-col">Max Level</td>
+              <td class="desc-col">Maximum advisor level before immortalisation</td>
+              <td><input type="number" v-model.number="advisorConfig.max_level" class="xp-input" min="2" max="20" @change="saveAdvisorConfig" /></td>
+            </tr>
+            <tr>
+              <td class="name-col">Options Per Level-Up</td>
+              <td class="desc-col">How many random upgrade choices are offered each level</td>
+              <td><input type="number" v-model.number="advisorConfig.options_per_level_up" class="xp-input" min="1" max="10" @change="saveAdvisorConfig" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="advisorSaved" class="saved-msg">Saved!</p>
+
+        <h4 class="sub-title">Advisor Level Preview</h4>
+        <table class="admin-table compact">
+          <thead>
+            <tr><th>Level</th><th>Total XP</th><th>XP to Next</th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="l in advisorLevelPreview" :key="l.level">
+              <td class="level-col">{{ l.level }}</td>
+              <td>{{ l.total.toLocaleString() }}</td>
+              <td>{{ l.toNext.toLocaleString() }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- XP & Coin Sources Table -->
       <div class="section-panel">
         <h3 class="section-title">XP &amp; Coin Award Sources</h3>
@@ -215,6 +262,12 @@ export default {
       levels: [],
       characters: [],
       items: [],
+      advisorConfig: {
+        xp_per_level: 100,
+        max_level: 8,
+        options_per_level_up: 2,
+      },
+      advisorSaved: false,
       defaultTotalRounds: 60,
       roundsSaved: false,
       showUnlockModal: false,
@@ -226,9 +279,20 @@ export default {
     unlockEntityOptions() {
       return this.unlockForm.type === 'character' ? this.characters : this.items;
     },
+    advisorLevelPreview() {
+      const rows = [];
+      const m = this.advisorConfig.xp_per_level || 100;
+      const max = this.advisorConfig.max_level || 8;
+      for (let l = 1; l <= max; l++) {
+        const total = Math.floor(m * (l - 1) * l / 2);
+        const next = l < max ? Math.floor(m * l * (l + 1) / 2) - total : 0;
+        rows.push({ level: l, total, toNext: next });
+      }
+      return rows;
+    },
   },
   async mounted() {
-    await Promise.all([this.loadConfig(), this.loadCoinConfig(), this.loadLevels(), this.loadEntities(), this.loadDefaultRounds()]);
+    await Promise.all([this.loadConfig(), this.loadCoinConfig(), this.loadAdvisorConfig(), this.loadLevels(), this.loadEntities(), this.loadDefaultRounds()]);
     this.loading = false;
   },
   methods: {
@@ -283,6 +347,25 @@ export default {
         await axios.put('/api/admin/rules/xp_config', { value: { ...this.config } });
         this.saved = true;
         setTimeout(() => { this.saved = false; }, 1500);
+      } catch {
+        // silently fail
+      }
+    },
+    async loadAdvisorConfig() {
+      try {
+        const res = await axios.get('/api/admin/rules');
+        if (res.data.advisor_level_config) {
+          this.advisorConfig = { ...this.advisorConfig, ...res.data.advisor_level_config };
+        }
+      } catch {
+        // use defaults
+      }
+    },
+    async saveAdvisorConfig() {
+      try {
+        await axios.put('/api/admin/rules/advisor_level_config', { value: { ...this.advisorConfig } });
+        this.advisorSaved = true;
+        setTimeout(() => { this.advisorSaved = false; }, 1500);
       } catch {
         // silently fail
       }

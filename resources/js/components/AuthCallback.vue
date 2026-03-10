@@ -42,6 +42,8 @@ export default {
       await this.auth.handleCallback(code, state);
       if (this.auth.state.user?.needs_username) {
         this.$router.push('/choose-username');
+      } else if (this.auth.state.user?.needs_advisors) {
+        this.$router.push('/choose-advisors');
       } else {
         this.$router.push('/');
       }

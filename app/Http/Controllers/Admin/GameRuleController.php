@@ -7,6 +7,7 @@ use App\Models\GameRule;
 use App\Traits\AuditsAdminActions;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class GameRuleController extends Controller
@@ -31,6 +32,10 @@ class GameRuleController extends Controller
             ['value' => $validated['value']]
         );
         $this->auditLog('update', 'GameRule', $rule->id, ['value' => ['old' => $oldValue, 'new' => $validated['value']]]);
+
+        if ($key === 'advisor_level_config') {
+            Cache::forget('advisor_level_config');
+        }
 
         return response()->json($rule);
     }

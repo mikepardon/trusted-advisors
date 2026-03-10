@@ -12,6 +12,7 @@ use App\Models\KingdomStyle;
 use App\Models\Unlockable;
 use App\Models\User;
 use App\Models\UserNotification;
+use App\Models\UserCharacter;
 use App\Models\UserUnlockable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -134,6 +135,14 @@ class CoinShopController extends Controller
             'unlocked_at' => now(),
         ]);
 
+        // Auto-create UserCharacter when a character is purchased
+        if ($unlockable->type === 'character' && $unlockable->entity_id) {
+            UserCharacter::firstOrCreate([
+                'user_id' => $user->id,
+                'character_id' => $unlockable->entity_id,
+            ]);
+        }
+
         return response()->json([
             'message' => 'Purchase successful!',
             'new_coins' => $user->coins,
@@ -202,6 +211,14 @@ class CoinShopController extends Controller
             'unlockable_id' => $unlockable->id,
             'unlocked_at' => now(),
         ]);
+
+        // Auto-create UserCharacter when a character is gifted
+        if ($unlockable->type === 'character' && $unlockable->entity_id) {
+            UserCharacter::firstOrCreate([
+                'user_id' => $recipient->id,
+                'character_id' => $unlockable->entity_id,
+            ]);
+        }
 
         $notification = UserNotification::create([
             'user_id' => $recipient->id,

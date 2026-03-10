@@ -63,4 +63,14 @@ class Character extends Model
     {
         return $this->hasMany(GamePlayer::class);
     }
+
+    public function userCharacters(): HasMany
+    {
+        return $this->hasMany(UserCharacter::class);
+    }
+
+    public function levelOptions(): HasMany
+    {
+        return $this->hasMany(CharacterLevelOption::class);
+    }
 }

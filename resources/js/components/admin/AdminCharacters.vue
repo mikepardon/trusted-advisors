@@ -289,6 +289,120 @@
             </label>
           </div>
 
+          <!-- Level Options (edit mode only) -->
+          <div v-if="editing" class="level-options-section">
+            <div class="lo-header" @click="showLevelOptions = !showLevelOptions">
+              <span class="lo-title">Level Options ({{ charLevelOptions.length }})</span>
+              <button type="button" class="balance-toggle">{{ showLevelOptions ? 'Hide' : 'Show' }}</button>
+            </div>
+
+            <div v-if="showLevelOptions" class="lo-body">
+              <div v-if="!charLevelOptions.length" class="lo-empty">No level options for this character.</div>
+              <table v-else class="admin-table lo-table">
+                <thead>
+                  <tr>
+                    <th>Lvl</th>
+                    <th>Name</th>
+                    <th>Type</th>
+                    <th>Max</th>
+                    <th>Active</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="opt in charLevelOptions" :key="opt.id">
+                    <td>{{ opt.available_at_level }}</td>
+                    <td>{{ opt.name }}</td>
+                    <td><span class="type-badge">{{ opt.type }}</span></td>
+                    <td>{{ opt.max_selections || '&infin;' }}</td>
+                    <td><span :class="opt.is_active ? 'status-active' : 'status-inactive'">{{ opt.is_active ? 'Yes' : 'No' }}</span></td>
+                    <td class="lo-actions">
+                      <button type="button" class="btn-lo-edit" @click="openEditLo(opt)">Edit</button>
+                      <button type="button" class="btn-lo-delete" @click="deleteLo(opt)">Del</button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <button type="button" class="btn-lo-add" @click="openCreateLo">+ Add Level Option</button>
+
+              <!-- Inline level option form -->
+              <div v-if="showLoForm" class="lo-form">
+                <h4 class="lo-form-title">{{ editingLo ? 'Edit Level Option' : 'New Level Option' }}</h4>
+                <div class="lo-form-grid">
+                  <div class="form-group">
+                    <label>Name</label>
+                    <input v-model="loForm.name" required />
+                  </div>
+                  <div class="form-group">
+                    <label>Type</label>
+                    <select v-model="loForm.type">
+                      <option value="bump_dice_face">Bump Dice Face</option>
+                      <option value="bump_two_dice_faces">Bump Two Dice Faces</option>
+                      <option value="start_with_item">Start With Item</option>
+                      <option value="extra_item_slot">Extra Item Slot</option>
+                      <option value="passive_stat_bonus">Passive Stat Bonus</option>
+                      <option value="add_wild">Add Wild</option>
+                      <option value="card_redraw">Card Redraw</option>
+                      <option value="start_with_curse">Start With Curse</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Available at Level</label>
+                    <input v-model.number="loForm.available_at_level" type="number" min="1" max="7" />
+                  </div>
+                  <div class="form-group">
+                    <label>Max Selections (0 = unlimited)</label>
+                    <input v-model.number="loForm.max_selections" type="number" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label>Sort Order</label>
+                    <input v-model.number="loForm.sort_order" type="number" min="0" />
+                  </div>
+                  <div class="form-group">
+                    <label>Icon</label>
+                    <input v-model="loForm.icon" />
+                  </div>
+                  <div class="form-group lo-full-width">
+                    <label>Description</label>
+                    <input v-model="loForm.description" />
+                  </div>
+                  <div class="form-group">
+                    <label><input type="checkbox" v-model="loForm.is_active" /> Active</label>
+                  </div>
+
+                  <!-- Type-specific config -->
+                  <template v-if="loForm.type === 'passive_stat_bonus'">
+                    <div class="form-group">
+                      <label>Stat</label>
+                      <select v-model="loConfigStat">
+                        <option v-for="s in loStatOptions" :key="s" :value="s">{{ s }}</option>
+                      </select>
+                    </div>
+                    <div class="form-group">
+                      <label>Value</label>
+                      <input v-model.number="loConfigValue" type="number" min="1" />
+                    </div>
+                  </template>
+                  <div v-if="loForm.type === 'start_with_item'" class="form-group">
+                    <label>Item ID (blank for random)</label>
+                    <input v-model.number="loConfigItemId" type="number" min="1" />
+                  </div>
+                  <div v-if="loForm.type === 'start_with_curse'" class="form-group">
+                    <label>Curse ID (blank for random)</label>
+                    <input v-model.number="loConfigCurseId" type="number" min="1" />
+                  </div>
+                </div>
+
+                <div v-if="loFormError" class="form-error">{{ loFormError }}</div>
+                <div class="lo-form-actions">
+                  <button type="button" class="btn-lo-save" @click="saveLo">{{ editingLo ? 'Update' : 'Create' }}</button>
+                  <button type="button" class="btn-lo-cancel" @click="showLoForm = false">Cancel</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
 
           <div class="modal-actions">
@@ -367,6 +481,17 @@ export default {
       aiError: '',
       importResult: null,
       showBalanceStats: false,
+      // Level options
+      showLevelOptions: false,
+      charLevelOptions: [],
+      showLoForm: false,
+      editingLo: null,
+      loFormError: '',
+      loForm: { name: '', type: 'bump_dice_face', available_at_level: 1, is_active: true, max_selections: 0, sort_order: 0, description: '', icon: '' },
+      loConfigStat: 'wealth',
+      loConfigValue: 1,
+      loConfigItemId: null,
+      loConfigCurseId: null,
     };
   },
   computed: {
@@ -388,6 +513,9 @@ export default {
         if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
         return String(av).localeCompare(String(bv)) * dir;
       });
+    },
+    loStatOptions() {
+      return ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
     },
     characterBalanceStats() {
       if (!this.characters.length) return null;
@@ -477,6 +605,9 @@ export default {
       this.die3DuelInput = '';
       this.formError = '';
       this.imageUploaded = false;
+      this.showLevelOptions = false;
+      this.charLevelOptions = [];
+      this.showLoForm = false;
       this.showModal = true;
     },
     openEdit(c) {
@@ -511,7 +642,10 @@ export default {
       this.die2DuelInput = hasDuelDice ? (c.dice_duel?.[1]?.join(', ') || '') : '';
       this.die3DuelInput = hasDuelDice ? (c.dice_duel?.[2]?.join(', ') || '') : '';
       this.formError = '';
+      this.showLevelOptions = false;
+      this.showLoForm = false;
       this.showModal = true;
+      this.fetchLevelOptions(c.id);
     },
     async save() {
       this.formError = '';
@@ -669,6 +803,84 @@ export default {
         await this.fetch();
       } catch (e) {
         this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
+      }
+    },
+    // Level option methods
+    async fetchLevelOptions(characterId) {
+      try {
+        const res = await axios.get('/api/admin/character-level-options');
+        this.charLevelOptions = res.data.filter(o => o.character_id === characterId);
+      } catch { this.charLevelOptions = []; }
+    },
+    openCreateLo() {
+      this.editingLo = null;
+      this.loForm = { name: '', type: 'bump_dice_face', available_at_level: 1, is_active: true, max_selections: 0, sort_order: 0, description: '', icon: '' };
+      this.loConfigStat = 'wealth';
+      this.loConfigValue = 1;
+      this.loConfigItemId = null;
+      this.loConfigCurseId = null;
+      this.loFormError = '';
+      this.showLoForm = true;
+    },
+    openEditLo(opt) {
+      this.editingLo = opt.id;
+      this.loForm = {
+        name: opt.name,
+        type: opt.type,
+        available_at_level: opt.available_at_level,
+        is_active: opt.is_active,
+        max_selections: opt.max_selections,
+        sort_order: opt.sort_order,
+        description: opt.description || '',
+        icon: opt.icon || '',
+      };
+      if (opt.type === 'passive_stat_bonus' && opt.config) {
+        this.loConfigStat = opt.config.stat || 'wealth';
+        this.loConfigValue = opt.config.value || 1;
+      }
+      if (opt.type === 'start_with_item' && opt.config) {
+        this.loConfigItemId = opt.config.item_id || null;
+      }
+      if (opt.type === 'start_with_curse' && opt.config) {
+        this.loConfigCurseId = opt.config.curse_id || null;
+      }
+      this.loFormError = '';
+      this.showLoForm = true;
+    },
+    buildLoConfig() {
+      if (this.loForm.type === 'passive_stat_bonus') {
+        return { stat: this.loConfigStat, value: this.loConfigValue };
+      }
+      if (this.loForm.type === 'start_with_item') {
+        return this.loConfigItemId ? { item_id: this.loConfigItemId } : { random: true };
+      }
+      if (this.loForm.type === 'start_with_curse') {
+        return this.loConfigCurseId ? { curse_id: this.loConfigCurseId } : { random: true };
+      }
+      return null;
+    },
+    async saveLo() {
+      this.loFormError = '';
+      const data = { ...this.loForm, config: this.buildLoConfig(), character_id: this.editing.id };
+      try {
+        if (this.editingLo) {
+          await axios.put(`/api/admin/character-level-options/${this.editingLo}`, data);
+        } else {
+          await axios.post('/api/admin/character-level-options', data);
+        }
+        this.showLoForm = false;
+        await this.fetchLevelOptions(this.editing.id);
+      } catch (e) {
+        this.loFormError = e.response?.data?.message || 'Error saving';
+      }
+    },
+    async deleteLo(opt) {
+      if (!confirm(`Delete "${opt.name}"?`)) return;
+      try {
+        await axios.delete(`/api/admin/character-level-options/${opt.id}`);
+        await this.fetchLevelOptions(this.editing.id);
+      } catch (e) {
+        this.loFormError = e.response?.data?.message || 'Error deleting';
       }
     },
   },
@@ -1173,4 +1385,154 @@ export default {
   font-weight: 700;
 }
 
+/* Level Options section */
+.level-options-section {
+  border: 1px solid rgba(138, 106, 46, 0.35);
+  background: rgba(0, 0, 0, 0.15);
+  padding: 12px;
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+
+.lo-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+}
+
+.lo-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.95rem;
+}
+
+.lo-body {
+  margin-top: 10px;
+}
+
+.lo-empty {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-style: italic;
+  margin-bottom: 8px;
+}
+
+.lo-table {
+  font-size: 0.78rem;
+  margin-bottom: 8px;
+}
+
+.lo-table th,
+.lo-table td {
+  padding: 5px 8px;
+}
+
+.lo-actions {
+  white-space: nowrap;
+  display: flex;
+  gap: 4px;
+}
+
+.type-badge {
+  background: rgba(212, 168, 67, 0.1);
+  border: 1px solid rgba(212, 168, 67, 0.2);
+  color: var(--accent-gold);
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+}
+
+.status-active { color: #5ab87a; }
+.status-inactive { color: #e07070; }
+
+.btn-lo-edit,
+.btn-lo-delete {
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.btn-lo-edit {
+  background: rgba(212, 168, 67, 0.15);
+  border: 1px solid rgba(212, 168, 67, 0.3);
+  color: var(--accent-gold);
+}
+
+.btn-lo-delete {
+  background: rgba(224, 112, 112, 0.15);
+  border: 1px solid rgba(224, 112, 112, 0.3);
+  color: #e07070;
+}
+
+.btn-lo-add {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  background: rgba(90, 184, 122, 0.1);
+  border: 1px dashed rgba(90, 184, 122, 0.4);
+  color: #5ab87a;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.8rem;
+  margin-top: 6px;
+  transition: background 0.2s;
+}
+
+.btn-lo-add:hover {
+  background: rgba(90, 184, 122, 0.2);
+}
+
+.lo-form {
+  margin-top: 10px;
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-gold);
+  border-radius: 6px;
+}
+
+.lo-form-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 0.85rem;
+  margin: 0 0 10px;
+}
+
+.lo-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.lo-full-width {
+  grid-column: span 2;
+}
+
+.lo-form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.btn-lo-save {
+  padding: 6px 16px;
+  background: linear-gradient(180deg, var(--wood-light, #3a2a14), var(--wood-medium, #2a1a0a));
+  border: 1px solid var(--accent-gold);
+  color: var(--accent-gold);
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Cinzel', serif;
+  font-size: 0.78rem;
+}
+
+.btn-lo-cancel {
+  padding: 6px 16px;
+  background: transparent;
+  border: 1px solid var(--border-gold);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.78rem;
+}
 </style>
