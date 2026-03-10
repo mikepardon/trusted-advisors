@@ -88,7 +88,12 @@ class GameController extends Controller
             ? UserUnlockable::where('user_id', $userId)->pluck('unlockable_id')->toArray()
             : [];
 
-        $characters = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds) {
+        // Load user's owned characters with progression data
+        $userCharacters = $userId
+            ? UserCharacter::where('user_id', $userId)->get()->keyBy('character_id')
+            : collect();
+
+        $characters = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds, $userCharacters) {
             $data = $c->toArray();
             $unlockable = $charUnlockables[$c->id] ?? null;
             $data['is_locked_for_user'] = false;
@@ -102,6 +107,29 @@ class GameController extends Controller
                         ? "Reach level {$unlockable->unlock_value}"
                         : "Earn required achievement";
                 }
+            }
+
+            // Lock characters the user doesn't own
+            $uc = $userCharacters[$c->id] ?? null;
+            if ($userCharacters->isNotEmpty() && !$uc) {
+                $data['is_locked_for_user'] = true;
+                $data['unlock_requirement'] = 'You must own this advisor';
+            }
+
+            // Include user progression data
+            if ($uc) {
+                $data['level'] = $uc->level;
+                $data['display_name'] = $uc->getDisplayName();
+                $data['base_dice'] = $c->dice;
+                $data['dice'] = $uc->getModifiedDice(false);
+                $data['extra_item_slots'] = $uc->getExtraItemSlots();
+                $data['card_redraws'] = $uc->getCardRedraws();
+                $data['passive_bonuses'] = $uc->getPassiveBonuses();
+            } else {
+                $data['level'] = 0;
+                $data['extra_item_slots'] = 0;
+                $data['card_redraws'] = 0;
+                $data['passive_bonuses'] = [];
             }
 
             return $data;
@@ -1674,8 +1702,8 @@ class GameController extends Controller
             return response()->json(['error' => 'Not in resolving phase'], 422);
         }
 
-        // Online mode: only host can advance
-        if ($game->isOnline() && $request->user()->id !== $game->user_id) {
+        // Online cooperative: only host can advance. Duel: either player can advance.
+        if ($game->isOnline() && !$game->isDuel() && $request->user()->id !== $game->user_id) {
             return response()->json(['error' => 'Only the host can advance the round'], 403);
         }
 
@@ -2442,6 +2470,34 @@ class GameController extends Controller
                         }
                         continue;
                     }
+                    if ($stat === 'grant_item_id') {
+                        $item = Item::find($change);
+                        if ($item) {
+                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
+                                $duelSpecialEffects[] = [
+                                    'type' => 'item_blocked',
+                                    'player' => $character->name,
+                                    'item' => $item->name,
+                                    'description' => "{$character->name}'s inventory is full! {$item->name} was lost.",
+                                ];
+                            } else {
+                                GamePlayerItem::create([
+                                    'game_player_id' => $rollingPlayer->id,
+                                    'item_id' => $item->id,
+                                    'acquired_round' => $game->current_round,
+                                    'is_used' => false,
+                                ]);
+                                $duelSpecialEffects[] = [
+                                    'type' => 'draw_item',
+                                    'phase' => 'negative',
+                                    'player' => $character->name,
+                                    'item' => $item->name,
+                                    'description' => "{$character->name} received {$item->name}!",
+                                ];
+                            }
+                        }
+                        continue;
+                    }
                     if (in_array($stat, $statKeys)) {
                         $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $change;
                     }
@@ -2672,6 +2728,7 @@ class GameController extends Controller
             'special_effects' => $duelSpecialEffects,
             'pending_curses' => !empty($duelPendingCurses) ? $duelPendingCurses : null,
             'player_curses' => GamePlayerCurse::where('game_player_id', $rollingPlayer->id)->with('curse')->get(),
+            'player_items' => GamePlayerItem::where('game_player_id', $rollingPlayer->id)->with('item')->get(),
         ];
 
         if ($game->isOnline()) {

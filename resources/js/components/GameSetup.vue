@@ -426,12 +426,18 @@
                 <h3 class="advisor-name">{{ char.display_name || char.name }}</h3>
                 <p class="advisor-desc">{{ char.description }}</p>
                 <div v-if="getCharacterBonusLabel(char.id)" class="advisor-bonus-badge">{{ getCharacterBonusLabel(char.id) }}</div>
+                <!-- Upgrade bonuses -->
+                <div v-if="hasUpgradeBonuses(char)" class="advisor-upgrades">
+                  <span v-if="char.extra_item_slots > 0" class="advisor-upgrade-tag">+{{ char.extra_item_slots }} Item Slot{{ char.extra_item_slots > 1 ? 's' : '' }}</span>
+                  <span v-if="char.card_redraws > 0" class="advisor-upgrade-tag">{{ char.card_redraws }} Redraw{{ char.card_redraws > 1 ? 's' : '' }}</span>
+                  <span v-for="(val, stat) in char.passive_bonuses" :key="stat" class="advisor-upgrade-tag">+{{ val }} {{ stat.charAt(0).toUpperCase() + stat.slice(1) }}</span>
+                </div>
                 <div class="advisor-stats">
                   <div class="advisor-dice-rows">
                     <div v-for="(die, dIdx) in char.dice" :key="dIdx" class="advisor-die-row">
                       <span class="advisor-die-label">Die {{ dIdx + 1 }}</span>
                       <div class="advisor-die-faces">
-                        <span v-for="(face, fIdx) in die" :key="fIdx" class="advisor-die-face" :class="{ 'face-wild': face === 'WILD' }">{{ face === 'WILD' ? 'W' : face }}</span>
+                        <span v-for="(face, fIdx) in die" :key="fIdx" class="advisor-die-face" :class="{ 'face-wild': face === 'WILD', 'face-upgraded': char.level > 0 && isDiceUpgraded(char, dIdx, fIdx) }">{{ face === 'WILD' ? 'W' : face }}</span>
                       </div>
                     </div>
                   </div>
@@ -833,7 +839,7 @@ export default {
         }
         const [gameRes, charsRes] = await Promise.all([
           axios.post('/api/games', gamePayload),
-          axios.get('/api/characters'),
+          axios.get('/api/characters', { params: { game_type: this.gameType } }),
         ]);
         this.gameId = gameRes.data.id;
         let allChars = charsRes.data;
@@ -886,6 +892,17 @@ export default {
           this.swiperInstance.slideTo(0, 0);
         }
       });
+    },
+    hasUpgradeBonuses(char) {
+      return (char.extra_item_slots > 0)
+        || (char.card_redraws > 0)
+        || Object.keys(char.passive_bonuses || {}).length > 0;
+    },
+    isDiceUpgraded(char, dieIdx, faceIdx) {
+      if (!char.base_dice) return false;
+      const baseVal = char.base_dice[dieIdx]?.[faceIdx];
+      const modVal = char.dice[dieIdx]?.[faceIdx];
+      return baseVal !== modVal;
     },
     getCharacterBonusLabel(charId) {
       const char = this.characters.find(c => c.id === charId);
@@ -1633,6 +1650,29 @@ export default {
   border-color: var(--accent-gold);
   background: rgba(212, 168, 67, 0.15);
   font-size: 0.55rem;
+}
+
+.advisor-die-face.face-upgraded {
+  color: #5ab87a;
+  border-color: rgba(90, 184, 122, 0.5);
+  background: rgba(90, 184, 122, 0.15);
+}
+
+.advisor-upgrades {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.advisor-upgrade-tag {
+  font-size: 0.62rem;
+  padding: 2px 6px;
+  background: rgba(90, 184, 122, 0.1);
+  border: 1px solid rgba(90, 184, 122, 0.25);
+  border-radius: 4px;
+  color: #5ab87a;
 }
 
 .advisor-ability {

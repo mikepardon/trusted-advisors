@@ -259,7 +259,12 @@ class GameLobbyController extends Controller
             ? UserUnlockable::where('user_id', $userId)->pluck('unlockable_id')->toArray()
             : [];
 
-        $characters = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds) {
+        // Only show characters the user owns (has in user_characters)
+        $ownedCharacterIds = $userId
+            ? \App\Models\UserCharacter::where('user_id', $userId)->pluck('character_id')->toArray()
+            : [];
+
+        $characters = $characters->map(function ($c) use ($charUnlockables, $userUnlockableIds, $ownedCharacterIds) {
             $charData = $c->toArray();
             $unlockable = $charUnlockables[$c->id] ?? null;
             $charData['is_locked_for_user'] = false;
@@ -273,6 +278,12 @@ class GameLobbyController extends Controller
                         ? "Reach level {$unlockable->unlock_value}"
                         : "Earn required achievement";
                 }
+            }
+
+            // Lock characters the user doesn't own
+            if (!empty($ownedCharacterIds) && !in_array($c->id, $ownedCharacterIds)) {
+                $charData['is_locked_for_user'] = true;
+                $charData['unlock_requirement'] = 'You must own this advisor';
             }
 
             return $charData;

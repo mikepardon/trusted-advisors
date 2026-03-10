@@ -209,11 +209,6 @@ export default {
     },
   },
   mounted() {
-    // Auto-show tutorial for first-time visitors
-    if (!localStorage.getItem('has_seen_tutorial')) {
-      this.showTutorial = true;
-      localStorage.setItem('has_seen_tutorial', '1');
-    }
     // Fetch site settings (homepage background)
     axios.get('/api/site-settings').then(res => {
       this.homepageBgUrl = res.data?.homepage_background_url || null;
@@ -223,6 +218,11 @@ export default {
     // fetchUser() is already called in app.js router guard; just wait for it
     const check = () => {
       if (!this.auth.state.loading && this.auth.state.user) {
+        // Auto-show tutorial for first-time visitors (after login)
+        if (!localStorage.getItem('has_seen_tutorial')) {
+          this.showTutorial = true;
+          localStorage.setItem('has_seen_tutorial', '1');
+        }
         this.fetchNotifCount();
         this.subscribeNotifChannel();
         initOneSignal().then(() => promptPushPermission());

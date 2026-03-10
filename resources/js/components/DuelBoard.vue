@@ -949,6 +949,11 @@ export default {
 
       this.pendingRerollDecision = true;
 
+      // Update player items if included in roll result
+      if (rollResult.player_items && pn === this.activePlayerNumber) {
+        this.currentPlayerItems = rollResult.player_items;
+      }
+
       // Process pending curses from roll result
       if (rollResult.pending_curses) {
         this.pendingCurses = rollResult.pending_curses;
@@ -1184,6 +1189,9 @@ export default {
     },
 
     async advanceRound() {
+      // Prevent concurrent advance calls
+      if (this._advancing) return;
+      this._advancing = true;
       try {
         const res = await axios.post(`/api/games/${this.gameId}/next-round`);
 
@@ -1226,8 +1234,16 @@ export default {
           await this.loadDuelHand();
         }
       } catch (e) {
-        this.toast.error('Failed to advance: ' + (e.response?.data?.error || e.message));
-        this.$emit('refresh');
+        // In online duel, both players may try to advance simultaneously —
+        // silently refresh state instead of showing error
+        if (this.isOnline && e.response?.status === 422) {
+          this.$emit('refresh');
+        } else {
+          this.toast.error('Failed to advance: ' + (e.response?.data?.error || e.message));
+          this.$emit('refresh');
+        }
+      } finally {
+        this._advancing = false;
       }
     },
 
