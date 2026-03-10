@@ -103,7 +103,7 @@
                   v-for="opt in char.level_options[level]"
                   :key="opt.id"
                 >
-                  <span v-if="opt.icon" class="upgrade-icon">{{ opt.icon }}</span>
+                  <span v-if="opt.icon" class="upgrade-icon">{{ upgradeIconEmoji(opt.icon) }}</span>
                   <div class="upgrade-details">
                     <span class="upgrade-name">{{ opt.name }}</span>
                     <span class="upgrade-desc">{{ opt.description }}</span>
