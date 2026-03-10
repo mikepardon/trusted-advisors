@@ -479,7 +479,7 @@ export default {
           const productId = platform === 'apple'
             ? this.premiumProduct?.apple_product_id
             : this.premiumProduct?.google_product_id;
-          await completePurchaseIAP(productId);
+          await completePurchaseIAP(productId, true);
           this.isPremium = true;
         }
       } catch (e) {

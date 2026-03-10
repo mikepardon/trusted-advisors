@@ -130,7 +130,7 @@ export default {
             this.subscribing = false;
             return;
           }
-          await completePurchaseIAP(productId);
+          await completePurchaseIAP(productId, true);
           this.auth.state.user.is_premium = true;
           this.toast.success('Premium activated!');
         }
