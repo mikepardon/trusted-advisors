@@ -1,6 +1,17 @@
 import axios from 'axios';
-import { isIosApp, isAndroidApp, isNativeApp } from 'webtonative';
+import { isIosApp, isAndroidApp, isNativeApp, platform } from 'webtonative';
 import { inAppPurchase, getReceiptData, getAllPurchases } from 'webtonative/InAppPurchase';
+
+// Debug: log platform detection at load time (remove after testing)
+console.log('[WTN] Platform detection:', {
+    platform,
+    isNativeApp,
+    isIosApp,
+    isAndroidApp,
+    hasWebkit: typeof window !== 'undefined' && !!window.webkit,
+    hasMessageHandlers: typeof window !== 'undefined' && !!window.webkit?.messageHandlers?.webToNativeInterface,
+    hasWebToNativeInterface: typeof window !== 'undefined' && !!window.WebToNativeInterface,
+});
 
 /**
  * Detect if running inside a WebToNative wrapper app.

@@ -117,24 +117,28 @@ export default {
     },
     async subscribe() {
       this.subscribing = true;
+      const platform = getPaymentPlatform();
+      console.log('[Premium] subscribe clicked', { platform, price: this.price });
       try {
-        const platform = getPaymentPlatform();
         if (platform === 'stripe') {
           await stripeCheckout('subscription');
         } else {
           const productId = platform === 'apple'
             ? this.price?.apple_product_id
             : this.price?.google_product_id;
+          console.log('[Premium] IAP productId:', productId);
           if (!productId) {
             this.toast.error('IAP product not configured.');
             this.subscribing = false;
             return;
           }
-          await completePurchaseIAP(productId, true);
+          const result = await completePurchaseIAP(productId, true);
+          console.log('[Premium] IAP result:', result);
           this.auth.state.user.is_premium = true;
           this.toast.success('Premium activated!');
         }
       } catch (e) {
+        console.error('[Premium] subscribe error:', e);
         this.toast.error(e.response?.data?.error || e.message || 'Purchase failed.');
       }
       this.subscribing = false;
