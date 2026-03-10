@@ -79,19 +79,24 @@
         >Immortalise</button>
       </div>
 
-      <!-- Immortalise Confirmation -->
-      <div v-if="showImmortaliseConfirm" class="adv-immortalise-confirm">
-        <div class="adv-immortalise-icon">&#10047;</div>
-        <p class="adv-immortalise-title">Immortalise this advisor?</p>
-        <p class="adv-immortalise-desc">They will reset to Level 1 with a new title. Previous upgrades will be lost for this incarnation.</p>
-        <div class="adv-immortalise-btns">
-          <button class="btn-adv-immortalise-yes" :disabled="immortalising" @click="doImmortalise">
-            {{ immortalising ? 'Immortalising...' : 'Confirm' }}
-          </button>
-          <button class="btn-adv-immortalise-no" :disabled="immortalising" @click="showImmortaliseConfirm = false">Cancel</button>
+    </div>
+
+    <!-- Immortalise Confirmation Modal -->
+    <Transition name="imm-fade">
+      <div v-if="showImmortaliseConfirm" class="adv-immortalise-overlay" @click.self="showImmortaliseConfirm = false">
+        <div class="adv-immortalise-modal">
+          <div class="adv-immortalise-icon">&#10047;</div>
+          <p class="adv-immortalise-title">Immortalise this advisor?</p>
+          <p class="adv-immortalise-desc">They will reset to Level 1 with a new title. Previous upgrades will be lost for this incarnation.</p>
+          <div class="adv-immortalise-btns">
+            <button class="btn-adv-immortalise-yes" :disabled="immortalising" @click="doImmortalise">
+              {{ immortalising ? 'Immortalising...' : 'Confirm' }}
+            </button>
+            <button class="btn-adv-immortalise-no" :disabled="immortalising" @click="showImmortaliseConfirm = false">Cancel</button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
   </div>
 </template>
 
@@ -500,13 +505,36 @@ export default {
   cursor: not-allowed;
 }
 
-.adv-immortalise-confirm {
+/* Immortalise modal transition */
+.imm-fade-enter-active {
+  transition: opacity 0.2s ease;
+}
+.imm-fade-leave-active {
+  transition: opacity 0.15s ease;
+}
+.imm-fade-enter-from,
+.imm-fade-leave-to {
+  opacity: 0;
+}
+
+.adv-immortalise-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.adv-immortalise-modal {
+  background: linear-gradient(180deg, #2a1a30, #1a0f20);
+  border: 2px solid #b06adf;
+  border-radius: 12px;
+  padding: 28px 24px;
+  max-width: 320px;
   width: 100%;
-  margin-top: 8px;
-  padding: 16px;
-  background: rgba(90, 42, 122, 0.12);
-  border: 1px solid rgba(176, 106, 223, 0.35);
-  border-radius: 8px;
   text-align: center;
 }
 

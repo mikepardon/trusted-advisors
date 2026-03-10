@@ -87,20 +87,31 @@
         <!-- Upgrade path toggle -->
         <button
           class="upgrade-toggle"
-          @click.stop="toggleUpgradePath(char.id)"
+          @click.stop="openUpgradeModal(char)"
         >
-          {{ expandedUpgrades[char.id] ? 'Hide Upgrade Path' : 'View Upgrade Path' }}
-          <span class="toggle-chevron" :class="{ open: expandedUpgrades[char.id] }">&#9662;</span>
+          View Upgrade Path
+          <span class="toggle-chevron">&#9662;</span>
         </button>
+      </div>
+    </div>
 
-        <Transition name="expand">
-          <div v-if="expandedUpgrades[char.id]" class="upgrade-tree">
-            <template v-for="level in sortedLevels(char.level_options)" :key="level">
+    <!-- Upgrade Path Modal -->
+    <Transition name="modal-fade">
+      <div v-if="upgradeModalChar" class="upgrade-modal-overlay" @click.self="upgradeModalChar = null">
+        <div class="upgrade-modal">
+          <button class="upgrade-modal-close" @click="upgradeModalChar = null">&times;</button>
+          <div class="upgrade-modal-portrait-wrap">
+            <img :src="upgradeModalChar.image_url || '/images/character.png'" :alt="upgradeModalChar.name" class="upgrade-modal-portrait" />
+          </div>
+          <h3 class="upgrade-modal-name">{{ upgradeModalChar.name }}</h3>
+          <p class="upgrade-modal-subtitle">Upgrade Path</p>
+          <div class="upgrade-tree">
+            <template v-for="level in sortedLevels(upgradeModalChar.level_options)" :key="level">
               <div class="upgrade-level-group">
                 <span class="upgrade-level-label">Level {{ level }}</span>
                 <div
                   class="upgrade-option"
-                  v-for="opt in char.level_options[level]"
+                  v-for="opt in upgradeModalChar.level_options[level]"
                   :key="opt.id"
                 >
                   <span v-if="opt.icon" class="upgrade-icon">{{ upgradeIconEmoji(opt.icon) }}</span>
@@ -112,9 +123,9 @@
               </div>
             </template>
           </div>
-        </Transition>
+        </div>
       </div>
-    </div>
+    </Transition>
 
     <!-- Confirm button -->
     <div class="confirm-section" v-if="!loading">
@@ -144,7 +155,7 @@ export default {
     return {
       characters: [],
       selectedIds: [],
-      expandedUpgrades: {},
+      upgradeModalChar: null,
       loading: true,
       submitting: false,
       error: '',
@@ -171,11 +182,8 @@ export default {
         this.selectedIds.push(id);
       }
     },
-    toggleUpgradePath(id) {
-      this.expandedUpgrades = {
-        ...this.expandedUpgrades,
-        [id]: !this.expandedUpgrades[id],
-      };
+    openUpgradeModal(char) {
+      this.upgradeModalChar = char;
     },
     upgradeIconEmoji(icon) {
       const map = {
@@ -525,38 +533,101 @@ export default {
 
 .toggle-chevron {
   font-size: 0.6rem;
-  transition: transform 0.25s;
 }
 
-.toggle-chevron.open {
-  transform: rotate(180deg);
+/* Modal transition */
+.modal-fade-enter-active {
+  transition: opacity 0.2s ease;
 }
-
-/* Expand transition */
-.expand-enter-active {
-  transition: max-height 0.35s ease, opacity 0.25s ease;
-  overflow: hidden;
+.modal-fade-leave-active {
+  transition: opacity 0.15s ease;
 }
-.expand-leave-active {
-  transition: max-height 0.25s ease, opacity 0.15s ease;
-  overflow: hidden;
-}
-.expand-enter-from,
-.expand-leave-to {
-  max-height: 0;
+.modal-fade-enter-from,
+.modal-fade-leave-to {
   opacity: 0;
 }
-.expand-enter-to,
-.expand-leave-from {
-  max-height: 2000px;
-  opacity: 1;
+
+/* Upgrade Modal */
+.upgrade-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.85);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.upgrade-modal {
+  background: linear-gradient(180deg, #2a1f14, #1a1209);
+  border: 2px solid var(--accent-gold);
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 380px;
+  width: 100%;
+  position: relative;
+  max-height: 85vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.upgrade-modal-close {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.upgrade-modal-close:hover {
+  color: var(--accent-gold);
+  transform: none;
+  box-shadow: none;
+}
+
+.upgrade-modal-portrait-wrap {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid var(--accent-gold);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.upgrade-modal-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upgrade-modal-name {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+  margin: 0 0 2px;
+  text-align: center;
+}
+
+.upgrade-modal-subtitle {
+  font-family: 'Cinzel', serif;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
 }
 
 .upgrade-tree {
   width: 100%;
-  margin-top: 8px;
-  border-top: 1px solid rgba(138, 106, 46, 0.2);
-  padding-top: 8px;
 }
 
 .upgrade-level-group {
