@@ -32,9 +32,22 @@ export function getPaymentPlatform() {
  */
 export function purchaseIAP(productId, isSubscription = false) {
     return new Promise((resolve, reject) => {
+        let settled = false;
+
+        // Timeout after 60s — if native never responds, don't hang forever
+        const timeout = setTimeout(() => {
+            if (!settled) {
+                settled = true;
+                reject(new Error('Purchase timed out. Please check that In-App Purchases are enabled and the product is configured in App Store Connect.'));
+            }
+        }, 60000);
+
         const params = {
             productId,
             callback: (data) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timeout);
                 if (data.isSuccess) {
                     resolve({
                         receiptData: data.receiptData,
@@ -54,6 +67,7 @@ export function purchaseIAP(productId, isSubscription = false) {
             params.isConsumable = false;
         }
 
+        console.log('[IAP] Starting purchase', { productId, platform: getPaymentPlatform(), isSubscription });
         inAppPurchase(params);
     });
 }
