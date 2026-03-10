@@ -27,6 +27,8 @@ class PaymentController extends Controller
                 'currency' => strtoupper($price->currency),
                 'interval' => $price->recurring->interval ?? null,
                 'interval_count' => $price->recurring->interval_count ?? 1,
+                'apple_product_id' => 'com.trustedadvisors.premium',
+                'google_product_id' => 'com.trustedadvisors.premium',
             ]);
         } catch (\Exception $e) {
             return response()->json(['error' => 'Could not fetch price.'], 500);

@@ -3471,7 +3471,7 @@ class GameController extends Controller
      */
     private function applyImmediateItemEffect(Game $game, GamePlayer $player, Item $item): ?string
     {
-        $effect = $item->effect;
+        $effect = $game->isDuel() ? ($item->getDuelEffect() ?? []) : ($item->effect ?? []);
         $bonusType = $effect['bonus_type'] ?? '';
         $bonusValue = (int) ($effect['bonus_value'] ?? 0);
 
@@ -4258,11 +4258,14 @@ class GameController extends Controller
      * Check which players have more than 2 active (non-used) items.
      */
     /**
-     * Get difficulty scaling based on round number (increases every 6 rounds).
+     * Get difficulty scaling based on round number (year = 6 rounds).
+     * Year 1: +0, Year 2: +2, Year 3: +3, Year 4: +4, Year 5: +5
      */
     private function getDifficultyScaling(Game $game): int
     {
-        return (int) floor(($game->current_round - 1) / 6);
+        $year = (int) floor(($game->current_round - 1) / 6); // 0-indexed year
+        if ($year <= 0) return 0;
+        return $year + 1; // year 1 => +2, year 2 => +3, year 3 => +4, year 4 => +5
     }
 
     /**
@@ -4399,7 +4402,8 @@ class GameController extends Controller
 
         // Apply immediate effects for stat_boost/heal_die/score_bonus/steal_stat
         $immediateDesc = null;
-        $bonusType = $playerItem->item->effect['bonus_type'] ?? '';
+        $itemEffect = $isDuel ? ($playerItem->item->getDuelEffect() ?? []) : ($playerItem->item->effect ?? []);
+        $bonusType = $itemEffect['bonus_type'] ?? '';
         if (in_array($bonusType, ['stat_boost', 'heal_die', 'score_bonus', 'end_game_multiplier'])) {
             $immediateDesc = $this->applyImmediateItemEffect($game, $player, $playerItem->item);
         } elseif ($bonusType === 'steal_stat' && $game->isDuel()) {

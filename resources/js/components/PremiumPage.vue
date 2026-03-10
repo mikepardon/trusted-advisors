@@ -74,7 +74,7 @@
 import axios from 'axios';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/toast';
-import { stripeCheckout } from '../services/paymentService';
+import { stripeCheckout, getPaymentPlatform, completePurchaseIAP, isWebToNative } from '../services/paymentService';
 
 export default {
   name: 'PremiumPage',
@@ -118,13 +118,37 @@ export default {
     async subscribe() {
       this.subscribing = true;
       try {
-        await stripeCheckout('subscription');
+        const platform = getPaymentPlatform();
+        if (platform === 'stripe') {
+          await stripeCheckout('subscription');
+        } else {
+          const productId = platform === 'apple'
+            ? this.price?.apple_product_id
+            : this.price?.google_product_id;
+          if (!productId) {
+            this.toast.error('IAP product not configured.');
+            this.subscribing = false;
+            return;
+          }
+          await completePurchaseIAP(productId);
+          this.auth.state.user.is_premium = true;
+          this.toast.success('Premium activated!');
+        }
       } catch (e) {
         this.toast.error(e.response?.data?.error || e.message || 'Purchase failed.');
       }
       this.subscribing = false;
     },
     async manageSub() {
+      const platform = getPaymentPlatform();
+      if (platform === 'apple') {
+        window.location.href = 'https://apps.apple.com/account/subscriptions';
+        return;
+      }
+      if (platform === 'google') {
+        window.location.href = 'https://play.google.com/store/account/subscriptions';
+        return;
+      }
       try {
         const res = await axios.get('/api/premium/manage');
         if (res.data.url) {
