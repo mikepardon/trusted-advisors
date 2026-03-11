@@ -81,6 +81,14 @@ class CurseSeeder extends Seeder
                 'negative_effect_duel' => ['type' => 'stat_per_round', 'stat' => 'happiness', 'value' => -1],
                 'positive_effect_duel' => ['type' => 'auto_max_stat', 'count' => 1],
             ],
+            [
+                'name' => 'The Seer\'s Lens',
+                'description' => 'A cursed crystal reveals the hidden consequences of every choice. But foresight bleeds gold from the treasury each month.',
+                'negative_effect' => ['type' => 'stat_per_round', 'stat' => 'wealth', 'value' => -1],
+                'positive_effect' => ['type' => 'reveal_previews'],
+                'negative_effect_duel' => ['type' => 'stat_per_round', 'stat' => 'wealth', 'value' => -1],
+                'positive_effect_duel' => ['type' => 'reveal_previews'],
+            ],
 
             // ===========================
             // DIFFICULTY MODIFIER CURSES

@@ -9,7 +9,6 @@
     <div class="stats-grid">
       <div v-for="stat in stats" :key="stat.key" class="stat-item">
         <div class="stat-header">
-          <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
           <span class="stat-name">{{ stat.label }}</span>
           <span class="stat-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
         </div>
@@ -72,7 +71,7 @@
               }"
             />
           </svg>
-          <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]">{{ tweenedValues[stat.key] }}</span>
+          <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]"><AppIcon :type="stat.type" :value="stat.value" size="md" /></span>
         </div>
         <span class="stat-short">{{ stat.short }}</span>
       </div>
@@ -535,9 +534,15 @@ export default {
   transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 
-/* Short stat labels — hidden on desktop */
+/* Short stat labels */
 .stat-short {
-  display: none;
+  display: block;
+  font-size: 1.2rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-family: 'Cinzel', serif;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
 }
 
 /* Radial progress — hidden on desktop */
@@ -800,13 +805,7 @@ export default {
   }
 
   .stat-short {
-    display: block;
-    font-size: 0.55rem;
-    text-align: center;
-    color: var(--text-secondary);
-    font-family: 'Cinzel', serif;
-    letter-spacing: 0.5px;
-    margin-top: 2px;
+    display: none;
   }
 
   .stat-value {

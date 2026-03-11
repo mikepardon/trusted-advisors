@@ -919,9 +919,17 @@ class GameController extends Controller
 
         $isDuel = $game->isDuel();
 
+        // Check if any curse grants reveal_previews
+        $playerCurses = GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get();
+        $showPreviews = $playerCurses->contains(function ($pc) {
+            $effect = $pc->curse?->positive_effect ?? [];
+            return ($effect['type'] ?? null) === 'reveal_previews';
+        });
+
         return response()->json([
             'player_number' => $playerNumber,
             'round' => $game->current_round,
+            'show_previews' => $showPreviews,
             'cards' => $hands->map(function ($h) use ($scaling, $allDiceFaces, $totalRollMod, $totalDiffMod, $isDuel) {
                 $cardData = $h->card->toArray();
                 if ($isDuel) {
@@ -947,7 +955,7 @@ class GameController extends Controller
             'character_dice' => $player->dice_overrides ?? ($isDuel ? $player->character->getDuelDice() : $player->character->dice),
             'character_wild_value' => $isDuel ? $player->character->getDuelWildValue() : $player->character->wild_value,
             'character_wild_ability' => $isDuel ? $player->character->getDuelWildAbilityDescription() : $player->character->wild_ability_description,
-            'player_curses' => GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get(),
+            'player_curses' => $playerCurses,
             'card_redraws_remaining' => max(0, ($player->card_redraw_uses ?? 0) - ($player->card_redraws_used ?? 0)),
         ]);
     }
@@ -1360,6 +1368,9 @@ class GameController extends Controller
                             'value' => (float) $change,
                             'description' => "Final score modifier increased by +{$change}%!",
                         ];
+                        continue;
+                    }
+                    if ($stat === 'reveal_stats') {
                         continue;
                     }
                     $positiveEffects[$stat] = ($positiveEffects[$stat] ?? 0) + $change;

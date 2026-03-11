@@ -98,6 +98,13 @@
             </svg>
             <span class="bar-icon-badge">{{ diceCount }}</span>
           </button>
+          <button v-if="activeCurseCount > 0" class="bar-icon-btn bar-icon-curse" title="View Curses" @click="showCurseDetails = true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+              <path d="M12 8v4M12 16h.01"/>
+            </svg>
+            <span class="bar-icon-badge bar-icon-badge-curse">{{ activeCurseCount }}</span>
+          </button>
         </div>
       </div>
       <div class="time-info">
@@ -111,11 +118,6 @@
 
     <!-- Player Items (overlay only, button in top bar) -->
     <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" :currentRound="gameData.current_round || 0" />
-
-    <!-- Active Curses Indicator -->
-    <div v-if="activeCurseCount > 0" class="curse-indicator" @click="showCurseDetails = true">
-      &#9760; {{ activeCurseCount }} curse{{ activeCurseCount > 1 ? 's' : '' }}
-    </div>
 
     <!-- Active Curses Overlay -->
     <teleport to="body">
@@ -220,14 +222,19 @@
 
       <template v-else>
         <CardSelectionHand
-          v-if="!isSinglePlayer || !currentPlayerHasAssigned"
+          v-if="isSinglePlayer || !currentPlayerHasAssigned"
           :cards="currentHand"
           :hasAssigned="currentPlayerHasAssigned"
           :loading="handLoading"
           :redraws="cardRedraws"
+          :showPreviews="showPreviews"
+          :singlePlayer="isSinglePlayer"
+          :resolveData="singlePlayerResolveData"
           @assign="assignRoles"
           @preview="onCardPreview"
           @redraw="onCardRedraw"
+          @continue="onSinglePlayerContinue"
+          @resolve-shown="currentStatPhase = 'negative'"
         />
       </template>
 
@@ -439,10 +446,14 @@ export default {
       showCurseSelection: false,
       // Card effect preview
       cardPreviewEffects: null,
+      // Seer's Lens curse: show stat preview bars
+      showPreviews: false,
       // Burger menu
       showGameMenu: false,
       showSettingsModal: false,
       showQuitConfirm: false,
+      // Single-player inline results
+      singlePlayerResolveData: null,
     };
   },
   computed: {
@@ -708,7 +719,10 @@ export default {
 
         // If in resolving phase, restore full resolve state or reconstruct from server
         if (this.gameData.round_phase === 'resolving') {
-          if (!this.restoreResolveState()) {
+          if (this.isSinglePlayer) {
+            // Single player: skip RoundResults UI, just advance to next round
+            await this.advanceRound();
+          } else if (!this.restoreResolveState()) {
             await this.loadRoundResults();
             this.resolveResumed = true;
           }
@@ -729,6 +743,7 @@ export default {
         this.characterWildValue = res.data.character_wild_value || null;
         this.characterWildAbility = res.data.character_wild_ability || null;
         this.cardRedraws = res.data.card_redraws_remaining ?? 0;
+        this.showPreviews = res.data.show_previews || false;
       } catch (e) {
         this.currentHand = [];
         this.currentPlayerItems = [];
@@ -860,9 +875,7 @@ export default {
         this.isGameOver = res.data.game_over;
         this.gameAfterPositive = res.data.game_after_positive;
         this.gameAfterNegative = res.data.game_after_negative;
-        this.currentStatPhase = null; // stats stay at pre-resolve until accepted
         this.gameData.game = res.data.game;
-        this.gameData.round_phase = 'resolving';
         // Refresh items after resolution (new items may have been granted)
         if (res.data.player_items && res.data.player_items[this.activePlayerNumber]) {
           this.currentPlayerItems = res.data.player_items[this.activePlayerNumber];
@@ -874,6 +887,23 @@ export default {
         // Process pending curses
         this.pendingCurses = res.data.pending_curses || null;
         this.playerCurses = res.data.player_curses || {};
+
+        if (this.isSinglePlayer) {
+          // Single player: show inline results on the card instead of RoundResults
+          this.singlePlayerResolveData = {
+            positivePhase: res.data.positive_phase,
+            negativePhase: res.data.negative_phase,
+            combinedEffects: res.data.combined_effects,
+            eventEffects: res.data.event_effects,
+            specialEffects: res.data.special_effects || [],
+            gameOver: res.data.game_over,
+          };
+          this.currentStatPhase = null; // bars stay at pre-resolve until results shown
+          // Keep round_phase as 'selecting' so CardSelectionHand stays visible
+        } else {
+          this.currentStatPhase = null; // stats stay at pre-resolve until accepted
+          this.gameData.round_phase = 'resolving';
+        }
         // Persist resolve state for page refresh recovery
         this.saveResolveState();
       } catch (e) {
@@ -1121,6 +1151,7 @@ export default {
           this.usingItem = false;
           this.allItemsDecided = false;
           this.resolveResumed = false;
+          this.singlePlayerResolveData = null;
           this.gameData = data;
           this.checkEventReveal();
           if (this.myPlayerNumber) {
@@ -1195,6 +1226,7 @@ export default {
       if (t === 'score_bonus') return `+${effect.value} score at game end`;
       if (t === 'opponent_difficulty') return `Opponent's cards +${effect.value} difficulty`;
       if (t === 'opponent_lose_die') return `Opponent loses a die for ${effect.rounds || 1} round(s)`;
+      if (t === 'reveal_previews') return 'Reveals stat preview bars on card hover';
       return JSON.stringify(effect);
     },
     getPlayerNameForCurse(playerNumber) {
@@ -1280,6 +1312,9 @@ export default {
     onPhaseComplete(phase) {
       this.currentStatPhase = phase;
     },
+    onSinglePlayerContinue() {
+      this.advanceRound();
+    },
     async advanceRound() {
       // Show curse selection first if there are pending curses
       if (this.pendingCurses && this.pendingCurses.length > 0) {
@@ -1322,6 +1357,7 @@ export default {
         this.usingItem = false;
         this.allItemsDecided = false;
         this.resolveResumed = false;
+        this.singlePlayerResolveData = null;
         this.gameData = res.data;
         this.activePlayerNumber = 1;
         this.checkEventReveal();
@@ -1341,24 +1377,20 @@ export default {
 </script>
 
 <style scoped>
-/* Curse indicator */
-.curse-indicator {
-  position: fixed;
-  bottom: 80px;
-  right: 16px;
-  background: rgba(40, 0, 60, 0.9);
-  border: 1px solid rgba(155, 89, 182, 0.5);
+/* Curse icon in header bar */
+.bar-icon-curse {
+  border-color: rgba(155, 89, 182, 0.5);
   color: #c890e0;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  z-index: 50;
-  transition: all 0.2s;
 }
-.curse-indicator:hover {
+.bar-icon-curse:hover {
   border-color: #9b59b6;
-  background: rgba(60, 0, 90, 0.95);
+  background: rgba(155, 89, 182, 0.1);
+}
+.bar-icon-curse .bar-icon-svg {
+  color: #c890e0;
+}
+.bar-icon-curse .bar-icon-badge {
+  color: #c890e0;
 }
 
 /* Curse Viewer Overlay */
@@ -1716,7 +1748,13 @@ export default {
 
 /* Item Phase Styles */
 .item-phase {
-  margin: 12px 0;
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .item-prompt-card {
@@ -1725,6 +1763,9 @@ export default {
   border-radius: 10px;
   padding: 20px;
   text-align: center;
+  max-width: 340px;
+  width: 90%;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
 }
 
 .item-prompt-title {

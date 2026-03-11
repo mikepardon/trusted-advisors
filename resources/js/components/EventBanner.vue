@@ -58,7 +58,6 @@ export default {
   border: 1px solid #8b4513;
   border-radius: 8px;
   padding: 12px 18px;
-  margin-bottom: 20px;
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -107,7 +106,6 @@ export default {
 @media (max-width: 768px) {
   .event-banner {
     padding: 8px 12px;
-    margin-bottom: 10px;
   }
 
   .event-title {
