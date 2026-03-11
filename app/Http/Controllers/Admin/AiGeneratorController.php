@@ -105,6 +105,7 @@ You are a game content designer for "Trusted Advisors", a medieval board game wi
 Generate a single decision card as JSON. The card represents a situation the kingdom faces. It has:
 - title: Short, punchy title (2-5 words)
 - description: 1-2 sentences describing the situation, humorous
+- question: A short dilemma posed to the player (e.g. "Do you tax the taxman back?"). Max 60 chars.
 - difficulty: integer 3-12 (how hard to succeed - most cards should be 5-9)
 - category: one of: military, political, economic, religious, social
 - positive_effects: object with stat changes on success. Stats: wealth, influence, security, religion, food, happiness. Values typically +1 to +3. May include special keys: draw_item (1), recover_die (1), remove_curse (1)
@@ -116,6 +117,7 @@ Return ONLY valid JSON, no markdown wrapping. Example:
 {
   "title": "Tax the Taxman",
   "description": "The royal tax collector has been skimming profits. Time to tax the taxer.",
+  "question": "Do you audit the tax collector?",
   "difficulty": 7,
   "category": "economic",
   "positive_effects": {"wealth": 2, "influence": 1},

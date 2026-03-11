@@ -49,7 +49,7 @@ class CsvController extends Controller
             'cards' => [
                 'model' => Card::class,
                 'columns' => [
-                    'id', 'title', 'description', 'sort_order',
+                    'id', 'title', 'description', 'question', 'sort_order',
                     'difficulty', 'positive_effects', 'negative_effects',
                     'difficulty_duel', 'positive_effects_duel', 'negative_effects_duel',
                     'positive_flavor', 'negative_flavor', 'category',
@@ -60,6 +60,7 @@ class CsvController extends Controller
                 'rules' => [
                     'title' => 'required|string|max:255',
                     'description' => 'required|string',
+                    'question' => 'nullable|string|max:500',
                     'sort_order' => 'required|integer',
                     'difficulty' => 'required|integer|min:1|max:20',
                     'positive_effects' => 'required|array',

@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Card extends Model
 {
     protected $fillable = [
-        'title', 'description', 'sort_order',
+        'title', 'description', 'question', 'sort_order',
         'difficulty', 'difficulty_duel',
         'positive_effects', 'positive_effects_duel',
         'negative_effects', 'negative_effects_duel',

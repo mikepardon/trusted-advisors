@@ -116,6 +116,14 @@
             </span>
           </div>
 
+          <!-- Flavor text reveal -->
+          <div v-if="positivePhase.success && positiveFlavorText" class="flavor-reveal flavor-positive">
+            {{ positiveFlavorText }}
+          </div>
+          <div v-else-if="!positivePhase.success && negativeFlavorForActed" class="flavor-reveal flavor-negative">
+            {{ negativeFlavorForActed }}
+          </div>
+
           <!-- Show effects preview (but stats haven't moved yet) -->
           <div v-if="positivePhase.success && Object.keys(filterStatEffects(positivePhase.effects || {})).length" class="effects-row">
             <span
@@ -161,6 +169,7 @@
           <div v-for="(card, idx) in negativePhase.cards" :key="'nd-' + idx" class="neg-card-detail">
             <h5 class="neg-card-name">{{ card.card.title }}</h5>
             <p class="neg-card-desc">{{ card.card.description }}</p>
+            <p v-if="card.card.negative_flavor" class="neg-card-flavor">{{ card.card.negative_flavor }}</p>
           </div>
         </div>
 
@@ -282,6 +291,17 @@ export default {
     },
     negativeSpecialEffects() {
       return (this.specialEffects || []).filter(e => e.phase === 'negative');
+    },
+    positiveFlavorText() {
+      const cards = this.positivePhase.cards || [];
+      const flavors = cards.map(c => c.card?.positive_flavor).filter(Boolean);
+      return flavors.join(' ');
+    },
+    negativeFlavorForActed() {
+      // When the council fails the acted-on cards, show their negative flavor
+      const cards = this.positivePhase.cards || [];
+      const flavors = cards.map(c => c.card?.negative_flavor).filter(Boolean);
+      return flavors.join(' ');
     },
   },
   watch: {
@@ -707,6 +727,36 @@ export default {
 .mod-harmful {
   background: rgba(160, 48, 32, 0.12);
   color: #e57373;
+}
+
+.flavor-reveal {
+  font-style: italic;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  animation: fadeIn 0.3s ease;
+}
+
+.flavor-positive {
+  color: #6abf5e;
+  background: rgba(74, 138, 58, 0.08);
+  border-left: 3px solid rgba(74, 138, 58, 0.4);
+}
+
+.flavor-negative {
+  color: #e57373;
+  background: rgba(160, 48, 32, 0.08);
+  border-left: 3px solid rgba(160, 48, 32, 0.4);
+}
+
+.neg-card-flavor {
+  color: #e57373;
+  font-style: italic;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin-top: 4px;
 }
 
 .no-effects {

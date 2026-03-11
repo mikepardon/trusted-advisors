@@ -153,6 +153,11 @@
             <textarea v-model="form.description" rows="3" required></textarea>
           </div>
 
+          <div class="form-group">
+            <label>Question (narrative dilemma shown on card)</label>
+            <input v-model="form.question" placeholder="Do you answer the call?" />
+          </div>
+
           <div class="form-row">
             <div class="form-group">
               <label>Difficulty (integer, 3-12)</label>
@@ -444,6 +449,7 @@ export default {
       form: {
         title: '',
         description: '',
+        question: '',
         sort_order: 1,
         difficulty: 6,
         category: '',
@@ -684,6 +690,7 @@ export default {
       this.form = {
         title: '',
         description: '',
+        question: '',
         sort_order: maxSort + 1,
         difficulty: 6,
         category: '',
@@ -735,6 +742,7 @@ export default {
       this.form = {
         title: card.title,
         description: card.description,
+        question: card.question || '',
         sort_order: card.sort_order,
         difficulty: card.difficulty,
         category: card.category || '',
@@ -785,6 +793,7 @@ export default {
       const payload = {
         title: this.form.title,
         description: this.form.description,
+        question: this.form.question || null,
         sort_order: this.form.sort_order,
         difficulty: this.form.difficulty,
         category: this.form.category || null,
@@ -833,6 +842,7 @@ export default {
         this.form = {
           title: data.title || '',
           description: data.description || '',
+          question: data.question || '',
           sort_order: maxSort + 1,
           difficulty: data.difficulty || 6,
           category: data.category || '',

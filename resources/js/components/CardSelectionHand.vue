@@ -46,15 +46,21 @@
 
               <h3 class="parchment-title">{{ item.card.title }}</h3>
               <p class="parchment-desc">{{ item.card.description }}</p>
+              <p v-if="item.card.question" class="parchment-question">"{{ item.card.question }}"</p>
               <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
 
               <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
 
               <div class="outcome-section outcome-top">
-                <p class="outcome-text">{{ item.card.positive_flavor || 'The council addresses the matter.' }}</p>
-                <div class="outcome-chips">
-                  <span v-for="(val, stat) in filterStatEffects(item.card.positive_effects)" :key="'p-' + stat" class="stat-chip chip-positive">
-                    {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+                <p class="outcome-label outcome-label-positive">If you act</p>
+                <div class="outcome-arrows">
+                  <span
+                    v-for="arrow in effectArrows(item.card.positive_effects)"
+                    :key="'p-' + arrow.stat"
+                    class="arrow-chip"
+                    :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
+                  >
+                    {{ formatStatName(arrow.stat) }} {{ arrowSymbol(arrow) }}
                   </span>
                 </div>
               </div>
@@ -62,10 +68,15 @@
               <div class="parchment-divider divider-thin"><span class="divider-ornament small">&#8226;</span></div>
 
               <div class="outcome-section outcome-bottom">
-                <p class="outcome-text">{{ item.card.negative_flavor || 'The matter festers if ignored.' }}</p>
-                <div class="outcome-chips">
-                  <span v-for="(val, stat) in filterNegativeEffects(item.card.negative_effects)" :key="'n-' + stat" class="stat-chip chip-negative">
-                    {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+                <p class="outcome-label outcome-label-negative">If ignored</p>
+                <div class="outcome-arrows">
+                  <span
+                    v-for="arrow in effectArrows(item.card.negative_effects)"
+                    :key="'n-' + arrow.stat"
+                    class="arrow-chip"
+                    :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
+                  >
+                    {{ formatStatName(arrow.stat) }} {{ arrowSymbol(arrow) }}
                   </span>
                 </div>
               </div>
@@ -117,15 +128,21 @@
 
         <h3 class="parchment-title">{{ item.card.title }}</h3>
         <p class="parchment-desc">{{ item.card.description }}</p>
+        <p v-if="item.card.question" class="parchment-question">"{{ item.card.question }}"</p>
         <span class="parchment-difficulty">Difficulty {{ item.card.difficulty }}</span>
 
         <div class="parchment-divider"><span class="divider-ornament">&#9830;</span></div>
 
         <div class="outcome-section outcome-top">
-          <p class="outcome-text">{{ item.card.positive_flavor || 'The council addresses the matter.' }}</p>
-          <div class="outcome-chips">
-            <span v-for="(val, stat) in filterStatEffects(item.card.positive_effects)" :key="'p-' + stat" class="stat-chip chip-positive">
-              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+          <p class="outcome-label outcome-label-positive">If you act</p>
+          <div class="outcome-arrows">
+            <span
+              v-for="arrow in effectArrows(item.card.positive_effects)"
+              :key="'p-' + arrow.stat"
+              class="arrow-chip"
+              :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
+            >
+              {{ formatStatName(arrow.stat) }} {{ arrowSymbol(arrow) }}
             </span>
           </div>
         </div>
@@ -133,10 +150,15 @@
         <div class="parchment-divider divider-thin"><span class="divider-ornament small">&#8226;</span></div>
 
         <div class="outcome-section outcome-bottom">
-          <p class="outcome-text">{{ item.card.negative_flavor || 'The matter festers if ignored.' }}</p>
-          <div class="outcome-chips">
-            <span v-for="(val, stat) in filterNegativeEffects(item.card.negative_effects)" :key="'n-' + stat" class="stat-chip chip-negative">
-              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
+          <p class="outcome-label outcome-label-negative">If ignored</p>
+          <div class="outcome-arrows">
+            <span
+              v-for="arrow in effectArrows(item.card.negative_effects)"
+              :key="'n-' + arrow.stat"
+              class="arrow-chip"
+              :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
+            >
+              {{ formatStatName(arrow.stat) }} {{ arrowSymbol(arrow) }}
             </span>
           </div>
         </div>
@@ -163,6 +185,10 @@ import { EffectCards } from 'swiper/modules';
 import 'swiper/css';
 import 'swiper/css/effect-cards';
 import { playSound } from '../sounds';
+
+const STAT_KEYS = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+const SPECIAL_KEYS_POSITIVE = ['grant_item_id', 'draw_item', 'recover_die', 'remove_curse', 'draw_curse', 'bonus_score', 'end_game_modifier'];
+const SPECIAL_KEYS_NEGATIVE = ['lose_die', 'discard_item', 'draw_item', 'draw_curse', 'bonus_score', 'end_game_modifier'];
 
 export default {
   name: 'CardSelectionHand',
@@ -240,8 +266,6 @@ export default {
         this.$emit('preview', null);
         return;
       }
-      // Merge this card's positive effects with the other cards' negative effects
-      // into a single net change per stat
       const net = {};
       const pos = this.filterStatEffects(item.card.positive_effects);
       for (const [stat, val] of Object.entries(pos)) {
@@ -254,7 +278,6 @@ export default {
           net[stat] = (net[stat] || 0) + val;
         }
       }
-      // Split into positive/negative based on net direction, skip zeros
       const positive = {};
       const negative = {};
       for (const [stat, val] of Object.entries(net)) {
@@ -279,9 +302,8 @@ export default {
     filterStatEffects(effects) {
       if (!effects) return {};
       const result = {};
-      const specialKeys = ['grant_item_id', 'draw_item', 'recover_die'];
       for (const [key, val] of Object.entries(effects)) {
-        if (!specialKeys.includes(key)) {
+        if (STAT_KEYS.includes(key)) {
           result[key] = val;
         }
       }
@@ -290,9 +312,8 @@ export default {
     filterNegativeEffects(effects) {
       if (!effects) return {};
       const result = {};
-      const specialKeys = ['lose_die', 'discard_item'];
       for (const [key, val] of Object.entries(effects)) {
-        if (!specialKeys.includes(key)) {
+        if (STAT_KEYS.includes(key)) {
           result[key] = val;
         }
       }
@@ -305,6 +326,28 @@ export default {
     },
     isNegativeSelected(handId) {
       return this.selectedPositive !== null && this.selectedPositive !== handId;
+    },
+    effectArrows(effects) {
+      if (!effects) return [];
+      const arrows = [];
+      for (const stat of STAT_KEYS) {
+        const val = effects[stat];
+        if (val && val !== 0) {
+          const direction = val > 0 ? 'up' : 'down';
+          const magnitude = Math.abs(val) >= 3 ? 2 : 1;
+          arrows.push({ stat, direction, magnitude });
+        }
+      }
+      return arrows;
+    },
+    arrowSymbol(arrow) {
+      if (arrow.direction === 'up') {
+        return arrow.magnitude >= 2 ? '\u2191\u2191' : '\u2191';
+      }
+      return arrow.magnitude >= 2 ? '\u2193\u2193' : '\u2193';
+    },
+    formatStatName(stat) {
+      return stat.charAt(0).toUpperCase() + stat.slice(1);
     },
   },
   watch: {
@@ -457,11 +500,20 @@ export default {
 
 .parchment-desc {
   color: var(--text-primary);
-  font-style: italic;
   font-size: 0.9rem;
   line-height: 1.5;
   text-align: center;
+  margin-bottom: 8px;
+}
+
+.parchment-question {
+  color: var(--accent-gold);
+  font-style: italic;
+  font-size: 0.88rem;
+  line-height: 1.4;
+  text-align: center;
   margin-bottom: 10px;
+  opacity: 0.9;
 }
 
 .parchment-difficulty {
@@ -514,23 +566,32 @@ export default {
   padding: 4px 0;
 }
 
-.outcome-text {
-  color: var(--text-secondary);
-  font-size: 0.82rem;
-  line-height: 1.4;
-  margin-bottom: 6px;
+.outcome-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
   text-align: center;
-  font-style: italic;
+  margin-bottom: 6px;
 }
 
-.outcome-chips {
+.outcome-label-positive {
+  color: #4caf50;
+}
+
+.outcome-label-negative {
+  color: #e57373;
+}
+
+.outcome-arrows {
   display: flex;
   flex-wrap: wrap;
   gap: 5px;
   justify-content: center;
 }
 
-.stat-chip {
+.arrow-chip {
   padding: 3px 9px;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -538,12 +599,12 @@ export default {
   text-transform: capitalize;
 }
 
-.chip-positive {
+.arrow-up {
   background: rgba(39, 174, 96, 0.15);
   color: #4caf50;
 }
 
-.chip-negative {
+.arrow-down {
   background: rgba(192, 57, 43, 0.15);
   color: #e57373;
 }
@@ -605,6 +666,10 @@ export default {
 
   .parchment-desc {
     font-size: 0.85rem;
+  }
+
+  .parchment-question {
+    font-size: 0.82rem;
   }
 
 }

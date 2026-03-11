@@ -28,6 +28,7 @@ class CardController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
+            'question' => 'nullable|string|max:500',
             'sort_order' => 'required|integer',
             'difficulty' => 'required|integer|min:1|max:20',
             'positive_effects' => 'required|array',
@@ -53,6 +54,7 @@ class CardController extends Controller
         $validated = $request->validate([
             'title' => 'required|string|max:255',
             'description' => 'required|string',
+            'question' => 'nullable|string|max:500',
             'sort_order' => 'required|integer',
             'difficulty' => 'required|integer|min:1|max:20',
             'positive_effects' => 'required|array',

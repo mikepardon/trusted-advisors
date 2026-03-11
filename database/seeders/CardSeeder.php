@@ -20,6 +20,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Border Raid',
                 'description' => 'A band of Welsh raiders has been spotted near the western marches. A swift response could prevent further incursions.',
+                'question' => 'Will you ride out to meet the raiders?',
                 'difficulty' => 4,
                 'positive_effects' => ['security' => 3, 'influence' => 2],
                 'negative_effects' => ['security' => -1],
@@ -30,6 +31,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Castle Inspection',
                 'description' => 'The King demands a review of the garrison forces stationed along the Scottish border. Their readiness must be assessed.',
+                'question' => 'Should you inspect the garrison?',
                 'difficulty' => 3,
                 'positive_effects' => ['security' => 3],
                 'negative_effects' => ['influence' => -1],
@@ -40,6 +42,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Levy Muster',
                 'description' => 'The realm needs fresh men-at-arms. Local lords must be persuaded to send their levies.',
+                'question' => 'Will you call the levies to arms?',
                 'difficulty' => 4,
                 'positive_effects' => ['security' => 3, 'influence' => 1],
                 'negative_effects' => ['happiness' => -1],
@@ -50,6 +53,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Supply Convoy',
                 'description' => 'A supply train must reach the northern castles before winter sets in. Bandits have been reported along the road.',
+                'question' => 'Do you escort the supply train north?',
                 'difficulty' => 5,
                 'positive_effects' => ['security' => 2, 'food' => 2],
                 'negative_effects' => ['food' => -1],
@@ -60,6 +64,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Watchtower Construction',
                 'description' => 'Engineers propose building a chain of watchtowers along the Welsh border to improve frontier surveillance.',
+                'question' => 'Should the council fund new watchtowers?',
                 'difficulty' => 3,
                 'positive_effects' => ['security' => 3],
                 'negative_effects' => ['wealth' => -1],
@@ -70,6 +75,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Deserter Hunt',
                 'description' => 'A company of soldiers has abandoned their posts near the border. They must be tracked down before others follow suit.',
+                'question' => 'Will you hunt down the deserters?',
                 'difficulty' => 5,
                 'positive_effects' => ['security' => 4],
                 'negative_effects' => ['security' => -2],
@@ -80,6 +86,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Veteran Settlers',
                 'description' => 'Retired soldiers seek land grants in the shires. Settling them wisely could strengthen the frontier.',
+                'question' => 'Do you grant land to the veterans?',
                 'difficulty' => 3,
                 'positive_effects' => ['security' => 2, 'happiness' => 2],
                 'negative_effects' => ['happiness' => -1],
@@ -90,6 +97,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Armoury Restock',
                 'description' => 'The castle armouries are running low on quality weapons. New forges must be commissioned.',
+                'question' => 'Should you commission new forges?',
                 'difficulty' => 4,
                 'positive_effects' => ['security' => 3],
                 'negative_effects' => ['wealth' => -1],
@@ -100,6 +108,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Scout Report',
                 'description' => 'Scouts have returned with intelligence about bandit movements in the forest. The information must be verified.',
+                'question' => 'Do you act on the scouts\' intelligence?',
                 'difficulty' => 4,
                 'positive_effects' => ['security' => 2, 'influence' => 2],
                 'negative_effects' => ['security' => -1],
@@ -110,6 +119,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Tournament',
                 'description' => 'A grand tournament through the castle grounds would boost morale and display the realm\'s martial prowess.',
+                'question' => 'Will you host the tournament?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3, 'security' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -120,6 +130,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Palisade Repairs',
                 'description' => 'The outer palisades of the border forts need reinforcement before the raiding season begins.',
+                'question' => 'Should you reinforce the palisades?',
                 'difficulty' => 4,
                 'positive_effects' => ['security' => 4],
                 'negative_effects' => ['food' => -1],
@@ -130,6 +141,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Messenger',
                 'description' => 'An urgent message must reach the northern lords. The roads are dangerous and the messenger needs an escort.',
+                'question' => 'Will you send an escort with the messenger?',
                 'difficulty' => 3,
                 'positive_effects' => ['influence' => 3, 'security' => 1],
                 'negative_effects' => ['influence' => -1],
@@ -140,6 +152,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Road Patrol',
                 'description' => 'Regular patrols must be maintained along the trade roads to protect merchants and pilgrims.',
+                'question' => 'Do you send patrols along the roads?',
                 'difficulty' => 3,
                 'positive_effects' => ['security' => 2, 'wealth' => 2],
                 'negative_effects' => ['security' => -1],
@@ -152,6 +165,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Welsh Incursion',
                 'description' => 'A large warband from Wales has crossed the border. The knights must be rallied to meet this threat.',
+                'question' => 'Will you rally the knights to fight?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 4, 'influence' => 2],
                 'negative_effects' => ['security' => -2, 'food' => -1],
@@ -162,6 +176,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Army March',
                 'description' => 'A full company of knights must be deployed to the Scottish border. Logistics and supply lines must be carefully planned.',
+                'question' => 'Should the army march north?',
                 'difficulty' => 8,
                 'positive_effects' => ['security' => 5, 'influence' => 1],
                 'negative_effects' => ['wealth' => -2],
@@ -172,6 +187,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Castle Siege',
                 'description' => 'A border castle is under siege by rebel lords. Reinforcements and supplies must be sent before the walls fall.',
+                'question' => 'Will you send relief to the castle?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 4, 'happiness' => 2],
                 'negative_effects' => ['security' => -2],
@@ -182,6 +198,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Coastal Defense',
                 'description' => 'Norse raiders threaten the eastern coast. A naval patrol must be established to protect the harbours.',
+                'question' => 'Do you establish a coastal patrol?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 3, 'wealth' => 3],
                 'negative_effects' => ['wealth' => -1],
@@ -192,6 +209,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Cavalry Charge',
                 'description' => 'The enemy has been spotted in open ground. A mounted charge could shatter their lines and end the conflict swiftly.',
+                'question' => 'Do you order the cavalry to charge?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 5],
                 'negative_effects' => ['security' => -2],
@@ -202,6 +220,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Keep Fortification',
                 'description' => 'The border keeps need stone walls to replace their wooden structures at key defensive positions.',
+                'question' => 'Should you rebuild the keeps in stone?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 4, 'influence' => 1],
                 'negative_effects' => ['wealth' => -2],
@@ -212,6 +231,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Knight\'s Trial',
                 'description' => 'A knight stands accused of cowardice in battle. The trial could set a precedent for martial honour.',
+                'question' => 'Will you put the knight on trial?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 3, 'security' => 2],
                 'negative_effects' => ['happiness' => -1],
@@ -222,6 +242,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'War Council',
                 'description' => 'The lords gather to plan the spring campaign. Strategy must be debated and a unified plan agreed upon.',
+                'question' => 'Should the council convene for war?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 4, 'influence' => 2],
                 'negative_effects' => ['influence' => -1],
@@ -232,6 +253,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Longbow Drill',
                 'description' => 'The archers must be drilled in formation shooting before the next engagement.',
+                'question' => 'Will you drill the archers?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 4],
                 'negative_effects' => ['happiness' => -1],
@@ -242,6 +264,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Strategic Retreat',
                 'description' => 'The enemy is too strong to face head-on. A withdrawal could preserve the army for a future engagement.',
+                'question' => 'Do you order a retreat?',
                 'difficulty' => 8,
                 'positive_effects' => ['security' => 3, 'food' => 2],
                 'negative_effects' => ['influence' => -2],
@@ -252,6 +275,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Prisoner Ransom',
                 'description' => 'Captured knights could be ransomed back to their lords. Negotiations are delicate and fraught with danger.',
+                'question' => 'Will you negotiate the ransom?',
                 'difficulty' => 6,
                 'positive_effects' => ['happiness' => 3, 'influence' => 2],
                 'negative_effects' => ['security' => -1],
@@ -262,6 +286,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Forward Outpost',
                 'description' => 'A new outpost must be established deep in the borderlands to project the King\'s power.',
+                'question' => 'Should you build an outpost in the wilds?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 4, 'influence' => 2],
                 'negative_effects' => ['wealth' => -1, 'food' => -1],
@@ -272,6 +297,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Scorched Fields',
                 'description' => 'Enemy forces advance rapidly. Burning the crops ahead of them could slow their march.',
+                'question' => 'Do you burn the fields to slow them?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 5],
                 'negative_effects' => ['food' => -2, 'happiness' => -1],
@@ -282,6 +308,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Supply Line Guard',
                 'description' => 'The army supply lines are vulnerable to enemy raiding parties. Additional guards must be assigned.',
+                'question' => 'Will you reinforce the supply lines?',
                 'difficulty' => 7,
                 'positive_effects' => ['food' => 3, 'security' => 2],
                 'negative_effects' => ['food' => -2],
@@ -292,6 +319,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Night Raid',
                 'description' => 'Intelligence suggests the enemy camp is vulnerable under cover of darkness. A surprise attack could be devastating.',
+                'question' => 'Do you strike under cover of darkness?',
                 'difficulty' => 8,
                 'positive_effects' => ['security' => 5, 'influence' => 2],
                 'negative_effects' => ['security' => -2],
@@ -302,6 +330,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Mercenary Company',
                 'description' => 'A company of Flemish mercenaries offers their swords. They are fearsome but expensive and unpredictable.',
+                'question' => 'Will you hire the mercenaries?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 4, 'influence' => 3],
                 'negative_effects' => ['wealth' => -2],
@@ -312,6 +341,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Bridge Battle',
                 'description' => 'The only river crossing is a heavily defended bridge. Taking it would open a new front against the enemy.',
+                'question' => 'Do you storm the bridge?',
                 'difficulty' => 8,
                 'positive_effects' => ['security' => 5, 'influence' => 1],
                 'negative_effects' => ['security' => -2],
@@ -322,6 +352,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Mountain Pass',
                 'description' => 'A treacherous mountain pass must be secured before winter closes it. The terrain favours the defenders.',
+                'question' => 'Should you seize the mountain pass?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 4, 'wealth' => 2],
                 'negative_effects' => ['food' => -1, 'happiness' => -1],
@@ -332,6 +363,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'River Ford',
                 'description' => 'The army must cross a major river while enemy forces watch from the far bank. Timing is everything.',
+                'question' => 'Will you attempt the river crossing?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 4, 'influence' => 1],
                 'negative_effects' => ['security' => -1],
@@ -344,6 +376,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Full Scale Invasion',
                 'description' => 'The Scots have united with Welsh rebels for a massive coordinated invasion. Every available knight must ride.',
+                'question' => 'Can the realm withstand this invasion?',
                 'difficulty' => 11,
                 'positive_effects' => ['security' => 5, 'influence' => 3, 'happiness' => 2],
                 'negative_effects' => ['security' => -2, 'food' => -1],
@@ -354,6 +387,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Barons\' Revolt',
                 'description' => 'A powerful baron has declared himself independent and marches on the capital with three loyal lords.',
+                'question' => 'Will you confront the rebel baron?',
                 'difficulty' => 12,
                 'positive_effects' => ['security' => 5, 'influence' => 4],
                 'negative_effects' => ['security' => -2, 'happiness' => -1],
@@ -364,6 +398,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Guard Mutiny',
                 'description' => 'The King\'s personal guard demands double pay and threatens to abandon the castle if refused.',
+                'question' => 'Do you meet the guard\'s demands?',
                 'difficulty' => 10,
                 'positive_effects' => ['security' => 5, 'influence' => 3],
                 'negative_effects' => ['security' => -2, 'wealth' => -1],
@@ -374,6 +409,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Scottish War',
                 'description' => 'The Scottish clans have crossed the border in force. A major campaign is needed to push them back.',
+                'question' => 'Will you launch a campaign against them?',
                 'difficulty' => 11,
                 'positive_effects' => ['security' => 5, 'influence' => 4],
                 'negative_effects' => ['security' => -2, 'food' => -2],
@@ -384,6 +420,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'French Campaign',
                 'description' => 'The French threaten English holdings across the Channel. A full military expedition must be launched.',
+                'question' => 'Do you send an army across the Channel?',
                 'difficulty' => 12,
                 'positive_effects' => ['security' => 5, 'influence' => 4, 'wealth' => 2],
                 'negative_effects' => ['wealth' => -2, 'food' => -1],
@@ -394,6 +431,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Siege of Stirling',
                 'description' => 'The great castle of Stirling is besieged. Its fall would be catastrophic for English control of the north.',
+                'question' => 'Will you march to relieve Stirling?',
                 'difficulty' => 10,
                 'positive_effects' => ['security' => 5, 'wealth' => 3],
                 'negative_effects' => ['security' => -2, 'happiness' => -1],
@@ -404,6 +442,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Battle of the Border',
                 'description' => 'The decisive battle for the northern frontier. Victory here would secure the border for a generation.',
+                'question' => 'Do you commit to the decisive battle?',
                 'difficulty' => 11,
                 'positive_effects' => ['security' => 5, 'influence' => 3, 'happiness' => 2],
                 'negative_effects' => ['security' => -2, 'wealth' => -1],
@@ -414,6 +453,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Channel Supremacy',
                 'description' => 'Control of the English Channel is at stake. A massive naval engagement will determine who rules the seas.',
+                'question' => 'Should the fleet engage for the Channel?',
                 'difficulty' => 10,
                 'positive_effects' => ['security' => 4, 'wealth' => 4],
                 'negative_effects' => ['wealth' => -2],
@@ -424,6 +464,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'The Black Knight',
                 'description' => 'A legendary enemy commander known as the Black Knight terrorises the borderlands. He must be stopped at any cost.',
+                'question' => 'Will you face the Black Knight?',
                 'difficulty' => 12,
                 'positive_effects' => ['security' => 5, 'influence' => 5],
                 'negative_effects' => ['security' => -2, 'happiness' => -2],
@@ -434,6 +475,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Garrison Rebellion',
                 'description' => 'Three castles in the west have refused orders and set up their own command under a rogue lord.',
+                'question' => 'Do you move against the rogue garrisons?',
                 'difficulty' => 9,
                 'positive_effects' => ['security' => 4, 'influence' => 4],
                 'negative_effects' => ['security' => -2, 'influence' => -1],
@@ -444,6 +486,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Succession Crisis',
                 'description' => 'With the King gravely ill, multiple factions vie for the throne. Military might will decide the succession.',
+                'question' => 'Can you secure the throne by force?',
                 'difficulty' => 11,
                 'positive_effects' => ['influence' => 5, 'security' => 4],
                 'negative_effects' => ['happiness' => -2, 'security' => -1],
@@ -460,6 +503,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Council Debate',
                 'description' => 'A heated debate in the Lord\'s Council over shire governance. Your faction must present a compelling argument.',
+                'question' => 'Will you speak before the council?',
                 'difficulty' => 4,
                 'positive_effects' => ['influence' => 3, 'happiness' => 1],
                 'negative_effects' => ['influence' => -1],
@@ -470,6 +514,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Shire Petition',
                 'description' => 'A delegation from the shires arrives with grievances. How they are received will affect loyalty.',
+                'question' => 'Do you hear the petitioners\' grievances?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3, 'influence' => 1],
                 'negative_effects' => ['happiness' => -1],
@@ -480,6 +525,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Tax Reform',
                 'description' => 'A lord proposes reforms to the tax system. The changes could benefit the treasury or anger the populace.',
+                'question' => 'Should the council reform the taxes?',
                 'difficulty' => 5,
                 'positive_effects' => ['wealth' => 3, 'influence' => 1],
                 'negative_effects' => ['happiness' => -1],
@@ -490,6 +536,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Address',
                 'description' => 'The people gather to hear an address from the castle steps. The right words could inspire confidence.',
+                'question' => 'Will you address the gathered crowd?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3, 'influence' => 1],
                 'negative_effects' => ['influence' => -1],
@@ -500,6 +547,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Diplomatic Envoy',
                 'description' => 'An envoy arrives from France seeking alliance. The terms must be negotiated carefully.',
+                'question' => 'Do you receive the French envoy?',
                 'difficulty' => 4,
                 'positive_effects' => ['influence' => 3, 'security' => 1],
                 'negative_effects' => ['influence' => -1],
@@ -510,6 +558,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Court Intrigue',
                 'description' => 'Rumours swirl through the King\'s court. Managing the whispers could prove advantageous.',
+                'question' => 'Should you exploit the court rumours?',
                 'difficulty' => 3,
                 'positive_effects' => ['influence' => 3],
                 'negative_effects' => ['happiness' => -1],
@@ -520,6 +569,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Sheriff Appointment',
                 'description' => 'A new sheriff must be appointed for a troubled shire. The right choice could restore order.',
+                'question' => 'Will you appoint a new sheriff?',
                 'difficulty' => 4,
                 'positive_effects' => ['influence' => 3, 'happiness' => 1],
                 'negative_effects' => ['influence' => -1],
@@ -530,6 +580,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Domesday Update',
                 'description' => 'The census records need updating. Accurate numbers are essential for taxation and military levies.',
+                'question' => 'Should the census records be updated?',
                 'difficulty' => 3,
                 'positive_effects' => ['wealth' => 2, 'influence' => 2],
                 'negative_effects' => ['happiness' => -1],
@@ -540,6 +591,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Land Dispute',
                 'description' => 'Two powerful families bring their dispute before the King\'s court. A wise ruling could earn respect.',
+                'question' => 'Will you settle the families\' quarrel?',
                 'difficulty' => 5,
                 'positive_effects' => ['influence' => 4],
                 'negative_effects' => ['influence' => -1],
@@ -550,6 +602,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Bridge Dedication',
                 'description' => 'A new stone bridge is ready for dedication. The ceremony should be used for maximum political advantage.',
+                'question' => 'Do you attend the bridge dedication?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3, 'influence' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -562,6 +615,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Baron\'s Conspiracy',
                 'description' => 'Whispers of a conspiracy among the barons reach the court. The plotters must be identified and dealt with.',
+                'question' => 'Will you investigate the conspiracy?',
                 'difficulty' => 7,
                 'positive_effects' => ['influence' => 4, 'security' => 2],
                 'negative_effects' => ['influence' => -2],
@@ -572,6 +626,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Foreign Alliance',
                 'description' => 'The Duke of Burgundy offers an alliance. The terms are favourable but could anger other allies.',
+                'question' => 'Do you accept Burgundy\'s offer?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 4, 'security' => 2],
                 'negative_effects' => ['influence' => -1, 'happiness' => -1],
@@ -582,6 +637,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Heir Question',
                 'description' => 'The question of royal succession cannot be ignored any longer. Various factions push their candidates.',
+                'question' => 'Should you name an heir now?',
                 'difficulty' => 8,
                 'positive_effects' => ['influence' => 5, 'happiness' => 2],
                 'negative_effects' => ['happiness' => -2],
@@ -592,6 +648,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Shire Revolt',
                 'description' => 'A shire threatens to revolt over heavy taxation. Diplomacy or force must be applied.',
+                'question' => 'Can you calm the restless shire?',
                 'difficulty' => 7,
                 'positive_effects' => ['influence' => 4, 'happiness' => 2],
                 'negative_effects' => ['happiness' => -2],
@@ -602,6 +659,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Decree',
                 'description' => 'A major royal decree must be drafted and proclaimed. Its wording will shape policy for years.',
+                'question' => 'Will you issue the royal decree?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 4, 'happiness' => 1],
                 'negative_effects' => ['influence' => -1],
@@ -612,6 +670,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Wool Trade Treaty',
                 'description' => 'Negotiations for a wool trade treaty with Flemish merchants. The deal could enrich England significantly.',
+                'question' => 'Do you negotiate with the Flemish?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 4, 'influence' => 2],
                 'negative_effects' => ['wealth' => -1],
@@ -622,6 +681,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Political Marriage',
                 'description' => 'A strategic marriage alliance is proposed between two powerful families. The union could stabilise the court.',
+                'question' => 'Should the council arrange the match?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 4, 'happiness' => 2],
                 'negative_effects' => ['happiness' => -1],
@@ -632,6 +692,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Border Treaty',
                 'description' => 'Scottish chieftains arrive to negotiate border agreements. Finding common ground would prevent future conflicts.',
+                'question' => 'Will you treat with the Scots?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 3, 'influence' => 3],
                 'negative_effects' => ['security' => -1],
@@ -642,6 +703,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Corruption Scandal',
                 'description' => 'A major corruption scandal threatens the administration. Public trust must be restored through decisive action.',
+                'question' => 'Do you expose the corrupt officials?',
                 'difficulty' => 8,
                 'positive_effects' => ['influence' => 4, 'wealth' => 2],
                 'negative_effects' => ['influence' => -2],
@@ -652,6 +714,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Charter Reform',
                 'description' => 'The kingdom\'s charters are outdated. Reforms could improve governance but will anger entrenched interests.',
+                'question' => 'Should you rewrite the charters?',
                 'difficulty' => 7,
                 'positive_effects' => ['influence' => 5, 'happiness' => 1],
                 'negative_effects' => ['influence' => -2],
@@ -662,6 +725,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Envoy\'s Dilemma',
                 'description' => 'The ambassador to France faces a choice that could mean peace or war. Your counsel is needed.',
+                'question' => 'Will you counsel the ambassador?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 3, 'security' => 3],
                 'negative_effects' => ['influence' => -1],
@@ -672,6 +736,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Shire Taxation',
                 'description' => 'Shire tax rates must be adjusted. Too high and revolt follows; too low and the treasury suffers.',
+                'question' => 'Do you raise the shire taxes?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 4, 'influence' => 1],
                 'negative_effects' => ['happiness' => -2],
@@ -682,6 +747,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Audience',
                 'description' => 'The King grants an audience to foreign dignitaries. The impression made could affect alliances for years.',
+                'question' => 'Should you prepare a grand reception?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 5],
                 'negative_effects' => ['influence' => -1],
@@ -692,6 +758,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Power Struggle',
                 'description' => 'Two influential lords clash over control of key positions at court. Choosing a side is unavoidable.',
+                'question' => 'Will you take a side in the feud?',
                 'difficulty' => 8,
                 'positive_effects' => ['influence' => 5, 'wealth' => 1],
                 'negative_effects' => ['influence' => -2],
@@ -702,6 +769,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Common Law Reform',
                 'description' => 'English common law needs updating and codification. The project could strengthen the legal system for generations.',
+                'question' => 'Should you codify the common laws?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 3, 'happiness' => 3],
                 'negative_effects' => ['influence' => -1],
@@ -714,6 +782,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Assassination Plot',
                 'description' => 'A plot to assassinate the King has been uncovered. The conspirators must be found before it is too late.',
+                'question' => 'Can you uncover the assassins in time?',
                 'difficulty' => 10,
                 'positive_effects' => ['security' => 5, 'influence' => 4],
                 'negative_effects' => ['security' => -2, 'happiness' => -1],
@@ -724,6 +793,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Constitutional Crisis',
                 'description' => 'A fundamental disagreement about the King\'s powers versus the barons threatens to tear England apart.',
+                'question' => 'Should you negotiate a new charter?',
                 'difficulty' => 11,
                 'positive_effects' => ['influence' => 5, 'happiness' => 4],
                 'negative_effects' => ['influence' => -2, 'happiness' => -1],
@@ -734,6 +804,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Pretender to the Throne',
                 'description' => 'A distant claimant emerges and seeks recognition from the barons. His claim must be dealt with.',
+                'question' => 'Will you challenge the pretender?',
                 'difficulty' => 12,
                 'positive_effects' => ['influence' => 5, 'security' => 4],
                 'negative_effects' => ['influence' => -2, 'security' => -1],
@@ -744,6 +815,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Court Purge',
                 'description' => 'Corruption runs so deep that a purge of the court may be necessary. The political fallout would be immense.',
+                'question' => 'Do you purge the corrupt from court?',
                 'difficulty' => 10,
                 'positive_effects' => ['influence' => 5, 'wealth' => 3],
                 'negative_effects' => ['happiness' => -2, 'influence' => -1],
@@ -754,6 +826,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Territorial Dispute',
                 'description' => 'Multiple lords claim the same lands. War between English territories would be catastrophic.',
+                'question' => 'Can you broker peace between them?',
                 'difficulty' => 9,
                 'positive_effects' => ['influence' => 4, 'security' => 3, 'happiness' => 2],
                 'negative_effects' => ['security' => -2],
@@ -764,6 +837,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'War Diplomacy',
                 'description' => 'With armies at the gates, only masterful diplomacy can prevent a devastating war on multiple fronts.',
+                'question' => 'Will diplomacy avert this war?',
                 'difficulty' => 11,
                 'positive_effects' => ['security' => 5, 'influence' => 4],
                 'negative_effects' => ['security' => -2, 'influence' => -1],
@@ -774,6 +848,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Dynastic Crisis',
                 'description' => 'The royal bloodline faces extinction. Adoption, marriage, or other means must secure the dynasty.',
+                'question' => 'Can you save the royal bloodline?',
                 'difficulty' => 10,
                 'positive_effects' => ['influence' => 5, 'happiness' => 3],
                 'negative_effects' => ['influence' => -2],
@@ -784,6 +859,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Shire Independence',
                 'description' => 'A powerful lord declares his lands independent from the crown. Reconquest or negotiation are the only options.',
+                'question' => 'Will you bring the rebel lord to heel?',
                 'difficulty' => 11,
                 'positive_effects' => ['influence' => 5, 'security' => 3, 'wealth' => 2],
                 'negative_effects' => ['influence' => -2, 'wealth' => -1],
@@ -794,6 +870,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Grand Alliance',
                 'description' => 'A grand alliance of European powers must be forged to face a common threat from the east.',
+                'question' => 'Can you forge a grand alliance?',
                 'difficulty' => 12,
                 'positive_effects' => ['influence' => 5, 'security' => 5],
                 'negative_effects' => ['wealth' => -2, 'happiness' => -1],
@@ -810,6 +887,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Market Day',
                 'description' => 'The weekly market draws merchants from across the shire. Managing it well could boost local trade.',
+                'question' => 'Will you oversee the market today?',
                 'difficulty' => 3,
                 'positive_effects' => ['wealth' => 3, 'happiness' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -820,6 +898,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Trade Road Guard',
                 'description' => 'Bandits have been preying on merchants along a key trade road. A patrol would restore confidence.',
+                'question' => 'Do you clear the road of bandits?',
                 'difficulty' => 4,
                 'positive_effects' => ['wealth' => 3, 'security' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -830,6 +909,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Grain Shipment',
                 'description' => 'A large grain shipment from the southern shires is expected. Proper storage and distribution must be arranged.',
+                'question' => 'Should you prepare the granaries?',
                 'difficulty' => 3,
                 'positive_effects' => ['food' => 4],
                 'negative_effects' => ['food' => -1],
@@ -840,6 +920,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Tin Mine Discovery',
                 'description' => 'Prospectors report discovering a new tin vein in the Cornish hills. Mining it could fill the treasury.',
+                'question' => 'Will you open the new tin mine?',
                 'difficulty' => 5,
                 'positive_effects' => ['wealth' => 4, 'grant_item_id' => 1],
                 'negative_effects' => ['happiness' => -1],
@@ -850,6 +931,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Tax Collection',
                 'description' => 'Annual taxes are due from the shires. Efficient collection will fund the kingdom\'s operations.',
+                'question' => 'Do you send out the tax collectors?',
                 'difficulty' => 4,
                 'positive_effects' => ['wealth' => 3],
                 'negative_effects' => ['happiness' => -1],
@@ -860,6 +942,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Harbour Repairs',
                 'description' => 'The main harbour needs dredging and repair. A functioning port is essential for maritime trade.',
+                'question' => 'Should you repair the harbour?',
                 'difficulty' => 3,
                 'positive_effects' => ['wealth' => 2, 'food' => 2],
                 'negative_effects' => ['wealth' => -1],
@@ -870,6 +953,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Road Mending',
                 'description' => 'The king\'s road to a major market town has fallen into disrepair. Fixing it would boost commerce.',
+                'question' => 'Will you mend the king\'s road?',
                 'difficulty' => 4,
                 'positive_effects' => ['wealth' => 3, 'happiness' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -880,6 +964,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Wool Merchants\' Guild',
                 'description' => 'The wool merchants\' guild requests a royal charter for exclusive trade rights. Granting it has pros and cons.',
+                'question' => 'Do you grant the guild its charter?',
                 'difficulty' => 5,
                 'positive_effects' => ['wealth' => 4],
                 'negative_effects' => ['happiness' => -1],
@@ -890,6 +975,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Apple Harvest',
                 'description' => 'The apple harvest is especially bountiful this year. Cider production could boost the economy.',
+                'question' => 'Should you press the apples for cider?',
                 'difficulty' => 3,
                 'positive_effects' => ['food' => 2, 'wealth' => 2, 'happiness' => 1],
                 'negative_effects' => ['food' => -1],
@@ -900,6 +986,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Livestock Count',
                 'description' => 'A count of livestock across the shires helps plan food distribution and supply needs.',
+                'question' => 'Will you order a livestock census?',
                 'difficulty' => 3,
                 'positive_effects' => ['food' => 3, 'wealth' => 1],
                 'negative_effects' => ['food' => -1],
@@ -912,6 +999,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Trade Embargo',
                 'description' => 'The French impose a trade embargo. New markets must be found or the embargo broken.',
+                'question' => 'Can you break the trade embargo?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 4, 'influence' => 2],
                 'negative_effects' => ['wealth' => -2],
@@ -922,6 +1010,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Coin Clipping',
                 'description' => 'The treasury is nearly empty. Debasing the coinage could stretch reserves, but at a cost to trust.',
+                'question' => 'Do you debase the coinage?',
                 'difficulty' => 6,
                 'positive_effects' => ['wealth' => 5],
                 'negative_effects' => ['happiness' => -2],
@@ -932,6 +1021,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Eastern Trade Expedition',
                 'description' => 'An ambitious expedition to establish direct trade with the Orient. The rewards could be immense.',
+                'question' => 'Should you fund the eastern voyage?',
                 'difficulty' => 8,
                 'positive_effects' => ['wealth' => 5, 'influence' => 2, 'grant_item_id' => 2],
                 'negative_effects' => ['wealth' => -2],
@@ -942,6 +1032,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Port Expansion',
                 'description' => 'The port of Bristol needs expansion to handle increased trade volumes. A major building project.',
+                'question' => 'Will you expand the port of Bristol?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 4, 'food' => 2],
                 'negative_effects' => ['wealth' => -2],
@@ -952,6 +1043,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Farming Reform',
                 'description' => 'The farming system needs modernisation. New crop rotation could dramatically increase food production.',
+                'question' => 'Do you introduce new crop methods?',
                 'difficulty' => 6,
                 'positive_effects' => ['food' => 5, 'happiness' => 1],
                 'negative_effects' => ['food' => -1, 'wealth' => -1],
@@ -962,6 +1054,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Mine Collapse',
                 'description' => 'A mine collapse has trapped workers underground. Rescue efforts will be costly but inaction has consequences.',
+                'question' => 'Will you fund a rescue effort?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 4, 'wealth' => 2],
                 'negative_effects' => ['wealth' => -2],
@@ -972,6 +1065,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Trade War',
                 'description' => 'Rival Flemish merchants undercut English traders. A coordinated response from the guilds is needed.',
+                'question' => 'Should the guilds unite against rivals?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 5, 'influence' => 1],
                 'negative_effects' => ['wealth' => -2],
@@ -982,6 +1076,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Banking Crisis',
                 'description' => 'Several major lending houses are on the verge of collapse. A bailout or controlled failure must be chosen.',
+                'question' => 'Do you bail out the lending houses?',
                 'difficulty' => 8,
                 'positive_effects' => ['wealth' => 5, 'happiness' => 1],
                 'negative_effects' => ['wealth' => -2, 'happiness' => -1],
@@ -992,6 +1087,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Granary',
                 'description' => 'A massive royal granary is proposed to store food reserves for times of need. The cost is significant.',
+                'question' => 'Should you build the royal granary?',
                 'difficulty' => 6,
                 'positive_effects' => ['food' => 5, 'happiness' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1002,6 +1098,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Aqueduct Project',
                 'description' => 'A new water system would bring fresh water to several towns. The project requires massive resources.',
+                'question' => 'Will you build the aqueduct?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 4, 'food' => 2, 'grant_item_id' => 3],
                 'negative_effects' => ['wealth' => -2],
@@ -1012,6 +1109,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Merchant Fleet',
                 'description' => 'England needs a larger merchant fleet to compete with foreign traders. Shipbuilding is expensive but necessary.',
+                'question' => 'Do you commission new trading ships?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 4, 'influence' => 2],
                 'negative_effects' => ['wealth' => -2],
@@ -1022,6 +1120,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Salt Tax',
                 'description' => 'A tax on salt could raise significant revenue, but salt is essential for preserving food.',
+                'question' => 'Should you impose a tax on salt?',
                 'difficulty' => 6,
                 'positive_effects' => ['wealth' => 4, 'influence' => 1],
                 'negative_effects' => ['happiness' => -2],
@@ -1032,6 +1131,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Land Redistribution',
                 'description' => 'Redistribution of common lands to small farmers could revitalise agriculture but anger wealthy landowners.',
+                'question' => 'Will you redistribute the common lands?',
                 'difficulty' => 8,
                 'positive_effects' => ['food' => 4, 'happiness' => 3],
                 'negative_effects' => ['influence' => -2],
@@ -1042,6 +1142,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Luxury Tax',
                 'description' => 'A tax on luxury goods targets the wealthy. It could raise revenue but may face fierce opposition.',
+                'question' => 'Do you tax the nobles\' luxuries?',
                 'difficulty' => 6,
                 'positive_effects' => ['wealth' => 4],
                 'negative_effects' => ['influence' => -1, 'happiness' => -1],
@@ -1052,6 +1153,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Grand Fair',
                 'description' => 'A grand trade fair would attract merchants from across Christendom. Organisation is key.',
+                'question' => 'Should you organise the grand fair?',
                 'difficulty' => 6,
                 'positive_effects' => ['wealth' => 3, 'happiness' => 3],
                 'negative_effects' => ['wealth' => -1],
@@ -1062,6 +1164,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Granary Fire',
                 'description' => 'A fire in the grain stores threatens food supplies. Quick action could minimise losses.',
+                'question' => 'Can you save the burning granary?',
                 'difficulty' => 7,
                 'positive_effects' => ['food' => 4, 'happiness' => 2],
                 'negative_effects' => ['food' => -2],
@@ -1074,6 +1177,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Economic Collapse',
                 'description' => 'The economy teeters on the brink of total collapse. Drastic measures are needed to prevent disaster.',
+                'question' => 'Can you prevent economic ruin?',
                 'difficulty' => 11,
                 'positive_effects' => ['wealth' => 5, 'happiness' => 3, 'food' => 2],
                 'negative_effects' => ['wealth' => -2, 'happiness' => -1],
@@ -1084,6 +1188,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Pirate Fleet',
                 'description' => 'A massive pirate fleet threatens all maritime trade. Only a major naval campaign can destroy them.',
+                'question' => 'Will you send the navy against them?',
                 'difficulty' => 10,
                 'positive_effects' => ['wealth' => 5, 'security' => 3, 'grant_item_id' => 4],
                 'negative_effects' => ['wealth' => -2, 'security' => -1],
@@ -1094,6 +1199,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Great Famine',
                 'description' => 'Crop failures across multiple shires threaten mass starvation. Emergency food imports are essential.',
+                'question' => 'Can the realm survive this famine?',
                 'difficulty' => 11,
                 'positive_effects' => ['food' => 5, 'happiness' => 4],
                 'negative_effects' => ['food' => -2, 'happiness' => -1],
@@ -1104,6 +1210,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Coinage Reform',
                 'description' => 'The entire monetary system needs overhaul. New coins, exchange rates, and guild regulations are required.',
+                'question' => 'Should you overhaul the currency?',
                 'difficulty' => 10,
                 'positive_effects' => ['wealth' => 5, 'influence' => 3],
                 'negative_effects' => ['wealth' => -2],
@@ -1114,6 +1221,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Continental Trade',
                 'description' => 'An opportunity to establish trade routes spanning all of Europe. The logistical challenges are immense.',
+                'question' => 'Do you open continental trade routes?',
                 'difficulty' => 12,
                 'positive_effects' => ['wealth' => 5, 'influence' => 4, 'grant_item_id' => 5],
                 'negative_effects' => ['wealth' => -2, 'security' => -1],
@@ -1124,6 +1232,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Plague and Commerce',
                 'description' => 'A plague disrupts trade networks. Commerce must be maintained while managing the health crisis.',
+                'question' => 'Can trade continue through the plague?',
                 'difficulty' => 9,
                 'positive_effects' => ['wealth' => 4, 'happiness' => 3],
                 'negative_effects' => ['happiness' => -2, 'food' => -1],
@@ -1134,6 +1243,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Monopoly',
                 'description' => 'The crown could seize control of key industries. Short-term gains are clear but long-term effects uncertain.',
+                'question' => 'Should the crown seize the industries?',
                 'difficulty' => 10,
                 'positive_effects' => ['wealth' => 5, 'influence' => 3],
                 'negative_effects' => ['happiness' => -2],
@@ -1144,6 +1254,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Merchant Conspiracy',
                 'description' => 'A group of wealthy merchants are manipulating markets for personal gain. Exposing them carries great risk.',
+                'question' => 'Will you expose the merchant cabal?',
                 'difficulty' => 11,
                 'positive_effects' => ['wealth' => 5, 'influence' => 4],
                 'negative_effects' => ['wealth' => -2, 'influence' => -1],
@@ -1160,6 +1271,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Church Tithe',
                 'description' => 'The annual tithe to the Church is due. A generous offering would please the clergy and the faithful.',
+                'question' => 'Do you pay the Church its tithe?',
                 'difficulty' => 3,
                 'positive_effects' => ['religion' => 3, 'happiness' => 1],
                 'negative_effects' => ['religion' => -1],
@@ -1170,6 +1282,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Feast Day Preparation',
                 'description' => 'The Feast of Michaelmas approaches. Proper preparations will ensure a celebration worthy of the saints.',
+                'question' => 'Will you prepare a proper feast day?',
                 'difficulty' => 4,
                 'positive_effects' => ['happiness' => 3, 'religion' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1180,6 +1293,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Friar\'s Counsel',
                 'description' => 'A wise friar offers spiritual counsel to the court. His guidance could inform important decisions.',
+                'question' => 'Should you heed the friar\'s wisdom?',
                 'difficulty' => 4,
                 'positive_effects' => ['religion' => 3, 'influence' => 1],
                 'negative_effects' => ['religion' => -1],
@@ -1190,6 +1304,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Wayside Shrine',
                 'description' => 'A roadside shrine to the Virgin Mary has fallen into disrepair. Restoring it would please travellers and the pious.',
+                'question' => 'Do you restore the roadside shrine?',
                 'difficulty' => 3,
                 'positive_effects' => ['religion' => 3],
                 'negative_effects' => ['wealth' => -1],
@@ -1200,6 +1315,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Holy Procession',
                 'description' => 'A grand procession through the town would honour the saints and demonstrate the crown\'s piety.',
+                'question' => 'Will you lead the holy procession?',
                 'difficulty' => 3,
                 'positive_effects' => ['religion' => 2, 'happiness' => 2],
                 'negative_effects' => ['religion' => -1],
@@ -1210,6 +1326,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Sacred Grove',
                 'description' => 'An ancient yew grove near the abbey is threatened by woodcutters. Protecting it would honour the monks.',
+                'question' => 'Should you protect the ancient grove?',
                 'difficulty' => 4,
                 'positive_effects' => ['religion' => 3, 'happiness' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1220,6 +1337,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Bishop Appointment',
                 'description' => 'A new bishop must be appointed for a major diocese. The choice will influence Church policy for years.',
+                'question' => 'Will you name the new bishop?',
                 'difficulty' => 5,
                 'positive_effects' => ['religion' => 4],
                 'negative_effects' => ['influence' => -1],
@@ -1230,6 +1348,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Omen Reading',
                 'description' => 'Strange signs in the sky worry the common folk. The Church must interpret them to calm the populace.',
+                'question' => 'Should the clergy interpret the signs?',
                 'difficulty' => 3,
                 'positive_effects' => ['religion' => 3, 'happiness' => 1],
                 'negative_effects' => ['religion' => -1],
@@ -1242,6 +1361,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Heresy Investigation',
                 'description' => 'Reports of heretical teachings threaten religious unity. An investigation must be conducted carefully.',
+                'question' => 'Do you investigate the heresy claims?',
                 'difficulty' => 7,
                 'positive_effects' => ['religion' => 4, 'influence' => 2],
                 'negative_effects' => ['religion' => -2],
@@ -1252,6 +1372,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Holy Relic',
                 'description' => 'A holy relic has been discovered. Authenticating and displaying it could inspire the faithful.',
+                'question' => 'Will you display the holy relic?',
                 'difficulty' => 6,
                 'positive_effects' => ['religion' => 5, 'grant_item_id' => 6],
                 'negative_effects' => ['religion' => -1],
@@ -1262,6 +1383,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Abbey Construction',
                 'description' => 'A magnificent new abbey is proposed. The project would glorify God but strain the treasury.',
+                'question' => 'Should you build the new abbey?',
                 'difficulty' => 7,
                 'positive_effects' => ['religion' => 4, 'happiness' => 3],
                 'negative_effects' => ['wealth' => -2],
@@ -1272,6 +1394,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Church Schism',
                 'description' => 'A bitter dispute between monastic orders threatens to split the English Church.',
+                'question' => 'Can you reconcile the warring orders?',
                 'difficulty' => 8,
                 'positive_effects' => ['religion' => 5, 'influence' => 2],
                 'negative_effects' => ['religion' => -2],
@@ -1282,6 +1405,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Prophecy',
                 'description' => 'A cryptic prophecy has thrown the kingdom into uncertainty. Only wise interpretation can calm the populace.',
+                'question' => 'Will you interpret the prophecy?',
                 'difficulty' => 6,
                 'positive_effects' => ['religion' => 4, 'happiness' => 2],
                 'negative_effects' => ['happiness' => -1],
@@ -1292,6 +1416,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Crusade Call',
                 'description' => 'The Pope calls for a crusade to the Holy Land. The zeal is powerful but the cost is enormous.',
+                'question' => 'Should England answer the crusade call?',
                 'difficulty' => 8,
                 'positive_effects' => ['religion' => 4, 'security' => 3],
                 'negative_effects' => ['happiness' => -2],
@@ -1302,6 +1427,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Secret Cult',
                 'description' => 'A mysterious cult operates in the shadows of the countryside. Investigating it could reveal threats.',
+                'question' => 'Do you root out the secret cult?',
                 'difficulty' => 7,
                 'positive_effects' => ['religion' => 3, 'security' => 3],
                 'negative_effects' => ['religion' => -1, 'happiness' => -1],
@@ -1312,6 +1438,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Saint\'s Day Tournament',
                 'description' => 'A grand tournament in honour of St. George must be organised. Athletic excellence honours God.',
+                'question' => 'Will you host the saint\'s tournament?',
                 'difficulty' => 6,
                 'positive_effects' => ['religion' => 3, 'happiness' => 3],
                 'negative_effects' => ['wealth' => -1],
@@ -1322,6 +1449,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Comet in the Sky',
                 'description' => 'A comet streaks across the heavens. The people look to their leaders to interpret this divine sign.',
+                'question' => 'Should you declare the comet a blessing?',
                 'difficulty' => 6,
                 'positive_effects' => ['religion' => 4, 'influence' => 2],
                 'negative_effects' => ['happiness' => -1],
@@ -1332,6 +1460,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Priestly Corruption',
                 'description' => 'Corruption within the clergy is exposed. Purging the corrupt risks backlash from their allies.',
+                'question' => 'Will you purge the corrupt priests?',
                 'difficulty' => 7,
                 'positive_effects' => ['religion' => 5, 'influence' => 1],
                 'negative_effects' => ['religion' => -2],
@@ -1342,6 +1471,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Abbey Treasury',
                 'description' => 'The abbey treasuries hold immense wealth. Borrowing from them is tempting but could anger the Church.',
+                'question' => 'Do you borrow from the abbey vaults?',
                 'difficulty' => 7,
                 'positive_effects' => ['wealth' => 4, 'religion' => 2],
                 'negative_effects' => ['religion' => -2],
@@ -1352,6 +1482,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Parish Schools',
                 'description' => 'Establishing parish schools would strengthen piety among the youth. Funding is the main challenge.',
+                'question' => 'Should you fund the parish schools?',
                 'difficulty' => 6,
                 'positive_effects' => ['religion' => 4, 'happiness' => 2],
                 'negative_effects' => ['wealth' => -1],
@@ -1364,6 +1495,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Persecution Crisis',
                 'description' => 'A wave of religious persecution threatens to destabilise the kingdom. Tolerance or orthodoxy must be chosen.',
+                'question' => 'Can you find a path between mercy and law?',
                 'difficulty' => 10,
                 'positive_effects' => ['religion' => 5, 'happiness' => 4],
                 'negative_effects' => ['religion' => -2, 'happiness' => -1],
@@ -1374,6 +1506,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Theological Revolution',
                 'description' => 'A new theological movement challenges centuries of Church tradition. Its ideas could transform the realm.',
+                'question' => 'Should you embrace the new teachings?',
                 'difficulty' => 11,
                 'positive_effects' => ['religion' => 5, 'influence' => 4],
                 'negative_effects' => ['religion' => -2, 'influence' => -1],
@@ -1384,6 +1517,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Divine Wrath',
                 'description' => 'The people believe God is punishing them. Only extraordinary piety can avert divine punishment.',
+                'question' => 'Will prayer and fasting calm the realm?',
                 'difficulty' => 10,
                 'positive_effects' => ['religion' => 5, 'happiness' => 3, 'grant_item_id' => 7],
                 'negative_effects' => ['religion' => -2, 'happiness' => -1],
@@ -1394,6 +1528,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Holy War',
                 'description' => 'A foreign power desecrates English churches. The faithful demand retribution through holy warfare.',
+                'question' => 'Do you wage war in God\'s name?',
                 'difficulty' => 12,
                 'positive_effects' => ['religion' => 5, 'security' => 4],
                 'negative_effects' => ['security' => -2, 'wealth' => -1],
@@ -1404,6 +1539,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Heresy Trial',
                 'description' => 'A prominent nobleman is accused of heresy. The trial will set a precedent for religious freedom.',
+                'question' => 'Should the nobleman face trial?',
                 'difficulty' => 9,
                 'positive_effects' => ['religion' => 4, 'influence' => 4],
                 'negative_effects' => ['happiness' => -2],
@@ -1414,6 +1550,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Great Cathedral',
                 'description' => 'A grand cathedral is proposed that would rival Canterbury. It would be the wonder of the age but enormously costly.',
+                'question' => 'Will you build the great cathedral?',
                 'difficulty' => 11,
                 'positive_effects' => ['religion' => 5, 'happiness' => 4, 'influence' => 2],
                 'negative_effects' => ['wealth' => -2, 'food' => -1],
@@ -1430,6 +1567,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Ale and Bread',
                 'description' => 'The people demand celebration. Free ale and bread distribution would improve public morale.',
+                'question' => 'Do you distribute free ale and bread?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 4],
                 'negative_effects' => ['wealth' => -1],
@@ -1440,6 +1578,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Bathhouse',
                 'description' => 'A new public bathhouse is proposed for the town. It would serve as a social hub and improve public health.',
+                'question' => 'Should you build the public bathhouse?',
                 'difficulty' => 4,
                 'positive_effects' => ['happiness' => 3, 'food' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1450,6 +1589,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'May Day Festival',
                 'description' => 'A spontaneous May Day celebration breaks out in the village green. Supporting it could boost morale.',
+                'question' => 'Will you support the May Day revels?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3, 'wealth' => 1],
                 'negative_effects' => ['happiness' => -1],
@@ -1460,6 +1600,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Alms Giving',
                 'description' => 'Surplus grain can be distributed to the poor. Generosity earns goodwill but costs resources.',
+                'question' => 'Do you give alms to the poor?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3, 'religion' => 1],
                 'negative_effects' => ['food' => -1],
@@ -1470,6 +1611,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Jousting Tournament',
                 'description' => 'The tournament grounds await. Grand jousting contests would thrill the masses and display knightly prowess.',
+                'question' => 'Should you hold a jousting contest?',
                 'difficulty' => 5,
                 'positive_effects' => ['happiness' => 4, 'influence' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1480,6 +1622,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Minstrel\'s Song',
                 'description' => 'A famous minstrel offers to perform at court. The arts nourish the soul of the realm.',
+                'question' => 'Will you invite the minstrel to play?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 3],
                 'negative_effects' => ['happiness' => -1],
@@ -1490,6 +1633,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Village Garden',
                 'description' => 'A patch of common land could be converted to gardens. The people would appreciate the green space.',
+                'question' => 'Do you plant a village garden?',
                 'difficulty' => 3,
                 'positive_effects' => ['happiness' => 2, 'food' => 2],
                 'negative_effects' => ['food' => -1],
@@ -1500,6 +1644,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Town Well',
                 'description' => 'A new stone well in the market square would provide fresh water and serve as a gathering place.',
+                'question' => 'Should you build a new town well?',
                 'difficulty' => 4,
                 'positive_effects' => ['happiness' => 3, 'influence' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1512,6 +1657,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Plague Outbreak',
                 'description' => 'A plague sweeps through the town. Quarantine measures and herbal remedies must be organised immediately.',
+                'question' => 'Can you contain the spreading plague?',
                 'difficulty' => 8,
                 'positive_effects' => ['happiness' => 4, 'food' => 3],
                 'negative_effects' => ['happiness' => -2, 'food' => -1],
@@ -1522,6 +1668,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Peasant Uprising',
                 'description' => 'Peasants on the estates have risen in revolt. The situation must be resolved with care.',
+                'question' => 'Will you confront the angry peasants?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 3, 'security' => 3],
                 'negative_effects' => ['security' => -2],
@@ -1532,6 +1679,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Town Fire',
                 'description' => 'A fire breaks out in the crowded timber-built town. Firefighting and relief efforts are critical.',
+                'question' => 'Do you rally the town against the fire?',
                 'difficulty' => 6,
                 'positive_effects' => ['happiness' => 4, 'security' => 2],
                 'negative_effects' => ['happiness' => -2],
@@ -1542,6 +1690,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Well Poisoned',
                 'description' => 'The town well has been fouled, leaving hundreds without clean water. Repairs must be made urgently.',
+                'question' => 'Can you restore the fouled water?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 5, 'food' => 1],
                 'negative_effects' => ['happiness' => -2],
@@ -1552,6 +1701,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Refugee Crisis',
                 'description' => 'Refugees flood into the towns from war-torn borderlands. Housing and food must be provided.',
+                'question' => 'Will you shelter the refugees?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 4, 'influence' => 2],
                 'negative_effects' => ['food' => -2],
@@ -1562,6 +1712,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Lord and Peasant',
                 'description' => 'Tensions between the nobility and the common folk escalate to dangerous levels. Mediation is required.',
+                'question' => 'Can you mediate between the classes?',
                 'difficulty' => 8,
                 'positive_effects' => ['happiness' => 5, 'influence' => 2],
                 'negative_effects' => ['happiness' => -2, 'influence' => -1],
@@ -1572,6 +1723,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Court Scandal',
                 'description' => 'A scandal involving a lord and a merchant\'s wife threatens public morality. It must be managed.',
+                'question' => 'Should you intervene in the scandal?',
                 'difficulty' => 6,
                 'positive_effects' => ['happiness' => 3, 'influence' => 3],
                 'negative_effects' => ['happiness' => -1, 'influence' => -1],
@@ -1582,6 +1734,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Housing Shortage',
                 'description' => 'The town faces a critical housing shortage. Building programmes must be initiated to prevent unrest.',
+                'question' => 'Do you fund new housing for the town?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 5, 'grant_item_id' => 8],
                 'negative_effects' => ['wealth' => -2],
@@ -1592,6 +1745,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Harvest Festival',
                 'description' => 'A grand harvest festival celebrating the realm\'s bounty. Performers from every shire are invited.',
+                'question' => 'Will you host the harvest festival?',
                 'difficulty' => 6,
                 'positive_effects' => ['happiness' => 4, 'influence' => 2],
                 'negative_effects' => ['wealth' => -1],
@@ -1602,6 +1756,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'School Reform',
                 'description' => 'The education of young nobles needs reform. Better training would improve the quality of future leaders.',
+                'question' => 'Should you reform the noble schools?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 3, 'influence' => 3],
                 'negative_effects' => ['wealth' => -2],
@@ -1612,6 +1767,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Veterans\' Resettlement',
                 'description' => 'Thousands of returning soldiers need resettlement. Land grants and pensions must be arranged.',
+                'question' => 'Do you resettle the returning soldiers?',
                 'difficulty' => 6,
                 'positive_effects' => ['happiness' => 4, 'security' => 2],
                 'negative_effects' => ['wealth' => -1, 'food' => -1],
@@ -1622,6 +1778,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Herbalist\'s Care',
                 'description' => 'A comprehensive public health effort could prevent disease but requires significant investment.',
+                'question' => 'Will you fund the healers\' efforts?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 5, 'food' => 1],
                 'negative_effects' => ['wealth' => -2],
@@ -1634,6 +1791,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Great Plague',
                 'description' => 'A devastating plague sweeps through the realm, killing thousands. Only extraordinary measures can stem the tide.',
+                'question' => 'Can the realm endure the great plague?',
                 'difficulty' => 11,
                 'positive_effects' => ['happiness' => 5, 'food' => 3, 'religion' => 2],
                 'negative_effects' => ['happiness' => -2, 'food' => -1],
@@ -1644,6 +1802,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Mass Migration',
                 'description' => 'Entire communities flee from famine and war in neighbouring lands. The realm must absorb or redirect them.',
+                'question' => 'Will you open the borders to them?',
                 'difficulty' => 10,
                 'positive_effects' => ['happiness' => 4, 'influence' => 4],
                 'negative_effects' => ['food' => -2, 'happiness' => -1],
@@ -1654,6 +1813,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Famine and Riots',
                 'description' => 'Famine triggers widespread riots across the shires. Order must be restored and food distributed.',
+                'question' => 'Can you quell the starving mobs?',
                 'difficulty' => 11,
                 'positive_effects' => ['food' => 5, 'happiness' => 4, 'grant_item_id' => 9],
                 'negative_effects' => ['food' => -2, 'security' => -1],
@@ -1664,6 +1824,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Cultural Upheaval',
                 'description' => 'A cultural movement challenges traditional English values. The realm must adapt or resist.',
+                'question' => 'Should the realm embrace the change?',
                 'difficulty' => 10,
                 'positive_effects' => ['happiness' => 5, 'influence' => 3],
                 'negative_effects' => ['religion' => -2],
@@ -1674,6 +1835,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Social Upheaval',
                 'description' => 'The social order is breaking down. Only radical reform or harsh suppression can restore stability.',
+                'question' => 'Can you hold the realm together?',
                 'difficulty' => 12,
                 'positive_effects' => ['happiness' => 5, 'influence' => 4, 'security' => 2],
                 'negative_effects' => ['happiness' => -2, 'influence' => -1],
@@ -1684,6 +1846,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Outlaw Insurrection',
                 'description' => 'A band of outlaws seize a castle and declare themselves free men. Their cause inspires the desperate.',
+                'question' => 'Will you retake the stolen castle?',
                 'difficulty' => 9,
                 'positive_effects' => ['security' => 4, 'happiness' => 4],
                 'negative_effects' => ['security' => -2, 'happiness' => -1],
@@ -1700,6 +1863,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Minor Earthquake',
                 'description' => 'A tremor shakes the region. Buildings are damaged and the people are frightened.',
+                'question' => 'Do you organize repair efforts?',
                 'difficulty' => 5,
                 'positive_effects' => ['happiness' => 3, 'security' => 2],
                 'negative_effects' => ['happiness' => -1, 'wealth' => -1],
@@ -1710,6 +1874,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Locust Swarm',
                 'description' => 'A swarm of locusts descends on the farmlands. Quick action could save most of the harvest.',
+                'question' => 'Can you drive off the locusts in time?',
                 'difficulty' => 5,
                 'positive_effects' => ['food' => 4, 'happiness' => 1],
                 'negative_effects' => ['food' => -2],
@@ -1722,6 +1887,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Great Flood',
                 'description' => 'Torrential rains cause rivers to burst their banks, flooding towns and farms across the lowlands.',
+                'question' => 'Will you send relief to the flooded lands?',
                 'difficulty' => 8,
                 'positive_effects' => ['happiness' => 4, 'influence' => 3],
                 'negative_effects' => ['food' => -2, 'wealth' => -1],
@@ -1732,6 +1898,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Storm Surge',
                 'description' => 'A massive storm surge strikes the coast, destroying port facilities and fishing villages.',
+                'question' => 'Do you rebuild the shattered coast?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 4, 'food' => 2, 'grant_item_id' => 10],
                 'negative_effects' => ['wealth' => -2, 'food' => -1],
@@ -1742,6 +1909,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Camp Fever',
                 'description' => 'A mysterious illness spreads through the army camps. Healers and herbal supplies are critical.',
+                'question' => 'Can the healers contain the fever?',
                 'difficulty' => 7,
                 'positive_effects' => ['security' => 3, 'happiness' => 3],
                 'negative_effects' => ['security' => -1, 'happiness' => -1],
@@ -1752,6 +1920,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Drought',
                 'description' => 'A prolonged drought threatens agriculture across several shires. Water management is essential.',
+                'question' => 'Will you ration the dwindling water?',
                 'difficulty' => 8,
                 'positive_effects' => ['food' => 5, 'happiness' => 2],
                 'negative_effects' => ['food' => -2, 'happiness' => -1],
@@ -1764,6 +1933,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Cataclysmic Storm',
                 'description' => 'A catastrophic storm strikes the heart of the kingdom. Multiple crises unfold simultaneously.',
+                'question' => 'Can the realm survive this catastrophe?',
                 'difficulty' => 12,
                 'positive_effects' => ['happiness' => 5, 'security' => 4, 'influence' => 3],
                 'negative_effects' => ['happiness' => -2, 'wealth' => -2],
@@ -1774,6 +1944,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Doomsday Prophecy',
                 'description' => 'A prophecy of the end times spreads through the land. Panic grips the populace as signs seem to confirm it.',
+                'question' => 'Can you calm the panicked masses?',
                 'difficulty' => 10,
                 'positive_effects' => ['religion' => 5, 'happiness' => 4],
                 'negative_effects' => ['happiness' => -2, 'religion' => -1],
@@ -1784,6 +1955,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Fall of an Ally',
                 'description' => 'A major ally falls to enemy forces. England stands more alone as enemies close in from all sides.',
+                'question' => 'Will you forge new alliances in time?',
                 'difficulty' => 11,
                 'positive_effects' => ['security' => 5, 'influence' => 4],
                 'negative_effects' => ['security' => -2, 'influence' => -1],
@@ -1800,6 +1972,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Calm Before the Storm',
                 'description' => 'A rare moment of peace descends upon the realm. Those who prepare wisely may find unexpected treasures.',
+                'question' => 'Do you use the calm wisely?',
                 'difficulty' => 3,
                 'positive_effects' => ['draw_item' => true],
                 'negative_effects' => ['happiness' => -1],
@@ -1810,6 +1983,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Fortune\'s Favour',
                 'description' => 'Lady Fortune smiles upon England. Merchants report finding rare goods among their usual wares.',
+                'question' => 'Will you seize fortune\'s gift?',
                 'difficulty' => 4,
                 'positive_effects' => ['draw_item' => true, 'influence' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1820,6 +1994,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Rest and Recovery',
                 'description' => 'A lull in the realm\'s troubles allows weary advisors to recuperate and regain their strength.',
+                'question' => 'Should the council take time to rest?',
                 'difficulty' => 3,
                 'positive_effects' => ['recover_die' => true],
                 'negative_effects' => ['security' => -1],
@@ -1830,6 +2005,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Healer\'s Visit',
                 'description' => 'A renowned healer from the monastery offers their services to the court.',
+                'question' => 'Do you welcome the healer to court?',
                 'difficulty' => 4,
                 'positive_effects' => ['recover_die' => true, 'happiness' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1840,6 +2016,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Armoury Shipment',
                 'description' => 'The royal armouries receive a shipment of fine weapons and equipment from the Continent.',
+                'question' => 'Will you inspect the foreign arms?',
                 'difficulty' => 5,
                 'positive_effects' => ['draw_item' => true, 'security' => 1],
                 'negative_effects' => ['wealth' => -1],
@@ -1850,6 +2027,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Scholar\'s Reprieve',
                 'description' => 'The great scholars of Oxford offer their wisdom to ease the burden on the King\'s advisors.',
+                'question' => 'Should you consult the Oxford scholars?',
                 'difficulty' => 3,
                 'positive_effects' => ['recover_die' => true],
                 'negative_effects' => ['influence' => -1],
@@ -1862,6 +2040,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Thieves in the Night',
                 'description' => 'A brazen band of thieves strikes at the heart of the castle, stealing from even the most guarded vaults.',
+                'question' => 'Can you catch the castle thieves?',
                 'difficulty' => 5,
                 'positive_effects' => ['security' => 3],
                 'negative_effects' => ['discard_item' => true],
@@ -1872,6 +2051,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Exhausting March',
                 'description' => 'The army is forced on a gruelling march through hostile terrain. Many soldiers collapse from fatigue.',
+                'question' => 'Do you push the army onward?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 3, 'influence' => 1],
                 'negative_effects' => ['lose_die' => 1],
@@ -1882,6 +2062,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Cursed Relic',
                 'description' => 'A mysterious relic is unearthed from an ancient barrow. Its dark power saps the will of those nearby.',
+                'question' => 'Should you disturb the ancient relic?',
                 'difficulty' => 4,
                 'positive_effects' => ['religion' => 2],
                 'negative_effects' => ['lose_die' => 1],
@@ -1892,6 +2073,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Outlaw Raid',
                 'description' => 'Organised outlaws raid merchant caravans, seizing valuable goods and supplies.',
+                'question' => 'Will you pursue the outlaw raiders?',
                 'difficulty' => 5,
                 'positive_effects' => ['wealth' => 3],
                 'negative_effects' => ['discard_item' => true],
@@ -1902,6 +2084,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Plague of Exhaustion',
                 'description' => 'A mysterious wasting sickness drains the energy of the realm\'s advisors. Recovery will take time.',
+                'question' => 'Can the council endure this sickness?',
                 'difficulty' => 7,
                 'positive_effects' => ['happiness' => 3, 'food' => 1],
                 'negative_effects' => ['lose_die' => 1, 'happiness' => -1],
@@ -1912,6 +2095,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Sabotage',
                 'description' => 'Enemy agents have infiltrated the court and sabotaged stores and equipment.',
+                'question' => 'Do you root out the enemy spies?',
                 'difficulty' => 6,
                 'positive_effects' => ['security' => 3],
                 'negative_effects' => ['discard_item' => true, 'security' => -1],
@@ -1926,6 +2110,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Grand Tournament',
                 'description' => 'Knights from across the realm gather for a magnificent tourney. Victory would echo through the ages.',
+                'question' => 'Should you champion the grand tourney?',
                 'difficulty' => 8,
                 'positive_effects' => ['security' => 2, 'happiness' => 1, 'bonus_score' => 10],
                 'negative_effects' => ['wealth' => -2],
@@ -1936,6 +2121,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Royal Wedding',
                 'description' => 'A prince seeks a bride from a neighboring kingdom. A successful match could cement your kingdom\'s legacy.',
+                'question' => 'Will you arrange the royal match?',
                 'difficulty' => 6,
                 'positive_effects' => ['influence' => 2, 'happiness' => 1, 'bonus_score' => 8],
                 'negative_effects' => ['influence' => -1],
@@ -1946,6 +2132,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Historic Treaty',
                 'description' => 'A once-in-a-generation opportunity to sign a peace treaty with your greatest rival.',
+                'question' => 'Do you offer the hand of peace?',
                 'difficulty' => 9,
                 'positive_effects' => ['influence' => 3, 'security' => 1, 'bonus_score' => 15],
                 'negative_effects' => ['security' => -2],
@@ -1956,6 +2143,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Failed Harvest Festival',
                 'description' => 'The annual harvest festival goes terribly wrong when storms ruin the celebrations.',
+                'question' => 'Can you salvage the ruined festival?',
                 'difficulty' => 5,
                 'positive_effects' => ['food' => 2, 'happiness' => 1],
                 'negative_effects' => ['happiness' => -1, 'bonus_score' => -5],
@@ -1966,6 +2154,7 @@ class CardSeeder extends Seeder
             [
                 'title' => 'Bard\'s Contest',
                 'description' => 'Bards and minstrels compete to compose the greatest song about your kingdom.',
+                'question' => 'Will you sponsor the bards\' contest?',
                 'difficulty' => 4,
                 'positive_effects' => ['happiness' => 2, 'bonus_score' => 5],
                 'negative_effects' => ['happiness' => -1],
