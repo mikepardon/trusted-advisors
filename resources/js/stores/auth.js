@@ -51,9 +51,9 @@ async function startLogin(provider = null) {
 
     const url = `${authUrl}/oauth/authorize?${params.toString()}`;
 
-    // In the native app, open in system browser so Google/Apple OAuth works
-    // The Universal Link on ta.mpgames.io will redirect back into the app
-    if (isNativeApp) {
+    // Google blocks OAuth in WebViews, so open in system browser.
+    // Apple works fine in WebViews, so keep it in-app.
+    if (isNativeApp && provider === 'google') {
         window.location.href = url + '&loadIn=defaultBrowser';
     } else {
         window.location.href = url;
