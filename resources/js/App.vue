@@ -1,5 +1,16 @@
 <template>
   <div id="game-app" :class="{ 'is-admin': isAdmin }">
+    <!-- Open in App banner (iOS Safari only) -->
+    <div v-if="showAppBanner" class="app-banner">
+      <img src="/images/logo.png" alt="Trusted Advisors" class="app-banner-icon" />
+      <div class="app-banner-text">
+        <strong>Trusted Advisors</strong>
+        <span>Open in the app for a better experience</span>
+      </div>
+      <a :href="appDeepLink" class="app-banner-open">OPEN</a>
+      <button class="app-banner-close" @click="dismissAppBanner">&times;</button>
+    </div>
+
     <!-- Impersonation banner -->
     <div v-if="auth.state.user?.is_impersonating" class="impersonation-banner" @click="stopImpersonating">
       Impersonating {{ auth.state.user.name }} &mdash; Click to stop
@@ -130,7 +141,12 @@ export default {
     };
   },
   data() {
+    const isIosSafari = /iPhone|iPad/.test(navigator.userAgent)
+      && /Safari/.test(navigator.userAgent)
+      && !navigator.userAgent.includes('wtn')
+      && !navigator.userAgent.includes('WebToNative');
     return {
+      showAppBanner: isIosSafari && !localStorage.getItem('app_banner_dismissed'),
       showSplash: !window.location.pathname.startsWith('/admin') && !document.cookie.includes('splash_seen=1'),
       showHowToPlay: false,
       showNotifications: false,
@@ -160,6 +176,9 @@ export default {
     },
   },
   computed: {
+    appDeepLink() {
+      return 'ta:/' + this.$route.fullPath;
+    },
     isAdmin() {
       return this.$route.path.startsWith('/admin');
     },
@@ -244,6 +263,10 @@ export default {
     document.removeEventListener('click', this._closeMenuOnClick);
   },
   methods: {
+    dismissAppBanner() {
+      this.showAppBanner = false;
+      localStorage.setItem('app_banner_dismissed', '1');
+    },
     splashDone() {
       this.showSplash = false;
       const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
@@ -996,6 +1019,72 @@ box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(
 .toast-fade-leave-to {
   opacity: 0;
   transform: translateX(-50%) translateY(-10px);
+}
+
+/* Open in App banner */
+.app-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, var(--wood-light), var(--wood-dark));
+  border-bottom: 1px solid var(--border-gold);
+  flex-shrink: 0;
+  z-index: 100;
+}
+
+.app-banner-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+.app-banner-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.app-banner-text strong {
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.app-banner-text span {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.app-banner-open {
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+  background: none;
+  border: 1px solid var(--accent-gold);
+  border-radius: 14px;
+  padding: 5px 14px;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.app-banner-open:hover {
+  background: rgba(240, 192, 80, 0.1);
+}
+
+.app-banner-close {
+  background: none !important;
+  border: none !important;
+  color: var(--text-secondary);
+  font-size: 1.3rem;
+  padding: 0 4px !important;
+  cursor: pointer;
+  line-height: 1;
+  box-shadow: none !important;
 }
 
 /* Impersonation banner */
