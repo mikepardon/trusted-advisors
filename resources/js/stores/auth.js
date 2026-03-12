@@ -1,5 +1,6 @@
 import { reactive } from 'vue';
 import axios from 'axios';
+import { isNativeApp } from 'webtonative';
 import { initOneSignal, promptPushPermission } from '../onesignal';
 import { generateCodeVerifier, generateCodeChallenge, generateState } from '../pkce';
 
@@ -25,8 +26,9 @@ async function startLogin(provider = null) {
     const challenge = await generateCodeChallenge(verifier);
     const oauthState = generateState();
 
-    sessionStorage.setItem('pkce_code_verifier', verifier);
-    sessionStorage.setItem('oauth_state', oauthState);
+    // Use localStorage so PKCE values survive app backgrounding (native apps)
+    localStorage.setItem('pkce_code_verifier', verifier);
+    localStorage.setItem('oauth_state', oauthState);
 
     const authUrl = import.meta.env.VITE_AUTH_URL;
     const clientId = import.meta.env.VITE_OAUTH_CLIENT_ID;
@@ -47,16 +49,24 @@ async function startLogin(provider = null) {
         params.set('provider', provider);
     }
 
-    window.location.href = `${authUrl}/oauth/authorize?${params.toString()}`;
+    const url = `${authUrl}/oauth/authorize?${params.toString()}`;
+
+    // In the native app, open in system browser so Google/Apple OAuth works
+    // The Universal Link on ta.mpgames.io will redirect back into the app
+    if (isNativeApp) {
+        window.location.href = url + '&loadIn=defaultBrowser';
+    } else {
+        window.location.href = url;
+    }
 }
 
 async function handleCallback(code, returnedState) {
-    const savedState = sessionStorage.getItem('oauth_state');
+    const savedState = localStorage.getItem('oauth_state');
     if (returnedState !== savedState) {
         throw new Error('Invalid state parameter. Please try again.');
     }
 
-    const verifier = sessionStorage.getItem('pkce_code_verifier');
+    const verifier = localStorage.getItem('pkce_code_verifier');
     if (!verifier) {
         throw new Error('Missing PKCE verifier. Please try again.');
     }
@@ -66,9 +76,9 @@ async function handleCallback(code, returnedState) {
         code_verifier: verifier,
     });
 
-    // Clean up sessionStorage
-    sessionStorage.removeItem('pkce_code_verifier');
-    sessionStorage.removeItem('oauth_state');
+    // Clean up
+    localStorage.removeItem('pkce_code_verifier');
+    localStorage.removeItem('oauth_state');
 
     if (res.data.streak_xp_awarded) {
         state.streakNotification = {
