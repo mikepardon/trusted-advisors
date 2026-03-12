@@ -198,7 +198,7 @@
     <div class="card-panel">
       <h2 class="section-title">Account</h2>
       <div class="account-actions">
-        <a :href="authServiceUrl + '/dashboard'" target="_blank" rel="noopener" class="btn-primary account-link">
+        <a :href="authServiceUrl + '/dashboard?from=' + encodeURIComponent(window.location.origin)" target="_blank" rel="noopener" class="btn-primary account-link">
           Manage Account
         </a>
         <button class="btn-logout" @click="handleLogout">Logout</button>
