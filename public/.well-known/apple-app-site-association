@@ -3,8 +3,10 @@
     "apps": [],
     "details": [
       {
-        "appID": "TEAMID.io.mpgames.ta",
-        "paths": ["*"]
+        "appID": "AK2C353U5M.io.mpgames.ta",
+        "paths": [
+          "*"
+        ]
       }
     ]
   }
