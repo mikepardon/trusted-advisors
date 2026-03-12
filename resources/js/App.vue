@@ -177,7 +177,7 @@ export default {
   },
   computed: {
     appDeepLink() {
-      return 'ta://' + this.$route.fullPath;
+      return 'ta://open' + this.$route.fullPath;
     },
     isAdmin() {
       return this.$route.path.startsWith('/admin');
