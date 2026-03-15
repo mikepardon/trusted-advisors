@@ -39,41 +39,39 @@
       </div>
 
       <div class="kingdom-stats">
-        <div v-for="stat in stats" :key="stat.key" class="stat-row">
-          <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
-          <div class="stat-bar-wrap">
-            <div class="stat-bar-bg">
-              <div
-                class="stat-bar"
-                :style="{ width: (kingdom[stat.key] / 20 * 100) + '%' }"
-                :class="[getBarClass(kingdom[stat.key]), barFlashClass[kingdom.id + '-' + stat.key], { 'bar-flat-right': getPreview(kingdom, stat.key)?.pos > 0 }]"
-              ></div>
-              <!-- Positive preview (green, extends after current bar) -->
-              <div
+        <div v-for="stat in stats" :key="stat.key" class="stat-cell">
+          <div class="radial-wrap">
+            <svg class="radial-svg" viewBox="0 0 48 48">
+              <circle class="radial-bg" cx="24" cy="24" r="20" />
+              <circle
+                class="radial-fill"
+                :class="[getBarClass(kingdom[stat.key]), barFlashClass[kingdom.id + '-' + stat.key]]"
+                cx="24" cy="24" r="20"
+                :style="{ strokeDashoffset: radialOffset(kingdom[stat.key]) }"
+              />
+              <!-- Positive preview arc -->
+              <circle
                 v-if="getPreview(kingdom, stat.key)?.pos > 0"
-                class="stat-bar-preview preview-positive"
+                class="radial-preview radial-preview-positive"
+                cx="24" cy="24" r="20"
                 :style="{
-                  left: Math.min(kingdom[stat.key] / 20 * 100, 100) + '%',
-                  width: Math.min(getPreview(kingdom, stat.key).pos / 20 * 100, 100 - kingdom[stat.key] / 20 * 100) + '%',
+                  strokeDasharray: radialPreviewDash(kingdom[stat.key], getPreview(kingdom, stat.key).pos),
+                  strokeDashoffset: radialPreviewOffset(kingdom[stat.key]),
                 }"
-              ></div>
-              <!-- Negative preview (red, overlaps end of current bar) -->
-              <div
+              />
+              <!-- Negative preview arc -->
+              <circle
                 v-if="getPreview(kingdom, stat.key)?.neg < 0"
-                class="stat-bar-preview preview-negative"
+                class="radial-preview radial-preview-negative"
+                cx="24" cy="24" r="20"
                 :style="{
-                  left: Math.max((kingdom[stat.key] + getPreview(kingdom, stat.key).neg) / 20 * 100, 0) + '%',
-                  width: Math.min(Math.abs(getPreview(kingdom, stat.key).neg) / 20 * 100, kingdom[stat.key] / 20 * 100) + '%',
+                  strokeDasharray: radialPreviewDash(kingdom[stat.key] + getPreview(kingdom, stat.key).neg, Math.abs(getPreview(kingdom, stat.key).neg)),
+                  strokeDashoffset: radialPreviewOffset(kingdom[stat.key] + getPreview(kingdom, stat.key).neg),
                 }"
-              ></div>
-            </div>
+              />
+            </svg>
+            <span class="radial-icon"><AppIcon :type="stat.type" :value="stat.value" size="md" /></span>
           </div>
-          <span
-            class="stat-value"
-            :class="[getValueClass(kingdom[stat.key]), flashClass[kingdom.id + '-' + stat.key]]"
-          >
-            {{ tweenedValues[kingdom.id + '-' + stat.key] ?? kingdom[stat.key] }}
-          </span>
         </div>
       </div>
       <div class="kingdom-total">
@@ -359,6 +357,23 @@ export default {
       if (value >= 20) return 'val-max';
       return 'val-safe';
     },
+    radialOffset(value) {
+      const circumference = 2 * Math.PI * 20;
+      const pct = Math.min(value, 20) / 20;
+      return circumference * (1 - pct);
+    },
+    radialPreviewDash(startValue, amount) {
+      const circumference = 2 * Math.PI * 20;
+      const clampedStart = Math.max(0, Math.min(startValue, 20));
+      const clampedEnd = Math.min(clampedStart + amount, 20);
+      const arcLen = ((clampedEnd - clampedStart) / 20) * circumference;
+      return `${arcLen} ${circumference - arcLen}`;
+    },
+    radialPreviewOffset(startValue) {
+      const circumference = 2 * Math.PI * 20;
+      const pct = Math.max(0, Math.min(startValue, 20)) / 20;
+      return circumference * (1 - pct);
+    },
   },
 };
 </script>
@@ -507,104 +522,83 @@ export default {
 }
 
 .kingdom-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
   flex: 1;
+  justify-items: center;
 }
 
-.stat-row {
+.stat-cell {
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
 }
 
-.stat-icon {
-  font-size: 0.85rem;
-  flex-shrink: 0;
-  width: 18px;
-  text-align: center;
-}
-
-.stat-bar-wrap {
-  flex: 1;
-  min-width: 0;
-}
-
-.stat-bar-bg {
-  background: rgba(0, 0, 0, 0.4);
-  height: 8px;
-  border-radius: 4px;
-  overflow: hidden;
+/* Radial progress */
+.radial-wrap {
   position: relative;
+  width: 44px;
+  height: 44px;
 }
 
-.stat-bar {
-  height: 100%;
-  border-radius: 4px;
-  transition: width 0.5s ease;
+.radial-svg {
+  width: 44px;
+  height: 44px;
+  transform: rotate(-90deg);
 }
 
-.bar-critical { background: #e74c3c; }
-.bar-danger { background: #e67e22; }
-.bar-caution { background: var(--ks-bar-caution, #d4a843); }
-.bar-safe { background: var(--ks-bar-safe, #27ae60); }
-.bar-max { background: linear-gradient(90deg, #d4a843, #f0d060); }
-
-.bar-flat-right {
-  border-top-right-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-}
-
-.stat-bar-preview {
+.radial-icon {
   position: absolute;
-  top: 0;
-  height: 100%;
-  border-radius: 0 4px 4px 0;
-  transition: left 0.25s ease, width 0.25s ease, opacity 0.25s ease;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.radial-bg {
+  fill: none;
+  stroke: rgba(0, 0, 0, 0.4);
+  stroke-width: 4;
+}
+
+.radial-fill {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-dasharray: 125.66;
+  transition: stroke-dashoffset 0.5s ease;
+}
+
+.radial-fill.bar-critical { stroke: #e74c3c; }
+.radial-fill.bar-danger { stroke: #e67e22; }
+.radial-fill.bar-caution { stroke: var(--ks-bar-caution, #d4a843); }
+.radial-fill.bar-safe { stroke: var(--ks-bar-safe, #27ae60); }
+.radial-fill.bar-max { stroke: #d4a843; }
+
+.radial-fill.bar-flash-up { stroke: #4caf50 !important; }
+.radial-fill.bar-flash-down { stroke: #e74c3c !important; }
+
+.radial-preview {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
   animation: preview-pulse 1.5s ease-in-out infinite;
 }
 
-.preview-positive {
-  background: rgba(6, 120, 10, 1);
-  box-shadow: 0 0 4px rgba(6, 120, 10, 0.9);
+.radial-preview-positive {
+  stroke: rgba(6, 120, 10, 0.9);
 }
 
-.preview-negative {
-  background: rgba(249, 23, 0, 0.9);
-  box-shadow: 0 0 4px rgba(249, 23, 0, 0.8);
+.radial-preview-negative {
+  stroke: rgba(249, 23, 0, 0.9);
 }
 
 @keyframes preview-pulse {
   0%, 100% { opacity: 0.5; }
   50% { opacity: 1; }
 }
-
-.bar-flash-up {
-  background: #4caf50 !important;
-  box-shadow: 0 0 8px rgba(76, 175, 80, 0.6);
-  transition: background 0.3s ease, box-shadow 0.3s ease;
-}
-
-.bar-flash-down {
-  background: #e74c3c !important;
-  box-shadow: 0 0 8px rgba(231, 76, 60, 0.6);
-  transition: background 0.3s ease, box-shadow 0.3s ease;
-}
-
-.stat-value {
-  font-weight: 700;
-  font-size: 0.8rem;
-  width: 20px;
-  text-align: right;
-  flex-shrink: 0;
-  transition: color 0.5s ease, text-shadow 0.5s ease;
-}
-
-.val-safe { color: var(--ks-stat-color, var(--text-bright)); }
-.val-danger { color: #e67e22; }
-.val-critical { color: #e74c3c; }
-.val-max { color: #d4a843; text-shadow: 0 0 6px rgba(212, 168, 67, 0.4); }
 
 .flash-up {
   color: #4caf50 !important;
@@ -638,18 +632,18 @@ export default {
     font-size: 0.7rem;
   }
 
-  .stat-icon {
-    font-size: 0.75rem;
-    width: 16px;
+  .radial-wrap {
+    width: 38px;
+    height: 38px;
   }
 
-  .stat-bar-bg {
-    height: 6px;
+  .radial-svg {
+    width: 38px;
+    height: 38px;
   }
 
-  .stat-value {
-    font-size: 0.7rem;
-    width: 18px;
+  .radial-icon {
+    font-size: 0.85rem;
   }
 
   .roll-info {

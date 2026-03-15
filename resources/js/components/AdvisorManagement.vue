@@ -199,6 +199,13 @@ export default {
   letter-spacing: 0.5px;
 }
 
+.loading-text {
+  text-align: center;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 40px;
+}
+
 @media (max-width: 768px) {
   .advisor-grid {
     grid-template-columns: repeat(3, 1fr);

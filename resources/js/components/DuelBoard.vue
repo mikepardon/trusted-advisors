@@ -103,6 +103,15 @@
       >
         Roll!
       </button>
+      <div v-else-if="showRerollAboveStats" class="continue-above-stats reroll-above">
+        <button class="btn-reroll-top" :disabled="rerolling" @click="handleReroll">
+          &#9733; {{ myAbility.name }}: {{ rerollLabelTop }}
+          <span class="ability-uses-badge">({{ myAbilityUses }} use{{ myAbilityUses > 1 ? 's' : '' }} left)</span>
+        </button>
+        <button class="btn-continue-top" :disabled="rerolling" @click="handleContinueAfterRoll">
+          {{ rerolling ? 'Rerolling...' : 'Skip' }}
+        </button>
+      </div>
       <div v-else-if="showContinueAboveStats" class="continue-above-stats">
         <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
       </div>
@@ -133,6 +142,7 @@
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
         :hideRollButton="true"
+        :hideRerollSection="true"
         :currentRound="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
@@ -172,6 +182,15 @@
       >
         Roll!
       </button>
+      <div v-else-if="showRerollAboveStats" class="continue-above-stats reroll-above">
+        <button class="btn-reroll-top" :disabled="rerolling" @click="handleReroll">
+          &#9733; {{ myAbility.name }}: {{ rerollLabelTop }}
+          <span class="ability-uses-badge">({{ myAbilityUses }} use{{ myAbilityUses > 1 ? 's' : '' }} left)</span>
+        </button>
+        <button class="btn-continue-top" :disabled="rerolling" @click="handleContinueAfterRoll">
+          {{ rerolling ? 'Rerolling...' : 'Skip' }}
+        </button>
+      </div>
       <div v-else-if="showContinueAboveStats" class="continue-above-stats">
         <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
       </div>
@@ -193,6 +212,7 @@
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
         :hideRollButton="true"
+        :hideRerollSection="true"
         :currentRound="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
@@ -212,6 +232,15 @@
       >
         Roll!
       </button>
+      <div v-else-if="showRerollAboveStats" class="continue-above-stats reroll-above">
+        <button class="btn-reroll-top" :disabled="rerolling" @click="handleReroll">
+          &#9733; {{ myAbility.name }}: {{ rerollLabelTop }}
+          <span class="ability-uses-badge">({{ myAbilityUses }} use{{ myAbilityUses > 1 ? 's' : '' }} left)</span>
+        </button>
+        <button class="btn-continue-top" :disabled="rerolling" @click="handleContinueAfterRoll">
+          {{ rerolling ? 'Rerolling...' : 'Skip' }}
+        </button>
+      </div>
       <div v-else-if="showContinueAboveStats" class="continue-above-stats">
         <button class="btn-continue-top" @click="handleContinueAfterRoll">Continue</button>
       </div>
@@ -243,6 +272,7 @@
         :playerItems="currentPlayerItems"
         :itemDecided="itemDecided"
         :hideRollButton="true"
+        :hideRerollSection="true"
         :currentRound="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
@@ -457,16 +487,25 @@ export default {
     dddiceAvailable() {
       return isDddiceAvailable();
     },
+    showRerollAboveStats() {
+      if (!this.pendingRerollDecision) return false;
+      if (!this.myRollData) return false;
+      if (this.duelPhase === 'rolling' && (!this.offererRollData || !this.chooserRollData)) return false;
+      const ability = this.myAbility?.name;
+      const isRerollAbility = ['rally', 'gamble'].includes(ability);
+      return isRerollAbility && this.myAbilityUses > 0 && !this.abilityActivated && !this.myRollData?.rerolled;
+    },
+    rerollLabelTop() {
+      if (!this.myAbility) return '';
+      if (this.myAbility.name === 'rally') return 'Reroll lowest die?';
+      if (this.myAbility.name === 'gamble') return 'Reroll all dice?';
+      return this.myAbility.description;
+    },
     showContinueAboveStats() {
       if (!this.pendingRerollDecision) return false;
       if (!this.myRollData) return false;
-      // In simultaneous rolling, don't show until BOTH players have rolled
       if (this.duelPhase === 'rolling' && (!this.offererRollData || !this.chooserRollData)) return false;
-      // If reroll option is showing, continue is paired with it in DuelRollPhase
-      const ability = this.myAbility?.name;
-      const isRerollAbility = ['rally', 'gamble'].includes(ability);
-      const hasReroll = isRerollAbility && this.myAbilityUses > 0 && !this.abilityActivated && !this.myRollData?.rerolled;
-      return !hasReroll;
+      return !this.showRerollAboveStats;
     },
     playerDiceThemesComputed() {
       return {
@@ -728,6 +767,8 @@ export default {
         const usable = this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
         if (usable.length === 0) {
           this.itemDecided = true;
+        } else {
+          this.itemDecided = false;
         }
       } catch {
         this.currentCards = [];
@@ -822,6 +863,8 @@ export default {
         const usable = this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
         if (usable.length === 0) {
           this.itemDecided = true;
+        } else {
+          this.itemDecided = false;
         }
       } catch {
         this.myCards = [];
@@ -1172,11 +1215,12 @@ export default {
         this.abilityActivated = false;
         this.peekedCards = null;
         this.advanceAfterOffererRoll();
-      } else {
-        // Chooser done — skip resolving, advance directly to next round
+      } else if (this.duelPhase === 'rolling_chooser' || this.duelPhase === 'resolving') {
+        // Chooser done — advance to next round
         if (this.chooserRollData?.duel_result || this.offererRollData?.duel_result) this.isGameOver = true;
         this.advanceRound();
       }
+      // Ignore if already in 'choosing' or other non-rolling phase (stale callback)
     },
 
     async refreshKingdoms() {
@@ -1528,8 +1572,12 @@ export default {
         }
       }
     } else if (this.duelPhase === 'resolving') {
-      // Page refreshed into resolving — skip it, advance directly
-      this.advanceRound();
+      // Page refreshed into resolving — check for pending curses first
+      if (this.pendingCurses && this.pendingCurses.length > 0) {
+        this.showCurseSelection = true;
+      } else {
+        this.advanceRound();
+      }
     }
   },
   beforeUnmount() {
@@ -1615,7 +1663,7 @@ export default {
 
 /* Continue button above kingdom stats */
 .continue-above-stats {
-  text-align: centThe er;
+  text-align: center;
   margin-bottom: 10px;
 }
 
@@ -1632,10 +1680,50 @@ export default {
   transition: all 0.2s;
 }
 
-.btn-continue-top:hover {
+.btn-continue-top:hover:not(:disabled) {
   background: rgba(212, 168, 67, 0.25);
   box-shadow: 0 0 12px rgba(212, 168, 67, 0.3);
 }
+
+.btn-continue-top:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Reroll option above stats */
+.reroll-above {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.btn-reroll-top {
+  background: linear-gradient(135deg, #2a1a40, #4a2a6a);
+  color: #d4a0ff;
+  border: 2px solid #8a60c0;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+  line-height: 1.4;
+  width: 100%;
+  max-width: 340px;
+  text-align: center;
+}
+
+.btn-reroll-top:hover:not(:disabled) {
+  background: linear-gradient(135deg, #3a2a50, #5a3a7a);
+  box-shadow: 0 0 15px rgba(138, 96, 192, 0.4);
+  border-color: #b080e0;
+}
+
+.btn-reroll-top:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.reroll-above .ability-uses-badge {
+  font-size: 0.7rem;
+  opacity: 0.7;
+}
+
 
 .btn-roll.action-btn-top {
   display: block;

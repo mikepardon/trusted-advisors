@@ -54,6 +54,8 @@ import AdminRetention from './components/admin/AdminRetention.vue';
 import AdminIcons from './components/admin/AdminIcons.vue';
 import AdminCharacterLevelOptions from './components/admin/AdminCharacterLevelOptions.vue';
 import AuthCallback from './components/AuthCallback.vue';
+import TermsPage from './components/TermsPage.vue';
+import PrivacyPage from './components/PrivacyPage.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
 import ChooseAdvisors from './components/ChooseAdvisors.vue';
 import { fetchSoundUrls } from './sounds';
@@ -77,6 +79,8 @@ const routes = [
     { path: '/premium', component: PremiumPage, meta: { auth: true } },
     { path: '/tournaments', component: TournamentPage, meta: { auth: true } },
     { path: '/events/:id', component: RotatingEventPage, props: true, meta: { auth: true } },
+    { path: '/terms', component: TermsPage },
+    { path: '/privacy', component: PrivacyPage },
     { path: '/settings', component: SettingsPage },
     { path: '/game/:id', component: GameBoard, props: true, meta: { auth: true } },
     { path: '/game/:id/over', component: GameOver, props: true, meta: { auth: true } },
@@ -129,9 +133,12 @@ const auth = useAuth();
 const authReady = auth.fetchUser();
 
 router.beforeEach(async (to, from, next) => {
-    // Wait for initial auth check to complete before guarding
+    // Wait for initial auth check to complete before guarding (with timeout)
     if (auth.state.loading) {
-        await authReady;
+        await Promise.race([
+            authReady,
+            new Promise(resolve => setTimeout(resolve, 15000)),
+        ]);
     }
 
     const requiresAuth = to.matched.some(r => r.meta.auth);
@@ -148,6 +155,11 @@ router.beforeEach(async (to, from, next) => {
     } else {
         next();
     }
+});
+
+router.afterEach(() => {
+    const main = document.querySelector('#game-app > main');
+    if (main) main.scrollTop = 0;
 });
 
 fetchSoundUrls();

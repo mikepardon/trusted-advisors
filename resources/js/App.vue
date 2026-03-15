@@ -51,7 +51,11 @@
 
     <main :style="mainBgStyle">
       <div v-if="(homepageBgUrl && isHomePage) || (gameBgUrl && isGamePage)" class="main-bg-overlay"></div>
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="page" mode="out-in">
+          <component :is="Component" :key="$route.path" />
+        </transition>
+      </router-view>
     </main>
 
     <!-- Bottom nav -->
@@ -235,6 +239,7 @@ export default {
       this.duelGameBgUrl = res.data?.duel_game_background_url || null;
     }).catch(() => {});
     // fetchUser() is already called in app.js router guard; just wait for it
+    let checkAttempts = 0;
     const check = () => {
       if (!this.auth.state.loading && this.auth.state.user) {
         // Auto-show tutorial for first-time visitors (after login)
@@ -245,7 +250,8 @@ export default {
         this.fetchNotifCount();
         this.subscribeNotifChannel();
         initOneSignal().then(() => promptPushPermission());
-      } else if (this.auth.state.loading) {
+      } else if (this.auth.state.loading && checkAttempts < 300) {
+        checkAttempts++;
         setTimeout(check, 50);
       }
     };
@@ -1118,5 +1124,20 @@ box-shadow: 0 4px 0 #7a5a14, 0 0 20px rgba(240,192,80,0.45), inset 0 1px 0 rgba(
 #game-app > main > :not(.main-bg-overlay) {
   position: relative;
   z-index: 1;
+}
+
+/* Page transitions */
+.page-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.page-leave-active {
+  transition: opacity 0.15s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-leave-to {
+  opacity: 0;
 }
 </style>

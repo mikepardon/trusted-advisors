@@ -87,7 +87,7 @@
             {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
           </span>
         </div>
-        <!-- Pre-roll: show potential positive & negative effects -->
+        <!-- Pre-roll: show colored chips (no details) -->
         <template v-if="!hasRolled">
           <div v-if="c.positive_effects && Object.keys(c.positive_effects).length" class="effects-row card-effects">
             <span class="effects-label">On Success:</span>
@@ -95,9 +95,7 @@
               v-for="(val, stat) in c.positive_effects"
               :key="'pos-'+stat"
               class="effect-badge effect-positive"
-            >
-              {{ stat }}: +{{ val }}
-            </span>
+            >{{ stat }}</span>
           </div>
           <div v-if="c.negative_effects && Object.keys(c.negative_effects).length" class="effects-row card-effects">
             <span class="effects-label">On Failure:</span>
@@ -105,9 +103,7 @@
               v-for="(val, stat) in c.negative_effects"
               :key="'neg-'+stat"
               class="effect-badge effect-negative"
-            >
-              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-            </span>
+            >{{ stat }}</span>
           </div>
         </template>
       </div>
@@ -134,7 +130,7 @@
       </div>
 
       <!-- Post-roll reroll option (for rally/gamble abilities) -->
-      <div v-if="showRerollOption" class="reroll-section">
+      <div v-if="showRerollOption && !hideRerollSection" class="reroll-section">
         <button
           class="btn-reroll"
           :disabled="rerolling"
@@ -178,6 +174,7 @@ export default {
     playerItems: { type: Array, default: () => [] },
     itemDecided: { type: Boolean, default: false },
     hideRollButton: { type: Boolean, default: false },
+    hideRerollSection: { type: Boolean, default: false },
     currentRound: { type: Number, default: 0 },
   },
   emits: ['roll', 'use-ability', 'reroll', 'continue', 'use-item', 'skip-item'],
@@ -419,6 +416,8 @@ export default {
   border-radius: 4px;
   font-size: 0.8rem;
   text-transform: capitalize;
+  min-width: 14px;
+  min-height: 14px;
 }
 
 .effect-positive { background: rgba(74, 138, 58, 0.15); color: #4a8a3a; }

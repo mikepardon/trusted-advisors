@@ -84,7 +84,7 @@ class FriendshipController extends Controller
             'username' => 'required|string',
         ]);
 
-        $receiver = User::where('name', $validated['username'])->first();
+        $receiver = User::whereRaw('LOWER(name) = ?', [strtolower($validated['username'])])->first();
 
         if (!$receiver) {
             return response()->json(['message' => 'User not found'], 404);

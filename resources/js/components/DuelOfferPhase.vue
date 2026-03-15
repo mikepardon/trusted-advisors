@@ -47,9 +47,7 @@
                     v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
                     :key="'p-' + stat"
                     class="stat-chip chip-positive"
-                  >
-                    {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-                  </span>
+                  >{{ stat }}</span>
                 </div>
               </div>
 
@@ -60,9 +58,7 @@
                     v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
                     :key="'n-' + stat"
                     class="stat-chip chip-negative"
-                  >
-                    {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-                  </span>
+                  >{{ stat }}</span>
                 </div>
               </div>
             </div>
@@ -103,9 +99,7 @@
               v-for="(val, stat) in filterStatEffects(item.card.positive_effects)"
               :key="'p-' + stat"
               class="stat-chip chip-positive"
-            >
-              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-            </span>
+            ></span>
           </div>
         </div>
 
@@ -116,9 +110,7 @@
               v-for="(val, stat) in filterStatEffects(item.card.negative_effects)"
               :key="'n-' + stat"
               class="stat-chip chip-negative"
-            >
-              {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
-            </span>
+            ></span>
           </div>
         </div>
       </div>
@@ -380,6 +372,8 @@ export default {
   font-size: 0.72rem;
   font-weight: 600;
   text-transform: capitalize;
+  min-width: 14px;
+  min-height: 14px;
 }
 
 .chip-positive { background: rgba(39, 174, 96, 0.15); color: #4caf50; }

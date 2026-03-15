@@ -303,15 +303,15 @@
         <button class="mobile-menu-item" @click="showGameMenu = false; openTutorial()">Tutorial</button>
         <button class="mobile-menu-item" @click="showGameMenu = false; showSettingsModal = true">Settings</button>
         <button
-          v-if="isSinglePlayer || isPassAndPlay || (isOnline && gameData.game.turn_time_limit >= 86400)"
+          v-if="!isOnline || !isDuel"
           class="mobile-menu-item game-menu-leave"
           @click="showGameMenu = false; goHome()"
         >Go Home</button>
         <button
-          v-if="isOnline && gameData.game.turn_time_limit < 86400"
+          v-if="isOnline && isDuel"
           class="mobile-menu-item game-menu-quit"
           @click="showGameMenu = false; showQuitConfirm = true"
-        >Quit Game</button>
+        >Resign</button>
       </div>
     </div>
 
@@ -321,9 +321,9 @@
     <!-- Quit Game Confirmation -->
     <ConfirmModal
       :visible="showQuitConfirm"
-      title="Quit Game"
-      message="Are you sure? Your ELO will be affected."
-      confirm-text="Quit"
+      title="Resign"
+      message="Leaving now counts as a resignation. Your opponent wins and your ELO will be affected."
+      confirm-text="Resign"
       :dangerous="true"
       @confirm="forfeitGame"
       @cancel="showQuitConfirm = false"
@@ -1275,10 +1275,13 @@ export default {
       }
     },
     async goHome() {
-      try {
-        await axios.post(`/api/games/${this.id}/cancel`);
-      } catch {
-        // ignore cancel errors
+      // Duel games are paused and resumable — don't cancel
+      if (!this.isDuel) {
+        try {
+          await axios.post(`/api/games/${this.id}/cancel`);
+        } catch {
+          // ignore cancel errors
+        }
       }
       this.$router.push('/');
     },
@@ -1316,11 +1319,15 @@ export default {
       this.advanceRound();
     },
     async advanceRound() {
+      // Prevent concurrent advance calls (e.g. double-tap)
+      if (this._advancing) return;
+
       // Show curse selection first if there are pending curses
       if (this.pendingCurses && this.pendingCurses.length > 0) {
         this.showCurseSelection = true;
         return;
       }
+      this._advancing = true;
       try {
         const res = await axios.post(`/api/games/${this.id}/next-round`);
 
@@ -1370,6 +1377,8 @@ export default {
       } catch (e) {
         this.toast.error('Failed to advance: ' + (e.response?.data?.error || e.message));
         await this.fetchGame();
+      } finally {
+        this._advancing = false;
       }
     },
   },

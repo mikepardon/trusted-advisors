@@ -6,16 +6,21 @@ const DEFAULT_THEME = 'dddice-standard';
 // Shared token manager — fetches guest token once, reused by all instances
 let _sharedToken = null;
 let _sharedTokenPromise = null;
+let _tokenFailedUntil = 0;
 
 async function getSharedToken() {
   if (_sharedToken) return _sharedToken;
+  // Don't retry for 5 minutes after a failure (e.g. 502 from dddice API)
+  if (Date.now() < _tokenFailedUntil) throw new Error('dddice token fetch on cooldown');
   if (_sharedTokenPromise) return _sharedTokenPromise;
   _sharedTokenPromise = axios.get('/api/dddice/guest-token').then(res => {
     _sharedToken = res.data.token;
     _sharedTokenPromise = null;
+    _tokenFailedUntil = 0;
     return _sharedToken;
   }).catch(e => {
     _sharedTokenPromise = null;
+    _tokenFailedUntil = Date.now() + 5 * 60 * 1000;
     throw e;
   });
   return _sharedTokenPromise;

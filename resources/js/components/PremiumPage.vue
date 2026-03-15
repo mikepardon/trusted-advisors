@@ -49,6 +49,7 @@
     <!-- Pricing -->
     <div v-if="!isPremium && auth.state.user?.payments_enabled" class="pricing-section">
       <div class="price-card">
+        <h3 class="price-title">Trusted Advisors Premium</h3>
         <div v-if="priceLoading" class="price-loading">Loading price...</div>
         <template v-else-if="price">
           <div class="price-amount">
@@ -57,6 +58,9 @@
           <div class="price-interval" v-if="price.interval">
             per {{ price.interval_count > 1 ? price.interval_count + ' ' : '' }}{{ price.interval }}{{ price.interval_count > 1 ? 's' : '' }}
           </div>
+          <p class="price-description">
+            Auto-renewable subscription. Includes all premium features: detailed stats &amp; analytics, custom game creation, private lobbies, tournament mode, and exclusive cosmetics.
+          </p>
         </template>
         <button
           class="subscribe-btn"
@@ -65,7 +69,18 @@
         >
           {{ subscribing ? 'Processing...' : 'Subscribe Now' }}
         </button>
+        <p class="subscription-terms">
+          Payment will be charged to your Apple ID account at confirmation of purchase.
+          Subscription automatically renews unless auto-renew is turned off at least 24 hours before the end of the current period.
+        </p>
       </div>
+    </div>
+
+    <!-- Legal links -->
+    <div class="legal-links">
+      <router-link to="/terms">Terms of Use (EULA)</router-link>
+      <span class="legal-divider">|</span>
+      <router-link to="/privacy">Privacy Policy</router-link>
     </div>
   </div>
 </template>
@@ -356,5 +371,50 @@ export default {
 .subscribe-btn:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.price-title {
+  font-family: 'Cinzel', serif;
+  color: var(--accent-gold);
+  font-size: 1.1rem;
+  margin: 0 0 8px;
+}
+
+.price-description {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  line-height: 1.4;
+  margin: 8px 0 4px;
+}
+
+.subscription-terms {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  line-height: 1.4;
+  margin: 12px 0 0;
+  opacity: 0.7;
+}
+
+.legal-links {
+  text-align: center;
+  margin-top: 20px;
+  padding-bottom: 20px;
+}
+
+.legal-links a {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  text-decoration: underline;
+  transition: color 0.2s;
+}
+
+.legal-links a:hover {
+  color: var(--accent-gold);
+}
+
+.legal-divider {
+  color: var(--text-secondary);
+  margin: 0 8px;
+  opacity: 0.4;
 }
 </style>

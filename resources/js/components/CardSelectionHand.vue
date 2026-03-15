@@ -71,7 +71,7 @@
                       class="arrow-chip"
                       :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
                     >
-                      {{ formatStatName(arrow.stat) }}
+{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
                     </span>
                   </div>
                 </div>
@@ -85,7 +85,7 @@
                       class="arrow-chip"
                       :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
                     >
-                      {{ formatStatName(arrow.stat) }}
+{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
                     </span>
                   </div>
                 </div>
@@ -190,7 +190,7 @@
                 class="arrow-chip"
                 :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
               >
-                {{ formatStatName(arrow.stat) }}
+{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
               </span>
             </div>
           </div>
@@ -204,7 +204,7 @@
                 class="arrow-chip"
                 :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
               >
-                {{ formatStatName(arrow.stat) }}
+{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
               </span>
             </div>
           </div>
@@ -756,6 +756,8 @@ export default {
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: capitalize;
+  min-width: 14px;
+  min-height: 14px;
 }
 
 .arrow-up {

@@ -88,6 +88,7 @@ async function handleCallback(code, returnedState) {
     }
 
     state.user = res.data;
+    state.loading = false;
 
     // Register push subscription
     initOneSignal().then(() => promptPushPermission());
