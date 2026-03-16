@@ -1,8 +1,5 @@
 <template>
   <div class="auth-screen">
-    <div class="banner-wrap">
-      <img src="/images/banner.png" alt="Trusted Advisors" class="banner-img" />
-    </div>
 
     <div class="card-panel auth-panel">
       <p class="auth-desc">Sign in to begin your adventure</p>
