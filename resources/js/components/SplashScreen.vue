@@ -1,7 +1,6 @@
 <template>
   <div class="splash-overlay" :class="{ 'splash-fade-out': fadingOut }">
     <div class="splash-content">
-      <img src="/images/banner.png" alt="Trusted Advisors" class="splash-logo" />
       <div class="splash-progress-bg">
         <div class="splash-progress-bar" :style="{ width: progress + '%' }"></div>
       </div>

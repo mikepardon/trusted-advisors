@@ -36,12 +36,7 @@
           </div>
           <span class="player-level">Lv.{{ auth.state.user.level ?? 1 }}</span>
         </div>
-        <img
-          src="/images/logo.png"
-          alt="Trusted Advisors"
-          class="header-logo"
-          @click="$router.push('/')"
-        />
+        <span class="header-title" @click="$router.push('/')">Trusted Advisors</span>
         <div v-if="auth.state.user" class="header-right-icons">
           <span class="header-elo" @click="navSound(); $router.push('/leaderboard')"><AppIcon icon-key="ui_elo_trophy" /> {{ auth.state.user.elo_rating ?? 1000 }}</span>
           <span class="header-coins" @click="navSound(); $router.push('/shop')"><AppIcon icon-key="ui_coins" /> {{ auth.state.user.coins ?? 0 }}</span>
@@ -500,18 +495,19 @@ body {
   letter-spacing: 1px;
 }
 
-.header-logo {
-  max-width: 200px;
-  width: 100%;
-  height: auto;
+.header-title {
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--accent-gold);
   cursor: pointer;
-  transition: transform 0.2s ease, filter 0.2s ease;
-  filter: drop-shadow(0 2px 8px rgba(212, 168, 67, 0.3));
+  text-shadow: 0 2px 8px rgba(212, 168, 67, 0.3);
+  letter-spacing: 1px;
+  transition: text-shadow 0.2s ease;
 }
 
-.header-logo:hover {
-  transform: scale(1.03);
-  filter: drop-shadow(0 4px 16px rgba(212, 168, 67, 0.5));
+.header-title:hover {
+  text-shadow: 0 4px 16px rgba(212, 168, 67, 0.5);
 }
 
 .header-right-icons {
