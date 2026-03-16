@@ -12,6 +12,21 @@
     <!-- Settings Tab -->
     <div v-if="tab === 'settings'" class="tab-content">
       <div class="card-panel">
+        <h3 class="sub-title">Payment System</h3>
+        <div class="toggle-row">
+          <label class="toggle-label">Payments &amp; Premium</label>
+          <button
+            class="toggle-btn"
+            :class="settings.payments_enabled ? 'toggle-on' : 'toggle-off'"
+            @click="togglePayments"
+          >
+            {{ settings.payments_enabled ? 'ON' : 'OFF' }}
+          </button>
+          <span class="toggle-hint">{{ settings.payments_enabled ? 'Premium features, shop upsells, and payment options are visible to users.' : 'All payment-related UI is hidden from users.' }}</span>
+        </div>
+      </div>
+
+      <div class="card-panel">
         <h3 class="sub-title">In-App Review</h3>
         <div class="form-grid">
           <div class="form-group">
@@ -107,6 +122,7 @@ export default {
     return {
       tab: 'settings',
       settings: {
+        payments_enabled: true,
         premium_price_id: '',
         app_review_enabled: false,
         app_review_trigger: { type: 'games_completed', value: 3 },
@@ -133,11 +149,24 @@ export default {
       try {
         const res = await axios.get('/api/admin/payment-settings');
         this.settings = {
+          payments_enabled: res.data.payments_enabled ?? true,
           premium_price_id: res.data.premium_price_id || '',
           app_review_enabled: res.data.app_review_enabled || false,
           app_review_trigger: res.data.app_review_trigger || { type: 'games_completed', value: 3 },
         };
       } catch {}
+    },
+    async togglePayments() {
+      this.settings.payments_enabled = !this.settings.payments_enabled;
+      try {
+        await axios.put('/api/admin/payment-settings', {
+          payments_enabled: this.settings.payments_enabled,
+        });
+        this.toast.success(this.settings.payments_enabled ? 'Payments enabled' : 'Payments disabled');
+      } catch (e) {
+        this.settings.payments_enabled = !this.settings.payments_enabled;
+        this.toast.error('Failed to update');
+      }
     },
     async saveSettings() {
       this.saving = true;
@@ -226,6 +255,17 @@ export default {
 .list-actions { display: flex; gap: 4px; }
 .btn-sm { background: rgba(212, 168, 67, 0.15); border: 1px solid rgba(138, 106, 46, 0.3); color: var(--accent-gold); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
 .btn-danger { background: rgba(160, 48, 32, 0.15); color: #d05040; border-color: rgba(160, 48, 32, 0.3); }
+
+.toggle-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.toggle-label { color: var(--text-primary); font-size: 0.9rem; font-weight: 600; min-width: 140px; }
+.toggle-btn {
+  padding: 6px 18px; border-radius: 20px; border: 1px solid; cursor: pointer;
+  font-family: 'Cinzel', serif; font-size: 0.8rem; font-weight: 700; letter-spacing: 1px;
+  transition: all 0.2s;
+}
+.toggle-on { background: rgba(76, 175, 80, 0.15); border-color: rgba(76, 175, 80, 0.4); color: #4caf50; }
+.toggle-off { background: rgba(231, 76, 60, 0.15); border-color: rgba(231, 76, 60, 0.4); color: #e74c3c; }
+.toggle-hint { color: var(--text-secondary); font-size: 0.78rem; font-style: italic; }
 
 @media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
 </style>

@@ -46,6 +46,7 @@ class AdminPaymentController extends Controller
     public function settings(): JsonResponse
     {
         return response()->json([
+            'payments_enabled' => GameRule::getValue('payments_enabled', true),
             'premium_price_id' => config('services.stripe.premium_price_id'),
             'app_review_enabled' => GameRule::getValue('app_review_enabled', false),
             'app_review_trigger' => GameRule::getValue('app_review_trigger', ['type' => 'games_completed', 'value' => 3]),
@@ -55,11 +56,19 @@ class AdminPaymentController extends Controller
     public function updateSettings(Request $request): JsonResponse
     {
         $request->validate([
+            'payments_enabled' => 'sometimes|boolean',
             'app_review_enabled' => 'sometimes|boolean',
             'app_review_trigger' => 'sometimes|array',
             'app_review_trigger.type' => 'sometimes|string|in:games_completed,level',
             'app_review_trigger.value' => 'sometimes|integer|min:1',
         ]);
+
+        if ($request->has('payments_enabled')) {
+            GameRule::updateOrCreate(
+                ['key' => 'payments_enabled'],
+                ['value' => $request->payments_enabled]
+            );
+        }
 
         if ($request->has('app_review_enabled')) {
             GameRule::updateOrCreate(

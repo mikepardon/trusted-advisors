@@ -14,30 +14,10 @@
         </div>
         <!-- Desktop: horizontal bar -->
         <div class="stat-bar-bg">
-          <div class="danger-zone danger-low"></div>
-          <div class="safe-zone"></div>
           <div
             class="stat-bar"
             :style="{ width: (game[stat.key] / 20 * 100) + '%' }"
-            :class="[getBarClass(game[stat.key]), barFlashClass[stat.key], { 'bar-flat-right': getPreview(stat.key)?.pos > 0 }]"
-          ></div>
-          <!-- Positive preview (green) -->
-          <div
-            v-if="getPreview(stat.key)?.pos > 0"
-            class="stat-bar-preview preview-positive"
-            :style="{
-              left: Math.min(game[stat.key] / 20 * 100, 100) + '%',
-              width: Math.min(getPreview(stat.key).pos / 20 * 100, 100 - game[stat.key] / 20 * 100) + '%',
-            }"
-          ></div>
-          <!-- Negative preview (red) -->
-          <div
-            v-if="getPreview(stat.key)?.neg < 0"
-            class="stat-bar-preview preview-negative"
-            :style="{
-              left: Math.max((game[stat.key] + getPreview(stat.key).neg) / 20 * 100, 0) + '%',
-              width: Math.min(Math.abs(getPreview(stat.key).neg) / 20 * 100, game[stat.key] / 20 * 100) + '%',
-            }"
+            :class="[getBarClass(stat.key), barFlashClass[stat.key]]"
           ></div>
         </div>
         <!-- Mobile: radial progress with number centered inside -->
@@ -46,29 +26,9 @@
             <circle class="radial-bg" cx="24" cy="24" r="20" />
             <circle
               class="radial-fill"
-              :class="[getBarClass(game[stat.key]), barFlashClass[stat.key]]"
+              :class="[getBarClass(stat.key), barFlashClass[stat.key]]"
               cx="24" cy="24" r="20"
               :style="{ strokeDashoffset: radialOffset(game[stat.key]) }"
-            />
-            <!-- Positive preview arc (green) -->
-            <circle
-              v-if="getPreview(stat.key)?.pos > 0"
-              class="radial-preview radial-preview-positive"
-              cx="24" cy="24" r="20"
-              :style="{
-                strokeDasharray: radialPreviewDash(game[stat.key], getPreview(stat.key).pos),
-                strokeDashoffset: radialPreviewOffset(game[stat.key]),
-              }"
-            />
-            <!-- Negative preview arc (red) -->
-            <circle
-              v-if="getPreview(stat.key)?.neg < 0"
-              class="radial-preview radial-preview-negative"
-              cx="24" cy="24" r="20"
-              :style="{
-                strokeDasharray: radialPreviewDash(game[stat.key] + getPreview(stat.key).neg, Math.abs(getPreview(stat.key).neg)),
-                strokeDashoffset: radialPreviewOffset(game[stat.key] + getPreview(stat.key).neg),
-              }"
             />
           </svg>
           <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]"><AppIcon :type="stat.type" :value="stat.value" size="md" /></span>
@@ -193,10 +153,6 @@ export default {
         if (cv.bg_color) style['--ks-bg-color'] = cv.bg_color;
         if (cv.name_accent) style['--ks-name-accent'] = cv.name_accent;
         if (cv.total_accent) style['--ks-total-accent'] = cv.total_accent;
-        if (cv.bar_safe) {
-          style['--ks-bar-safe'] = cv.bar_safe;
-          style['--ks-bar-safe-stroke'] = this.extractSolidColor(cv.bar_safe, '#27ae60');
-        }
         if (cv.bar_caution) {
           style['--ks-bar-caution'] = cv.bar_caution;
           style['--ks-bar-caution-stroke'] = this.extractSolidColor(cv.bar_caution, '#d4a843');
@@ -315,11 +271,14 @@ export default {
       if (!pos && !neg) return null;
       return { pos, neg };
     },
-    getBarClass(value) {
-      if (value <= 2) return 'bar-critical';
-      if (value <= 5) return 'bar-danger-low';
-      if (value <= 8) return 'bar-caution-low';
-      return 'bar-safe';
+    getBarClass(statKey) {
+      const preview = this.getPreview(statKey);
+      if (preview) {
+        if (preview.pos > 0 && preview.neg < 0) return 'bar-preview-mixed';
+        if (preview.pos > 0) return 'bar-preview-positive';
+        if (preview.neg < 0) return 'bar-preview-negative';
+      }
+      return 'bar-default';
     },
     getValueClass(value) {
       if (value <= 2) return 'val-critical';
@@ -329,19 +288,6 @@ export default {
     radialOffset(value) {
       const circumference = 2 * Math.PI * 20; // ~125.66
       const pct = Math.min(value, 20) / 20;
-      return circumference * (1 - pct);
-    },
-    radialPreviewDash(startValue, amount) {
-      const circumference = 2 * Math.PI * 20;
-      const clampedStart = Math.max(0, Math.min(startValue, 20));
-      const clampedEnd = Math.min(clampedStart + amount, 20);
-      const arcLen = ((clampedEnd - clampedStart) / 20) * circumference;
-      return `${arcLen} ${circumference - arcLen}`;
-    },
-    radialPreviewOffset(startValue) {
-      const circumference = 2 * Math.PI * 20;
-      const pct = Math.max(0, Math.min(startValue, 20)) / 20;
-      // Rotate so arc starts at the end of the current value
       return circumference * (1 - pct);
     },
     extractSolidColor(value, fallback) {
@@ -439,30 +385,6 @@ export default {
   position: relative;
 }
 
-/* Danger zone indicator at low end only */
-.danger-zone {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  opacity: 0.3;
-}
-
-.danger-low {
-  left: 0;
-  width: 10%;
-  background: linear-gradient(to right, #e74c3c, transparent);
-}
-
-.safe-zone {
-  position: absolute;
-  left: 25%;
-  right: 0;
-  top: 0;
-  height: 100%;
-  opacity: 0.1;
-  background: #27ae60;
-}
-
 .stat-bar {
   height: 100%;
   border-radius: 4px;
@@ -471,56 +393,10 @@ export default {
   z-index: 1;
 }
 
-.bar-critical { background: #e74c3c; }
-.bar-danger-low { background: #e67e22; }
-.bar-caution-low { background: var(--ks-bar-caution, #d4a843); }
-.bar-safe { background: var(--ks-bar-safe, #27ae60); }
-
-.bar-flat-right {
-  border-top-right-radius: 0 !important;
-  border-bottom-right-radius: 0 !important;
-}
-
-.stat-bar-preview {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  border-radius: 0 4px 4px 0;
-  z-index: 2;
-  transition: left 0.25s ease, width 0.25s ease, opacity 0.25s ease;
-  animation: preview-pulse 1.5s ease-in-out infinite;
-}
-
-.preview-positive {
-  background: rgba(6, 120, 10, 1);
-  box-shadow: 0 0 4px rgba(6, 120, 10, 0.9);
-}
-
-.preview-negative {
-  background: rgba(249, 23, 0, 0.9);
-  box-shadow: 0 0 4px rgba(249, 23, 0, 0.8);
-}
-
-@keyframes preview-pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
-
-.radial-preview {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
-  transition: stroke-dasharray 0.25s ease, stroke-dashoffset 0.25s ease;
-  animation: preview-pulse 1.5s ease-in-out infinite;
-}
-
-.radial-preview-positive {
-  stroke: rgba(6, 120, 10, 1);
-}
-
-.radial-preview-negative {
-  stroke: rgba(249, 23, 0, 0.9);
-}
+.bar-default { background: var(--ks-bar-caution, #d4a843); transition: background 0.25s ease; }
+.bar-preview-positive { background: #4caf50; transition: background 0.25s ease; }
+.bar-preview-negative { background: #e74c3c; transition: background 0.25s ease; }
+.bar-preview-mixed { background: #e67e22; transition: background 0.25s ease; }
 
 .bar-flash-up {
   background: #4caf50 !important;
@@ -583,10 +459,10 @@ export default {
   transition: stroke-dashoffset 0.5s ease;
 }
 
-.radial-fill.bar-critical { stroke: #e74c3c; }
-.radial-fill.bar-danger-low { stroke: #e67e22; }
-.radial-fill.bar-caution-low { stroke: var(--ks-bar-caution-stroke, var(--ks-bar-caution, #d4a843)); }
-.radial-fill.bar-safe { stroke: var(--ks-bar-safe-stroke, var(--ks-bar-safe, #27ae60)); }
+.radial-fill.bar-default { stroke: var(--ks-bar-caution-stroke, var(--ks-bar-caution, #d4a843)); transition: stroke 0.25s ease; }
+.radial-fill.bar-preview-positive { stroke: #4caf50; transition: stroke 0.25s ease; }
+.radial-fill.bar-preview-negative { stroke: #e74c3c; transition: stroke 0.25s ease; }
+.radial-fill.bar-preview-mixed { stroke: #e67e22; transition: stroke 0.25s ease; }
 
 .radial-fill.bar-flash-up { stroke: #4caf50 !important; }
 .radial-fill.bar-flash-down { stroke: #e74c3c !important; }

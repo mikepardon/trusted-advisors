@@ -360,7 +360,7 @@ export default {
     this.mediaQuery.addEventListener('change', this.onMediaChange);
     if (this.isMobile && this.cards.length) {
       this.$nextTick(() => {
-        if (this.previewsEnabled) this.emitPreview(this.cards[0]);
+        this.emitPreview(this.cards[0]);
       });
     }
   },
@@ -380,7 +380,7 @@ export default {
       this.activeSlideIndex = swiper.activeIndex;
       if (this.selectedPositive !== null) return;
       const item = this.cards[swiper.activeIndex];
-      if (item && this.previewsEnabled) this.emitPreview(item);
+      if (item) this.emitPreview(item);
     },
     selectAndConfirm(handId) {
       if (this.selectedPositive !== null) return;
@@ -434,9 +434,7 @@ export default {
     onCardHover(item) {
       if (this.selectedPositive !== null) return;
       this.hoveredId = item.hand_id;
-      if (this.previewsEnabled) {
-        this.emitPreview(item);
-      }
+      this.emitPreview(item);
     },
     onCardLeave() {
       this.hoveredId = null;
@@ -536,7 +534,7 @@ export default {
       }
       if (this.isMobile && newCards?.length) {
         this.$nextTick(() => {
-          if (this.previewsEnabled) this.emitPreview(newCards[0]);
+          this.emitPreview(newCards[0]);
         });
       }
     },

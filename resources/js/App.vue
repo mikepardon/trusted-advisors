@@ -151,7 +151,7 @@ export default {
       && !navigator.userAgent.includes('WebToNative');
     return {
       showAppBanner: isIosSafari && !localStorage.getItem('app_banner_dismissed'),
-      showSplash: !window.location.pathname.startsWith('/admin') && !document.cookie.includes('splash_seen=1'),
+      showSplash: false,
       showHowToPlay: false,
       showNotifications: false,
       showMenuPopup: false,

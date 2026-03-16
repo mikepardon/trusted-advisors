@@ -45,29 +45,9 @@
               <circle class="radial-bg" cx="24" cy="24" r="20" />
               <circle
                 class="radial-fill"
-                :class="[getBarClass(kingdom[stat.key]), barFlashClass[kingdom.id + '-' + stat.key]]"
+                :class="[getDuelBarClass(kingdom, stat.key), barFlashClass[kingdom.id + '-' + stat.key]]"
                 cx="24" cy="24" r="20"
                 :style="{ strokeDashoffset: radialOffset(kingdom[stat.key]) }"
-              />
-              <!-- Positive preview arc -->
-              <circle
-                v-if="getPreview(kingdom, stat.key)?.pos > 0"
-                class="radial-preview radial-preview-positive"
-                cx="24" cy="24" r="20"
-                :style="{
-                  strokeDasharray: radialPreviewDash(kingdom[stat.key], getPreview(kingdom, stat.key).pos),
-                  strokeDashoffset: radialPreviewOffset(kingdom[stat.key]),
-                }"
-              />
-              <!-- Negative preview arc -->
-              <circle
-                v-if="getPreview(kingdom, stat.key)?.neg < 0"
-                class="radial-preview radial-preview-negative"
-                cx="24" cy="24" r="20"
-                :style="{
-                  strokeDasharray: radialPreviewDash(kingdom[stat.key] + getPreview(kingdom, stat.key).neg, Math.abs(getPreview(kingdom, stat.key).neg)),
-                  strokeDashoffset: radialPreviewOffset(kingdom[stat.key] + getPreview(kingdom, stat.key).neg),
-                }"
               />
             </svg>
             <span class="radial-icon"><AppIcon :type="stat.type" :value="stat.value" size="md" /></span>
@@ -336,20 +316,15 @@ export default {
       return (k.wealth || 0) + (k.influence || 0) + (k.security || 0)
         + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);
     },
-    getBarClass(value) {
-      if (value <= 2) return 'bar-critical';
-      if (value <= 5) return 'bar-danger';
-      if (value <= 8) return 'bar-caution';
-      if (value >= 20) return 'bar-max';
-      return 'bar-safe';
-    },
-    getPreview(kingdom, statKey) {
-      if (!this.previewEffects || kingdom.player_number !== this.myPlayerNumber) return null;
-      const pos = this.previewEffects.positive?.[statKey] || 0;
-      const neg = this.previewEffects.negative?.[statKey] || 0;
-      if (!pos && !neg) return null;
-      const current = kingdom[statKey] || 0;
-      return { pos, neg, current };
+    getDuelBarClass(kingdom, statKey) {
+      if (kingdom.player_number === this.myPlayerNumber && this.previewEffects) {
+        const pos = this.previewEffects.positive?.[statKey] || 0;
+        const neg = this.previewEffects.negative?.[statKey] || 0;
+        if (pos > 0 && neg < 0) return 'bar-preview-mixed';
+        if (pos > 0) return 'bar-preview-positive';
+        if (neg < 0) return 'bar-preview-negative';
+      }
+      return 'bar-default';
     },
     getValueClass(value) {
       if (value <= 2) return 'val-critical';
@@ -360,18 +335,6 @@ export default {
     radialOffset(value) {
       const circumference = 2 * Math.PI * 20;
       const pct = Math.min(value, 20) / 20;
-      return circumference * (1 - pct);
-    },
-    radialPreviewDash(startValue, amount) {
-      const circumference = 2 * Math.PI * 20;
-      const clampedStart = Math.max(0, Math.min(startValue, 20));
-      const clampedEnd = Math.min(clampedStart + amount, 20);
-      const arcLen = ((clampedEnd - clampedStart) / 20) * circumference;
-      return `${arcLen} ${circumference - arcLen}`;
-    },
-    radialPreviewOffset(startValue) {
-      const circumference = 2 * Math.PI * 20;
-      const pct = Math.max(0, Math.min(startValue, 20)) / 20;
       return circumference * (1 - pct);
     },
   },
@@ -571,34 +534,13 @@ export default {
   transition: stroke-dashoffset 0.5s ease;
 }
 
-.radial-fill.bar-critical { stroke: #e74c3c; }
-.radial-fill.bar-danger { stroke: #e67e22; }
-.radial-fill.bar-caution { stroke: var(--ks-bar-caution, #d4a843); }
-.radial-fill.bar-safe { stroke: var(--ks-bar-safe, #27ae60); }
-.radial-fill.bar-max { stroke: #d4a843; }
+.radial-fill.bar-default { stroke: var(--ks-bar-caution, #d4a843); transition: stroke 0.25s ease; }
+.radial-fill.bar-preview-positive { stroke: #4caf50; transition: stroke 0.25s ease; }
+.radial-fill.bar-preview-negative { stroke: #e74c3c; transition: stroke 0.25s ease; }
+.radial-fill.bar-preview-mixed { stroke: #e67e22; transition: stroke 0.25s ease; }
 
 .radial-fill.bar-flash-up { stroke: #4caf50 !important; }
 .radial-fill.bar-flash-down { stroke: #e74c3c !important; }
-
-.radial-preview {
-  fill: none;
-  stroke-width: 4;
-  stroke-linecap: round;
-  animation: preview-pulse 1.5s ease-in-out infinite;
-}
-
-.radial-preview-positive {
-  stroke: rgba(6, 120, 10, 0.9);
-}
-
-.radial-preview-negative {
-  stroke: rgba(249, 23, 0, 0.9);
-}
-
-@keyframes preview-pulse {
-  0%, 100% { opacity: 0.5; }
-  50% { opacity: 1; }
-}
 
 .flash-up {
   color: #4caf50 !important;

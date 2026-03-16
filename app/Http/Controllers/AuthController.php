@@ -179,9 +179,12 @@ class AuthController extends Controller
             $data['impersonator_name'] = $impersonator?->name ?? 'Admin';
         }
 
-        $data['payments_enabled'] = !empty(config('services.stripe.key'))
+        $paymentsToggle = \App\Models\GameRule::getValue('payments_enabled', true);
+        $data['payments_enabled'] = $paymentsToggle && (
+            !empty(config('services.stripe.key'))
             || !empty(config('services.apple.shared_secret'))
-            || !empty(config('services.google_play.package_name'));
+            || !empty(config('services.google_play.package_name'))
+        );
 
         $tournamentsRule = \App\Models\GameRule::where('key', 'tournaments_enabled')->first();
         $data['tournaments_enabled'] = $tournamentsRule ? (bool) $tournamentsRule->value : false;
