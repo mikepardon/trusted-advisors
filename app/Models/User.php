@@ -254,6 +254,8 @@ class User extends Authenticatable
 
     public function recordCoinTransaction(int $amount, string $type, string $source, ?int $referenceId = null, string $description = ''): void
     {
+        if ($amount === 0) return;
+
         CoinTransaction::create([
             'user_id' => $this->id,
             'amount' => $amount,

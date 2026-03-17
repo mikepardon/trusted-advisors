@@ -386,7 +386,7 @@ export default {
         this.loadingHistory = true;
         try {
           const res = await axios.get('/api/coin-transactions');
-          this.transactions = res.data.transactions;
+          this.transactions = (res.data.transactions || []).filter(tx => tx.amount !== 0);
         } catch {}
         this.loadingHistory = false;
       }
