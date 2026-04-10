@@ -19,7 +19,7 @@ class ProcessExpiredTurns extends Command
             ->where('game_type', 'duel')
             ->whereNotNull('turn_time_limit')
             ->whereNotNull('turn_started_at')
-            ->whereRaw("datetime(turn_started_at, '+' || turn_time_limit || ' seconds') <= datetime('now')")
+            ->whereRaw("turn_started_at + (turn_time_limit * interval '1 second') <= NOW()")
             ->get();
 
         $processed = 0;
