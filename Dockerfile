@@ -4,6 +4,13 @@ COPY package.json package-lock.json* ./
 RUN npm ci
 COPY vite.config.js ./
 COPY resources/ resources/
+
+ARG VITE_PUSHER_APP_KEY
+ARG VITE_PUSHER_HOST
+ARG VITE_PUSHER_PORT=443
+ARG VITE_PUSHER_SCHEME=https
+ARG VITE_PUSHER_APP_CLUSTER=mt1
+
 RUN npm run build
 
 FROM composer:2 AS composer
