@@ -333,7 +333,7 @@ export default {
     },
     subscribeNotifChannel() {
       const userId = this.auth.state.user?.id;
-      if (!userId) return;
+      if (!userId || !window.Echo) return;
       this._notifChannel = window.Echo.private(`user.${userId}`)
         .listen('GameInviteReceived', () => {
           this.notifCount++;
