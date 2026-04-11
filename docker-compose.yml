@@ -6,7 +6,7 @@ services:
     container_name: trusted-advisors-app
     labels:
       - traefik.enable=true
-      - traefik.http.routers.mpgames-app.rule=Host(`ta.mpgames.io`)
+      - traefik.http.routers.ta.mpgames-app.rule=Host(`ta.mpgames.io`)
     networks:
       - default
       - traefik
