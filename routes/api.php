@@ -87,7 +87,6 @@ Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
 Route::get('/app-icons', [AppIconController::class, 'publicIndex']);
 Route::get('/site-settings', [GameRuleController::class, 'siteSettings']);
 Route::get('/auth/me', [AuthController::class, 'me']);
-Route::post('/auth/callback', [AuthController::class, 'handleOAuthCallback']);
 
 // Public replay
 Route::get('/replays/{token}', [ReplayController::class, 'showPublic']);

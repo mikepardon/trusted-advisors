@@ -1,6 +1,12 @@
 <?php
 
+use App\Http\Controllers\Auth\OAuthController;
 use Illuminate\Support\Facades\Route;
+
+// OAuth handshake with the MPGames auth service (server-side, session-backed)
+Route::get('/auth/redirect', [OAuthController::class, 'redirect']);
+Route::get('/auth/callback', [OAuthController::class, 'callback']);
+Route::get('/auth/manage', [OAuthController::class, 'manage']);
 
 // Deep linking well-known files (must be above catch-all)
 Route::get('/.well-known/assetlinks.json', function () {

@@ -53,7 +53,6 @@ import AdminBalance from './components/admin/AdminBalance.vue';
 import AdminRetention from './components/admin/AdminRetention.vue';
 import AdminIcons from './components/admin/AdminIcons.vue';
 import AdminCharacterLevelOptions from './components/admin/AdminCharacterLevelOptions.vue';
-import AuthCallback from './components/AuthCallback.vue';
 import TermsPage from './components/TermsPage.vue';
 import PrivacyPage from './components/PrivacyPage.vue';
 import ChooseUsername from './components/ChooseUsername.vue';
@@ -63,7 +62,6 @@ import { useIcons } from './stores/icons';
 
 const routes = [
     { path: '/', component: GameSetup },
-    { path: '/auth/callback', component: AuthCallback },
     { path: '/choose-username', component: ChooseUsername, meta: { auth: true } },
     { path: '/choose-advisors', component: ChooseAdvisors, meta: { auth: true } },
     { path: '/campaigns', component: GameHistory, meta: { auth: true } },

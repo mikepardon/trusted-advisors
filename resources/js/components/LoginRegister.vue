@@ -30,18 +30,19 @@
 </template>
 
 <script>
-import { useAuth } from '../stores/auth';
 import { isNativeApp } from 'webtonative';
 
 export default {
   name: 'LoginRegister',
   setup() {
-    const auth = useAuth();
-    return { auth, isNativeApp };
+    return { isNativeApp };
   },
   methods: {
     signIn(provider = null) {
-      this.auth.startLogin(provider);
+      // The OAuth handshake is driven entirely server-side.
+      window.location.href = provider
+        ? `/auth/redirect?provider=${encodeURIComponent(provider)}`
+        : '/auth/redirect';
     },
   },
 };
