@@ -1,6 +1,6 @@
 <template>
   <div class="tournament-page">
-    <button class="back-btn" @click="$router.push('/')">&#8592; Back</button>
+    <button class="back-btn" @click="router.push('/')">&#8592; Back</button>
 
     <h1 class="page-title">Tournaments</h1>
 
@@ -37,7 +37,7 @@
       </div>
       <div class="form-group">
         <label>
-          <input type="checkbox" v-model="form.is_private" /> Private (password required)
+          <input v-model="form.is_private" type="checkbox" /> Private (password required)
         </label>
         <input v-if="form.is_private" v-model="form.password" type="text" class="form-input" placeholder="Lobby password..." />
       </div>
@@ -85,7 +85,7 @@
     </div>
 
     <!-- Tournament detail modal -->
-    <div v-if="detail" class="modal-overlay" @click.self="detail = null">
+    <div v-if="detail" class="modal-overlay" @click.self="detail = undefined">
       <div class="detail-modal">
         <h2 class="section-title">{{ detail.name }}</h2>
         <div class="detail-meta">
@@ -107,7 +107,7 @@
         </div>
 
         <!-- Bracket -->
-        <div v-if="detail.matches && detail.matches.length" class="detail-section">
+        <div v-if="detail.matches && detail.matches.length > 0" class="detail-section">
           <h3>Bracket</h3>
           <div v-for="round in bracketRounds" :key="round" class="bracket-round">
             <h4>Round {{ round }}</h4>
@@ -119,7 +119,7 @@
               <div :class="['match-player', { winner: m.winner_id === m.player2_id }]">
                 {{ m.player2?.name || 'BYE' }}
               </div>
-              <button v-if="m.game && m.status === 'in_progress' && isMyMatch(m)" class="play-btn" @click="$router.push('/game/' + m.game.id); detail = null">
+              <button v-if="m.game && m.status === 'in_progress' && isMyMatch(m)" class="play-btn" @click="router.push('/game/' + m.game.id); detail = undefined">
                 Play
               </button>
               <span v-else-if="m.status === 'completed'" class="match-done">&#10003;</span>
@@ -137,17 +137,17 @@
           {{ starting ? 'Starting...' : 'Start Tournament' }}
         </button>
 
-        <button class="cancel-btn close-btn" @click="detail = null">Close</button>
+        <button class="cancel-btn close-btn" @click="detail = undefined">Close</button>
       </div>
     </div>
 
     <!-- Password modal -->
-    <div v-if="passwordModal" class="modal-overlay" @click.self="passwordModal = null">
+    <div v-if="passwordModal" class="modal-overlay" @click.self="passwordModal = undefined">
       <div class="modal-box">
         <h3>Enter Password</h3>
         <input v-model="joinPassword" type="text" class="form-input" placeholder="Password..." @keyup.enter="doJoin" />
         <div class="form-actions">
-          <button class="cancel-btn" @click="passwordModal = null">Cancel</button>
+          <button class="cancel-btn" @click="passwordModal = undefined">Cancel</button>
           <button class="btn-primary" @click="doJoin">Join</button>
         </div>
       </div>
@@ -155,144 +155,218 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import { useRouter } from "vue-router";
+import axios, { isAxiosError } from "axios";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'TournamentPage',
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast };
-  },
-  data() {
-    return {
-      tab: 'open',
-      loading: true,
-      openTournaments: [],
-      myTournaments: [],
-      showCreate: false,
-      creating: false,
-      starting: false,
-      form: {
-        name: '',
-        max_players: 4,
-        game_type: 'duel',
-        is_private: false,
-        password: '',
-      },
-      detail: null,
-      passwordModal: null,
-      joinPassword: '',
-    };
-  },
-  computed: {
-    bracketRounds() {
-      if (!this.detail?.matches) return [];
-      const rounds = [...new Set(this.detail.matches.map(m => m.bracket_round))];
-      return rounds.sort((a, b) => a - b);
-    },
-  },
-  async mounted() {
-    await this.fetchOpen();
-  },
-  methods: {
-    async fetchOpen() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/tournaments');
-        this.openTournaments = res.data;
-      } catch {}
-      this.loading = false;
-    },
-    async fetchMine() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/tournaments/mine');
-        this.myTournaments = res.data;
-      } catch {}
-      this.loading = false;
-    },
-    async viewTournament(id) {
-      try {
-        const res = await axios.get(`/api/tournaments/${id}`);
-        this.detail = res.data;
-      } catch (e) {
-        this.toast.error('Failed to load tournament.');
-      }
-    },
-    matchesForRound(round) {
-      return (this.detail?.matches || []).filter(m => m.bracket_round === round);
-    },
-    isMyMatch(match) {
-      const uid = this.auth.state.user?.id;
-      return match.player1_id === uid || match.player2_id === uid;
-    },
-    async createTournament() {
-      this.creating = true;
-      try {
-        const payload = { ...this.form };
-        if (!payload.is_private) delete payload.password;
-        const res = await axios.post('/api/tournaments', payload);
-        this.showCreate = false;
-        this.detail = res.data;
-        await this.fetchOpen();
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to create tournament.');
-      }
-      this.creating = false;
-    },
-    joinTournament(tournament) {
-      if (tournament.is_private) {
-        this.passwordModal = tournament;
-        this.joinPassword = '';
-      } else {
-        this.doJoinDirect(tournament.id);
-      }
-    },
-    async doJoin() {
-      const id = this.passwordModal?.id;
-      if (!id) return;
-      try {
-        await axios.post(`/api/tournaments/${id}/join`, { password: this.joinPassword });
-        this.passwordModal = null;
-        this.joinPassword = '';
-        await this.fetchOpen();
-        this.viewTournament(id);
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to join.');
-      }
-    },
-    async doJoinDirect(id) {
-      try {
-        await axios.post(`/api/tournaments/${id}/join`);
-        await this.fetchOpen();
-        this.viewTournament(id);
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to join.');
-      }
-    },
-    async startTournament() {
-      if (!this.detail) return;
-      this.starting = true;
-      try {
-        const res = await axios.post(`/api/tournaments/${this.detail.id}/start`);
-        this.detail = res.data;
-        await this.fetchOpen();
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to start tournament.');
-      }
-      this.starting = false;
-    },
-    ordinal(n) {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    },
-  },
-};
+interface TournamentCreator {
+  name: string | undefined;
+}
+
+interface TournamentSummary {
+  id: number;
+  name: string;
+  is_private: boolean;
+  status: string;
+  game_type: string;
+  max_players: number;
+  participants_count: number;
+  creator: TournamentCreator | undefined;
+}
+
+interface TournamentParticipant {
+  id: number;
+  user: { name: string | undefined } | undefined;
+  seed: number | undefined;
+  final_placement: number | undefined;
+}
+
+interface TournamentMatch {
+  id: number;
+  bracket_round: number;
+  status: string;
+  winner_id: number | undefined;
+  player1_id: number | undefined;
+  player2_id: number | undefined;
+  player1: { name: string | undefined } | undefined;
+  player2: { name: string | undefined } | undefined;
+  game: { id: number } | undefined;
+}
+
+interface TournamentDetail {
+  id: number;
+  name: string;
+  status: string;
+  game_type: string;
+  creator_id: number;
+  creator: TournamentCreator | undefined;
+  participants: TournamentParticipant[];
+  matches: TournamentMatch[] | undefined;
+}
+
+interface TournamentForm {
+  name: string;
+  max_players: number;
+  game_type: string;
+  is_private: boolean;
+  password: string;
+}
+
+const auth = useAuth();
+const toast = useToast();
+const router = useRouter();
+
+const tab = ref<"open" | "mine">("open");
+const loading = ref(true);
+const openTournaments = ref<TournamentSummary[]>([]);
+const myTournaments = ref<TournamentSummary[]>([]);
+const showCreate = ref(false);
+const creating = ref(false);
+const starting = ref(false);
+const form = reactive<TournamentForm>({
+  name: "",
+  max_players: 4,
+  game_type: "duel",
+  is_private: false,
+  password: "",
+});
+const detail = ref<TournamentDetail | undefined>(undefined);
+const passwordModal = ref<TournamentSummary | undefined>(undefined);
+const joinPassword = ref("");
+
+const bracketRounds = computed<number[]>(() => {
+  const matches = detail.value?.matches;
+  if (!matches) {
+    return [];
+  }
+  const rounds = [...new Set(matches.map((match) => match.bracket_round))];
+  return rounds.toSorted((first, second) => first - second);
+});
+
+function errorMessage(error: unknown, fallback: string): string {
+  return isAxiosError<{ error?: string }>(error) ? (error.response?.data?.error ?? fallback) : fallback;
+}
+
+async function fetchOpen(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<TournamentSummary[]>("/api/tournaments");
+    openTournaments.value = response.data;
+  } catch {
+    // ignore
+  }
+  loading.value = false;
+}
+
+async function fetchMine(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<TournamentSummary[]>("/api/tournaments/mine");
+    myTournaments.value = response.data;
+  } catch {
+    // ignore
+  }
+  loading.value = false;
+}
+
+async function viewTournament(id: number): Promise<void> {
+  try {
+    const response = await axios.get<TournamentDetail>(`/api/tournaments/${id}`);
+    detail.value = response.data;
+  } catch {
+    toast.error("Failed to load tournament.");
+  }
+}
+
+function matchesForRound(round: number): TournamentMatch[] {
+  return (detail.value?.matches ?? []).filter((match) => match.bracket_round === round);
+}
+
+function isMyMatch(match: TournamentMatch): boolean {
+  const userId = auth.state.user?.id;
+  return match.player1_id === userId || match.player2_id === userId;
+}
+
+async function createTournament(): Promise<void> {
+  creating.value = true;
+  try {
+    const payload: Partial<TournamentForm> = { ...form };
+    if (!payload.is_private) {
+      delete payload.password;
+    }
+    const response = await axios.post<TournamentDetail>("/api/tournaments", payload);
+    showCreate.value = false;
+    detail.value = response.data;
+    await fetchOpen();
+  } catch (error) {
+    toast.error(errorMessage(error, "Failed to create tournament."));
+  }
+  creating.value = false;
+}
+
+function joinTournament(tournament: TournamentSummary): void {
+  if (tournament.is_private) {
+    passwordModal.value = tournament;
+    joinPassword.value = "";
+  } else {
+    doJoinDirect(tournament.id);
+  }
+}
+
+async function doJoin(): Promise<void> {
+  const id = passwordModal.value?.id;
+  if (!id) {
+    return;
+  }
+  try {
+    await axios.post(`/api/tournaments/${id}/join`, { password: joinPassword.value });
+    passwordModal.value = undefined;
+    joinPassword.value = "";
+    await fetchOpen();
+    viewTournament(id);
+  } catch (error) {
+    toast.error(errorMessage(error, "Failed to join."));
+  }
+}
+
+async function doJoinDirect(id: number): Promise<void> {
+  try {
+    await axios.post(`/api/tournaments/${id}/join`);
+    await fetchOpen();
+    viewTournament(id);
+  } catch (error) {
+    toast.error(errorMessage(error, "Failed to join."));
+  }
+}
+
+async function startTournament(): Promise<void> {
+  const current = detail.value;
+  if (!current) {
+    return;
+  }
+  starting.value = true;
+  try {
+    const response = await axios.post<TournamentDetail>(`/api/tournaments/${current.id}/start`);
+    detail.value = response.data;
+    await fetchOpen();
+  } catch (error) {
+    toast.error(errorMessage(error, "Failed to start tournament."));
+  }
+  starting.value = false;
+}
+
+function ordinal(value: number): string {
+  const suffixes = ["th", "st", "nd", "rd"];
+  const remainder = value % 100;
+  return value + (suffixes[(remainder - 20) % 10] || suffixes[remainder] || suffixes[0]);
+}
+
+onMounted(async () => {
+  await fetchOpen();
+});
 </script>
 
 <style scoped>

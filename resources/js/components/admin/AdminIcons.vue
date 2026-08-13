@@ -27,84 +27,94 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import IconPicker from './IconPicker.vue';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import axios from "axios";
+import { computed, onMounted, ref } from "vue";
+import IconPicker from "./IconPicker.vue";
+import { useToast } from "../../stores/toast";
 
-const CATEGORY_LABELS = {
-  navigation: 'Navigation',
-  stats: 'Stats',
-  ui: 'UI',
+interface AppIcon {
+  id: number;
+  key: string;
+  label: string;
+  category: string;
+  icon_type: string;
+  icon_value: string;
+  _saving: boolean;
+  _saved: boolean;
+}
+
+interface IconGroup {
+  category: string;
+  label: string;
+  icons: AppIcon[];
+}
+
+const CATEGORY_LABELS: Record<string, string> = {
+  navigation: "Navigation",
+  stats: "Stats",
+  ui: "UI",
 };
 
-export default {
-  name: 'AdminIcons',
-  components: { IconPicker },
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return {
-      icons: [],
-      loading: true,
-      saveTimers: {},
-    };
-  },
-  computed: {
-    groupedIcons() {
-      const groups = {};
-      for (const icon of this.icons) {
-        if (!groups[icon.category]) {
-          groups[icon.category] = {
-            category: icon.category,
-            label: CATEGORY_LABELS[icon.category] || icon.category,
-            icons: [],
-          };
-        }
-        groups[icon.category].icons.push(icon);
-      }
-      return Object.values(groups);
-    },
-  },
-  async mounted() {
-    await this.loadIcons();
-  },
-  methods: {
-    async loadIcons() {
-      this.loading = true;
-      try {
-        const { data } = await axios.get('/api/admin/app-icons');
-        this.icons = data.map(i => ({ ...i, _saving: false, _saved: false }));
-      } catch {
-        this.toast.error('Failed to load icons');
-      }
-      this.loading = false;
-    },
-    updateIcon(icon, field, value) {
-      icon[field] = value;
-      // Debounce save
-      if (this.saveTimers[icon.id]) clearTimeout(this.saveTimers[icon.id]);
-      this.saveTimers[icon.id] = setTimeout(() => this.saveIcon(icon), 500);
-    },
-    async saveIcon(icon) {
-      icon._saving = true;
-      icon._saved = false;
-      try {
-        await axios.put(`/api/admin/app-icons/${icon.id}`, {
-          icon_type: icon.icon_type,
-          icon_value: icon.icon_value,
-        });
-        icon._saving = false;
-        icon._saved = true;
-        setTimeout(() => { icon._saved = false; }, 2000);
-      } catch {
-        icon._saving = false;
-        this.toast.error(`Failed to save ${icon.label}`);
-      }
-    },
-  },
-};
+const toast = useToast();
+
+const icons = ref<AppIcon[]>([]);
+const loading = ref(true);
+const saveTimers: Record<number, ReturnType<typeof setTimeout>> = {};
+
+const groupedIcons = computed<IconGroup[]>(() => {
+  const groups: Record<string, IconGroup> = {};
+  for (const icon of icons.value) {
+    if (!Object.hasOwn(groups, icon.category)) {
+      groups[icon.category] = {
+        category: icon.category,
+        label: CATEGORY_LABELS[icon.category] ?? icon.category,
+        icons: [],
+      };
+    }
+    groups[icon.category].icons.push(icon);
+  }
+  return Object.values(groups);
+});
+
+async function loadIcons(): Promise<void> {
+  loading.value = true;
+  try {
+    const { data } = await axios.get<AppIcon[]>("/api/admin/app-icons");
+    icons.value = data.map(icon => ({ ...icon, _saving: false, _saved: false }));
+  } catch {
+    toast.error("Failed to load icons");
+  }
+  loading.value = false;
+}
+
+async function saveIcon(icon: AppIcon): Promise<void> {
+  icon._saving = true;
+  icon._saved = false;
+  try {
+    await axios.put(`/api/admin/app-icons/${icon.id}`, {
+      icon_type: icon.icon_type,
+      icon_value: icon.icon_value,
+    });
+    icon._saving = false;
+    icon._saved = true;
+    setTimeout(() => { icon._saved = false; }, 2000);
+  } catch {
+    icon._saving = false;
+    toast.error(`Failed to save ${icon.label}`);
+  }
+}
+
+function updateIcon(icon: AppIcon, field: "icon_value" | "icon_type", value: string): void {
+  icon[field] = value;
+  // Debounce save
+  if (Object.hasOwn(saveTimers, icon.id)) clearTimeout(saveTimers[icon.id]);
+  saveTimers[icon.id] = setTimeout(() => saveIcon(icon), 500);
+}
+
+onMounted(async () => {
+  await loadIcons();
+});
 </script>
 
 <style scoped>

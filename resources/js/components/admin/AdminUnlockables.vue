@@ -93,77 +93,138 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'AdminUnlockables',
-  data() {
-    return {
-      unlockables: [],
-      characters: [],
-      items: [],
-      diceThemes: [],
-      kingdomStyles: [],
-      achievements: [],
-      showModal: false,
-      editing: null,
-      formError: '',
-      form: { type: 'character', entity_id: '', unlock_method: 'level', unlock_value: 1, cash_price_cents: null, stripe_price_id: '', apple_product_id: '', google_product_id: '' },
-    };
-  },
-  computed: {
-    entityOptions() {
-      if (this.form.type === 'character') return this.characters;
-      if (this.form.type === 'dice_theme') return this.diceThemes;
-      if (this.form.type === 'kingdom_style') return this.kingdomStyles;
-      return this.items;
-    },
-  },
-  async mounted() { this.load(); },
-  methods: {
-    async load() {
-      const res = await axios.get('/api/admin/unlockables');
-      this.unlockables = res.data.unlockables;
-      this.characters = res.data.characters;
-      this.items = res.data.items;
-      this.diceThemes = res.data.dice_themes || [];
-      this.kingdomStyles = res.data.kingdom_styles || [];
-      this.achievements = res.data.achievements;
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = { type: 'character', entity_id: '', unlock_method: 'level', unlock_value: 1, cash_price_cents: null, stripe_price_id: '', apple_product_id: '', google_product_id: '' };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(u) {
-      this.editing = u.id;
-      this.form = { type: u.type, entity_id: u.entity_id, unlock_method: u.unlock_method, unlock_value: u.unlock_value, cash_price_cents: u.cash_price_cents, stripe_price_id: u.stripe_price_id || '', apple_product_id: u.apple_product_id || '', google_product_id: u.google_product_id || '' };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/unlockables/${this.editing}`, this.form);
-        } else {
-          await axios.post('/api/admin/unlockables', this.form);
-        }
-        this.showModal = false;
-        this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.error || e.response?.data?.message || 'Error';
-      }
-    },
-    async deleteItem(u) {
-      if (!confirm('Delete this unlockable?')) return;
-      await axios.delete(`/api/admin/unlockables/${u.id}`);
-      this.load();
-    },
-  },
-};
+interface Unlockable {
+  id: number;
+  entity_name: string;
+  entity_id: number;
+  type: string;
+  unlock_method: string;
+  unlock_value: number | string;
+  unlock_label: string;
+  cash_price_cents: number | undefined;
+  stripe_price_id: string | undefined;
+  apple_product_id: string | undefined;
+  google_product_id: string | undefined;
+}
+
+interface EntityOption {
+  id: number;
+  name: string;
+}
+
+interface UnlockableForm {
+  type: string;
+  entity_id: number | string;
+  unlock_method: string;
+  unlock_value: number | string;
+  cash_price_cents: number | undefined;
+  stripe_price_id: string;
+  apple_product_id: string;
+  google_product_id: string;
+}
+
+interface UnlockablesResponse {
+  unlockables: Unlockable[];
+  characters: EntityOption[];
+  items: EntityOption[];
+  dice_themes?: EntityOption[];
+  kingdom_styles?: EntityOption[];
+  achievements: EntityOption[];
+}
+
+function emptyForm(): UnlockableForm {
+  return { type: "character", entity_id: "", unlock_method: "level", unlock_value: 1, cash_price_cents: undefined, stripe_price_id: "", apple_product_id: "", google_product_id: "" };
+}
+
+const unlockables = ref<Unlockable[]>([]);
+const characters = ref<EntityOption[]>([]);
+const items = ref<EntityOption[]>([]);
+const diceThemes = ref<EntityOption[]>([]);
+const kingdomStyles = ref<EntityOption[]>([]);
+const achievements = ref<EntityOption[]>([]);
+const showModal = ref(false);
+const editing = ref<number | undefined>(undefined);
+const formError = ref("");
+const form = reactive<UnlockableForm>(emptyForm());
+
+const entityOptions = computed<EntityOption[]>(() => {
+  if (form.type === "character") {
+    return characters.value;
+  }
+  if (form.type === "dice_theme") {
+    return diceThemes.value;
+  }
+  if (form.type === "kingdom_style") {
+    return kingdomStyles.value;
+  }
+  return items.value;
+});
+
+async function load(): Promise<void> {
+  const response = await axios.get<UnlockablesResponse>("/api/admin/unlockables");
+  unlockables.value = response.data.unlockables;
+  characters.value = response.data.characters;
+  items.value = response.data.items;
+  diceThemes.value = response.data.dice_themes ?? [];
+  kingdomStyles.value = response.data.kingdom_styles ?? [];
+  achievements.value = response.data.achievements;
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, emptyForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(u: Unlockable): void {
+  editing.value = u.id;
+  Object.assign(form, {
+    type: u.type,
+    entity_id: u.entity_id,
+    unlock_method: u.unlock_method,
+    unlock_value: u.unlock_value,
+    cash_price_cents: u.cash_price_cents,
+    stripe_price_id: u.stripe_price_id ?? "",
+    apple_product_id: u.apple_product_id ?? "",
+    google_product_id: u.google_product_id ?? "",
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  try {
+    if (editing.value) {
+      await axios.put(`/api/admin/unlockables/${editing.value}`, form);
+    } else {
+      await axios.post("/api/admin/unlockables", form);
+    }
+    showModal.value = false;
+    await load();
+  } catch (error) {
+    formError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.error ?? error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function deleteItem(u: Unlockable): Promise<void> {
+  if (!confirm("Delete this unlockable?")) {
+    return;
+  }
+  await axios.delete(`/api/admin/unlockables/${u.id}`);
+  await load();
+}
+
+onMounted(() => {
+  load();
+});
 </script>
 
 <style scoped>

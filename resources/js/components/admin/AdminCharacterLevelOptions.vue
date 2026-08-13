@@ -87,7 +87,7 @@
             </div>
             <div class="form-group">
               <label>
-                <input type="checkbox" v-model="form.is_active" /> Active
+                <input v-model="form.is_active" type="checkbox" /> Active
               </label>
             </div>
 
@@ -123,152 +123,203 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'AdminCharacterLevelOptions',
-  data() {
-    return {
-      options: [],
-      characters: [],
-      searchQuery: '',
-      showModal: false,
-      editing: null,
-      formError: '',
-      form: this.defaultForm(),
-      configStat: 'wealth',
-      configValue: 1,
-      configItemId: null,
-      configCurseId: null,
-      maxAvailableLevel: 7,
-    };
-  },
-  computed: {
-    filteredOptions() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.options;
-      return this.options.filter(o =>
-        o.name.toLowerCase().includes(q) ||
-        o.type.toLowerCase().includes(q) ||
-        (o.description || '').toLowerCase().includes(q)
-      );
-    },
-    statOptions() {
-      return ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-    },
-  },
-  async mounted() {
-    await this.load();
-    try {
-      const res = await axios.get('/api/admin/characters');
-      this.characters = res.data;
-    } catch (e) { /* ignore */ }
-    try {
-      const rulesRes = await axios.get('/api/admin/game-rules');
-      const config = rulesRes.data?.advisor_level_config;
-      if (config) {
-        const parsed = typeof config === 'string' ? JSON.parse(config) : config;
-        this.maxAvailableLevel = (parsed.max_level || 8) - 1;
-      }
-    } catch (e) { /* ignore */ }
-  },
-  methods: {
-    defaultForm() {
-      return {
-        name: '',
-        type: 'bump_dice_face',
-        config: null,
-        available_at_level: 1,
-        character_id: null,
-        is_active: true,
-        max_selections: 0,
-        sort_order: 0,
-        description: '',
-        icon: '',
-      };
-    },
-    async load() {
-      const res = await axios.get('/api/admin/character-level-options');
-      this.options = res.data;
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = this.defaultForm();
-      this.configStat = 'wealth';
-      this.configValue = 1;
-      this.configItemId = null;
-      this.configCurseId = null;
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(opt) {
-      this.editing = opt.id;
-      this.form = {
-        name: opt.name,
-        type: opt.type,
-        config: opt.config,
-        available_at_level: opt.available_at_level,
-        character_id: opt.character_id,
-        is_active: opt.is_active,
-        max_selections: opt.max_selections,
-        sort_order: opt.sort_order,
-        description: opt.description || '',
-        icon: opt.icon || '',
-      };
-      if (opt.type === 'passive_stat_bonus' && opt.config) {
-        this.configStat = opt.config.stat || 'wealth';
-        this.configValue = opt.config.value || 1;
-      }
-      if (opt.type === 'start_with_item' && opt.config) {
-        this.configItemId = opt.config.item_id || null;
-      }
-      if (opt.type === 'start_with_curse' && opt.config) {
-        this.configCurseId = opt.config.curse_id || null;
-      }
-      this.formError = '';
-      this.showModal = true;
-    },
-    buildConfig() {
-      if (this.form.type === 'passive_stat_bonus') {
-        return { stat: this.configStat, value: this.configValue };
-      }
-      if (this.form.type === 'start_with_item') {
-        if (this.configItemId) {
-          return { item_id: this.configItemId };
-        }
-        return { random: true };
-      }
-      if (this.form.type === 'start_with_curse') {
-        if (this.configCurseId) {
-          return { curse_id: this.configCurseId };
-        }
-        return { random: true };
-      }
-      return null;
-    },
-    async save() {
-      this.formError = '';
-      const data = { ...this.form, config: this.buildConfig() };
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/character-level-options/${this.editing}`, data);
-        } else {
-          await axios.post('/api/admin/character-level-options', data);
-        }
-        this.showModal = false;
-        await this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.message || e.response?.data?.error || 'Error saving';
-      }
-    },
-    async deleteOption(opt) {
-      if (!confirm(`Delete "${opt.name}"?`)) return;
-      await axios.delete(`/api/admin/character-level-options/${opt.id}`);
-      await this.load();
-    },
-  },
-};
+interface OptionConfig {
+  stat?: string;
+  value?: number;
+  item_id?: number;
+  curse_id?: number;
+  random?: boolean;
+}
+
+interface CharacterOption {
+  id: number;
+  name: string;
+}
+
+interface LevelOption {
+  id: number;
+  name: string;
+  type: string;
+  config: OptionConfig | undefined;
+  available_at_level: number;
+  character_id: number | undefined;
+  character: CharacterOption | undefined;
+  is_active: boolean;
+  max_selections: number;
+  sort_order: number;
+  description: string | undefined;
+  icon: string | undefined;
+}
+
+interface LevelOptionForm {
+  name: string;
+  type: string;
+  config: OptionConfig | undefined;
+  available_at_level: number;
+  character_id: number | undefined;
+  is_active: boolean;
+  max_selections: number;
+  sort_order: number;
+  description: string;
+  icon: string;
+}
+
+function defaultForm(): LevelOptionForm {
+  return {
+    name: "",
+    type: "bump_dice_face",
+    config: undefined,
+    available_at_level: 1,
+    character_id: undefined,
+    is_active: true,
+    max_selections: 0,
+    sort_order: 0,
+    description: "",
+    icon: "",
+  };
+}
+
+const options = ref<LevelOption[]>([]);
+const characters = ref<CharacterOption[]>([]);
+const searchQuery = ref("");
+const showModal = ref(false);
+const editing = ref<number | undefined>(undefined);
+const formError = ref("");
+const form = reactive<LevelOptionForm>(defaultForm());
+const configStat = ref("wealth");
+const configValue = ref(1);
+const configItemId = ref<number | undefined>(undefined);
+const configCurseId = ref<number | undefined>(undefined);
+const maxAvailableLevel = ref(7);
+
+const filteredOptions = computed<LevelOption[]>(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) {
+    return options.value;
+  }
+  return options.value.filter(option =>
+    option.name.toLowerCase().includes(query) ||
+    option.type.toLowerCase().includes(query) ||
+    (option.description || "").toLowerCase().includes(query),
+  );
+});
+
+const statOptions = computed<string[]>(() =>
+  ["wealth", "influence", "security", "religion", "food", "happiness"],
+);
+
+async function load(): Promise<void> {
+  const response = await axios.get<LevelOption[]>("/api/admin/character-level-options");
+  options.value = response.data;
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, defaultForm());
+  configStat.value = "wealth";
+  configValue.value = 1;
+  configItemId.value = undefined;
+  configCurseId.value = undefined;
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(option: LevelOption): void {
+  editing.value = option.id;
+  Object.assign(form, {
+    name: option.name,
+    type: option.type,
+    config: option.config,
+    available_at_level: option.available_at_level,
+    character_id: option.character_id,
+    is_active: option.is_active,
+    max_selections: option.max_selections,
+    sort_order: option.sort_order,
+    description: option.description || "",
+    icon: option.icon || "",
+  });
+  if (option.type === "passive_stat_bonus" && option.config) {
+    configStat.value = option.config.stat || "wealth";
+    configValue.value = option.config.value || 1;
+  }
+  if (option.type === "start_with_item" && option.config) {
+    configItemId.value = option.config.item_id || undefined;
+  }
+  if (option.type === "start_with_curse" && option.config) {
+    configCurseId.value = option.config.curse_id || undefined;
+  }
+  formError.value = "";
+  showModal.value = true;
+}
+
+function buildConfig(): OptionConfig | undefined {
+  if (form.type === "passive_stat_bonus") {
+    return { stat: configStat.value, value: configValue.value };
+  }
+  if (form.type === "start_with_item") {
+    if (configItemId.value) {
+      return { item_id: configItemId.value };
+    }
+    return { random: true };
+  }
+  if (form.type === "start_with_curse") {
+    if (configCurseId.value) {
+      return { curse_id: configCurseId.value };
+    }
+    return { random: true };
+  }
+  return undefined;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  const data = { ...form, config: buildConfig() };
+  try {
+    if (editing.value) {
+      await axios.put(`/api/admin/character-level-options/${editing.value}`, data);
+    } else {
+      await axios.post("/api/admin/character-level-options", data);
+    }
+    showModal.value = false;
+    await load();
+  } catch (error) {
+    formError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.message ?? error.response?.data?.error ?? "Error saving")
+      : "Error saving";
+  }
+}
+
+async function deleteOption(option: LevelOption): Promise<void> {
+  if (!confirm(`Delete "${option.name}"?`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/character-level-options/${option.id}`);
+  await load();
+}
+
+onMounted(async () => {
+  await load();
+  try {
+    const response = await axios.get<CharacterOption[]>("/api/admin/characters");
+    characters.value = response.data;
+  } catch {
+    // Character list is optional; leave empty on failure.
+  }
+  try {
+    const rulesResponse = await axios.get<{ advisor_level_config?: string | { max_level?: number } }>("/api/admin/game-rules");
+    const config = rulesResponse.data?.advisor_level_config;
+    if (config) {
+      const parsed = typeof config === "string" ? JSON.parse(config) : config;
+      maxAvailableLevel.value = (parsed.max_level || 8) - 1;
+    }
+  } catch {
+    // Game rules are optional; keep the default max level.
+  }
+});
 </script>
 
 <style scoped>

@@ -12,21 +12,22 @@
       <div class="swiper-hand">
         <Swiper
           :modules="swiperModules"
-          :effect="'cards'"
+          effect="cards"
           :grab-cursor="true"
           :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
           :style="{ overflow: 'visible' }"
           @swiper="onSwiper"
-          @slideChange="onSlideChange"
+          @slide-change="onSlideChange"
         >
-          <SwiperSlide v-for="item in cards" :key="item.hand_id"
-            :class="{ 'slide-hidden': singlePlayer && selectedPositive !== null && selectedPositive !== item.hand_id }"
+          <SwiperSlide
+v-for="item in cards" :key="item.hand_id"
+            :class="{ 'slide-hidden': singlePlayer && selectedPositive !== undefined && selectedPositive !== item.hand_id }"
           >
             <div
               class="parchment-card"
               :class="{
                 'card-acting': selectedPositive === item.hand_id,
-                'card-unattended': selectedPositive !== null && selectedPositive !== item.hand_id,
+                'card-unattended': selectedPositive !== undefined && selectedPositive !== item.hand_id,
               }"
               @click="isResolving(item) && resolvePhase === 'results' ? $emit('continue') : selectAndConfirm(item.hand_id)"
             >
@@ -44,7 +45,7 @@
                 <div v-if="selectedPositive === item.hand_id" class="card-ribbon acting">
                   Acting on this
                 </div>
-                <div v-else-if="selectedPositive !== null" class="card-ribbon unattended">
+                <div v-else-if="selectedPositive !== undefined" class="card-ribbon unattended">
                   Left unattended
                 </div>
               </template>
@@ -92,7 +93,7 @@
 
                 <!-- Card redraw button -->
                 <button
-                  v-if="redraws > 0 && selectedPositive === null"
+                  v-if="redraws > 0 && selectedPositive === undefined"
                   class="btn-redraw"
                   @click.stop="$emit('redraw', item.hand_id)"
                 >Redraw</button>
@@ -116,12 +117,12 @@
                 </div>
                 <div class="resolve-flavor">
                   <p class="resolve-flavor-positive">{{ positiveFlavor }}</p>
-                  <template v-if="negativeFlavors.length">
+                  <template v-if="negativeFlavors.length > 0">
                     <p class="resolve-flavor-meanwhile">Meanwhile...</p>
                     <p v-for="(f, fi) in negativeFlavors" :key="fi" class="resolve-flavor-negative">{{ f }}</p>
                   </template>
                 </div>
-                <div v-if="resolveSpecialEffects.length" class="resolve-specials">
+                <div v-if="resolveSpecialEffects.length > 0" class="resolve-specials">
                   <p v-for="(eff, ei) in resolveSpecialEffects" :key="ei" class="resolve-special">{{ eff.description }}</p>
                 </div>
                 <p class="resolve-tap-continue" @click="$emit('continue')">
@@ -138,12 +139,12 @@
     <div v-else class="hand-cards">
       <div
         v-for="item in cards"
+        v-show="!singlePlayer || selectedPositive === undefined || selectedPositive === item.hand_id"
         :key="item.hand_id"
-        v-show="!singlePlayer || selectedPositive === null || selectedPositive === item.hand_id"
         class="parchment-card"
         :class="{
           'card-acting': selectedPositive === item.hand_id,
-          'card-unattended': selectedPositive !== null && selectedPositive !== item.hand_id,
+          'card-unattended': selectedPositive !== undefined && selectedPositive !== item.hand_id,
         }"
         @click="isResolving(item) && resolvePhase === 'results' ? $emit('continue') : selectAndConfirm(item.hand_id)"
         @mouseenter="onCardHover(item)"
@@ -163,7 +164,7 @@
           <div v-if="selectedPositive === item.hand_id" class="card-ribbon acting">
             Acting on this
           </div>
-          <div v-else-if="selectedPositive !== null" class="card-ribbon unattended">
+          <div v-else-if="selectedPositive !== undefined" class="card-ribbon unattended">
             Left unattended
           </div>
         </template>
@@ -211,7 +212,7 @@
 
           <!-- Card redraw button -->
           <button
-            v-if="redraws > 0 && selectedPositive === null"
+            v-if="redraws > 0 && selectedPositive === undefined"
             class="btn-redraw"
             @click.stop="$emit('redraw', item.hand_id)"
           >Redraw</button>
@@ -235,12 +236,12 @@
           </div>
           <div class="resolve-flavor">
             <p class="resolve-flavor-positive">{{ positiveFlavor }}</p>
-            <template v-if="negativeFlavors.length">
+            <template v-if="negativeFlavors.length > 0">
               <p class="resolve-flavor-meanwhile">Meanwhile...</p>
               <p v-for="(f, fi) in negativeFlavors" :key="fi" class="resolve-flavor-negative">{{ f }}</p>
             </template>
           </div>
-          <div v-if="resolveSpecialEffects.length" class="resolve-specials">
+          <div v-if="resolveSpecialEffects.length > 0" class="resolve-specials">
             <p v-for="(eff, ei) in resolveSpecialEffects" :key="ei" class="resolve-special">{{ eff.description }}</p>
           </div>
           <p class="resolve-tap-continue" @click="$emit('continue')">
@@ -251,295 +252,367 @@
     </div>
 
     <!-- Redraws remaining indicator -->
-    <div v-if="redraws > 0 && selectedPositive === null" class="redraws-remaining">
+    <div v-if="redraws > 0 && selectedPositive === undefined" class="redraws-remaining">
       {{ redraws }} redraw{{ redraws > 1 ? 's' : '' }} remaining
     </div>
   </div>
 </template>
 
-<script>
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
-import { playSound } from '../sounds';
-import dddiceService from '../dddiceService';
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { EffectCards } from "swiper/modules";
+import type { Swiper as SwiperInstance } from "swiper";
+import "swiper/css";
+import "swiper/css/effect-cards";
+import { playSound } from "../sounds";
+import dddiceService from "../dddice-service";
 
-const STAT_KEYS = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-const SPECIAL_KEYS_POSITIVE = ['grant_item_id', 'draw_item', 'recover_die', 'remove_curse', 'draw_curse', 'bonus_score', 'end_game_modifier', 'reveal_stats'];
-const SPECIAL_KEYS_NEGATIVE = ['lose_die', 'discard_item', 'draw_item', 'draw_curse', 'bonus_score', 'end_game_modifier'];
+const {
+  cards = [],
+  hasAssigned = false,
+  loading = false,
+  redraws = 0,
+  singlePlayer = false,
+  resolveData = undefined,
+} = defineProps<{
+  cards?: HandItem[];
+  hasAssigned?: boolean;
+  loading?: boolean;
+  redraws?: number;
+  showPreviews?: boolean;
+  singlePlayer?: boolean;
+  resolveData?: ResolveData | undefined;
+}>();
 
-export default {
-  name: 'CardSelectionHand',
-  components: { Swiper, SwiperSlide },
-  props: {
-    cards: { type: Array, default: () => [] },
-    hasAssigned: { type: Boolean, default: false },
-    loading: { type: Boolean, default: false },
-    redraws: { type: Number, default: 0 },
-    showPreviews: { type: Boolean, default: false },
-    singlePlayer: { type: Boolean, default: false },
-    resolveData: { type: Object, default: null },
+const emit = defineEmits<{
+  assign: [payload: AssignPayload];
+  preview: [payload: PreviewPayload | undefined];
+  redraw: [handId: number];
+  continue: [];
+  "resolveShown": [];
+}>();
+
+const STAT_KEYS = new Set(["wealth", "influence", "security", "religion", "food", "happiness"]);
+
+interface CardEffects {
+  reveal_stats?: unknown;
+  draw_item?: unknown;
+  recover_die?: unknown;
+  lose_die?: unknown;
+  discard_item?: unknown;
+  [key: string]: unknown;
+}
+
+interface HandCard {
+  title: string;
+  description: string;
+  question?: string;
+  difficulty: number;
+  positive_effects?: CardEffects;
+  negative_effects?: CardEffects;
+  positive_flavor?: string;
+  negative_flavor?: string;
+}
+
+interface HandItem {
+  hand_id: number;
+  card: HandCard;
+}
+
+interface DiceRoll {
+  face: string;
+  value: number;
+}
+
+interface DiceResult {
+  rolls?: DiceRoll[];
+}
+
+interface PositivePhase {
+  total_roll?: number;
+  success?: boolean;
+  dice_results?: DiceResult[];
+}
+
+interface SpecialEffect {
+  description?: string;
+}
+
+interface ResolveData {
+  positivePhase?: PositivePhase;
+  combinedEffects?: Record<string, unknown>;
+  eventEffects?: Record<string, unknown>;
+  specialEffects?: SpecialEffect[];
+  gameOver?: boolean;
+}
+
+interface PreviewPayload {
+  positive: Record<string, number>;
+  negative: Record<string, number>;
+}
+
+interface AssignPayload {
+  positive_hand_id: number;
+  negative_hand_ids: number[];
+}
+
+interface EffectArrow {
+  stat: string;
+  direction: "up" | "down";
+  magnitude: number;
+  value: number;
+}
+
+const swiperModules = [EffectCards];
+
+const selectedPositive = ref<number | undefined>(undefined);
+const isMobile = ref(false);
+const swiperInstance = ref<SwiperInstance | undefined>(undefined);
+const mediaQuery = ref<MediaQueryList | undefined>(undefined);
+const resolvePhase = ref<"rolling" | "results" | undefined>(undefined);
+
+const hasForesight = computed(() => cards.some((item) => item.card.positive_effects?.reveal_stats));
+
+const selectedCard = computed<HandItem | undefined>(() => {
+  if (selectedPositive.value === undefined) {
+    return undefined;
+  }
+  return cards.find((item) => item.hand_id === selectedPositive.value);
+});
+
+const diceRolls = computed<DiceRoll[]>(() => {
+  const diceResults = resolveData?.positivePhase?.dice_results;
+  if (!diceResults) {
+    return [];
+  }
+  const rolls: DiceRoll[] = [];
+  for (const diceResult of diceResults) {
+    if (diceResult.rolls) {
+      rolls.push(...diceResult.rolls);
+    }
+  }
+  return rolls;
+});
+
+const positiveFlavor = computed(() => {
+  if (!selectedCard.value) {
+    return "";
+  }
+  return resolveData?.positivePhase?.success
+    ? selectedCard.value.card.positive_flavor ?? ""
+    : selectedCard.value.card.negative_flavor ?? "";
+});
+
+const negativeFlavors = computed<string[]>(() => {
+  if (selectedPositive.value === undefined) {
+    return [];
+  }
+  return cards
+    .filter((item) => item.hand_id !== selectedPositive.value && item.card.negative_flavor)
+    .map((item) => item.card.negative_flavor ?? "");
+});
+
+const resolveSpecialEffects = computed<SpecialEffect[]>(() => {
+  if (!resolveData?.specialEffects) {
+    return [];
+  }
+  return resolveData.specialEffects.filter((effect) => effect.description);
+});
+
+function onMediaChange(event: MediaQueryListEvent): void {
+  isMobile.value = event.matches;
+}
+
+function onSwiper(swiper: SwiperInstance): void {
+  swiperInstance.value = swiper;
+}
+
+function filterStatEffects(effects: CardEffects | undefined): Record<string, number> {
+  if (!effects) {
+    return {};
+  }
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(effects)) {
+    if (typeof value === "number" && STAT_KEYS.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function emitPreview(item: HandItem | undefined): void {
+  if (!item) {
+    emit("preview", undefined);
+    return;
+  }
+  const net: Record<string, number> = {};
+  const positiveEffects = filterStatEffects(item.card.positive_effects);
+  for (const [stat, value] of Object.entries(positiveEffects)) {
+    net[stat] = (net[stat] ?? 0) + value;
+  }
+  const otherCards = cards.filter((other) => other.hand_id !== item.hand_id);
+  for (const other of otherCards) {
+    const negativeEffects = filterStatEffects(other.card.negative_effects);
+    for (const [stat, value] of Object.entries(negativeEffects)) {
+      net[stat] = (net[stat] ?? 0) + value;
+    }
+  }
+  const positive: Record<string, number> = {};
+  const negative: Record<string, number> = {};
+  for (const [stat, value] of Object.entries(net)) {
+    if (value > 0) {
+      positive[stat] = value;
+    } else if (value < 0) {
+      negative[stat] = value;
+    }
+  }
+  if (Object.keys(positive).length === 0 && Object.keys(negative).length === 0) {
+    emit("preview", undefined);
+    return;
+  }
+  emit("preview", { positive, negative });
+}
+
+function onSlideChange(swiper: SwiperInstance): void {
+  if (selectedPositive.value !== undefined) {
+    return;
+  }
+  const item = cards[swiper.activeIndex];
+  if (item) {
+    emitPreview(item);
+  }
+}
+
+function selectAndConfirm(handId: number): void {
+  if (selectedPositive.value !== undefined) {
+    return;
+  }
+  playSound("clickCard");
+  selectedPositive.value = handId;
+  // Ensure Swiper shows the selected card on top
+  if (singlePlayer && swiperInstance.value) {
+    const index = cards.findIndex((item) => item.hand_id === handId);
+    if (index !== -1) {
+      swiperInstance.value.slideTo(index, 300);
+    }
+  }
+  emit("preview", undefined);
+  const negativeIds = cards
+    .filter((item) => item.hand_id !== handId)
+    .map((item) => item.hand_id);
+  if (negativeIds.length > 0) {
+    emit("assign", {
+      positive_hand_id: handId,
+      negative_hand_ids: negativeIds,
+    });
+  }
+}
+
+function onCardHover(item: HandItem): void {
+  if (selectedPositive.value !== undefined) {
+    return;
+  }
+  emitPreview(item);
+}
+
+function onCardLeave(): void {
+  emit("preview", undefined);
+}
+
+function hasSpecialEffects(card: HandCard): boolean {
+  const positive = card.positive_effects ?? {};
+  const negative = card.negative_effects ?? {};
+  return Boolean(
+    positive.draw_item ||
+      positive.recover_die ||
+      positive.reveal_stats ||
+      negative.lose_die ||
+      negative.discard_item,
+  );
+}
+
+function isResolving(item: HandItem): boolean {
+  return resolveData !== undefined && selectedPositive.value === item.hand_id;
+}
+
+function effectArrows(effects: CardEffects | undefined): EffectArrow[] {
+  if (!effects) {
+    return [];
+  }
+  const arrows: EffectArrow[] = [];
+  for (const stat of STAT_KEYS) {
+    const value = effects[stat];
+    if (typeof value === "number" && value !== 0) {
+      const direction = value > 0 ? "up" : "down";
+      const magnitude = Math.abs(value) >= 3 ? 2 : 1;
+      arrows.push({ stat, direction, magnitude, value });
+    }
+  }
+  return arrows;
+}
+
+function formatStatName(stat: string): string {
+  return stat.charAt(0).toUpperCase() + stat.slice(1);
+}
+
+watch(
+  () => resolveData,
+  async (value) => {
+    if (value) {
+      resolvePhase.value = "rolling";
+      const use3D = dddiceService.isReady();
+      if (use3D) {
+        const diceSpecs = diceRolls.value.map((roll) => ({
+          theme: "dddice-standard",
+          value: roll.value,
+        }));
+        await dddiceService.roll(diceSpecs);
+      } else {
+        playSound("dice");
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+      }
+      if (resolveData) {
+        resolvePhase.value = "results";
+        emit("resolveShown");
+      }
+    } else {
+      resolvePhase.value = undefined;
+    }
   },
-  emits: ['assign', 'preview', 'redraw', 'continue', 'resolve-shown'],
-  data() {
-    return {
-      selectedPositive: null,
-      isMobile: false,
-      activeSlideIndex: 0,
-      swiperInstance: null,
-      mediaQuery: null,
-      hoveredId: null,
-      resolvePhase: null,
-    };
-  },
-  computed: {
-    swiperModules() {
-      return [EffectCards];
-    },
-    activeSlideHandId() {
-      if (this.cards.length === 0) return null;
-      const card = this.cards[this.activeSlideIndex];
-      return card ? card.hand_id : null;
-    },
-    hasForesight() {
-      return this.cards.some(c => c.card.positive_effects?.reveal_stats);
-    },
-    previewsEnabled() {
-      return this.showPreviews || this.hasForesight;
-    },
-    selectedCard() {
-      if (!this.selectedPositive) return null;
-      return this.cards.find(c => c.hand_id === this.selectedPositive) || null;
-    },
-    diceRolls() {
-      if (!this.resolveData?.positivePhase?.dice_results) return [];
-      const rolls = [];
-      for (const dr of this.resolveData.positivePhase.dice_results) {
-        if (dr.rolls) rolls.push(...dr.rolls);
-      }
-      return rolls;
-    },
-    positiveFlavor() {
-      if (!this.selectedCard) return '';
-      return this.resolveData?.positivePhase?.success
-        ? (this.selectedCard.card.positive_flavor || '')
-        : (this.selectedCard.card.negative_flavor || '');
-    },
-    negativeFlavors() {
-      if (!this.selectedPositive) return [];
-      return this.cards
-        .filter(c => c.hand_id !== this.selectedPositive && c.card.negative_flavor)
-        .map(c => c.card.negative_flavor);
-    },
-    allEffects() {
-      const merged = {};
-      const combined = this.resolveData?.combinedEffects || {};
-      const events = this.resolveData?.eventEffects || {};
-      for (const [stat, val] of Object.entries(combined)) {
-        if (typeof val === 'number') merged[stat] = (merged[stat] || 0) + val;
-      }
-      for (const [stat, val] of Object.entries(events)) {
-        if (typeof val === 'number') merged[stat] = (merged[stat] || 0) + val;
-      }
-      // Filter out zero values
-      const result = {};
-      for (const [stat, val] of Object.entries(merged)) {
-        if (val !== 0) result[stat] = val;
-      }
-      return result;
-    },
-    resolveSpecialEffects() {
-      if (!this.resolveData?.specialEffects) return [];
-      return this.resolveData.specialEffects.filter(e => e.description);
-    },
-  },
-  mounted() {
-    this.mediaQuery = window.matchMedia('(max-width: 768px)');
-    this.isMobile = this.mediaQuery.matches;
-    this.mediaQuery.addEventListener('change', this.onMediaChange);
-    if (this.isMobile && this.cards.length) {
-      this.$nextTick(() => {
-        this.emitPreview(this.cards[0]);
+);
+
+watch(
+  () => cards,
+  (newCards) => {
+    selectedPositive.value = undefined;
+    if (swiperInstance.value) {
+      nextTick(() => {
+        swiperInstance.value?.slideTo(0, 0);
+      });
+    }
+    if (isMobile.value && newCards?.length) {
+      nextTick(() => {
+        emitPreview(newCards[0]);
       });
     }
   },
-  beforeUnmount() {
-    if (this.mediaQuery) {
-      this.mediaQuery.removeEventListener('change', this.onMediaChange);
-    }
-  },
-  methods: {
-    onMediaChange(e) {
-      this.isMobile = e.matches;
-    },
-    onSwiper(swiper) {
-      this.swiperInstance = swiper;
-    },
-    onSlideChange(swiper) {
-      this.activeSlideIndex = swiper.activeIndex;
-      if (this.selectedPositive !== null) return;
-      const item = this.cards[swiper.activeIndex];
-      if (item) this.emitPreview(item);
-    },
-    selectAndConfirm(handId) {
-      if (this.selectedPositive !== null) return;
-      playSound('clickCard');
-      this.selectedPositive = handId;
-      // Ensure Swiper shows the selected card on top
-      if (this.singlePlayer && this.swiperInstance) {
-        const idx = this.cards.findIndex(c => c.hand_id === handId);
-        if (idx >= 0) this.swiperInstance.slideTo(idx, 300);
-      }
-      this.$emit('preview', null);
-      const negativeIds = this.cards
-        .filter(c => c.hand_id !== handId)
-        .map(c => c.hand_id);
-      if (negativeIds.length > 0) {
-        this.$emit('assign', {
-          positive_hand_id: handId,
-          negative_hand_ids: negativeIds,
-        });
-      }
-    },
-    emitPreview(item) {
-      if (!item) {
-        this.$emit('preview', null);
-        return;
-      }
-      const net = {};
-      const pos = this.filterStatEffects(item.card.positive_effects);
-      for (const [stat, val] of Object.entries(pos)) {
-        net[stat] = (net[stat] || 0) + val;
-      }
-      const otherCards = this.cards.filter(c => c.hand_id !== item.hand_id);
-      for (const other of otherCards) {
-        const neg = this.filterNegativeEffects(other.card.negative_effects);
-        for (const [stat, val] of Object.entries(neg)) {
-          net[stat] = (net[stat] || 0) + val;
-        }
-      }
-      const positive = {};
-      const negative = {};
-      for (const [stat, val] of Object.entries(net)) {
-        if (val > 0) positive[stat] = val;
-        else if (val < 0) negative[stat] = val;
-      }
-      if (!Object.keys(positive).length && !Object.keys(negative).length) {
-        this.$emit('preview', null);
-        return;
-      }
-      this.$emit('preview', { positive, negative });
-    },
-    onCardHover(item) {
-      if (this.selectedPositive !== null) return;
-      this.hoveredId = item.hand_id;
-      this.emitPreview(item);
-    },
-    onCardLeave() {
-      this.hoveredId = null;
-      this.$emit('preview', null);
-    },
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      for (const [key, val] of Object.entries(effects)) {
-        if (STAT_KEYS.includes(key)) {
-          result[key] = val;
-        }
-      }
-      return result;
-    },
-    filterNegativeEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      for (const [key, val] of Object.entries(effects)) {
-        if (STAT_KEYS.includes(key)) {
-          result[key] = val;
-        }
-      }
-      return result;
-    },
-    hasSpecialEffects(card) {
-      const pos = card.positive_effects || {};
-      const neg = card.negative_effects || {};
-      return pos.draw_item || pos.recover_die || pos.reveal_stats || neg.lose_die || neg.discard_item;
-    },
-    isResolving(item) {
-      return this.resolveData && this.selectedPositive === item.hand_id;
-    },
-    isNegativeSelected(handId) {
-      return this.selectedPositive !== null && this.selectedPositive !== handId;
-    },
-    effectArrows(effects) {
-      if (!effects) return [];
-      const arrows = [];
-      for (const stat of STAT_KEYS) {
-        const val = effects[stat];
-        if (val && val !== 0) {
-          const direction = val > 0 ? 'up' : 'down';
-          const magnitude = Math.abs(val) >= 3 ? 2 : 1;
-          arrows.push({ stat, direction, magnitude, value: val });
-        }
-      }
-      return arrows;
-    },
-    arrowSymbol(arrow) {
-      if (this.hasForesight) {
-        return arrow.value > 0 ? `+${arrow.value}` : `${arrow.value}`;
-      }
-      if (arrow.direction === 'up') {
-        return arrow.magnitude >= 2 ? '\u2191\u2191' : '\u2191';
-      }
-      return arrow.magnitude >= 2 ? '\u2193\u2193' : '\u2193';
-    },
-    formatStatName(stat) {
-      return stat.charAt(0).toUpperCase() + stat.slice(1);
-    },
-    statEmoji(stat) {
-      const emojis = { wealth: '\u{1FA99}', influence: '\u{1F451}', security: '\u{1F6E1}\uFE0F', religion: '\u26EA', food: '\u{1F33E}', happiness: '\u{1F60A}' };
-      return emojis[stat] || '';
-    },
-  },
-  watch: {
-    async resolveData(val) {
-      if (val) {
-        this.resolvePhase = 'rolling';
-        const use3D = dddiceService.isReady();
-        if (use3D) {
-          const diceSpecs = this.diceRolls.map(roll => ({
-            theme: 'dddice-standard',
-            value: roll.value,
-          }));
-          await dddiceService.roll(diceSpecs);
-        } else {
-          playSound('dice');
-          await new Promise(r => setTimeout(r, 1500));
-        }
-        if (this.resolveData) {
-          this.resolvePhase = 'results';
-          this.$emit('resolve-shown');
-        }
-      } else {
-        this.resolvePhase = null;
-      }
-    },
-    cards(newCards) {
-      this.selectedPositive = null;
-      this.activeSlideIndex = 0;
-      if (this.swiperInstance) {
-        this.$nextTick(() => {
-          this.swiperInstance.slideTo(0, 0);
-        });
-      }
-      if (this.isMobile && newCards?.length) {
-        this.$nextTick(() => {
-          this.emitPreview(newCards[0]);
-        });
-      }
-    },
-  },
-};
+);
+
+onMounted(() => {
+  mediaQuery.value = window.matchMedia("(max-width: 768px)");
+  isMobile.value = mediaQuery.value.matches;
+  mediaQuery.value.addEventListener("change", onMediaChange);
+  if (isMobile.value && cards.length > 0) {
+    nextTick(() => {
+      emitPreview(cards[0]);
+    });
+  }
+});
+
+onBeforeUnmount(() => {
+  mediaQuery.value?.removeEventListener("change", onMediaChange);
+});
 </script>
 
 <style scoped>

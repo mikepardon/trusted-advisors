@@ -5,17 +5,17 @@
       <div class="header-buttons">
         <button class="btn-csv" @click="exportCsv">Export CSV</button>
         <button class="btn-csv" @click="triggerImport">Import CSV</button>
-        <input type="file" ref="csvInput" accept=".csv" style="display:none" @change="handleImportFile" />
+        <input ref="csvInput" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
         <button class="btn-primary" @click="openCreate">+ New Card</button>
         <button class="btn-ai" @click="showAiModal = true">Generate with AI</button>
       </div>
     </div>
 
-    <div v-if="importResult" class="import-result" :class="importResult.errors.length ? 'import-warn' : 'import-ok'">
+    <div v-if="importResult" class="import-result" :class="importResult.errors.length > 0 ? 'import-warn' : 'import-ok'">
       CSV Import: {{ importResult.created }} created, {{ importResult.updated }} updated.
-      <span v-if="importResult.errors.length"> {{ importResult.errors.length }} error(s).</span>
+      <span v-if="importResult.errors.length > 0"> {{ importResult.errors.length }} error(s).</span>
       <div v-for="(err, i) in importResult.errors" :key="i" class="import-error-line">{{ err }}</div>
-      <button class="import-dismiss" @click="importResult = null">Dismiss</button>
+      <button class="import-dismiss" @click="importResult = undefined">Dismiss</button>
     </div>
 
     <!-- Balance Stats Panel -->
@@ -106,10 +106,10 @@
       <table class="admin-table">
         <thead>
           <tr>
-            <SortableHeader label="#" field="sort_order" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
-            <SortableHeader label="Title" field="title" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
-            <SortableHeader label="Difficulty" field="difficulty" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
-            <SortableHeader label="Category" field="category" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="#" field="sort_order" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
+            <SortableHeader label="Title" field="title" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
+            <SortableHeader label="Difficulty" field="difficulty" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
+            <SortableHeader label="Category" field="category" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
             <th>Description</th>
             <th>Actions</th>
           </tr>
@@ -190,38 +190,38 @@
                 <input
                   type="number"
                   :value="form.positive[stat.key] || ''"
-                  @input="setEffect('positive', stat.key, $event.target.value)"
                   class="stat-input"
                   :placeholder="0"
+                  @input="onEffectInput('positive', stat.key, $event)"
                 />
               </div>
             </div>
             <div class="variant-rules">
               <label class="variant-check">
-                <input type="checkbox" v-model="form.positiveRecoverDie" />
+                <input v-model="form.positiveRecoverDie" type="checkbox" />
                 <span class="variant-label">Recover a lost die</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.positiveDrawItem" />
+                <input v-model="form.positiveDrawItem" type="checkbox" />
                 <span class="variant-label">Draw an item</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.positiveRemoveCurse" />
+                <input v-model="form.positiveRemoveCurse" type="checkbox" />
                 <span class="variant-label">Remove a curse</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.positiveDrawCurse" />
+                <input v-model="form.positiveDrawCurse" type="checkbox" />
                 <span class="variant-label">Draw a curse</span>
               </label>
             </div>
             <div class="form-row" style="margin-top: 8px;">
               <div class="form-group">
                 <label>Bonus Score (on success)</label>
-                <input type="number" v-model.number="form.positiveBonusScore" placeholder="0" style="width: 80px;" />
+                <input v-model.number="form.positiveBonusScore" type="number" placeholder="0" style="width: 80px;" />
               </div>
               <div class="form-group">
                 <label>End-Game Modifier %</label>
-                <input type="number" v-model.number="form.positiveEndGameModifier" placeholder="0" style="width: 80px;" />
+                <input v-model.number="form.positiveEndGameModifier" type="number" placeholder="0" style="width: 80px;" />
               </div>
             </div>
           </div>
@@ -239,38 +239,38 @@
                 <input
                   type="number"
                   :value="form.negative[stat.key] || ''"
-                  @input="setEffect('negative', stat.key, $event.target.value)"
                   class="stat-input"
                   :placeholder="0"
+                  @input="onEffectInput('negative', stat.key, $event)"
                 />
               </div>
             </div>
             <div class="variant-rules">
               <label class="variant-check">
-                <input type="checkbox" v-model="form.negativeLoseDie" />
+                <input v-model="form.negativeLoseDie" type="checkbox" />
                 <span class="variant-label">Lose a die</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.negativeDiscardItem" />
+                <input v-model="form.negativeDiscardItem" type="checkbox" />
                 <span class="variant-label">Discard an item</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.negativeDrawItem" />
+                <input v-model="form.negativeDrawItem" type="checkbox" />
                 <span class="variant-label">Draw cursed item</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.negativeDrawCurse" />
+                <input v-model="form.negativeDrawCurse" type="checkbox" />
                 <span class="variant-label">Draw a curse</span>
               </label>
             </div>
             <div class="form-row" style="margin-top: 8px;">
               <div class="form-group">
                 <label>Bonus Score Penalty (on failure)</label>
-                <input type="number" v-model.number="form.negativeBonusScore" placeholder="0" style="width: 80px;" />
+                <input v-model.number="form.negativeBonusScore" type="number" placeholder="0" style="width: 80px;" />
               </div>
               <div class="form-group">
                 <label>End-Game Modifier %</label>
-                <input type="number" v-model.number="form.negativeEndGameModifier" placeholder="0" style="width: 80px;" />
+                <input v-model.number="form.negativeEndGameModifier" type="number" placeholder="0" style="width: 80px;" />
               </div>
             </div>
           </div>
@@ -278,7 +278,7 @@
           <!-- Duel Stats Override -->
           <div class="effects-section" style="border: 1px solid rgba(138, 58, 185, 0.3); background: rgba(138, 58, 185, 0.05);">
             <label class="variant-check" style="margin-bottom: 8px;">
-              <input type="checkbox" v-model="form.useDuelStats" />
+              <input v-model="form.useDuelStats" type="checkbox" />
               <span class="variant-label" style="color: #c890e0; font-weight: 700;">Use different stats for Duel mode</span>
             </label>
             <template v-if="form.useDuelStats">
@@ -290,70 +290,70 @@
               <div class="stat-grid">
                 <div v-for="stat in stats" :key="'dpos-' + stat.key" class="stat-cell">
                   <span class="stat-icon" :title="stat.label">{{ stat.icon }}</span>
-                  <input type="number" :value="form.positive_duel[stat.key] || ''" @input="setEffect('positive_duel', stat.key, $event.target.value)" class="stat-input" :placeholder="0" />
+                  <input type="number" :value="form.positive_duel[stat.key] || ''" class="stat-input" :placeholder="0" @input="onEffectInput('positive_duel', stat.key, $event)" />
                 </div>
               </div>
               <div class="variant-rules">
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelPositiveRecoverDie" />
+                  <input v-model="form.duelPositiveRecoverDie" type="checkbox" />
                   <span class="variant-label">Recover a lost die</span>
                 </label>
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelPositiveDrawItem" />
+                  <input v-model="form.duelPositiveDrawItem" type="checkbox" />
                   <span class="variant-label">Draw an item</span>
                 </label>
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelPositiveRemoveCurse" />
+                  <input v-model="form.duelPositiveRemoveCurse" type="checkbox" />
                   <span class="variant-label">Remove a curse</span>
                 </label>
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelPositiveDrawCurse" />
+                  <input v-model="form.duelPositiveDrawCurse" type="checkbox" />
                   <span class="variant-label">Draw a curse</span>
                 </label>
               </div>
               <div class="form-row" style="margin-top: 8px;">
                 <div class="form-group">
                   <label>Bonus Score (on success)</label>
-                  <input type="number" v-model.number="form.duelPositiveBonusScore" placeholder="0" style="width: 80px;" />
+                  <input v-model.number="form.duelPositiveBonusScore" type="number" placeholder="0" style="width: 80px;" />
                 </div>
                 <div class="form-group">
                   <label>End-Game Modifier %</label>
-                  <input type="number" v-model.number="form.duelPositiveEndGameModifier" placeholder="0" style="width: 80px;" />
+                  <input v-model.number="form.duelPositiveEndGameModifier" type="number" placeholder="0" style="width: 80px;" />
                 </div>
               </div>
               <h4 class="effects-title" style="color: #c890e0;">Duel Negative Effects</h4>
               <div class="stat-grid">
                 <div v-for="stat in stats" :key="'dneg-' + stat.key" class="stat-cell">
                   <span class="stat-icon" :title="stat.label">{{ stat.icon }}</span>
-                  <input type="number" :value="form.negative_duel[stat.key] || ''" @input="setEffect('negative_duel', stat.key, $event.target.value)" class="stat-input" :placeholder="0" />
+                  <input type="number" :value="form.negative_duel[stat.key] || ''" class="stat-input" :placeholder="0" @input="onEffectInput('negative_duel', stat.key, $event)" />
                 </div>
               </div>
               <div class="variant-rules">
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelNegativeLoseDie" />
+                  <input v-model="form.duelNegativeLoseDie" type="checkbox" />
                   <span class="variant-label">Lose a die</span>
                 </label>
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelNegativeDiscardItem" />
+                  <input v-model="form.duelNegativeDiscardItem" type="checkbox" />
                   <span class="variant-label">Discard an item</span>
                 </label>
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelNegativeDrawItem" />
+                  <input v-model="form.duelNegativeDrawItem" type="checkbox" />
                   <span class="variant-label">Draw cursed item</span>
                 </label>
                 <label class="variant-check">
-                  <input type="checkbox" v-model="form.duelNegativeDrawCurse" />
+                  <input v-model="form.duelNegativeDrawCurse" type="checkbox" />
                   <span class="variant-label">Draw a curse</span>
                 </label>
               </div>
               <div class="form-row" style="margin-top: 8px;">
                 <div class="form-group">
                   <label>Bonus Score Penalty (on failure)</label>
-                  <input type="number" v-model.number="form.duelNegativeBonusScore" placeholder="0" style="width: 80px;" />
+                  <input v-model.number="form.duelNegativeBonusScore" type="number" placeholder="0" style="width: 80px;" />
                 </div>
                 <div class="form-group">
                   <label>End-Game Modifier %</label>
-                  <input type="number" v-model.number="form.duelNegativeEndGameModifier" placeholder="0" style="width: 80px;" />
+                  <input v-model.number="form.duelNegativeEndGameModifier" type="number" placeholder="0" style="width: 80px;" />
                 </div>
               </div>
             </template>
@@ -364,11 +364,11 @@
             <h4 class="effects-title" style="color: var(--accent-gold);">Availability</h4>
             <div class="variant-rules">
               <label class="variant-check">
-                <input type="checkbox" v-model="form.available_cooperative" />
+                <input v-model="form.available_cooperative" type="checkbox" />
                 <span class="variant-label">Available in Co-op</span>
               </label>
               <label class="variant-check">
-                <input type="checkbox" v-model="form.available_duel" />
+                <input v-model="form.available_duel" type="checkbox" />
                 <span class="variant-label">Available in Duel</span>
               </label>
             </div>
@@ -416,487 +416,677 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
-import AdminSearchInput from './AdminSearchInput.vue';
-import SortableHeader from './SortableHeader.vue';
-import { useIcons } from '../../stores/icons';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
+import AdminSearchInput from "./AdminSearchInput.vue";
+import SortableHeader from "./SortableHeader.vue";
+import { useIcons } from "../../stores/icons";
 
-export default {
-  name: 'AdminCards',
-  components: { AdminSearchInput, SortableHeader },
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      cards: [],
-      loading: true,
-      searchQuery: '',
-      sortField: 'sort_order',
-      sortDir: 'asc',
-      showModal: false,
-      editing: null,
-      saving: false,
-      formError: '',
-      showAiModal: false,
-      aiPrompt: '',
-      aiCategory: '',
-      aiGenerating: false,
-      aiError: '',
-      importResult: null,
-      showBalanceStats: false,
-      stats: useIcons().getStatIcons(),
-      form: {
-        title: '',
-        description: '',
-        question: '',
-        sort_order: 1,
-        difficulty: 6,
-        category: '',
-        positive: {},
-        negative: {},
-        positive_flavor: '',
-        negative_flavor: '',
-        positiveRecoverDie: false,
-        positiveDrawItem: false,
-        positiveRemoveCurse: false,
-        positiveDrawCurse: false,
-        negativeLoseDie: false,
-        negativeDiscardItem: false,
-        negativeDrawItem: false,
-        negativeDrawCurse: false,
-        positiveBonusScore: 0,
-        positiveEndGameModifier: 0,
-        negativeBonusScore: 0,
-        negativeEndGameModifier: 0,
-        available_cooperative: true,
-        available_duel: true,
-        useDuelStats: false,
-        difficulty_duel: 6,
-        positive_duel: {},
-        negative_duel: {},
-        duelPositiveRecoverDie: false,
-        duelPositiveDrawItem: false,
-        duelPositiveRemoveCurse: false,
-        duelPositiveDrawCurse: false,
-        duelPositiveBonusScore: 0,
-        duelPositiveEndGameModifier: 0,
-        duelNegativeLoseDie: false,
-        duelNegativeDiscardItem: false,
-        duelNegativeDrawItem: false,
-        duelNegativeDrawCurse: false,
-        duelNegativeBonusScore: 0,
-      },
+type EffectMap = Record<string, number>;
+
+interface StatIcon {
+  key: string;
+  label: string;
+  short: string;
+  type: string;
+  value: string;
+  icon: string;
+}
+
+interface Card {
+  id: number;
+  title: string;
+  description: string;
+  question?: string;
+  sort_order: number;
+  difficulty: number;
+  category?: string;
+  positive_effects?: EffectMap;
+  negative_effects?: EffectMap;
+  positive_flavor?: string;
+  negative_flavor?: string;
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+  difficulty_duel?: number;
+  positive_effects_duel?: EffectMap;
+  negative_effects_duel?: EffectMap;
+}
+
+interface CardForm {
+  title: string;
+  description: string;
+  question: string;
+  sort_order: number;
+  difficulty: number;
+  category: string;
+  positive: EffectMap;
+  negative: EffectMap;
+  positive_flavor: string;
+  negative_flavor: string;
+  positiveRecoverDie: boolean;
+  positiveDrawItem: boolean;
+  positiveRemoveCurse: boolean;
+  positiveDrawCurse: boolean;
+  negativeLoseDie: boolean;
+  negativeDiscardItem: boolean;
+  negativeDrawItem: boolean;
+  negativeDrawCurse: boolean;
+  positiveBonusScore: number;
+  positiveEndGameModifier: number;
+  negativeBonusScore: number;
+  negativeEndGameModifier: number;
+  available_cooperative: boolean;
+  available_duel: boolean;
+  useDuelStats: boolean;
+  difficulty_duel: number;
+  positive_duel: EffectMap;
+  negative_duel: EffectMap;
+  duelPositiveRecoverDie: boolean;
+  duelPositiveDrawItem: boolean;
+  duelPositiveRemoveCurse: boolean;
+  duelPositiveDrawCurse: boolean;
+  duelPositiveBonusScore: number;
+  duelPositiveEndGameModifier: number;
+  duelNegativeLoseDie: boolean;
+  duelNegativeDiscardItem: boolean;
+  duelNegativeDrawItem: boolean;
+  duelNegativeDrawCurse: boolean;
+  duelNegativeBonusScore: number;
+  duelNegativeEndGameModifier: number;
+}
+
+interface AiCardResponse {
+  title?: string;
+  description?: string;
+  question?: string;
+  difficulty?: number;
+  category?: string;
+  positive_effects?: EffectMap;
+  negative_effects?: EffectMap;
+  positive_flavor?: string;
+  negative_flavor?: string;
+}
+
+interface ImportResult {
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
+type EffectSide = "positive" | "negative" | "positive_duel" | "negative_duel";
+
+interface ObjectToFormResult {
+  stats: EffectMap;
+  recoverDie: boolean;
+  loseDie: boolean;
+  drawItem: boolean;
+  discardItem: boolean;
+  removeCurse: boolean;
+  drawCurse: boolean;
+  bonusScore: number;
+  endGameModifier: number;
+}
+
+interface PerStatData {
+  totalPos: number;
+  totalNeg: number;
+  net: number;
+  avgPos: number;
+  avgNeg: number;
+}
+
+interface CardBalanceStats {
+  count: number;
+  avgDiff: number;
+  diffDist: { easy: number; medium: number; hard: number };
+  catDist: Record<string, number>;
+  perStat: Record<string, PerStatData>;
+  specialCounts: Record<string, number>;
+  avgPosPerCard: number;
+  avgNegPerCard: number;
+}
+
+function defaultForm(sortOrder: number): CardForm {
+  return {
+    title: "",
+    description: "",
+    question: "",
+    sort_order: sortOrder,
+    difficulty: 6,
+    category: "",
+    positive: {},
+    negative: {},
+    positive_flavor: "",
+    negative_flavor: "",
+    positiveRecoverDie: false,
+    positiveDrawItem: false,
+    positiveRemoveCurse: false,
+    positiveDrawCurse: false,
+    negativeLoseDie: false,
+    negativeDiscardItem: false,
+    negativeDrawItem: false,
+    negativeDrawCurse: false,
+    positiveBonusScore: 0,
+    positiveEndGameModifier: 0,
+    negativeBonusScore: 0,
+    negativeEndGameModifier: 0,
+    available_cooperative: true,
+    available_duel: true,
+    useDuelStats: false,
+    difficulty_duel: 6,
+    positive_duel: {},
+    negative_duel: {},
+    duelPositiveRecoverDie: false,
+    duelPositiveDrawItem: false,
+    duelPositiveRemoveCurse: false,
+    duelPositiveDrawCurse: false,
+    duelPositiveBonusScore: 0,
+    duelPositiveEndGameModifier: 0,
+    duelNegativeLoseDie: false,
+    duelNegativeDiscardItem: false,
+    duelNegativeDrawItem: false,
+    duelNegativeDrawCurse: false,
+    duelNegativeBonusScore: 0,
+    duelNegativeEndGameModifier: 0,
+  };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string; error?: string }>(error)) {
+    return error.response?.data?.message ?? error.response?.data?.error ?? error.message;
+  }
+  return fallback;
+}
+
+const toast = useToast();
+
+const cards = ref<Card[]>([]);
+const loading = ref(true);
+const searchQuery = ref("");
+const sortField = ref("sort_order");
+const sortDirection = ref<"asc" | "desc">("asc");
+const showModal = ref(false);
+const editing = ref<Card | undefined>(undefined);
+const saving = ref(false);
+const formError = ref("");
+const showAiModal = ref(false);
+const aiPrompt = ref("");
+const aiCategory = ref("");
+const aiGenerating = ref(false);
+const aiError = ref("");
+const importResult = ref<ImportResult | undefined>(undefined);
+const showBalanceStats = ref(false);
+const stats: StatIcon[] = useIcons().getStatIcons();
+const form = reactive<CardForm>(defaultForm(1));
+const csvInput = useTemplateRef<HTMLInputElement>("csvInput");
+
+function nextSortOrder(): number {
+  let max = 0;
+  for (const card of cards.value) {
+    max = Math.max(max, card.sort_order);
+  }
+  return max + 1;
+}
+
+function sortValue(card: Card, field: string): string | number {
+  if (field === "difficulty") {
+    return card.difficulty;
+  }
+  if (field === "sort_order") {
+    return card.sort_order;
+  }
+  if (field === "title") {
+    return card.title;
+  }
+  if (field === "category") {
+    return card.category ?? "";
+  }
+  return "";
+}
+
+const filteredCards = computed<Card[]>(() => {
+  let list = cards.value;
+  const query = searchQuery.value.toLowerCase().trim();
+  if (query) {
+    list = list.filter((card) =>
+      (card.title || "").toLowerCase().includes(query)
+      || (card.description || "").toLowerCase().includes(query)
+      || (card.category || "").toLowerCase().includes(query)
+      || String(card.difficulty).includes(query),
+    );
+  }
+  const field = sortField.value;
+  const direction = sortDirection.value === "asc" ? 1 : -1;
+  return list.toSorted((a, b) => {
+    const av = sortValue(a, field);
+    const bv = sortValue(b, field);
+    if (typeof av === "number" && typeof bv === "number") {
+      return (av - bv) * direction;
+    }
+    return String(av).localeCompare(String(bv)) * direction;
+  });
+});
+
+const cardBalanceStats = computed<CardBalanceStats | undefined>(() => {
+  if (cards.value.length === 0) {
+    return undefined;
+  }
+  const statKeys = ["wealth", "influence", "security", "religion", "food", "happiness"];
+  const specialKeys = ["draw_item", "recover_die", "lose_die", "discard_item", "remove_curse"];
+
+  // Difficulty
+  const avgDiff = cards.value.reduce((sum, card) => sum + (card.difficulty || 0), 0) / cards.value.length;
+  const diffDistribution = { easy: 0, medium: 0, hard: 0 };
+  for (const card of cards.value) {
+    if (card.difficulty <= 5) {
+      diffDistribution.easy++;
+    } else if (card.difficulty <= 8) {
+      diffDistribution.medium++;
+    } else {
+      diffDistribution.hard++;
+    }
+  }
+
+  // Category distribution
+  const catDistribution: Record<string, number> = {};
+  for (const card of cards.value) {
+    const category = card.category || "none";
+    catDistribution[category] = (catDistribution[category] || 0) + 1;
+  }
+
+  // Per-stat totals
+  const perStat: Record<string, PerStatData> = {};
+  for (const key of statKeys) {
+    let totalPos = 0;
+    let totalNeg = 0;
+    for (const card of cards.value) {
+      totalPos += card.positive_effects?.[key] || 0;
+      totalNeg += card.negative_effects?.[key] || 0;
+    }
+    perStat[key] = {
+      totalPos,
+      totalNeg,
+      net: totalPos + totalNeg,
+      avgPos: totalPos / cards.value.length,
+      avgNeg: totalNeg / cards.value.length,
     };
+  }
+
+  // Special effect counts
+  const specialCounts: Record<string, number> = {};
+  for (const key of specialKeys) {
+    let count = 0;
+    for (const card of cards.value) {
+      if ((card.positive_effects?.[key] ?? 0) !== 0 || (card.negative_effects?.[key] ?? 0) !== 0) {
+        count++;
+      }
+    }
+    specialCounts[key] = count;
+  }
+
+  // Avg positive/negative per card
+  let totalPosSum = 0;
+  let totalNegSum = 0;
+  for (const card of cards.value) {
+    for (const key of statKeys) {
+      totalPosSum += card.positive_effects?.[key] || 0;
+      totalNegSum += card.negative_effects?.[key] || 0;
+    }
+  }
+
+  return {
+    count: cards.value.length,
+    avgDiff,
+    diffDist: diffDistribution,
+    catDist: catDistribution,
+    perStat,
+    specialCounts,
+    avgPosPerCard: totalPosSum / cards.value.length,
+    avgNegPerCard: totalNegSum / cards.value.length,
+  };
+});
+
+function toggleSort(field: string): void {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
+  } else {
+    sortField.value = field;
+    sortDirection.value = "asc";
+  }
+}
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  const response = await axios.get<Card[]>("/api/admin/cards");
+  cards.value = response.data;
+  loading.value = false;
+}
+
+function truncate(value: string | undefined, length: number): string {
+  if (value && value.length > length) {
+    return `${value.slice(0, Math.max(0, length))}...`;
+  }
+  return value || "";
+}
+
+function diffClass(difficulty: number): string {
+  if (difficulty <= 5) {
+    return "diff-easy";
+  }
+  if (difficulty <= 8) {
+    return "diff-medium";
+  }
+  return "diff-hard";
+}
+
+function setEffect(side: EffectSide, key: string, value: string): void {
+  const parsed = value === "" ? 0 : Math.trunc(Number(value));
+  // Zero (or non-numeric) clears the effect; effectsToObject drops zero-valued keys before saving.
+  form[side][key] = Number.isNaN(parsed) ? 0 : parsed;
+}
+
+function onEffectInput(side: EffectSide, key: string, event: Event): void {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  setEffect(side, key, target.value);
+}
+
+// For each side, the flag/value fields on the form that map onto special effect keys.
+const SPECIAL_EFFECT_FIELDS: Record<EffectSide, { flags: [keyof CardForm, string][]; values: [keyof CardForm, string][] }> = {
+  positive: {
+    flags: [
+      ["positiveRecoverDie", "recover_die"],
+      ["positiveDrawItem", "draw_item"],
+      ["positiveRemoveCurse", "remove_curse"],
+      ["positiveDrawCurse", "draw_curse"],
+    ],
+    values: [
+      ["positiveBonusScore", "bonus_score"],
+      ["positiveEndGameModifier", "end_game_modifier"],
+    ],
   },
-  computed: {
-    filteredCards() {
-      let list = this.cards;
-      const q = this.searchQuery.toLowerCase().trim();
-      if (q) {
-        list = list.filter(c =>
-          (c.title || '').toLowerCase().includes(q) ||
-          (c.description || '').toLowerCase().includes(q) ||
-          (c.category || '').toLowerCase().includes(q) ||
-          String(c.difficulty).includes(q)
-        );
-      }
-      const field = this.sortField;
-      const dir = this.sortDir === 'asc' ? 1 : -1;
-      return [...list].sort((a, b) => {
-        const av = a[field] ?? '';
-        const bv = b[field] ?? '';
-        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-        return String(av).localeCompare(String(bv)) * dir;
-      });
-    },
-    cardBalanceStats() {
-      if (!this.cards.length) return null;
-      const statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-      const specialKeys = ['draw_item', 'recover_die', 'lose_die', 'discard_item', 'remove_curse'];
-
-      // Difficulty
-      const avgDiff = this.cards.reduce((s, c) => s + (c.difficulty || 0), 0) / this.cards.length;
-      const diffDist = { easy: 0, medium: 0, hard: 0 };
-      this.cards.forEach(c => {
-        if (c.difficulty <= 5) diffDist.easy++;
-        else if (c.difficulty <= 8) diffDist.medium++;
-        else diffDist.hard++;
-      });
-
-      // Category distribution
-      const catDist = {};
-      this.cards.forEach(c => {
-        const cat = c.category || 'none';
-        catDist[cat] = (catDist[cat] || 0) + 1;
-      });
-
-      // Per-stat totals
-      const perStat = {};
-      statKeys.forEach(key => {
-        let totalPos = 0, totalNeg = 0;
-        this.cards.forEach(c => {
-          totalPos += (c.positive_effects && c.positive_effects[key]) || 0;
-          totalNeg += (c.negative_effects && c.negative_effects[key]) || 0;
-        });
-        perStat[key] = {
-          totalPos,
-          totalNeg,
-          net: totalPos + totalNeg,
-          avgPos: totalPos / this.cards.length,
-          avgNeg: totalNeg / this.cards.length,
-        };
-      });
-
-      // Special effect counts
-      const specialCounts = {};
-      specialKeys.forEach(key => {
-        let count = 0;
-        this.cards.forEach(c => {
-          if ((c.positive_effects && c.positive_effects[key]) || (c.negative_effects && c.negative_effects[key])) count++;
-        });
-        specialCounts[key] = count;
-      });
-
-      // Avg positive/negative per card
-      let totalPosSum = 0, totalNegSum = 0;
-      this.cards.forEach(c => {
-        statKeys.forEach(key => {
-          totalPosSum += (c.positive_effects && c.positive_effects[key]) || 0;
-          totalNegSum += (c.negative_effects && c.negative_effects[key]) || 0;
-        });
-      });
-
-      return {
-        count: this.cards.length,
-        avgDiff: avgDiff,
-        diffDist,
-        catDist,
-        perStat,
-        specialCounts,
-        avgPosPerCard: totalPosSum / this.cards.length,
-        avgNegPerCard: totalNegSum / this.cards.length,
-      };
-    },
+  negative: {
+    flags: [
+      ["negativeLoseDie", "lose_die"],
+      ["negativeDiscardItem", "discard_item"],
+      ["negativeDrawItem", "draw_item"],
+      ["negativeDrawCurse", "draw_curse"],
+    ],
+    values: [
+      ["negativeBonusScore", "bonus_score"],
+      ["negativeEndGameModifier", "end_game_modifier"],
+    ],
   },
-  async mounted() {
-    await this.fetch();
+  positive_duel: {
+    flags: [
+      ["duelPositiveRecoverDie", "recover_die"],
+      ["duelPositiveDrawItem", "draw_item"],
+      ["duelPositiveRemoveCurse", "remove_curse"],
+      ["duelPositiveDrawCurse", "draw_curse"],
+    ],
+    values: [
+      ["duelPositiveBonusScore", "bonus_score"],
+      ["duelPositiveEndGameModifier", "end_game_modifier"],
+    ],
   },
-  methods: {
-    toggleSort(field) {
-      if (this.sortField === field) {
-        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
-      } else {
-        this.sortField = field;
-        this.sortDir = 'asc';
-      }
-    },
-    async fetch() {
-      this.loading = true;
-      const res = await axios.get('/api/admin/cards');
-      this.cards = res.data;
-      this.loading = false;
-    },
-    truncate(str, len) {
-      return str && str.length > len ? str.substring(0, len) + '...' : str || '';
-    },
-    diffClass(difficulty) {
-      if (difficulty <= 5) return 'diff-easy';
-      if (difficulty <= 8) return 'diff-medium';
-      return 'diff-hard';
-    },
-    buildDuelEffects(effects) {
-      if (!effects) return null;
-      const obj = {};
-      for (const [key, val] of Object.entries(effects)) {
-        if (val && val !== 0) obj[key] = val;
-      }
-      return Object.keys(obj).length > 0 ? obj : null;
-    },
-    setEffect(side, key, value) {
-      const num = value === '' ? null : parseInt(value);
-      if (num === null || num === 0 || isNaN(num)) {
-        delete this.form[side][key];
-      } else {
-        this.form[side][key] = num;
-      }
-    },
-    effectsToObj(effects, form, side) {
-      const obj = {};
-      for (const [key, val] of Object.entries(effects)) {
-        if (val && val !== 0) obj[key] = val;
-      }
-      if (side === 'positive') {
-        if (form.positiveRecoverDie) obj['recover_die'] = 1;
-        if (form.positiveDrawItem) obj['draw_item'] = 1;
-        if (form.positiveRemoveCurse) obj['remove_curse'] = 1;
-        if (form.positiveDrawCurse) obj['draw_curse'] = 1;
-        if (form.positiveBonusScore) obj['bonus_score'] = form.positiveBonusScore;
-        if (form.positiveEndGameModifier) obj['end_game_modifier'] = form.positiveEndGameModifier;
-      }
-      if (side === 'negative') {
-        if (form.negativeLoseDie) obj['lose_die'] = 1;
-        if (form.negativeDiscardItem) obj['discard_item'] = 1;
-        if (form.negativeDrawItem) obj['draw_item'] = 1;
-        if (form.negativeDrawCurse) obj['draw_curse'] = 1;
-        if (form.negativeBonusScore) obj['bonus_score'] = form.negativeBonusScore;
-        if (form.negativeEndGameModifier) obj['end_game_modifier'] = form.negativeEndGameModifier;
-      }
-      if (side === 'positive_duel') {
-        if (form.duelPositiveRecoverDie) obj['recover_die'] = 1;
-        if (form.duelPositiveDrawItem) obj['draw_item'] = 1;
-        if (form.duelPositiveRemoveCurse) obj['remove_curse'] = 1;
-        if (form.duelPositiveDrawCurse) obj['draw_curse'] = 1;
-        if (form.duelPositiveBonusScore) obj['bonus_score'] = form.duelPositiveBonusScore;
-        if (form.duelPositiveEndGameModifier) obj['end_game_modifier'] = form.duelPositiveEndGameModifier;
-      }
-      if (side === 'negative_duel') {
-        if (form.duelNegativeLoseDie) obj['lose_die'] = 1;
-        if (form.duelNegativeDiscardItem) obj['discard_item'] = 1;
-        if (form.duelNegativeDrawItem) obj['draw_item'] = 1;
-        if (form.duelNegativeDrawCurse) obj['draw_curse'] = 1;
-        if (form.duelNegativeBonusScore) obj['bonus_score'] = form.duelNegativeBonusScore;
-        if (form.duelNegativeEndGameModifier) obj['end_game_modifier'] = form.duelNegativeEndGameModifier;
-      }
-      return obj;
-    },
-    objToForm(effects) {
-      const obj = {};
-      let recoverDie = false;
-      let loseDie = false;
-      let drawItem = false;
-      let discardItem = false;
-      let removeCurse = false;
-      let drawCurse = false;
-      let bonusScore = 0;
-      let endGameModifier = 0;
-      for (const [key, val] of Object.entries(effects || {})) {
-        if (key === 'recover_die') recoverDie = true;
-        else if (key === 'lose_die') loseDie = true;
-        else if (key === 'draw_item') drawItem = true;
-        else if (key === 'discard_item') discardItem = true;
-        else if (key === 'remove_curse') removeCurse = true;
-        else if (key === 'draw_curse') drawCurse = true;
-        else if (key === 'bonus_score') bonusScore = val;
-        else if (key === 'end_game_modifier') endGameModifier = val;
-        else obj[key] = val;
-      }
-      return { stats: obj, recoverDie, loseDie, drawItem, discardItem, removeCurse, drawCurse, bonusScore, endGameModifier };
-    },
-
-    openCreate() {
-      this.editing = null;
-      const maxSort = this.cards.reduce((m, c) => Math.max(m, c.sort_order), 0);
-      this.form = {
-        title: '',
-        description: '',
-        question: '',
-        sort_order: maxSort + 1,
-        difficulty: 6,
-        category: '',
-        positive: {},
-        negative: {},
-        positive_flavor: '',
-        negative_flavor: '',
-        positiveRecoverDie: false,
-        positiveDrawItem: false,
-        positiveRemoveCurse: false,
-        positiveDrawCurse: false,
-        negativeLoseDie: false,
-        negativeDiscardItem: false,
-        negativeDrawItem: false,
-        negativeDrawCurse: false,
-        positiveBonusScore: 0,
-        positiveEndGameModifier: 0,
-        negativeBonusScore: 0,
-        negativeEndGameModifier: 0,
-        available_cooperative: true,
-        available_duel: true,
-        useDuelStats: false,
-        difficulty_duel: 6,
-        positive_duel: {},
-        negative_duel: {},
-        duelPositiveRecoverDie: false,
-        duelPositiveDrawItem: false,
-        duelPositiveRemoveCurse: false,
-        duelPositiveDrawCurse: false,
-        duelPositiveBonusScore: 0,
-        duelPositiveEndGameModifier: 0,
-        duelNegativeLoseDie: false,
-        duelNegativeDiscardItem: false,
-        duelNegativeDrawItem: false,
-        duelNegativeDrawCurse: false,
-        duelNegativeBonusScore: 0,
-        duelNegativeEndGameModifier: 0,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(card) {
-      this.editing = card;
-      const pos = this.objToForm(card.positive_effects);
-      const neg = this.objToForm(card.negative_effects);
-      const hasDuelStats = card.difficulty_duel != null || card.positive_effects_duel != null || card.negative_effects_duel != null;
-      const posDuel = hasDuelStats ? this.objToForm(card.positive_effects_duel) : { stats: {} };
-      const negDuel = hasDuelStats ? this.objToForm(card.negative_effects_duel) : { stats: {} };
-      this.form = {
-        title: card.title,
-        description: card.description,
-        question: card.question || '',
-        sort_order: card.sort_order,
-        difficulty: card.difficulty,
-        category: card.category || '',
-        positive: { ...pos.stats },
-        negative: { ...neg.stats },
-        positive_flavor: card.positive_flavor || '',
-        negative_flavor: card.negative_flavor || '',
-        positiveRecoverDie: pos.recoverDie,
-        positiveDrawItem: pos.drawItem,
-        positiveRemoveCurse: pos.removeCurse,
-        positiveDrawCurse: pos.drawCurse,
-        negativeLoseDie: neg.loseDie,
-        negativeDiscardItem: neg.discardItem,
-        negativeDrawItem: neg.drawItem,
-        negativeDrawCurse: neg.drawCurse,
-        positiveBonusScore: pos.bonusScore || 0,
-        positiveEndGameModifier: pos.endGameModifier || 0,
-        negativeBonusScore: neg.bonusScore || 0,
-        negativeEndGameModifier: neg.endGameModifier || 0,
-        available_cooperative: card.available_cooperative ?? true,
-        available_duel: card.available_duel ?? true,
-        useDuelStats: hasDuelStats,
-        difficulty_duel: card.difficulty_duel ?? card.difficulty,
-        positive_duel: { ...posDuel.stats },
-        negative_duel: { ...negDuel.stats },
-        duelPositiveRecoverDie: posDuel.recoverDie || false,
-        duelPositiveDrawItem: posDuel.drawItem || false,
-        duelPositiveRemoveCurse: posDuel.removeCurse || false,
-        duelPositiveDrawCurse: posDuel.drawCurse || false,
-        duelPositiveBonusScore: posDuel.bonusScore || 0,
-        duelPositiveEndGameModifier: posDuel.endGameModifier || 0,
-        duelNegativeLoseDie: negDuel.loseDie || false,
-        duelNegativeDiscardItem: negDuel.discardItem || false,
-        duelNegativeDrawItem: negDuel.drawItem || false,
-        duelNegativeDrawCurse: negDuel.drawCurse || false,
-        duelNegativeBonusScore: negDuel.bonusScore || 0,
-        duelNegativeEndGameModifier: negDuel.endGameModifier || 0,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-
-      const positive_effects = this.effectsToObj(this.form.positive, this.form, 'positive');
-      const negative_effects = this.effectsToObj(this.form.negative, this.form, 'negative');
-
-      const payload = {
-        title: this.form.title,
-        description: this.form.description,
-        question: this.form.question || null,
-        sort_order: this.form.sort_order,
-        difficulty: this.form.difficulty,
-        category: this.form.category || null,
-        positive_effects,
-        negative_effects,
-        positive_flavor: this.form.positive_flavor || null,
-        negative_flavor: this.form.negative_flavor || null,
-        available_cooperative: this.form.available_cooperative,
-        available_duel: this.form.available_duel,
-        difficulty_duel: this.form.useDuelStats ? this.form.difficulty_duel : null,
-        positive_effects_duel: this.form.useDuelStats ? this.effectsToObj(this.form.positive_duel, this.form, 'positive_duel') : null,
-        negative_effects_duel: this.form.useDuelStats ? this.effectsToObj(this.form.negative_duel, this.form, 'negative_duel') : null,
-      };
-
-      this.saving = true;
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/cards/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/cards', payload);
-        }
-        this.showModal = false;
-        await this.fetch();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Save failed';
-      }
-      this.saving = false;
-    },
-    async generateWithAi() {
-      this.aiError = '';
-      this.aiGenerating = true;
-      try {
-        const res = await axios.post('/api/admin/ai/generate-card', {
-          prompt: this.aiPrompt || undefined,
-          category: this.aiCategory || undefined,
-        });
-        const data = res.data;
-        this.showAiModal = false;
-        this.aiPrompt = '';
-        this.aiCategory = '';
-        // Open create modal pre-filled with AI data
-        const maxSort = this.cards.reduce((m, c) => Math.max(m, c.sort_order), 0);
-        const posData = this.objToForm(data.positive_effects);
-        const negData = this.objToForm(data.negative_effects);
-        this.editing = null;
-        this.form = {
-          title: data.title || '',
-          description: data.description || '',
-          question: data.question || '',
-          sort_order: maxSort + 1,
-          difficulty: data.difficulty || 6,
-          category: data.category || '',
-          positive: { ...posData.stats },
-          negative: { ...negData.stats },
-          positive_flavor: data.positive_flavor || '',
-          negative_flavor: data.negative_flavor || '',
-          positiveRecoverDie: posData.recoverDie,
-          positiveDrawItem: posData.drawItem,
-          positiveRemoveCurse: posData.removeCurse,
-          negativeLoseDie: negData.loseDie,
-          negativeDiscardItem: negData.discardItem,
-          negativeDrawItem: negData.drawItem,
-        };
-        this.formError = '';
-        this.showModal = true;
-      } catch (e) {
-        this.aiError = e.response?.data?.message || e.response?.data?.error || 'AI generation failed';
-      }
-      this.aiGenerating = false;
-    },
-    exportCsv() {
-      window.location.href = '/api/admin/cards/export-csv';
-    },
-    triggerImport() {
-      this.$refs.csvInput.click();
-    },
-    async handleImportFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const res = await axios.post('/api/admin/cards/import-csv', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        this.importResult = res.data;
-        await this.fetch();
-      } catch (e) {
-        this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
-      }
-      event.target.value = '';
-    },
-    async confirmDelete(card) {
-      if (!confirm(`Delete card "${card.title}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/cards/${card.id}`);
-        await this.fetch();
-      } catch (e) {
-        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
+  negative_duel: {
+    flags: [
+      ["duelNegativeLoseDie", "lose_die"],
+      ["duelNegativeDiscardItem", "discard_item"],
+      ["duelNegativeDrawItem", "draw_item"],
+      ["duelNegativeDrawCurse", "draw_curse"],
+    ],
+    values: [
+      ["duelNegativeBonusScore", "bonus_score"],
+      ["duelNegativeEndGameModifier", "end_game_modifier"],
+    ],
   },
 };
+
+function effectsToObject(effects: EffectMap, source: CardForm, side: EffectSide): EffectMap {
+  const object: EffectMap = {};
+  for (const [key, value] of Object.entries(effects)) {
+    if (value && value !== 0) {
+      object[key] = value;
+    }
+  }
+  const mapping = SPECIAL_EFFECT_FIELDS[side];
+  for (const [field, effectKey] of mapping.flags) {
+    if (source[field] === true) {
+      object[effectKey] = 1;
+    }
+  }
+  for (const [field, effectKey] of mapping.values) {
+    const value = source[field];
+    if (typeof value === "number" && value !== 0) {
+      object[effectKey] = value;
+    }
+  }
+  return object;
+}
+
+function objectToForm(effects: EffectMap | undefined): ObjectToFormResult {
+  const source = effects || {};
+  const specialKeys = new Set([
+    "recover_die",
+    "lose_die",
+    "draw_item",
+    "discard_item",
+    "remove_curse",
+    "draw_curse",
+    "bonus_score",
+    "end_game_modifier",
+  ]);
+  const stats: EffectMap = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (!specialKeys.has(key)) {
+      stats[key] = value;
+    }
+  }
+  return {
+    stats,
+    recoverDie: source.recover_die !== undefined,
+    loseDie: source.lose_die !== undefined,
+    drawItem: source.draw_item !== undefined,
+    discardItem: source.discard_item !== undefined,
+    removeCurse: source.remove_curse !== undefined,
+    drawCurse: source.draw_curse !== undefined,
+    bonusScore: source.bonus_score ?? 0,
+    endGameModifier: source.end_game_modifier ?? 0,
+  };
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, defaultForm(nextSortOrder()));
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(card: Card): void {
+  editing.value = card;
+  const pos = objectToForm(card.positive_effects);
+  const neg = objectToForm(card.negative_effects);
+  const hasDuelStats = card.difficulty_duel != undefined || card.positive_effects_duel != undefined || card.negative_effects_duel != undefined;
+  const posDuel = objectToForm(hasDuelStats ? card.positive_effects_duel : undefined);
+  const negDuel = objectToForm(hasDuelStats ? card.negative_effects_duel : undefined);
+  Object.assign(form, {
+    title: card.title,
+    description: card.description,
+    question: card.question || "",
+    sort_order: card.sort_order,
+    difficulty: card.difficulty,
+    category: card.category || "",
+    positive: { ...pos.stats },
+    negative: { ...neg.stats },
+    positive_flavor: card.positive_flavor || "",
+    negative_flavor: card.negative_flavor || "",
+    positiveRecoverDie: pos.recoverDie,
+    positiveDrawItem: pos.drawItem,
+    positiveRemoveCurse: pos.removeCurse,
+    positiveDrawCurse: pos.drawCurse,
+    negativeLoseDie: neg.loseDie,
+    negativeDiscardItem: neg.discardItem,
+    negativeDrawItem: neg.drawItem,
+    negativeDrawCurse: neg.drawCurse,
+    positiveBonusScore: pos.bonusScore || 0,
+    positiveEndGameModifier: pos.endGameModifier || 0,
+    negativeBonusScore: neg.bonusScore || 0,
+    negativeEndGameModifier: neg.endGameModifier || 0,
+    available_cooperative: card.available_cooperative ?? true,
+    available_duel: card.available_duel ?? true,
+    useDuelStats: hasDuelStats,
+    difficulty_duel: card.difficulty_duel ?? card.difficulty,
+    positive_duel: { ...posDuel.stats },
+    negative_duel: { ...negDuel.stats },
+    duelPositiveRecoverDie: posDuel.recoverDie || false,
+    duelPositiveDrawItem: posDuel.drawItem || false,
+    duelPositiveRemoveCurse: posDuel.removeCurse || false,
+    duelPositiveDrawCurse: posDuel.drawCurse || false,
+    duelPositiveBonusScore: posDuel.bonusScore || 0,
+    duelPositiveEndGameModifier: posDuel.endGameModifier || 0,
+    duelNegativeLoseDie: negDuel.loseDie || false,
+    duelNegativeDiscardItem: negDuel.discardItem || false,
+    duelNegativeDrawItem: negDuel.drawItem || false,
+    duelNegativeDrawCurse: negDuel.drawCurse || false,
+    duelNegativeBonusScore: negDuel.bonusScore || 0,
+    duelNegativeEndGameModifier: negDuel.endGameModifier || 0,
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+
+  const positiveEffects = effectsToObject(form.positive, form, "positive");
+  const negativeEffects = effectsToObject(form.negative, form, "negative");
+
+  const payload = {
+    title: form.title,
+    description: form.description,
+    question: form.question || undefined,
+    sort_order: form.sort_order,
+    difficulty: form.difficulty,
+    category: form.category || undefined,
+    positive_effects: positiveEffects,
+    negative_effects: negativeEffects,
+    positive_flavor: form.positive_flavor || undefined,
+    negative_flavor: form.negative_flavor || undefined,
+    available_cooperative: form.available_cooperative,
+    available_duel: form.available_duel,
+    difficulty_duel: form.useDuelStats ? form.difficulty_duel : undefined,
+    positive_effects_duel: form.useDuelStats ? effectsToObject(form.positive_duel, form, "positive_duel") : undefined,
+    negative_effects_duel: form.useDuelStats ? effectsToObject(form.negative_duel, form, "negative_duel") : undefined,
+  };
+
+  saving.value = true;
+  try {
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/cards/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/cards", payload);
+    }
+    showModal.value = false;
+    await fetch();
+  } catch (error) {
+    formError.value = errorMessage(error, "Save failed");
+  }
+  saving.value = false;
+}
+
+async function generateWithAi(): Promise<void> {
+  aiError.value = "";
+  aiGenerating.value = true;
+  try {
+    const response = await axios.post<AiCardResponse>("/api/admin/ai/generate-card", {
+      prompt: aiPrompt.value || undefined,
+      category: aiCategory.value || undefined,
+    });
+    const data = response.data;
+    showAiModal.value = false;
+    aiPrompt.value = "";
+    aiCategory.value = "";
+    // Open create modal pre-filled with AI data
+    const posData = objectToForm(data.positive_effects);
+    const negData = objectToForm(data.negative_effects);
+    editing.value = undefined;
+    Object.assign(form, defaultForm(nextSortOrder()), {
+      title: data.title || "",
+      description: data.description || "",
+      question: data.question || "",
+      difficulty: data.difficulty || 6,
+      category: data.category || "",
+      positive: { ...posData.stats },
+      negative: { ...negData.stats },
+      positive_flavor: data.positive_flavor || "",
+      negative_flavor: data.negative_flavor || "",
+      positiveRecoverDie: posData.recoverDie,
+      positiveDrawItem: posData.drawItem,
+      positiveRemoveCurse: posData.removeCurse,
+      negativeLoseDie: negData.loseDie,
+      negativeDiscardItem: negData.discardItem,
+      negativeDrawItem: negData.drawItem,
+    });
+    formError.value = "";
+    showModal.value = true;
+  } catch (error) {
+    aiError.value = errorMessage(error, "AI generation failed");
+  }
+  aiGenerating.value = false;
+}
+
+function exportCsv(): void {
+  window.location.assign("/api/admin/cards/export-csv");
+}
+
+function triggerImport(): void {
+  csvInput.value?.click();
+}
+
+async function handleImportFile(event: Event): Promise<void> {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await axios.post<ImportResult>("/api/admin/cards/import-csv", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    importResult.value = response.data;
+    await fetch();
+  } catch (error) {
+    importResult.value = { created: 0, updated: 0, errors: [errorMessage(error, "Import failed")] };
+  }
+  target.value = "";
+}
+
+async function confirmDelete(card: Card): Promise<void> {
+  if (!confirm(`Delete card "${card.title}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/cards/${card.id}`);
+    await fetch();
+  } catch (error) {
+    toast.error(`Delete failed: ${errorMessage(error, "Delete failed")}`);
+  }
+}
+
+onMounted(async () => {
+  await fetch();
+});
 </script>
 
 <style scoped>

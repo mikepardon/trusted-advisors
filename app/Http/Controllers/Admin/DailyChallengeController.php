@@ -50,7 +50,11 @@ class DailyChallengeController extends Controller
             'addon_id' => 'nullable|integer|exists:addons,id',
         ]);
 
-        $dailyChallenge->update($validated);
+        // An omitted nullable addon_id means "Base Game" was selected; null it explicitly.
+        $dailyChallenge->update([
+            ...$validated,
+            'addon_id' => $validated['addon_id'] ?? null,
+        ]);
         return response()->json($dailyChallenge);
     }
 

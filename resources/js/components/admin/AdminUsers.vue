@@ -48,19 +48,19 @@
             </td>
             <td>{{ formatDate(user.last_login_at) }}</td>
             <td class="actions-cell">
-              <button class="action-btn" @click="viewUser(user.id)" title="Manage User">&#128065;</button>
+              <button class="action-btn" title="Manage User" @click="viewUser(user.id)">&#128065;</button>
               <button
                 v-if="!user.is_admin"
                 class="action-btn"
-                @click="impersonateUser(user)"
                 title="Login as this user"
+                @click="impersonateUser(user)"
               >&#128100;</button>
               <button
                 v-if="!user.is_admin"
                 class="action-btn"
                 :class="{ 'btn-unban': user.banned_at }"
-                @click="toggleBan(user)"
                 :title="user.banned_at ? 'Unban' : 'Ban'"
+                @click="toggleBan(user)"
               >{{ user.banned_at ? '&#9989;' : '&#128683;' }}</button>
             </td>
           </tr>
@@ -76,9 +76,9 @@
     </div>
 
     <!-- Manage User Panel -->
-    <div v-if="selectedUser" class="detail-overlay" @click.self="selectedUser = null">
+    <div v-if="selectedUser" class="detail-overlay" @click.self="selectedUser = undefined">
       <div class="detail-panel">
-        <button class="detail-close" @click="selectedUser = null">&times;</button>
+        <button class="detail-close" @click="selectedUser = undefined">&times;</button>
 
         <!-- Header -->
         <div class="detail-header">
@@ -110,11 +110,11 @@
           <h3 class="section-title">Edit Name</h3>
           <div class="inline-form">
             <input v-model="editName" class="form-input" placeholder="New display name" />
-            <button class="btn-sm btn-action" @click="saveName" :disabled="nameLoading || !editName.trim()">
+            <button class="btn-sm btn-action" :disabled="nameLoading || !editName.trim()" @click="saveName">
               {{ nameLoading ? 'Saving...' : 'Save' }}
             </button>
           </div>
-          <p v-if="nameMsg" :class="['action-msg', nameMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ nameMsg }}</p>
+          <p v-if="nameMessage" :class="['action-msg', nameMessage.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ nameMessage }}</p>
         </div>
 
         <!-- Admin Role -->
@@ -128,11 +128,11 @@
               <option value="moderator">Moderator</option>
               <option value="analyst">Analyst</option>
             </select>
-            <button class="btn-sm btn-action" @click="saveRole" :disabled="roleLoading">
+            <button class="btn-sm btn-action" :disabled="roleLoading" @click="saveRole">
               {{ roleLoading ? 'Saving...' : 'Update Role' }}
             </button>
           </div>
-          <p v-if="roleMsg" :class="['action-msg', roleMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ roleMsg }}</p>
+          <p v-if="roleMessage" :class="['action-msg', roleMessage.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ roleMessage }}</p>
         </div>
 
         <!-- Send Notification -->
@@ -141,11 +141,11 @@
           <div class="stacked-form">
             <input v-model="notifyTitle" class="form-input" placeholder="Notification title" />
             <textarea v-model="notifyMessage" class="form-input form-textarea" rows="2" placeholder="Message body"></textarea>
-            <button class="btn-sm btn-action" @click="sendNotification" :disabled="notifyLoading || !notifyTitle.trim() || !notifyMessage.trim()">
+            <button class="btn-sm btn-action" :disabled="notifyLoading || !notifyTitle.trim() || !notifyMessage.trim()" @click="sendNotification">
               {{ notifyLoading ? 'Sending...' : 'Send' }}
             </button>
           </div>
-          <p v-if="notifyMsg" :class="['action-msg', notifyMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ notifyMsg }}</p>
+          <p v-if="notifyResult" :class="['action-msg', notifyResult.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ notifyResult }}</p>
         </div>
 
         <!-- Gift Premium -->
@@ -153,7 +153,7 @@
           <h3 class="section-title">Premium Subscription</h3>
           <div v-if="selectedUser.is_premium" class="premium-active">
             <p class="premium-status">Active — expires {{ formatDate(selectedUser.premium_expires_at) }}</p>
-            <button class="btn-sm btn-danger" @click="revokePremium" :disabled="giftLoading">Revoke</button>
+            <button class="btn-sm btn-danger" :disabled="giftLoading" @click="revokePremium">Revoke</button>
           </div>
           <div v-else class="inline-form">
             <select v-model="giftDuration" class="form-input">
@@ -163,17 +163,17 @@
               <option value="1_year">1 Year</option>
               <option value="lifetime">Lifetime</option>
             </select>
-            <button class="btn-sm btn-gift" @click="giftPremium" :disabled="giftLoading">
+            <button class="btn-sm btn-gift" :disabled="giftLoading" @click="giftPremium">
               {{ giftLoading ? 'Gifting...' : 'Gift Premium' }}
             </button>
           </div>
-          <p v-if="giftMsg" :class="['action-msg', giftMsg.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ giftMsg }}</p>
+          <p v-if="giftMessage" :class="['action-msg', giftMessage.startsWith('Error') ? 'msg-error' : 'msg-success']">{{ giftMessage }}</p>
         </div>
 
         <!-- Login Logs -->
         <div class="manage-section">
           <h3 class="section-title">Recent Login History</h3>
-          <div v-if="loginLogs.length" class="logs-table-wrap">
+          <div v-if="loginLogs.length > 0" class="logs-table-wrap">
             <table class="logs-table">
               <thead>
                 <tr>
@@ -199,213 +199,285 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import axios, { isAxiosError } from "axios";
+import { onMounted, ref } from "vue";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminUsers',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      users: [],
-      searchQuery: '',
-      pagination: { currentPage: 1, lastPage: 1 },
-      selectedUser: null,
-      loginLogs: [],
-      _searchTimer: null,
-      // Edit name
-      editName: '',
-      nameLoading: false,
-      nameMsg: '',
-      // Role
-      editRole: '',
-      roleLoading: false,
-      roleMsg: '',
-      // Notification
-      notifyTitle: '',
-      notifyMessage: '',
-      notifyLoading: false,
-      notifyMsg: '',
-      // Premium
-      giftDuration: '1_month',
-      giftLoading: false,
-      giftMsg: '',
+interface AdminUser {
+  id: number;
+  name: string;
+  email?: string;
+  level: number;
+  xp: number;
+  elo_rating: number;
+  coins: number;
+  timeout_count: number;
+  banned_at?: string;
+  is_admin: boolean;
+  admin_role?: string;
+  is_premium: boolean;
+  premium_expires_at?: string;
+  last_login_at?: string;
+  created_at?: string;
+  games_played: number;
+  games_won: number;
+  achievement_count: number;
+  login_streak: number;
+  max_login_streak: number;
+}
+
+interface LoginLog {
+  id: number;
+  logged_in_at: string;
+  ip_address?: string;
+  user_agent?: string;
+}
+
+interface Pagination {
+  currentPage: number;
+  lastPage: number;
+}
+
+interface UsersResponse {
+  data: AdminUser[];
+  current_page: number;
+  last_page: number;
+}
+
+interface NameResponse {
+  name: string;
+}
+
+interface BanResponse {
+  banned_at?: string;
+}
+
+interface MessageResponse {
+  message: string;
+}
+
+const toast = useToast();
+
+const users = ref<AdminUser[]>([]);
+const searchQuery = ref("");
+const pagination = ref<Pagination>({ currentPage: 1, lastPage: 1 });
+const selectedUser = ref<AdminUser | undefined>(undefined);
+const loginLogs = ref<LoginLog[]>([]);
+const searchTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+// Edit name
+const editName = ref("");
+const nameLoading = ref(false);
+const nameMessage = ref("");
+// Role
+const editRole = ref("");
+const roleLoading = ref(false);
+const roleMessage = ref("");
+// Notification
+const notifyTitle = ref("");
+const notifyMessage = ref("");
+const notifyLoading = ref(false);
+const notifyResult = ref("");
+// Premium
+const giftDuration = ref("1_month");
+const giftLoading = ref(false);
+const giftMessage = ref("");
+
+function errorMessage(error: unknown): string {
+  return isAxiosError<{ error?: string; message?: string }>(error)
+    ? error.response?.data?.error ?? error.response?.data?.message ?? error.message
+    : "Failed";
+}
+
+async function fetchUsers(page = 1): Promise<void> {
+  try {
+    const parameters: { page: number; search?: string } = { page };
+    if (searchQuery.value) parameters.search = searchQuery.value;
+    const response = await axios.get<UsersResponse>("/api/admin/users", { params: parameters });
+    users.value = response.data.data;
+    pagination.value = {
+      currentPage: response.data.current_page,
+      lastPage: response.data.last_page,
     };
-  },
-  mounted() {
-    this.fetchUsers();
-  },
-  methods: {
-    async fetchUsers(page = 1) {
-      try {
-        const params = { page };
-        if (this.searchQuery) params.search = this.searchQuery;
-        const res = await axios.get('/api/admin/users', { params });
-        this.users = res.data.data;
-        this.pagination = {
-          currentPage: res.data.current_page,
-          lastPage: res.data.last_page,
-        };
-      } catch (e) {
-        console.error('Failed to fetch users:', e);
-      }
-    },
-    debouncedSearch() {
-      clearTimeout(this._searchTimer);
-      this._searchTimer = setTimeout(() => {
-        this.fetchUsers(1);
-      }, 300);
-    },
-    goToPage(page) {
-      this.fetchUsers(page);
-    },
-    async viewUser(userId) {
-      // Reset form state
-      this.nameMsg = '';
-      this.roleMsg = '';
-      this.notifyMsg = '';
-      this.giftMsg = '';
-      this.notifyTitle = '';
-      this.notifyMessage = '';
+  } catch (error) {
+    console.error("Failed to fetch users:", error);
+  }
+}
 
-      try {
-        const [userRes, logsRes] = await Promise.all([
-          axios.get(`/api/admin/users/${userId}`),
-          axios.get(`/api/admin/users/${userId}/login-logs`),
-        ]);
-        this.selectedUser = userRes.data;
-        this.loginLogs = logsRes.data;
-        this.editName = this.selectedUser.name;
-        this.editRole = this.selectedUser.admin_role || '';
-      } catch (e) {
-        console.error('Failed to fetch user details:', e);
-      }
-    },
-    async impersonateUser(user) {
-      if (!confirm(`Login as ${user.name}? You will be redirected to the app as this user.`)) return;
-      try {
-        await axios.post(`/api/admin/users/${user.id}/impersonate`);
-        window.location.href = '/';
-      } catch (e) {
-        this.toast.error('Failed: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    async toggleBan(user) {
-      const action = user.banned_at ? 'unban' : 'ban';
-      if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
-      try {
-        const res = await axios.post(`/api/admin/users/${user.id}/ban`);
-        user.banned_at = res.data.banned_at;
-      } catch (e) {
-        this.toast.error('Failed: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    // Edit name
-    async saveName() {
-      if (!this.selectedUser || !this.editName.trim()) return;
-      this.nameLoading = true;
-      this.nameMsg = '';
-      try {
-        const res = await axios.put(`/api/admin/users/${this.selectedUser.id}/name`, { name: this.editName.trim() });
-        this.selectedUser.name = res.data.name;
-        this.nameMsg = 'Name updated';
-        // Update table row too
-        const row = this.users.find(u => u.id === this.selectedUser.id);
-        if (row) row.name = res.data.name;
-        setTimeout(() => { this.nameMsg = ''; }, 3000);
-      } catch (e) {
-        this.nameMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
-      }
-      this.nameLoading = false;
-    },
-    // Admin role
-    async saveRole() {
-      if (!this.selectedUser) return;
-      this.roleLoading = true;
-      this.roleMsg = '';
-      try {
-        if (this.editRole) {
-          await axios.put(`/api/admin/users/${this.selectedUser.id}/role`, { admin_role: this.editRole });
-          this.selectedUser.admin_role = this.editRole;
-          this.selectedUser.is_admin = true;
-          this.roleMsg = 'Role updated to ' + this.editRole.replace(/_/g, ' ');
-        } else {
-          this.roleMsg = 'Error: Select a role to assign';
-          this.roleLoading = false;
-          return;
-        }
-        // Update table row
-        const row = this.users.find(u => u.id === this.selectedUser.id);
-        if (row) row.is_admin = true;
-        setTimeout(() => { this.roleMsg = ''; }, 3000);
-      } catch (e) {
-        this.roleMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
-      }
-      this.roleLoading = false;
-    },
-    // Send notification
-    async sendNotification() {
-      if (!this.selectedUser || !this.notifyTitle.trim() || !this.notifyMessage.trim()) return;
-      this.notifyLoading = true;
-      this.notifyMsg = '';
-      try {
-        await axios.post(`/api/admin/users/${this.selectedUser.id}/notify`, {
-          title: this.notifyTitle.trim(),
-          message: this.notifyMessage.trim(),
-        });
-        this.notifyMsg = 'Notification sent';
-        this.notifyTitle = '';
-        this.notifyMessage = '';
-        setTimeout(() => { this.notifyMsg = ''; }, 3000);
-      } catch (e) {
-        this.notifyMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
-      }
-      this.notifyLoading = false;
-    },
-    // Premium
-    async giftPremium() {
-      if (!this.selectedUser) return;
-      this.giftLoading = true;
-      this.giftMsg = '';
-      try {
-        const res = await axios.post(`/api/admin/users/${this.selectedUser.id}/grant-premium`, {
-          duration: this.giftDuration,
-        });
-        this.giftMsg = res.data.message;
-        const userRes = await axios.get(`/api/admin/users/${this.selectedUser.id}`);
-        this.selectedUser = userRes.data;
-        this.editName = this.selectedUser.name;
-        this.editRole = this.selectedUser.admin_role || '';
-      } catch (e) {
-        this.giftMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
-      }
-      this.giftLoading = false;
-    },
-    async revokePremium() {
-      if (!this.selectedUser || !confirm(`Revoke premium from ${this.selectedUser.name}?`)) return;
-      this.giftLoading = true;
-      this.giftMsg = '';
-      try {
-        const res = await axios.post(`/api/admin/users/${this.selectedUser.id}/revoke-premium`);
-        this.giftMsg = res.data.message;
-        const userRes = await axios.get(`/api/admin/users/${this.selectedUser.id}`);
-        this.selectedUser = userRes.data;
-        this.editName = this.selectedUser.name;
-        this.editRole = this.selectedUser.admin_role || '';
-      } catch (e) {
-        this.giftMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
-      }
-      this.giftLoading = false;
-    },
-    formatDate(dateStr) {
-      if (!dateStr) return '—';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-        + ' ' + d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-    },
-  },
-};
+function debouncedSearch(): void {
+  clearTimeout(searchTimer.value);
+  searchTimer.value = setTimeout(() => {
+    void fetchUsers(1);
+  }, 300);
+}
+
+function goToPage(page: number): void {
+  void fetchUsers(page);
+}
+
+async function viewUser(userId: number): Promise<void> {
+  // Reset form state
+  nameMessage.value = "";
+  roleMessage.value = "";
+  notifyResult.value = "";
+  giftMessage.value = "";
+  notifyTitle.value = "";
+  notifyMessage.value = "";
+
+  try {
+    const [userResponse, logsResponse] = await Promise.all([
+      axios.get<AdminUser>(`/api/admin/users/${userId}`),
+      axios.get<LoginLog[]>(`/api/admin/users/${userId}/login-logs`),
+    ]);
+    selectedUser.value = userResponse.data;
+    loginLogs.value = logsResponse.data;
+    editName.value = selectedUser.value.name;
+    editRole.value = selectedUser.value.admin_role || "";
+  } catch (error) {
+    console.error("Failed to fetch user details:", error);
+  }
+}
+
+async function impersonateUser(user: AdminUser): Promise<void> {
+  if (!confirm(`Login as ${user.name}? You will be redirected to the app as this user.`)) return;
+  try {
+    await axios.post(`/api/admin/users/${user.id}/impersonate`);
+    window.location.assign("/");
+  } catch (error) {
+    toast.error(`Failed: ${errorMessage(error)}`);
+  }
+}
+
+async function toggleBan(user: AdminUser): Promise<void> {
+  const action = user.banned_at ? "unban" : "ban";
+  if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
+  try {
+    const response = await axios.post<BanResponse>(`/api/admin/users/${user.id}/ban`);
+    user.banned_at = response.data.banned_at;
+  } catch (error) {
+    toast.error(`Failed: ${errorMessage(error)}`);
+  }
+}
+
+// Edit name
+async function saveName(): Promise<void> {
+  if (!selectedUser.value || !editName.value.trim()) return;
+  nameLoading.value = true;
+  nameMessage.value = "";
+  try {
+    const response = await axios.put<NameResponse>(`/api/admin/users/${selectedUser.value.id}/name`, {
+      name: editName.value.trim(),
+    });
+    selectedUser.value.name = response.data.name;
+    nameMessage.value = "Name updated";
+    // Update table row too
+    const row = users.value.find((u) => u.id === selectedUser.value?.id);
+    if (row) row.name = response.data.name;
+    setTimeout(() => {
+      nameMessage.value = "";
+    }, 3000);
+  } catch (error) {
+    nameMessage.value = `Error: ${errorMessage(error)}`;
+  }
+  nameLoading.value = false;
+}
+
+// Admin role
+async function saveRole(): Promise<void> {
+  if (!selectedUser.value) return;
+  roleLoading.value = true;
+  roleMessage.value = "";
+  try {
+    if (editRole.value) {
+      await axios.put(`/api/admin/users/${selectedUser.value.id}/role`, { admin_role: editRole.value });
+      selectedUser.value.admin_role = editRole.value;
+      selectedUser.value.is_admin = true;
+      roleMessage.value = `Role updated to ${editRole.value.replaceAll('_', " ")}`;
+    } else {
+      roleMessage.value = "Error: Select a role to assign";
+      roleLoading.value = false;
+      return;
+    }
+    // Update table row
+    const row = users.value.find((u) => u.id === selectedUser.value?.id);
+    if (row) row.is_admin = true;
+    setTimeout(() => {
+      roleMessage.value = "";
+    }, 3000);
+  } catch (error) {
+    roleMessage.value = `Error: ${errorMessage(error)}`;
+  }
+  roleLoading.value = false;
+}
+
+// Send notification
+async function sendNotification(): Promise<void> {
+  if (!selectedUser.value || !notifyTitle.value.trim() || !notifyMessage.value.trim()) return;
+  notifyLoading.value = true;
+  notifyResult.value = "";
+  try {
+    await axios.post(`/api/admin/users/${selectedUser.value.id}/notify`, {
+      title: notifyTitle.value.trim(),
+      message: notifyMessage.value.trim(),
+    });
+    notifyResult.value = "Notification sent";
+    notifyTitle.value = "";
+    notifyMessage.value = "";
+    setTimeout(() => {
+      notifyResult.value = "";
+    }, 3000);
+  } catch (error) {
+    notifyResult.value = `Error: ${errorMessage(error)}`;
+  }
+  notifyLoading.value = false;
+}
+
+// Premium
+async function giftPremium(): Promise<void> {
+  if (!selectedUser.value) return;
+  giftLoading.value = true;
+  giftMessage.value = "";
+  try {
+    const response = await axios.post<MessageResponse>(`/api/admin/users/${selectedUser.value.id}/grant-premium`, {
+      duration: giftDuration.value,
+    });
+    giftMessage.value = response.data.message;
+    const userResponse = await axios.get<AdminUser>(`/api/admin/users/${selectedUser.value.id}`);
+    selectedUser.value = userResponse.data;
+    editName.value = selectedUser.value.name;
+    editRole.value = selectedUser.value.admin_role || "";
+  } catch (error) {
+    giftMessage.value = `Error: ${errorMessage(error)}`;
+  }
+  giftLoading.value = false;
+}
+
+async function revokePremium(): Promise<void> {
+  if (!selectedUser.value || !confirm(`Revoke premium from ${selectedUser.value.name}?`)) return;
+  giftLoading.value = true;
+  giftMessage.value = "";
+  try {
+    const response = await axios.post<MessageResponse>(`/api/admin/users/${selectedUser.value.id}/revoke-premium`);
+    giftMessage.value = response.data.message;
+    const userResponse = await axios.get<AdminUser>(`/api/admin/users/${selectedUser.value.id}`);
+    selectedUser.value = userResponse.data;
+    editName.value = selectedUser.value.name;
+    editRole.value = selectedUser.value.admin_role || "";
+  } catch (error) {
+    giftMessage.value = `Error: ${errorMessage(error)}`;
+  }
+  giftLoading.value = false;
+}
+
+function formatDate(dateString: string | undefined): string {
+  if (!dateString) return "—";
+  const date = new Date(dateString);
+  return `${date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} ${date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`;
+}
+
+onMounted(() => {
+  void fetchUsers();
+});
 </script>
 
 <style scoped>

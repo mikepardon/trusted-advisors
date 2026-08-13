@@ -56,12 +56,6 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'PrivacyPage',
-};
-</script>
-
 <style scoped>
 .legal-page {
   max-width: 600px;

@@ -1,24 +1,28 @@
 <template>
   <th class="sortable-header" @click="$emit('sort', field)">
     <span class="header-label">{{ label }}</span>
-    <span class="sort-arrow" v-if="currentSort === field">
+    <span v-if="currentSort === field" class="sort-arrow">
       {{ currentDir === 'asc' ? '\u25B2' : '\u25BC' }}
     </span>
-    <span class="sort-arrow sort-inactive" v-else>&#8693;</span>
+    <span v-else class="sort-arrow sort-inactive">&#8693;</span>
   </th>
 </template>
 
-<script>
-export default {
-  name: 'SortableHeader',
-  props: {
-    label: { type: String, required: true },
-    field: { type: String, required: true },
-    currentSort: { type: String, default: '' },
-    currentDir: { type: String, default: 'asc' },
+<script setup lang="ts">
+withDefaults(
+  defineProps<{
+    label: string;
+    field: string;
+    currentSort?: string;
+    currentDir?: string;
+  }>(),
+  {
+    currentSort: "",
+    currentDir: "asc",
   },
-  emits: ['sort'],
-};
+);
+
+defineEmits<{ sort: [field: string] }>();
 </script>
 
 <style scoped>

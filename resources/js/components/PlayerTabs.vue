@@ -17,15 +17,22 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'PlayerTabs',
-  props: {
-    players: { type: Array, required: true },
-    activePlayer: { type: Number, default: 1 },
-  },
-  emits: ['switch'],
-};
+<script setup lang="ts">
+interface PlayerTab {
+  player_number: number;
+  character_name: string;
+  has_assigned: boolean;
+}
+
+withDefaults(
+  defineProps<{
+    players: PlayerTab[];
+    activePlayer?: number;
+  }>(),
+  { activePlayer: 1 },
+);
+
+defineEmits<{ switch: [playerNumber: number] }>();
 </script>
 
 <style scoped>

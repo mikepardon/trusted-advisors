@@ -74,7 +74,7 @@
       </div>
 
       <!-- Charts -->
-      <div class="charts-grid" v-if="hasChartData">
+      <div v-if="hasChartData" class="charts-grid">
         <div class="chart-card">
           <h4 class="chart-title">Games by Mode</h4>
           <Doughnut :data="modeChartData" :options="chartOptions" />
@@ -135,7 +135,7 @@
       <h3 class="section-title">Feature Toggles</h3>
       <div class="toggles-panel">
         <label class="toggle-row">
-          <input type="checkbox" v-model="tournamentsEnabled" @change="saveToggle('tournaments_enabled', tournamentsEnabled)" />
+          <input v-model="tournamentsEnabled" type="checkbox" @change="saveToggle('tournaments_enabled', tournamentsEnabled)" />
           <span class="toggle-label">Tournaments Mode</span>
           <span class="toggle-desc">Allow players to create and join tournaments</span>
         </label>
@@ -147,7 +147,7 @@
         <div class="appearance-row">
           <span class="toggle-label">Homepage Background Image</span>
           <span class="toggle-desc" style="padding-left:0">Displayed between header and bottom nav on the homepage.</span>
-          <div class="bg-preview-wrap" v-if="homepageBgUrl">
+          <div v-if="homepageBgUrl" class="bg-preview-wrap">
             <img :src="homepageBgUrl" class="bg-preview" alt="Homepage background" />
             <button class="btn-remove-bg" @click="removeHomepageBg">Remove</button>
           </div>
@@ -160,7 +160,7 @@
         <div class="appearance-row">
           <span class="toggle-label">Classic Game Background</span>
           <span class="toggle-desc" style="padding-left:0">Background image during cooperative games.</span>
-          <div class="bg-preview-wrap" v-if="classicBgUrl">
+          <div v-if="classicBgUrl" class="bg-preview-wrap">
             <img :src="classicBgUrl" class="bg-preview" alt="Classic game background" />
             <button class="btn-remove-bg" @click="removeGameBg('classic')">Remove</button>
           </div>
@@ -173,7 +173,7 @@
         <div class="appearance-row">
           <span class="toggle-label">Duel Game Background</span>
           <span class="toggle-desc" style="padding-left:0">Background image during duel games.</span>
-          <div class="bg-preview-wrap" v-if="duelBgUrl">
+          <div v-if="duelBgUrl" class="bg-preview-wrap">
             <img :src="duelBgUrl" class="bg-preview" alt="Duel game background" />
             <button class="btn-remove-bg" @click="removeGameBg('duel')">Remove</button>
           </div>
@@ -194,174 +194,200 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
-import { Doughnut } from 'vue-chartjs';
-import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
-import MediaLibraryModal from './MediaLibraryModal.vue';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios from "axios";
+import { useToast } from "../../stores/toast";
+import { Doughnut } from "vue-chartjs";
+import { Chart as ChartJS, ArcElement, Tooltip, Legend } from "chart.js";
+import MediaLibraryModal from "./MediaLibraryModal.vue";
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
-export default {
-  name: 'AdminDashboard',
-  components: { Doughnut, MediaLibraryModal },
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      loading: true,
-      stats: {},
-      tournamentsEnabled: false,
-      homepageBgUrl: null,
-      classicBgUrl: null,
-      duelBgUrl: null,
-      showMediaPicker: false,
-      mediaPickerTarget: 'homepage',
-    };
+interface DashboardStats {
+  total_users?: number;
+  verified_users?: number;
+  completed_games?: number;
+  active_games?: number;
+  setup_games?: number;
+  cancelled_games?: number;
+  wins?: number;
+  games_by_mode?: { single?: number; pass_and_play?: number; online?: number };
+  games_by_type?: { cooperative?: number; duel?: number };
+  content_counts?: { characters?: number; cards?: number; events?: number; items?: number };
+}
+
+interface MediaItem {
+  path: string;
+  url: string;
+}
+
+type MediaTarget = "homepage" | "classic" | "duel";
+
+const toast = useToast();
+
+const loading = ref(true);
+const stats = ref<DashboardStats>({});
+const tournamentsEnabled = ref(false);
+const homepageBgUrl = ref<string | undefined>(undefined);
+const classicBgUrl = ref<string | undefined>(undefined);
+const duelBgUrl = ref<string | undefined>(undefined);
+const showMediaPicker = ref(false);
+const mediaPickerTarget = ref<MediaTarget>("homepage");
+
+const winRate = computed<number>(() => {
+  const completed = stats.value.completed_games || 0;
+  if (completed === 0) {
+    return 0;
+  }
+  return Math.round(((stats.value.wins ?? 0) / completed) * 100);
+});
+
+const hasChartData = computed<boolean>(() =>
+  (stats.value.completed_games ?? 0) > 0 || (stats.value.active_games ?? 0) > 0,
+);
+
+const modeChartData = computed(() => {
+  const modes = stats.value.games_by_mode ?? {};
+  return {
+    labels: ["Single", "Pass & Play", "Online"],
+    datasets: [{
+      data: [modes.single || 0, modes.pass_and_play || 0, modes.online || 0],
+      backgroundColor: ["#d4a843", "#8a6a2e", "#e8c468"],
+      borderColor: "rgba(30, 25, 18, 0.8)",
+      borderWidth: 2,
+    }],
+  };
+});
+
+const typeChartData = computed(() => {
+  const types = stats.value.games_by_type ?? {};
+  return {
+    labels: ["Cooperative", "Duel"],
+    datasets: [{
+      data: [types.cooperative || 0, types.duel || 0],
+      backgroundColor: ["#4a8a3a", "#a03020"],
+      borderColor: "rgba(30, 25, 18, 0.8)",
+      borderWidth: 2,
+    }],
+  };
+});
+
+const winChartData = computed(() => {
+  const wins = stats.value.wins || 0;
+  const completed = stats.value.completed_games || 0;
+  const losses = Math.max(0, completed - wins);
+  return {
+    labels: ["Wins", "Losses"],
+    datasets: [{
+      data: [wins, losses],
+      backgroundColor: ["#4a8a3a", "#a03020"],
+      borderColor: "rgba(30, 25, 18, 0.8)",
+      borderWidth: 2,
+    }],
+  };
+});
+
+const chartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: true,
+  plugins: {
+    legend: {
+      position: "bottom" as const,
+      labels: {
+        color: "#b8a67a",
+        padding: 14,
+        font: { size: 12 },
+      },
+    },
+    tooltip: {
+      backgroundColor: "rgba(30, 25, 18, 0.95)",
+      titleColor: "#d4a843",
+      bodyColor: "#e0d6c2",
+      borderColor: "#8a6a2e",
+      borderWidth: 1,
+    },
   },
-  computed: {
-    winRate() {
-      const completed = this.stats.completed_games || 0;
-      if (completed === 0) return 0;
-      return Math.round((this.stats.wins / completed) * 100);
-    },
-    hasChartData() {
-      return this.stats.completed_games > 0 || this.stats.active_games > 0;
-    },
-    modeChartData() {
-      const modes = this.stats.games_by_mode || {};
-      return {
-        labels: ['Single', 'Pass & Play', 'Online'],
-        datasets: [{
-          data: [modes.single || 0, modes.pass_and_play || 0, modes.online || 0],
-          backgroundColor: ['#d4a843', '#8a6a2e', '#e8c468'],
-          borderColor: 'rgba(30, 25, 18, 0.8)',
-          borderWidth: 2,
-        }],
-      };
-    },
-    typeChartData() {
-      const types = this.stats.games_by_type || {};
-      return {
-        labels: ['Cooperative', 'Duel'],
-        datasets: [{
-          data: [types.cooperative || 0, types.duel || 0],
-          backgroundColor: ['#4a8a3a', '#a03020'],
-          borderColor: 'rgba(30, 25, 18, 0.8)',
-          borderWidth: 2,
-        }],
-      };
-    },
-    winChartData() {
-      const wins = this.stats.wins || 0;
-      const completed = this.stats.completed_games || 0;
-      const losses = Math.max(0, completed - wins);
-      return {
-        labels: ['Wins', 'Losses'],
-        datasets: [{
-          data: [wins, losses],
-          backgroundColor: ['#4a8a3a', '#a03020'],
-          borderColor: 'rgba(30, 25, 18, 0.8)',
-          borderWidth: 2,
-        }],
-      };
-    },
-    chartOptions() {
-      return {
-        responsive: true,
-        maintainAspectRatio: true,
-        plugins: {
-          legend: {
-            position: 'bottom',
-            labels: {
-              color: '#b8a67a',
-              padding: 14,
-              font: { size: 12 },
-            },
-          },
-          tooltip: {
-            backgroundColor: 'rgba(30, 25, 18, 0.95)',
-            titleColor: '#d4a843',
-            bodyColor: '#e0d6c2',
-            borderColor: '#8a6a2e',
-            borderWidth: 1,
-          },
-        },
-      };
-    },
-  },
-  async mounted() {
-    try {
-      const [statsRes, rulesRes, siteRes] = await Promise.all([
-        axios.get('/api/admin/dashboard-stats'),
-        axios.get('/api/admin/rules'),
-        axios.get('/api/site-settings'),
-      ]);
-      this.stats = statsRes.data;
-      this.tournamentsEnabled = !!rulesRes.data?.tournaments_enabled;
-      this.homepageBgUrl = siteRes.data?.homepage_background_url || null;
-      this.classicBgUrl = siteRes.data?.classic_game_background_url || null;
-      this.duelBgUrl = siteRes.data?.duel_game_background_url || null;
-    } catch (e) {
-      console.error('Failed to load dashboard stats', e);
+}));
+
+async function saveToggle(key: string, isEnabled: boolean): Promise<void> {
+  try {
+    await axios.put(`/api/admin/rules/${key}`, { value: isEnabled });
+  } catch {
+    toast.error("Failed to save setting");
+  }
+}
+
+async function onMediaSelected(item: MediaItem): Promise<void> {
+  showMediaPicker.value = false;
+  const keyMap: Record<MediaTarget, string> = {
+    homepage: "homepage_background_image",
+    classic: "classic_game_background_image",
+    duel: "duel_game_background_image",
+  };
+  const target = mediaPickerTarget.value;
+  const key = keyMap[target];
+  try {
+    await axios.put(`/api/admin/rules/${key}`, { value: item.path });
+    if (target === "homepage") {
+      homepageBgUrl.value = item.url;
+    } else if (target === "classic") {
+      classicBgUrl.value = item.url;
+    } else {
+      duelBgUrl.value = item.url;
     }
-    this.loading = false;
-  },
-  methods: {
-    async saveToggle(key, value) {
-      try {
-        await axios.put(`/api/admin/rules/${key}`, { value });
-      } catch {
-        this.toast.error('Failed to save setting');
-      }
-    },
-    async onMediaSelected(item) {
-      this.showMediaPicker = false;
-      const keyMap = {
-        homepage: 'homepage_background_image',
-        classic: 'classic_game_background_image',
-        duel: 'duel_game_background_image',
-      };
-      const urlMap = {
-        homepage: 'homepageBgUrl',
-        classic: 'classicBgUrl',
-        duel: 'duelBgUrl',
-      };
-      const key = keyMap[this.mediaPickerTarget] || keyMap.homepage;
-      const urlProp = urlMap[this.mediaPickerTarget] || urlMap.homepage;
-      try {
-        await axios.put(`/api/admin/rules/${key}`, { value: item.path });
-        this[urlProp] = item.url;
-        this.toast.success('Background updated');
-      } catch {
-        this.toast.error('Failed to set background');
-      }
-    },
-    async removeHomepageBg() {
-      try {
-        await axios.delete('/api/admin/homepage-background');
-        this.homepageBgUrl = null;
-        this.toast.success('Background removed');
-      } catch {
-        this.toast.error('Failed to remove background');
-      }
-    },
-    async removeGameBg(type) {
-      const key = type === 'classic' ? 'classic_game_background_image' : 'duel_game_background_image';
-      try {
-        const existing = await axios.get('/api/admin/rules');
-        if (existing.data?.[key]) {
-          await axios.put(`/api/admin/rules/${key}`, { value: '' });
-        }
-        if (type === 'classic') this.classicBgUrl = null;
-        else this.duelBgUrl = null;
-        this.toast.success('Background removed');
-      } catch {
-        this.toast.error('Failed to remove background');
-      }
-    },
-  },
-};
+    toast.success("Background updated");
+  } catch {
+    toast.error("Failed to set background");
+  }
+}
+
+async function removeHomepageBg(): Promise<void> {
+  try {
+    await axios.delete("/api/admin/homepage-background");
+    homepageBgUrl.value = undefined;
+    toast.success("Background removed");
+  } catch {
+    toast.error("Failed to remove background");
+  }
+}
+
+async function removeGameBg(type: "classic" | "duel"): Promise<void> {
+  const key = type === "classic" ? "classic_game_background_image" : "duel_game_background_image";
+  try {
+    const existing = await axios.get<Record<string, unknown>>("/api/admin/rules");
+    const currentValue = existing.data ? existing.data[key] : undefined;
+    if (currentValue) {
+      await axios.put(`/api/admin/rules/${key}`, { value: "" });
+    }
+    if (type === "classic") {
+      classicBgUrl.value = undefined;
+    } else {
+      duelBgUrl.value = undefined;
+    }
+    toast.success("Background removed");
+  } catch {
+    toast.error("Failed to remove background");
+  }
+}
+
+onMounted(async () => {
+  try {
+    const [statsResponse, rulesResponse, siteResponse] = await Promise.all([
+      axios.get<DashboardStats>("/api/admin/dashboard-stats"),
+      axios.get<{ tournaments_enabled?: boolean }>("/api/admin/rules"),
+      axios.get<{ homepage_background_url?: string; classic_game_background_url?: string; duel_game_background_url?: string }>("/api/site-settings"),
+    ]);
+    stats.value = statsResponse.data;
+    tournamentsEnabled.value = Boolean(rulesResponse.data?.tournaments_enabled);
+    homepageBgUrl.value = siteResponse.data?.homepage_background_url || undefined;
+    classicBgUrl.value = siteResponse.data?.classic_game_background_url || undefined;
+    duelBgUrl.value = siteResponse.data?.duel_game_background_url || undefined;
+  } catch (error) {
+    console.error("Failed to load dashboard stats", error);
+  }
+  loading.value = false;
+});
 </script>
 
 <style scoped>

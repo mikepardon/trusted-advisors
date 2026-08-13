@@ -13,27 +13,32 @@
   </transition>
 </template>
 
-<script>
-export default {
-  name: 'ConfirmModal',
-  props: {
-    visible: { type: Boolean, default: false },
-    title: { type: String, default: 'Are you sure?' },
-    message: { type: String, default: '' },
-    confirmText: { type: String, default: 'Confirm' },
-    cancelText: { type: String, default: 'Cancel' },
-    dangerous: { type: Boolean, default: false },
-  },
-  emits: ['confirm', 'cancel'],
-  methods: {
-    confirm() {
-      this.$emit('confirm');
-    },
-    cancel() {
-      this.$emit('cancel');
-    },
-  },
-};
+<script setup lang="ts">
+const {
+  visible = false,
+  title = "Are you sure?",
+  message = "",
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  dangerous = false,
+} = defineProps<{
+  visible?: boolean;
+  title?: string;
+  message?: string;
+  confirmText?: string;
+  cancelText?: string;
+  dangerous?: boolean;
+}>();
+
+const emit = defineEmits<{ confirm: []; cancel: [] }>();
+
+function confirm(): void {
+  emit("confirm");
+}
+
+function cancel(): void {
+  emit("cancel");
+}
 </script>
 
 <style scoped>

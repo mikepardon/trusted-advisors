@@ -1,7 +1,7 @@
 <template>
   <div class="advisor-mgmt">
     <div v-if="loading" class="loading-text">Loading advisors...</div>
-    <div v-else-if="!advisors.length" class="loading-text">No advisors unlocked yet.</div>
+    <div v-else-if="advisors.length === 0" class="loading-text">No advisors unlocked yet.</div>
     <div v-else class="advisor-grid">
       <div
         v-for="a in advisors"
@@ -19,33 +19,49 @@
         <div class="advisor-xp-bar-wrap">
           <div class="advisor-xp-bar" :style="{ width: xpPercent(a) + '%' }"></div>
         </div>
-        <span class="advisor-xp-text" v-if="a.level < (a.max_level || 8)">{{ a.xp - a.xp_for_current_level }} / {{ a.xp_for_next_level - a.xp_for_current_level }} XP</span>
-        <span class="advisor-xp-text advisor-xp-max" v-else>MAX</span>
-        <button v-if="a.pending_upgrades > 0" class="advisor-levelup-btn" @click.stop="$emit('level-up', a)">Level Up!</button>
+        <span v-if="a.level < (a.max_level || 8)" class="advisor-xp-text">{{ a.xp - a.xp_for_current_level }} / {{ a.xp_for_next_level - a.xp_for_current_level }} XP</span>
+        <span v-else class="advisor-xp-text advisor-xp-max">MAX</span>
+        <button v-if="a.pending_upgrades > 0" class="advisor-levelup-btn" @click.stop="$emit('levelUp', a)">Level Up!</button>
         <span v-else-if="a.can_immortalise" class="advisor-immortalise-tag">Immortalise</span>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-export default {
-  name: 'AdvisorManagement',
-  props: {
-    advisors: { type: Array, default: () => [] },
-    loading: { type: Boolean, default: false },
-  },
-  emits: ['select', 'level-up'],
-  methods: {
-    xpPercent(a) {
-      if (a.level >= (a.max_level || 8)) return 100;
-      if (!a.xp_for_next_level) return 0;
-      const range = a.xp_for_next_level - a.xp_for_current_level;
-      if (range <= 0) return 100;
-      return Math.min(100, ((a.xp - a.xp_for_current_level) / range) * 100);
-    },
-  },
-};
+<script setup lang="ts">
+interface Advisor {
+  id: number;
+  level: number;
+  max_level?: number;
+  xp: number;
+  xp_for_current_level: number;
+  xp_for_next_level: number;
+  display_name: string;
+  pending_upgrades: number;
+  can_immortalise: boolean;
+  character: { image_url?: string };
+}
+
+const { advisors = [], loading = false } = defineProps<{
+  advisors?: Advisor[];
+  loading?: boolean;
+}>();
+
+defineEmits<{ select: [advisor: Advisor]; "levelUp": [advisor: Advisor] }>();
+
+function xpPercent(a: Advisor): number {
+  if (a.level >= (a.max_level || 8)) {
+    return 100;
+  }
+  if (!a.xp_for_next_level) {
+    return 0;
+  }
+  const range = a.xp_for_next_level - a.xp_for_current_level;
+  if (range <= 0) {
+    return 100;
+  }
+  return Math.min(100, ((a.xp - a.xp_for_current_level) / range) * 100);
+}
 </script>
 
 <style scoped>

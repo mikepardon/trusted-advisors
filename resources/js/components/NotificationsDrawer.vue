@@ -4,7 +4,7 @@
       <div class="drawer-header">
         <h3 class="drawer-title">Notifications</h3>
         <div class="header-actions">
-          <button v-if="dbNotifications.length" class="mark-read-btn" @click="markAllRead">Mark all read</button>
+          <button v-if="databaseNotifications.length > 0" class="mark-read-btn" @click="markAllRead">Mark all read</button>
           <button v-if="hasReadNotifications" class="mark-read-btn delete-read-btn" @click="deleteAllRead">Delete all read</button>
         </div>
         <button class="drawer-close" @click="$emit('close')">&times;</button>
@@ -18,37 +18,37 @@
 
       <div v-else class="drawer-content">
         <!-- Game invites -->
-        <div v-if="gameInvites.length" class="notif-section">
+        <div v-if="gameInvites.length > 0" class="notif-section">
           <h4 class="notif-section-title">Game Invites</h4>
           <div v-for="invite in gameInvites" :key="'gi-' + invite.id" class="notif-item">
             <div class="notif-text">
               <strong>{{ invite.sender?.name || 'Someone' }}</strong> invited you to a game
             </div>
             <div class="notif-actions">
-              <button class="notif-btn notif-accept" @click="acceptGameInvite(invite)" :disabled="invite.busy">Accept</button>
-              <button class="notif-btn notif-decline" @click="declineGameInvite(invite)" :disabled="invite.busy">Decline</button>
+              <button class="notif-btn notif-accept" :disabled="invite.busy" @click="acceptGameInvite(invite)">Accept</button>
+              <button class="notif-btn notif-decline" :disabled="invite.busy" @click="declineGameInvite(invite)">Decline</button>
             </div>
           </div>
         </div>
 
         <!-- Friend requests -->
-        <div v-if="friendRequests.length" class="notif-section">
+        <div v-if="friendRequests.length > 0" class="notif-section">
           <h4 class="notif-section-title">Friend Requests</h4>
           <div v-for="req in friendRequests" :key="'fr-' + req.id" class="notif-item">
             <div class="notif-text">
               <strong>{{ req.user?.name || 'Someone' }}</strong> sent you a friend request
             </div>
             <div class="notif-actions">
-              <button class="notif-btn notif-accept" @click="acceptFriend(req)" :disabled="req.busy">Accept</button>
-              <button class="notif-btn notif-decline" @click="rejectFriend(req)" :disabled="req.busy">Reject</button>
+              <button class="notif-btn notif-accept" :disabled="req.busy" @click="acceptFriend(req)">Accept</button>
+              <button class="notif-btn notif-decline" :disabled="req.busy" @click="rejectFriend(req)">Reject</button>
             </div>
           </div>
         </div>
 
         <!-- DB Notifications (Rewards & Announcements) -->
-        <div v-if="dbNotifications.length" class="notif-section">
+        <div v-if="databaseNotifications.length > 0" class="notif-section">
           <h4 class="notif-section-title">Rewards &amp; Announcements</h4>
-          <div v-for="notif in dbNotifications" :key="'db-' + notif.id" class="notif-item notif-db" :class="{ unread: !notif.read_at }">
+          <div v-for="notif in databaseNotifications" :key="'db-' + notif.id" class="notif-item notif-db" :class="{ unread: !notif.read_at }">
             <div class="notif-icon-col">
               <span v-if="notif.type === 'season_reward'" class="notif-type-icon">&#127942;</span>
               <span v-else-if="notif.type === 'admin_gift'" class="notif-type-icon">&#127873;</span>
@@ -66,8 +66,8 @@
             <button
               v-if="!hasRewards(notif) || notif.claimed_at"
               class="notif-dismiss"
-              @click.stop="dismissNotif(notif)"
               title="Dismiss"
+              @click.stop="dismissNotif(notif)"
             >&times;</button>
           </div>
         </div>
@@ -83,164 +83,241 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../stores/toast';
-import NotificationDetailModal from './NotificationDetailModal.vue';
+<script setup lang="ts">
+import { ref, computed, watch } from "vue";
+import { useRouter } from "vue-router";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../stores/toast";
+import NotificationDetailModal from "./NotificationDetailModal.vue";
 
-export default {
-  name: 'NotificationsDrawer',
-  components: { NotificationDetailModal },
-  setup() {
-    return { toast: useToast() };
+interface GameInvite {
+  id: number;
+  sender?: { name?: string };
+  busy: boolean;
+}
+
+interface FriendRequest {
+  id: number;
+  user?: { name?: string };
+  busy: boolean;
+}
+
+interface DatabaseNotificationData {
+  reward_xp?: number;
+  reward_coins?: number;
+  reward_character_id?: number;
+  reward_dice_theme_id?: number;
+  reward_kingdom_style_id?: number;
+}
+
+interface DatabaseNotification {
+  id: number;
+  type: string;
+  title: string;
+  message: string;
+  data?: DatabaseNotificationData;
+  read_at?: string;
+  claimed_at?: string;
+  created_at?: string;
+}
+
+const { open = false } = defineProps<{
+  open?: boolean;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  "update:count": [count: number];
+}>();
+
+const toast = useToast();
+const router = useRouter();
+
+const loading = ref(false);
+const visible = ref(false);
+const gameInvites = ref<GameInvite[]>([]);
+const friendRequests = ref<FriendRequest[]>([]);
+const databaseNotifications = ref<DatabaseNotification[]>([]);
+const selectedNotif = ref<DatabaseNotification>();
+
+const allEmpty = computed(
+  () => gameInvites.value.length === 0 && friendRequests.value.length === 0 && databaseNotifications.value.length === 0,
+);
+
+const totalCount = computed(() => {
+  const unreadDatabase = databaseNotifications.value.filter((notif) => !notif.read_at).length;
+  return gameInvites.value.length + friendRequests.value.length + unreadDatabase;
+});
+
+const hasReadNotifications = computed(() => databaseNotifications.value.some((notif) => notif.read_at));
+
+watch(
+  () => open,
+  (value) => {
+    if (value) {
+      fetchAll();
+      requestAnimationFrame(() => {
+        visible.value = true;
+      });
+    } else {
+      visible.value = false;
+    }
   },
-  props: {
-    open: { type: Boolean, default: false },
-  },
-  emits: ['close', 'update:count'],
-  data() {
-    return {
-      loading: false,
-      visible: false,
-      gameInvites: [],
-      friendRequests: [],
-      dbNotifications: [],
-      selectedNotif: null,
-    };
-  },
-  computed: {
-    allEmpty() {
-      return !this.gameInvites.length && !this.friendRequests.length && !this.dbNotifications.length;
-    },
-    totalCount() {
-      const unreadDb = this.dbNotifications.filter(n => !n.read_at).length;
-      return this.gameInvites.length + this.friendRequests.length + unreadDb;
-    },
-    hasReadNotifications() {
-      return this.dbNotifications.some(n => n.read_at);
-    },
-  },
-  watch: {
-    open(val) {
-      if (val) {
-        this.fetchAll();
-        requestAnimationFrame(() => { this.visible = true; });
-      } else {
-        this.visible = false;
-      }
-    },
-    totalCount(val) {
-      this.$emit('update:count', val);
-    },
-  },
-  methods: {
-    hasRewards(notif) {
-      const d = notif.data;
-      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id || d.reward_dice_theme_id || d.reward_kingdom_style_id);
-    },
-    async fetchAll() {
-      this.loading = true;
-      try {
-        const [invitesRes, friendsRes, notifsRes] = await Promise.all([
-          axios.get('/api/game-invites/pending'),
-          axios.get('/api/friends'),
-          axios.get('/api/notifications'),
-        ]);
-        this.gameInvites = (invitesRes.data || []).map(i => ({ ...i, busy: false }));
-        this.friendRequests = (friendsRes.data.pending_received || []).map(r => ({ ...r, busy: false }));
-        this.dbNotifications = notifsRes.data?.data || [];
-      } catch {
-        // silently fail
-      }
-      this.loading = false;
-    },
-    openDetail(notif) {
-      this.selectedNotif = notif;
-      // Mark as read
-      if (!notif.read_at) {
-        axios.post(`/api/notifications/${notif.id}/read`).then(() => {
-          notif.read_at = new Date().toISOString();
-        }).catch(() => {});
-      }
-    },
-    onClaimed(notifId) {
-      const notif = this.dbNotifications.find(n => n.id === notifId);
-      if (notif) {
-        notif.claimed_at = new Date().toISOString();
-        notif.read_at = notif.read_at || new Date().toISOString();
-      }
-      this.selectedNotif = null;
-    },
-    async dismissNotif(notif) {
-      try {
-        await axios.delete(`/api/notifications/${notif.id}`);
-        this.dbNotifications = this.dbNotifications.filter(n => n.id !== notif.id);
-      } catch {}
-    },
-    async markAllRead() {
-      try {
-        await axios.post('/api/notifications/mark-all-read');
-        this.dbNotifications.forEach(n => { n.read_at = n.read_at || new Date().toISOString(); });
-      } catch {}
-    },
-    async deleteAllRead() {
-      try {
-        await axios.delete('/api/notifications/read');
-        this.dbNotifications = this.dbNotifications.filter(n => !n.read_at);
-      } catch {}
-    },
-    timeAgo(dateStr) {
-      if (!dateStr) return '';
-      const diff = Date.now() - new Date(dateStr).getTime();
-      const mins = Math.floor(diff / 60000);
-      if (mins < 1) return 'just now';
-      if (mins < 60) return `${mins}m ago`;
-      const hrs = Math.floor(mins / 60);
-      if (hrs < 24) return `${hrs}h ago`;
-      const days = Math.floor(hrs / 24);
-      return `${days}d ago`;
-    },
-    async acceptGameInvite(invite) {
-      invite.busy = true;
-      try {
-        const res = await axios.post(`/api/game-invites/${invite.id}/accept`);
-        this.gameInvites = this.gameInvites.filter(i => i.id !== invite.id);
-        this.$emit('close');
-        this.$router.push('/game/' + res.data.game_id);
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to accept invite');
-        invite.busy = false;
-      }
-    },
-    async declineGameInvite(invite) {
-      invite.busy = true;
-      try {
-        await axios.post(`/api/game-invites/${invite.id}/decline`);
-        this.gameInvites = this.gameInvites.filter(i => i.id !== invite.id);
-      } catch {
-        invite.busy = false;
-      }
-    },
-    async acceptFriend(req) {
-      req.busy = true;
-      try {
-        await axios.post(`/api/friends/${req.id}/accept`);
-        this.friendRequests = this.friendRequests.filter(r => r.id !== req.id);
-      } catch {
-        req.busy = false;
-      }
-    },
-    async rejectFriend(req) {
-      req.busy = true;
-      try {
-        await axios.delete(`/api/friends/${req.id}`);
-        this.friendRequests = this.friendRequests.filter(r => r.id !== req.id);
-      } catch {
-        req.busy = false;
-      }
-    },
-  },
-};
+);
+
+watch(totalCount, (value) => {
+  emit("update:count", value);
+});
+
+function hasRewards(notif: DatabaseNotification): boolean {
+  const data = notif.data;
+  return Boolean(
+    data &&
+      ((data.reward_xp ?? 0) > 0 ||
+        (data.reward_coins ?? 0) > 0 ||
+        data.reward_character_id ||
+        data.reward_dice_theme_id ||
+        data.reward_kingdom_style_id),
+  );
+}
+
+async function fetchAll(): Promise<void> {
+  loading.value = true;
+  try {
+    const [invitesResponse, friendsResponse, notifsResponse] = await Promise.all([
+      axios.get<GameInvite[] | undefined>("/api/game-invites/pending"),
+      axios.get<{ pending_received?: FriendRequest[] }>("/api/friends"),
+      axios.get<{ data?: DatabaseNotification[] }>("/api/notifications"),
+    ]);
+    gameInvites.value = (invitesResponse.data ?? []).map((invite) => ({ ...invite, busy: false }));
+    friendRequests.value = (friendsResponse.data.pending_received ?? []).map((request) => ({ ...request, busy: false }));
+    databaseNotifications.value = notifsResponse.data?.data ?? [];
+  } catch {
+    // silently fail
+  }
+  loading.value = false;
+}
+
+async function openDetail(notif: DatabaseNotification): Promise<void> {
+  selectedNotif.value = notif;
+  // Mark as read
+  if (!notif.read_at) {
+    try {
+      await axios.post(`/api/notifications/${notif.id}/read`);
+      notif.read_at = new Date().toISOString();
+    } catch {
+      // silently fail
+    }
+  }
+}
+
+function onClaimed(notifId: number): void {
+  const notif = databaseNotifications.value.find((item) => item.id === notifId);
+  if (notif) {
+    notif.claimed_at = new Date().toISOString();
+    notif.read_at ??= new Date().toISOString();
+  }
+  selectedNotif.value = undefined;
+}
+
+async function dismissNotif(notif: DatabaseNotification): Promise<void> {
+  try {
+    await axios.delete(`/api/notifications/${notif.id}`);
+    databaseNotifications.value = databaseNotifications.value.filter((item) => item.id !== notif.id);
+  } catch {
+    // silently fail
+  }
+}
+
+async function markAllRead(): Promise<void> {
+  try {
+    await axios.post("/api/notifications/mark-all-read");
+    for (const notif of databaseNotifications.value) {
+      notif.read_at ??= new Date().toISOString();
+    }
+  } catch {
+    // silently fail
+  }
+}
+
+async function deleteAllRead(): Promise<void> {
+  try {
+    await axios.delete("/api/notifications/read");
+    databaseNotifications.value = databaseNotifications.value.filter((notif) => !notif.read_at);
+  } catch {
+    // silently fail
+  }
+}
+
+function timeAgo(dateString: string | undefined): string {
+  if (!dateString) {
+    return "";
+  }
+  const diff = Date.now() - new Date(dateString).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 1) {
+    return "just now";
+  }
+  if (mins < 60) {
+    return `${mins}m ago`;
+  }
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) {
+    return `${hrs}h ago`;
+  }
+  const days = Math.floor(hrs / 24);
+  return `${days}d ago`;
+}
+
+async function acceptGameInvite(invite: GameInvite): Promise<void> {
+  invite.busy = true;
+  try {
+    const response = await axios.post<{ game_id: number }>(`/api/game-invites/${invite.id}/accept`);
+    gameInvites.value = gameInvites.value.filter((item) => item.id !== invite.id);
+    emit("close");
+    router.push(`/game/${response.data.game_id}`);
+  } catch (error) {
+    toast.error(acceptInviteErrorMessage(error));
+    invite.busy = false;
+  }
+}
+
+function acceptInviteErrorMessage(error: unknown): string {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error ?? "Failed to accept invite";
+  }
+  return "Failed to accept invite";
+}
+
+async function declineGameInvite(invite: GameInvite): Promise<void> {
+  invite.busy = true;
+  try {
+    await axios.post(`/api/game-invites/${invite.id}/decline`);
+    gameInvites.value = gameInvites.value.filter((item) => item.id !== invite.id);
+  } catch {
+    invite.busy = false;
+  }
+}
+
+async function acceptFriend(request: FriendRequest): Promise<void> {
+  request.busy = true;
+  try {
+    await axios.post(`/api/friends/${request.id}/accept`);
+    friendRequests.value = friendRequests.value.filter((item) => item.id !== request.id);
+  } catch {
+    request.busy = false;
+  }
+}
+
+async function rejectFriend(request: FriendRequest): Promise<void> {
+  request.busy = true;
+  try {
+    await axios.delete(`/api/friends/${request.id}`);
+    friendRequests.value = friendRequests.value.filter((item) => item.id !== request.id);
+  } catch {
+    request.busy = false;
+  }
+}
 </script>
 
 <style scoped>

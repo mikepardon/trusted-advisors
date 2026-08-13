@@ -14,9 +14,9 @@
         <option value="">All Types</option>
         <option v-for="t in targetTypeOptions" :key="t" :value="t">{{ t }}</option>
       </select>
-      <input type="date" v-model="filters.date_from" @change="load" placeholder="From" />
-      <input type="date" v-model="filters.date_to" @change="load" placeholder="To" />
-      <input type="text" v-model="filters.search" @input="debouncedLoad" placeholder="Search..." />
+      <input v-model="filters.date_from" type="date" placeholder="From" @change="load" />
+      <input v-model="filters.date_to" type="date" placeholder="To" @change="load" />
+      <input v-model="filters.search" type="text" placeholder="Search..." @input="debouncedLoad" />
     </div>
 
     <!-- Table -->
@@ -47,9 +47,9 @@
               <div v-if="expanded === log.id && log.changes" class="changes-detail">
                 <div v-for="(change, field) in log.changes" :key="field" class="change-row">
                   <strong>{{ field }}:</strong>
-                  <span class="old-val">{{ formatVal(change.old) }}</span>
+                  <span class="old-val">{{ formatValue(change.old) }}</span>
                   <span class="arrow">&rarr;</span>
-                  <span class="new-val">{{ formatVal(change.new) }}</span>
+                  <span class="new-val">{{ formatValue(change.new) }}</span>
                 </div>
               </div>
             </td>
@@ -70,56 +70,78 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import axios from "axios";
+import { onMounted, reactive, ref } from "vue";
 
-export default {
-  name: 'AdminAuditLog',
-  data() {
-    return {
-      logs: [],
-      filters: { action: '', target_type: '', date_from: '', date_to: '', search: '' },
-      pagination: { currentPage: 1, lastPage: 1 },
-      expanded: null,
-      debounceTimer: null,
-      actionOptions: ['create', 'update', 'delete', 'ban', 'unban', 'impersonate', 'end_season', 'update_role', 'grant_premium', 'revoke_premium', 'cancel'],
-      targetTypeOptions: ['Card', 'Character', 'Event', 'Item', 'Season', 'Announcement', 'User', 'GameRule', 'AdminGift'],
-    };
-  },
-  async mounted() {
-    await this.load();
-  },
-  methods: {
-    async load(page = 1) {
-      try {
-        const params = { ...this.filters, page };
-        const res = await axios.get('/api/admin/audit-log', { params });
-        this.logs = res.data.data;
-        this.pagination.currentPage = res.data.current_page;
-        this.pagination.lastPage = res.data.last_page;
-      } catch {}
-    },
-    goPage(p) {
-      this.load(p);
-    },
-    debouncedLoad() {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = setTimeout(() => this.load(), 400);
-    },
-    toggleExpand(id) {
-      this.expanded = this.expanded === id ? null : id;
-    },
-    formatDate(d) {
-      if (!d) return '';
-      return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    },
-    formatVal(v) {
-      if (v === null || v === undefined) return 'null';
-      if (typeof v === 'object') return JSON.stringify(v);
-      return String(v);
-    },
-  },
-};
+interface AuditChange {
+  old: unknown;
+  new: unknown;
+}
+
+interface AuditLogEntry {
+  id: number;
+  created_at: string | undefined;
+  admin: { name: string } | undefined;
+  action: string;
+  target_type: string;
+  target_id: number | undefined;
+  changes: Record<string, AuditChange> | undefined;
+}
+
+interface AuditLogResponse {
+  data: AuditLogEntry[];
+  current_page: number;
+  last_page: number;
+}
+
+const logs = ref<AuditLogEntry[]>([]);
+const filters = reactive({ action: "", target_type: "", date_from: "", date_to: "", search: "" });
+const pagination = reactive({ currentPage: 1, lastPage: 1 });
+const expanded = ref<number | undefined>(undefined);
+const debounceTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+const actionOptions = ["create", "update", "delete", "ban", "unban", "impersonate", "end_season", "update_role", "grant_premium", "revoke_premium", "cancel"];
+const targetTypeOptions = ["Card", "Character", "Event", "Item", "Season", "Announcement", "User", "GameRule", "AdminGift"];
+
+async function load(page = 1): Promise<void> {
+  try {
+    const parameters = { ...filters, page };
+    const response = await axios.get<AuditLogResponse>("/api/admin/audit-log", { params: parameters });
+    logs.value = response.data.data;
+    pagination.currentPage = response.data.current_page;
+    pagination.lastPage = response.data.last_page;
+  } catch {
+    // ignore fetch errors
+  }
+}
+
+function goPage(page: number): void {
+  load(page);
+}
+
+function debouncedLoad(): void {
+  clearTimeout(debounceTimer.value);
+  debounceTimer.value = setTimeout(() => load(), 400);
+}
+
+function toggleExpand(id: number): void {
+  expanded.value = expanded.value === id ? undefined : id;
+}
+
+function formatDate(date: string | undefined): string {
+  if (!date) return "";
+  return new Date(date).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function formatValue(value: unknown): string {
+  if (value === null || value === undefined) return "null";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+onMounted(async () => {
+  await load();
+});
 </script>
 
 <style scoped>

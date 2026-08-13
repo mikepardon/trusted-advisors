@@ -6,7 +6,7 @@
       <p class="lvlup-subtitle">{{ advisor.display_name }} &mdash; Choose upgrade for Level {{ forLevel }}</p>
 
       <div v-if="loading" class="loading-text">Loading options...</div>
-      <div v-else-if="!options.length" class="loading-text">No options available.</div>
+      <div v-else-if="options.length === 0" class="loading-text">No options available.</div>
       <div v-else class="lvlup-options">
         <div
           v-for="opt in options"
@@ -21,7 +21,7 @@
           <p class="lvlup-opt-desc">{{ opt.description }}</p>
 
           <!-- Dice picker for bump/wild types -->
-          <div v-if="selectedOption?.id === opt.id && needsDicePicker(opt)" class="lvlup-dice-picker" @click.stop>
+          <div v-if="selectedOption?.id === opt.id && isDicePickerNeeded(opt)" class="lvlup-dice-picker" @click.stop>
             <p class="lvlup-picker-label">
               {{ opt.type === 'bump_two_dice_faces' ? 'Select 2 die faces:' : 'Select a die face:' }}
             </p>
@@ -63,132 +63,173 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../stores/toast';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'LevelUpChoice',
-  props: {
-    advisor: { type: Object, required: true },
-  },
-  emits: ['close', 'chosen'],
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return {
-      loading: true,
-      options: [],
-      forLevel: null,
-      selectedOption: null,
-      selectedFaces: [],
-      saving: false,
-      error: '',
-    };
-  },
-  computed: {
-    canConfirm() {
-      if (!this.selectedOption) return false;
-      const t = this.selectedOption.type;
-      if (t === 'bump_dice_face' || t === 'add_wild') return this.selectedFaces.length === 1;
-      if (t === 'bump_two_dice_faces') return this.selectedFaces.length === 2;
-      return true;
-    },
-    previewText() {
-      if (!this.selectedOption) return '';
-      const t = this.selectedOption.type;
-      if (t === 'bump_dice_face' && this.selectedFaces.length === 1) {
-        const f = this.selectedFaces[0];
-        const cur = this.advisor.modified_dice[f.die_index]?.[f.face_index];
-        return `Die ${f.die_index + 1}, face ${f.face_index + 1}: ${cur} -> ${Number(cur) + 1}`;
-      }
-      if (t === 'bump_two_dice_faces' && this.selectedFaces.length === 2) {
-        return this.selectedFaces.map(f => {
-          const cur = this.advisor.modified_dice[f.die_index]?.[f.face_index];
-          return `Die ${f.die_index + 1} face ${f.face_index + 1}: ${cur} -> ${Number(cur) + 1}`;
-        }).join(', ');
-      }
-      if (t === 'add_wild' && this.selectedFaces.length === 1) {
-        const f = this.selectedFaces[0];
-        const cur = this.advisor.modified_dice[f.die_index]?.[f.face_index];
-        return `Die ${f.die_index + 1}, face ${f.face_index + 1}: ${cur} -> WILD`;
-      }
-      return '';
-    },
-  },
-  async mounted() {
-    await this.loadOptions();
-  },
-  methods: {
-    async loadOptions() {
-      this.loading = true;
-      try {
-        const res = await axios.get(`/api/my-advisors/${this.advisor.id}/level-options`);
-        this.options = res.data.options;
-        this.forLevel = res.data.for_level;
-      } catch (e) {
-        this.error = e.response?.data?.error || 'Failed to load options';
-      }
-      this.loading = false;
-    },
-    needsDicePicker(opt) {
-      return ['bump_dice_face', 'bump_two_dice_faces', 'add_wild'].includes(opt.type);
-    },
-    selectOption(opt) {
-      this.selectedOption = opt;
-      this.selectedFaces = [];
-      this.error = '';
-    },
-    isFaceSelected(di, fi) {
-      return this.selectedFaces.some(f => f.die_index === di && f.face_index === fi);
-    },
-    toggleFace(opt, di, fi, face) {
-      // Can't select WILD faces for bump types
-      if (face === 'WILD' && opt.type !== 'add_wild') return;
-      // Can't select non-WILD for add_wild (it replaces a non-WILD face)
-      if (face === 'WILD' && opt.type === 'add_wild') return;
+interface Advisor {
+  id: number;
+  display_name?: string;
+  modified_dice: string[][];
+}
 
-      const existing = this.selectedFaces.findIndex(f => f.die_index === di && f.face_index === fi);
-      if (existing >= 0) {
-        this.selectedFaces.splice(existing, 1);
-        return;
-      }
+interface LevelOption {
+  id: number;
+  name: string;
+  description?: string;
+  type: string;
+}
 
-      const maxFaces = opt.type === 'bump_two_dice_faces' ? 2 : 1;
-      if (this.selectedFaces.length >= maxFaces) {
-        this.selectedFaces = [];
-      }
-      this.selectedFaces.push({ die_index: di, face_index: fi });
-    },
-    buildUserChoice() {
-      const t = this.selectedOption.type;
-      if (t === 'bump_dice_face' || t === 'add_wild') {
-        return this.selectedFaces[0] || null;
-      }
-      if (t === 'bump_two_dice_faces') {
-        return { faces: this.selectedFaces };
-      }
-      return null;
-    },
-    async confirm() {
-      if (!this.canConfirm) return;
-      this.saving = true;
-      this.error = '';
-      try {
-        const res = await axios.post(`/api/my-advisors/${this.advisor.id}/choose-upgrade`, {
-          option_id: this.selectedOption.id,
-          user_choice: this.buildUserChoice(),
-        });
-        this.toast.success(`Chose: ${this.selectedOption.name}`);
-        this.$emit('chosen', res.data);
-      } catch (e) {
-        this.error = e.response?.data?.error || 'Failed to choose upgrade';
-      }
-      this.saving = false;
-    },
-  },
-};
+interface SelectedFace {
+  die_index: number;
+  face_index: number;
+}
+
+interface LevelOptionsResponse {
+  options: LevelOption[];
+  for_level: number;
+}
+
+const { advisor } = defineProps<{ advisor: Advisor }>();
+
+const emit = defineEmits<{ close: []; chosen: [result: unknown] }>();
+
+const toast = useToast();
+
+const loading = ref(true);
+const options = ref<LevelOption[]>([]);
+const forLevel = ref<number>();
+const selectedOption = ref<LevelOption>();
+const selectedFaces = ref<SelectedFace[]>([]);
+const saving = ref(false);
+const error = ref("");
+
+const canConfirm = computed(() => {
+  if (!selectedOption.value) {
+    return false;
+  }
+  const type = selectedOption.value.type;
+  if (type === "bump_dice_face" || type === "add_wild") {
+    return selectedFaces.value.length === 1;
+  }
+  if (type === "bump_two_dice_faces") {
+    return selectedFaces.value.length === 2;
+  }
+  return true;
+});
+
+const previewText = computed(() => {
+  if (!selectedOption.value) {
+    return "";
+  }
+  const type = selectedOption.value.type;
+  if (type === "bump_dice_face" && selectedFaces.value.length === 1) {
+    const face = selectedFaces.value[0];
+    const current = advisor.modified_dice[face.die_index]?.[face.face_index];
+    return `Die ${face.die_index + 1}, face ${face.face_index + 1}: ${current} -> ${Number(current) + 1}`;
+  }
+  if (type === "bump_two_dice_faces" && selectedFaces.value.length === 2) {
+    return selectedFaces.value.map((face) => {
+      const current = advisor.modified_dice[face.die_index]?.[face.face_index];
+      return `Die ${face.die_index + 1} face ${face.face_index + 1}: ${current} -> ${Number(current) + 1}`;
+    }).join(", ");
+  }
+  if (type === "add_wild" && selectedFaces.value.length === 1) {
+    const face = selectedFaces.value[0];
+    const current = advisor.modified_dice[face.die_index]?.[face.face_index];
+    return `Die ${face.die_index + 1}, face ${face.face_index + 1}: ${current} -> WILD`;
+  }
+  return "";
+});
+
+async function loadOptions(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<LevelOptionsResponse>(`/api/my-advisors/${advisor.id}/level-options`);
+    options.value = response.data.options;
+    forLevel.value = response.data.for_level;
+  } catch (error_) {
+    const message = isAxiosError<{ error?: string }>(error_) ? error_.response?.data?.error : undefined;
+    error.value = message ?? "Failed to load options";
+  }
+  loading.value = false;
+}
+
+function isDicePickerNeeded(option: LevelOption): boolean {
+  return ["bump_dice_face", "bump_two_dice_faces", "add_wild"].includes(option.type);
+}
+
+function selectOption(option: LevelOption): void {
+  selectedOption.value = option;
+  selectedFaces.value = [];
+  error.value = "";
+}
+
+function isFaceSelected(dieIndex: number, faceIndex: number): boolean {
+  return selectedFaces.value.some((face) => face.die_index === dieIndex && face.face_index === faceIndex);
+}
+
+function toggleFace(option: LevelOption, dieIndex: number, faceIndex: number, face: string): void {
+  // Can't select WILD faces for bump types
+  if (face === "WILD" && option.type !== "add_wild") {
+    return;
+  }
+  // Can't select non-WILD for add_wild (it replaces a non-WILD face)
+  if (face === "WILD" && option.type === "add_wild") {
+    return;
+  }
+
+  const existing = selectedFaces.value.findIndex((selected) => selected.die_index === dieIndex && selected.face_index === faceIndex);
+  if (existing !== -1) {
+    selectedFaces.value.splice(existing, 1);
+    return;
+  }
+
+  const maxFaces = option.type === "bump_two_dice_faces" ? 2 : 1;
+  if (selectedFaces.value.length >= maxFaces) {
+    selectedFaces.value = [];
+  }
+  selectedFaces.value.push({ die_index: dieIndex, face_index: faceIndex });
+}
+
+function buildUserChoice(): SelectedFace | { faces: SelectedFace[] } | undefined {
+  if (!selectedOption.value) {
+    return undefined;
+  }
+  const type = selectedOption.value.type;
+  if (type === "bump_dice_face" || type === "add_wild") {
+    return selectedFaces.value[0] || undefined;
+  }
+  if (type === "bump_two_dice_faces") {
+    return { faces: selectedFaces.value };
+  }
+  return undefined;
+}
+
+async function confirm(): Promise<void> {
+  if (!canConfirm.value || !selectedOption.value) {
+    return;
+  }
+  saving.value = true;
+  error.value = "";
+  try {
+    const response = await axios.post(`/api/my-advisors/${advisor.id}/choose-upgrade`, {
+      option_id: selectedOption.value.id,
+      user_choice: buildUserChoice(),
+    });
+    toast.success(`Chose: ${selectedOption.value.name}`);
+    emit("chosen", response.data);
+  } catch (error_) {
+    const message = isAxiosError<{ error?: string }>(error_) ? error_.response?.data?.error : undefined;
+    error.value = message ?? "Failed to choose upgrade";
+  }
+  saving.value = false;
+}
+
+onMounted(async () => {
+  await loadOptions();
+});
 </script>
 
 <style scoped>

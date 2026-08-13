@@ -110,199 +110,345 @@
   </div>
 </template>
 
-<script>
-import AppIcon from './AppIcon.vue';
-import { useIcons } from '../stores/icons';
-import '../styles/kingdom-styles.css';
+<script setup lang="ts">
+import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
+import AppIcon from "./AppIcon.vue";
+import { useIcons } from "../stores/icons";
+import "../styles/kingdom-styles.css";
 
-export default {
-  name: 'KingdomStats',
-  components: { AppIcon },
-  props: {
-    game: { type: Object, required: true },
-    kingdomStyleSlug: { type: String, default: 'classic' },
-    kingdomStyleData: { type: Object, default: null },
-    previewEffects: { type: Object, default: null },
-  },
-  data() {
-    return {
-      stats: useIcons().getStatIcons(),
-      prevValues: {},
-      tweenedValues: {},
-      flashClass: {},
-      barFlashClass: {},
-      flashTimers: {},
-      tweenTimers: {},
-      showBreakdown: false,
-    };
-  },
-  computed: {
-    kingdomAnim() {
-      return this.kingdomStyleData?.css_vars?.border_anim || 'none';
-    },
-    kingdomRootStyle() {
-      const style = {};
-      const data = this.kingdomStyleData;
-      // Apply css_vars from DB as inline custom properties (overrides static CSS)
-      if (data?.css_vars) {
-        const cv = data.css_vars;
-        if (cv.border_color) style['--ks-border-color'] = cv.border_color;
-        if (cv.border_glow) style['--ks-border-glow'] = cv.border_glow;
-        if (cv.border_color_rgb) style['--ks-border-color-rgb'] = cv.border_color_rgb;
-        if (cv.bg_tint) style['--ks-bg-tint'] = cv.bg_tint;
-        if (cv.bg_color) style['--ks-bg-color'] = cv.bg_color;
-        if (cv.name_accent) style['--ks-name-accent'] = cv.name_accent;
-        if (cv.total_accent) style['--ks-total-accent'] = cv.total_accent;
-        if (cv.bar_caution) {
-          style['--ks-bar-caution'] = cv.bar_caution;
-          style['--ks-bar-caution-stroke'] = this.extractSolidColor(cv.bar_caution, '#d4a843');
-        }
-        if (cv.stat_color) style['--ks-stat-color'] = cv.stat_color;
-        if (cv.text_color) style['--ks-text-color'] = cv.text_color;
-      }
-      // Apply background image
-      if (data?.background_image_url) {
-        style.backgroundImage = `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url(${data.background_image_url})`;
-        style.backgroundSize = 'cover';
-        style.backgroundPosition = 'center';
-      }
-      return style;
-    },
-    showLiveScore() {
-      return this.game.game_type !== 'duel' && this.game.status !== 'completed' && this.game.status !== 'cancelled';
-    },
-    liveBreakdown() {
-      const g = this.game;
-      const statVals = [g.wealth || 0, g.influence || 0, g.security || 0, g.religion || 0, g.food || 0, g.happiness || 0];
-      const base = statVals.reduce((s, v) => s + v, 0);
-      const yearsCompleted = Math.floor((g.current_round || 0) / 12);
-      const years = yearsCompleted + 1;
-      const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
-      const yearMultiplier = multipliers[years] || 2.0;
-      const multiplied = Math.floor(base * yearMultiplier);
-      const spread = Math.max(...statVals) - Math.min(...statVals);
-      const balance = Math.max(0, 30 - spread * 3);
-      const yearBonus = yearsCompleted * 50;
-      let stacking = 0;
-      statVals.forEach(v => {
-        if (v >= 15) stacking += 10;
-        if (v >= 20) stacking += 20;
-      });
-      const bonus = g.bonus_score || 0;
-      const modifier = g.score_modifier || 0;
+interface StatIcon {
+  key: string;
+  label: string;
+  short: string;
+  type: string;
+  value: string;
+  icon: string;
+}
 
-      // Calculate curse end-game bonuses (preview)
-      let curseBonus = 0;
-      const isDuel = g.game_type === 'duel';
-      if (g.players) {
-        for (const player of g.players) {
-          for (const pc of (player.curses || [])) {
-            const pos = isDuel ? (pc.curse?.positive_effect_duel || pc.curse?.positive_effect) : pc.curse?.positive_effect;
-            if (pos?.type === 'score_bonus') curseBonus += (pos.value || 0);
-          }
-        }
-      }
+interface KingdomCssVariables {
+  border_anim?: string;
+  border_color?: string;
+  border_glow?: string;
+  border_color_rgb?: string;
+  bg_tint?: string;
+  bg_color?: string;
+  name_accent?: string;
+  total_accent?: string;
+  bar_caution?: string;
+  stat_color?: string;
+  text_color?: string;
+}
 
-      const rawTotal = multiplied + balance + stacking + yearBonus + bonus + curseBonus;
-      const final_ = Math.floor(rawTotal * (1 + modifier / 100));
-      return { base, yearMultiplier, multiplied, balance, stacking, yearBonus, bonus, curseBonus, modifier, final: final_ };
-    },
-    liveScore() {
-      return this.liveBreakdown.final;
-    },
-    liveRank() {
-      const s = this.liveScore;
-      if (s >= 200) return 'Legendary';
-      if (s >= 150) return 'Excellent';
-      if (s >= 100) return 'Good';
-      if (s >= 60) return 'Adequate';
-      return 'Poor';
-    },
-  },
-  watch: {
-    game: {
-      handler(newGame, oldGame) {
-        if (!newGame) return;
-        for (const stat of this.stats) {
-          const oldVal = this.prevValues[stat.key];
-          const newVal = newGame[stat.key];
-          if (oldVal === undefined || !oldGame) {
-            this.tweenedValues[stat.key] = newVal;
-          } else if (newVal !== oldVal) {
-            if (this.flashTimers[stat.key]) clearTimeout(this.flashTimers[stat.key]);
-            const direction = newVal > oldVal ? 'up' : 'down';
-            this.flashClass[stat.key] = 'flash-' + direction;
-            this.barFlashClass[stat.key] = 'bar-flash-' + direction;
-            this.flashTimers[stat.key] = setTimeout(() => {
-              this.flashClass[stat.key] = '';
-              this.barFlashClass[stat.key] = '';
-            }, 1200);
-            this.animateValue(stat.key, oldVal, newVal);
-          }
-          this.prevValues[stat.key] = newVal;
+interface KingdomStyleData {
+  css_vars?: KingdomCssVariables;
+  background_image_url?: string;
+}
+
+interface CurseEffect {
+  type?: string;
+  value?: number;
+}
+
+interface PlayerCurse {
+  curse?: {
+    positive_effect?: CurseEffect;
+    positive_effect_duel?: CurseEffect;
+  };
+}
+
+interface GamePlayer {
+  curses?: PlayerCurse[];
+}
+
+interface GameState {
+  game_type?: string;
+  status?: string;
+  wealth?: number;
+  influence?: number;
+  security?: number;
+  religion?: number;
+  food?: number;
+  happiness?: number;
+  current_round?: number;
+  bonus_score?: number;
+  score_modifier?: number;
+  players?: GamePlayer[];
+  [key: string]: unknown;
+}
+
+interface PreviewEffects {
+  positive?: Record<string, number>;
+  negative?: Record<string, number>;
+}
+
+interface LiveBreakdown {
+  base: number;
+  yearMultiplier: number;
+  multiplied: number;
+  balance: number;
+  stacking: number;
+  yearBonus: number;
+  bonus: number;
+  curseBonus: number;
+  modifier: number;
+  final: number;
+}
+
+interface StatPreview {
+  pos: number;
+  neg: number;
+}
+
+const {
+  game,
+  kingdomStyleSlug = "classic",
+  kingdomStyleData = undefined,
+  previewEffects = undefined,
+} = defineProps<{
+  game: GameState;
+  kingdomStyleSlug?: string;
+  kingdomStyleData?: KingdomStyleData;
+  previewEffects?: PreviewEffects;
+}>();
+
+const stats: StatIcon[] = useIcons().getStatIcons();
+const previousValues = reactive<Record<string, number>>({});
+const tweenedValues = reactive<Record<string, number>>({});
+const flashClass = reactive<Record<string, string>>({});
+const barFlashClass = reactive<Record<string, string>>({});
+const flashTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+const tweenTimers: Record<string, number> = {};
+const showBreakdown = ref(false);
+
+const kingdomAnim = computed<string>(() => kingdomStyleData?.css_vars?.border_anim || "none");
+
+const kingdomRootStyle = computed<Record<string, string>>(() => {
+  const style: Record<string, string> = {};
+  const data = kingdomStyleData;
+  // Apply css_vars from DB as inline custom properties (overrides static CSS)
+  if (data?.css_vars) {
+    const cv = data.css_vars;
+    if (cv.border_color) {
+      style["--ks-border-color"] = cv.border_color;
+    }
+    if (cv.border_glow) {
+      style["--ks-border-glow"] = cv.border_glow;
+    }
+    if (cv.border_color_rgb) {
+      style["--ks-border-color-rgb"] = cv.border_color_rgb;
+    }
+    if (cv.bg_tint) {
+      style["--ks-bg-tint"] = cv.bg_tint;
+    }
+    if (cv.bg_color) {
+      style["--ks-bg-color"] = cv.bg_color;
+    }
+    if (cv.name_accent) {
+      style["--ks-name-accent"] = cv.name_accent;
+    }
+    if (cv.total_accent) {
+      style["--ks-total-accent"] = cv.total_accent;
+    }
+    if (cv.bar_caution) {
+      style["--ks-bar-caution"] = cv.bar_caution;
+      style["--ks-bar-caution-stroke"] = extractSolidColor(cv.bar_caution, "#d4a843");
+    }
+    if (cv.stat_color) {
+      style["--ks-stat-color"] = cv.stat_color;
+    }
+    if (cv.text_color) {
+      style["--ks-text-color"] = cv.text_color;
+    }
+  }
+  // Apply background image
+  if (data?.background_image_url) {
+    style.backgroundImage = `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url(${data.background_image_url})`;
+    style.backgroundSize = "cover";
+    style.backgroundPosition = "center";
+  }
+  return style;
+});
+
+const showLiveScore = computed<boolean>(() => game.game_type !== "duel" && game.status !== "completed" && game.status !== "cancelled");
+
+const liveBreakdown = computed<LiveBreakdown>(() => {
+  const statVals = [game.wealth || 0, game.influence || 0, game.security || 0, game.religion || 0, game.food || 0, game.happiness || 0];
+  const base = statVals.reduce((sum, value) => sum + value, 0);
+  const yearsCompleted = Math.floor((game.current_round || 0) / 12);
+  const years = yearsCompleted + 1;
+  const multipliers: Record<number, number> = { 1: 1, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2 };
+  const yearMultiplier = multipliers[years] || 2;
+  const multiplied = Math.floor(base * yearMultiplier);
+  const spread = Math.max(...statVals) - Math.min(...statVals);
+  const balance = Math.max(0, 30 - spread * 3);
+  const yearBonus = yearsCompleted * 50;
+  let stacking = 0;
+  for (const value of statVals) {
+    if (value >= 15) {
+      stacking += 10;
+    }
+    if (value >= 20) {
+      stacking += 20;
+    }
+  }
+  const bonus = game.bonus_score || 0;
+  const modifier = game.score_modifier || 0;
+
+  // Calculate curse end-game bonuses (preview)
+  let curseBonus = 0;
+  const isDuel = game.game_type === "duel";
+  if (game.players) {
+    for (const player of game.players) {
+      const playerCurses = player.curses || [];
+      for (const pc of playerCurses) {
+        const pos = isDuel ? (pc.curse?.positive_effect_duel || pc.curse?.positive_effect) : pc.curse?.positive_effect;
+        if (pos?.type === "score_bonus") {
+          curseBonus += (pos.value || 0);
         }
-      },
-      deep: true,
-      immediate: true,
-    },
-  },
-  beforeUnmount() {
-    Object.values(this.tweenTimers).forEach(id => cancelAnimationFrame(id));
-  },
-  methods: {
-    animateValue(key, from, to) {
-      if (this.tweenTimers[key]) cancelAnimationFrame(this.tweenTimers[key]);
-      const duration = 800;
-      const start = performance.now();
-      const step = (now) => {
-        const t = Math.min((now - start) / duration, 1);
-        const ease = 1 - Math.pow(1 - t, 3); // ease-out cubic
-        this.tweenedValues[key] = Math.round(from + (to - from) * ease);
-        if (t < 1) {
-          this.tweenTimers[key] = requestAnimationFrame(step);
-        }
-      };
-      this.tweenTimers[key] = requestAnimationFrame(step);
-    },
-    getPreview(statKey) {
-      if (!this.previewEffects) return null;
-      const pos = this.previewEffects.positive?.[statKey] || 0;
-      const neg = this.previewEffects.negative?.[statKey] || 0;
-      if (!pos && !neg) return null;
-      return { pos, neg };
-    },
-    getBarClass(statKey) {
-      const preview = this.getPreview(statKey);
-      if (preview) {
-        if (preview.pos > 0 && preview.neg < 0) return 'bar-preview-mixed';
-        if (preview.pos > 0) return 'bar-preview-positive';
-        if (preview.neg < 0) return 'bar-preview-negative';
       }
-      return 'bar-default';
-    },
-    getValueClass(value) {
-      if (value <= 2) return 'val-critical';
-      if (value <= 5) return 'val-danger';
-      return 'val-safe';
-    },
-    radialOffset(value) {
-      const circumference = 2 * Math.PI * 20; // ~125.66
-      const pct = Math.min(value, 20) / 20;
-      return circumference * (1 - pct);
-    },
-    extractSolidColor(value, fallback) {
-      if (!value || typeof value !== 'string') return fallback;
-      // If it's not a gradient, return as-is (it's already a solid color)
-      if (!value.includes('gradient')) return value;
-      // Extract the first color from a gradient string
-      const hexMatch = value.match(/#[0-9a-fA-F]{3,8}/);
-      if (hexMatch) return hexMatch[0];
-      const rgbMatch = value.match(/rgba?\([^)]+\)/);
-      if (rgbMatch) return rgbMatch[0];
-      return fallback;
-    },
+    }
+  }
+
+  const rawTotal = multiplied + balance + stacking + yearBonus + bonus + curseBonus;
+  const final = Math.floor(rawTotal * (1 + modifier / 100));
+  return { base, yearMultiplier, multiplied, balance, stacking, yearBonus, bonus, curseBonus, modifier, final };
+});
+
+const liveScore = computed<number>(() => liveBreakdown.value.final);
+
+const liveRank = computed<string>(() => {
+  const score = liveScore.value;
+  if (score >= 200) {
+    return "Legendary";
+  }
+  if (score >= 150) {
+    return "Excellent";
+  }
+  if (score >= 100) {
+    return "Good";
+  }
+  if (score >= 60) {
+    return "Adequate";
+  }
+  return "Poor";
+});
+
+watch(
+  () => game,
+  (newGame, oldGame) => {
+    if (!newGame) {
+      return;
+    }
+    for (const stat of stats) {
+      const oldValue = previousValues[stat.key];
+      const newValue = newGame[stat.key] as number;
+      if (oldValue === undefined || !oldGame) {
+        tweenedValues[stat.key] = newValue;
+      } else if (newValue !== oldValue) {
+        if (Object.hasOwn(flashTimers, stat.key)) {
+          clearTimeout(flashTimers[stat.key]);
+        }
+        const direction = newValue > oldValue ? "up" : "down";
+        flashClass[stat.key] = `flash-${direction}`;
+        barFlashClass[stat.key] = `bar-flash-${direction}`;
+        flashTimers[stat.key] = setTimeout(() => {
+          flashClass[stat.key] = "";
+          barFlashClass[stat.key] = "";
+        }, 1200);
+        animateValue(stat.key, oldValue, newValue);
+      }
+      previousValues[stat.key] = newValue;
+    }
   },
-};
+  { deep: true, immediate: true },
+);
+
+onBeforeUnmount(() => {
+  for (const id of Object.values(tweenTimers)) {
+    cancelAnimationFrame(id);
+  }
+});
+
+function animateValue(key: string, from: number, to: number): void {
+  if (Object.hasOwn(tweenTimers, key)) {
+    cancelAnimationFrame(tweenTimers[key]);
+  }
+  const duration = 800;
+  const start = performance.now();
+  const step = (now: number): void => {
+    const t = Math.min((now - start) / duration, 1);
+    const ease = 1 - (1 - t) ** 3; // ease-out cubic
+    tweenedValues[key] = Math.round(from + (to - from) * ease);
+    if (t < 1) {
+      tweenTimers[key] = requestAnimationFrame(step);
+    }
+  };
+  tweenTimers[key] = requestAnimationFrame(step);
+}
+
+function getPreview(statKey: string): StatPreview | undefined {
+  if (!previewEffects) {
+    return undefined;
+  }
+  const pos = previewEffects.positive?.[statKey] || 0;
+  const neg = previewEffects.negative?.[statKey] || 0;
+  if (!pos && !neg) {
+    return undefined;
+  }
+  return { pos, neg };
+}
+
+function getBarClass(statKey: string): string {
+  const preview = getPreview(statKey);
+  if (preview) {
+    if (preview.pos > 0 && preview.neg < 0) {
+      return "bar-preview-mixed";
+    }
+    if (preview.pos > 0) {
+      return "bar-preview-positive";
+    }
+    if (preview.neg < 0) {
+      return "bar-preview-negative";
+    }
+  }
+  return "bar-default";
+}
+
+function getValueClass(value: number): string {
+  if (value <= 2) {
+    return "val-critical";
+  }
+  if (value <= 5) {
+    return "val-danger";
+  }
+  return "val-safe";
+}
+
+function radialOffset(value: number): number {
+  const circumference = 2 * Math.PI * 20; // ~125.66
+  const pct = Math.min(value, 20) / 20;
+  return circumference * (1 - pct);
+}
+
+function extractSolidColor(value: string | undefined, fallback: string): string {
+  if (!value || typeof value !== "string") {
+    return fallback;
+  }
+  // If it's not a gradient, return as-is (it's already a solid color)
+  if (!value.includes("gradient")) {
+    return value;
+  }
+  // Extract the first color from a gradient string
+  const hexMatch = value.match(/#[0-9a-fA-F]{3,8}/);
+  if (hexMatch) {
+    return hexMatch[0];
+  }
+  const rgbMatch = value.match(/rgba?\([^)]+\)/);
+  if (rgbMatch) {
+    return rgbMatch[0];
+  }
+  return fallback;
+}
 </script>
 
 <style scoped>

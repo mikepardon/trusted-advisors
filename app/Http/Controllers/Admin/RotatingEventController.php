@@ -97,7 +97,23 @@ class RotatingEventController extends Controller
             'visibility' => 'sometimes|string|in:all,premium,admin',
         ]);
 
-        $rotatingEvent->update($validated);
+        // Admin edit forms submit the whole record, so an omitted nullable field
+        // means "cleared" and must null the column rather than retain the old value.
+        $rotatingEvent->update([
+            ...$validated,
+            'modifiers' => $validated['modifiers'] ?? null,
+            'card_pool' => $validated['card_pool'] ?? null,
+            'item_pool' => $validated['item_pool'] ?? null,
+            'event_pool' => $validated['event_pool'] ?? null,
+            'character_pool' => $validated['character_pool'] ?? null,
+            'curse_pool' => $validated['curse_pool'] ?? null,
+            'fixed_event_id' => $validated['fixed_event_id'] ?? null,
+            'total_rounds' => $validated['total_rounds'] ?? null,
+            'xp_config' => $validated['xp_config'] ?? null,
+            'theme_color' => $validated['theme_color'] ?? null,
+            'max_attempts' => $validated['max_attempts'] ?? null,
+            'image_url' => $validated['image_url'] ?? null,
+        ]);
 
         return response()->json($rotatingEvent);
     }

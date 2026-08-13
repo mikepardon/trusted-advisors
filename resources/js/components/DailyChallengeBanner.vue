@@ -13,25 +13,29 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import axios from "axios";
 
-export default {
-  name: 'DailyChallengeBanner',
-  data() {
-    return {
-      challenge: null,
-    };
-  },
-  async mounted() {
+interface DailyChallenge {
+    title: string | undefined;
+    description: string | undefined;
+    reward_xp: number | undefined;
+    completed: boolean | undefined;
+}
+
+const challenge = ref<DailyChallenge | undefined>(undefined);
+
+onMounted(async () => {
     try {
-      const res = await axios.get('/api/daily-challenge');
-      if (res.data) {
-        this.challenge = res.data;
-      }
-    } catch {}
-  },
-};
+        const response = await axios.get<DailyChallenge | undefined>("/api/daily-challenge");
+        if (response.data) {
+            challenge.value = response.data;
+        }
+    } catch {
+        // Ignore: banner simply stays hidden if the challenge fails to load.
+    }
+});
 </script>
 
 <style scoped>

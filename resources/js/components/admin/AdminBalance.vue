@@ -17,8 +17,8 @@
         <option value="cooperative">Cooperative</option>
         <option value="duel">Duel</option>
       </select>
-      <input type="date" v-model="filters.date_from" @change="loadTab" />
-      <input type="date" v-model="filters.date_to" @change="loadTab" />
+      <input v-model="filters.date_from" type="date" @change="loadTab" />
+      <input v-model="filters.date_to" type="date" @change="loadTab" />
     </div>
 
     <!-- Tabs -->
@@ -34,12 +34,12 @@
       <table>
         <thead>
           <tr>
-            <th @click="sortBy('title')" class="sortable">Title</th>
-            <th @click="sortBy('difficulty')" class="sortable">Diff</th>
-            <th @click="sortBy('category')" class="sortable">Category</th>
-            <th @click="sortBy('appearances')" class="sortable">Played</th>
-            <th @click="sortBy('success_count')" class="sortable">Successes</th>
-            <th @click="sortBy('success_rate')" class="sortable">Rate %</th>
+            <th class="sortable" @click="sortBy('title')">Title</th>
+            <th class="sortable" @click="sortBy('difficulty')">Diff</th>
+            <th class="sortable" @click="sortBy('category')">Category</th>
+            <th class="sortable" @click="sortBy('appearances')">Played</th>
+            <th class="sortable" @click="sortBy('success_count')">Successes</th>
+            <th class="sortable" @click="sortBy('success_rate')">Rate %</th>
           </tr>
         </thead>
         <tbody>
@@ -61,10 +61,10 @@
       <table>
         <thead>
           <tr>
-            <th @click="sortBy('name')" class="sortable">Name</th>
-            <th @click="sortBy('pick_count')" class="sortable">Picks</th>
-            <th @click="sortBy('win_count')" class="sortable">Wins</th>
-            <th @click="sortBy('win_rate')" class="sortable">Win Rate %</th>
+            <th class="sortable" @click="sortBy('name')">Name</th>
+            <th class="sortable" @click="sortBy('pick_count')">Picks</th>
+            <th class="sortable" @click="sortBy('win_count')">Wins</th>
+            <th class="sortable" @click="sortBy('win_rate')">Win Rate %</th>
           </tr>
         </thead>
         <tbody>
@@ -84,12 +84,12 @@
       <table>
         <thead>
           <tr>
-            <th @click="sortBy('name')" class="sortable">Name</th>
-            <th @click="sortBy('effect_type')" class="sortable">Type</th>
-            <th @click="sortBy('times_acquired')" class="sortable">Acquired</th>
-            <th @click="sortBy('games_appeared_in')" class="sortable">Games</th>
-            <th @click="sortBy('times_used')" class="sortable">Used</th>
-            <th @click="sortBy('times_cursed')" class="sortable">Cursed</th>
+            <th class="sortable" @click="sortBy('name')">Name</th>
+            <th class="sortable" @click="sortBy('effect_type')">Type</th>
+            <th class="sortable" @click="sortBy('times_acquired')">Acquired</th>
+            <th class="sortable" @click="sortBy('games_appeared_in')">Games</th>
+            <th class="sortable" @click="sortBy('times_used')">Used</th>
+            <th class="sortable" @click="sortBy('times_cursed')">Cursed</th>
           </tr>
         </thead>
         <tbody>
@@ -113,16 +113,16 @@
       <table>
         <thead>
           <tr>
-            <th @click="sortBy('title')" class="sortable">Title</th>
-            <th @click="sortBy('mechanic')" class="sortable">Mechanic</th>
-            <th @click="sortBy('times_drawn')" class="sortable">Times Drawn</th>
+            <th class="sortable" @click="sortBy('title')">Title</th>
+            <th class="sortable" @click="sortBy('mechanic')">Mechanic</th>
+            <th class="sortable" @click="sortBy('times_drawn')">Times Drawn</th>
             <th>of Games</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="ev in sortedEvents" :key="ev.id" class="clickable-row" @click="openEventModal(ev)">
             <td>{{ ev.title }}</td>
-            <td><span class="type-badge" v-if="ev.mechanic">{{ ev.mechanic }}</span><span v-else class="muted">—</span></td>
+            <td><span v-if="ev.mechanic" class="type-badge">{{ ev.mechanic }}</span><span v-else class="muted">—</span></td>
             <td>{{ ev.times_drawn }}</td>
             <td class="muted">/ {{ ev.total_games }}</td>
           </tr>
@@ -139,11 +139,11 @@
           <h3>{{ selectedCard.title }}</h3>
           <div class="detail-badges">
             <span class="badge">Difficulty: {{ selectedCard.difficulty }}</span>
-            <span class="badge" v-if="selectedCard.category">{{ selectedCard.category }}</span>
+            <span v-if="selectedCard.category" class="badge">{{ selectedCard.category }}</span>
           </div>
         </div>
 
-        <p class="detail-description" v-if="selectedCard.description">{{ selectedCard.description }}</p>
+        <p v-if="selectedCard.description" class="detail-description">{{ selectedCard.description }}</p>
 
         <div class="detail-stats">
           <div class="detail-stat">
@@ -160,10 +160,10 @@
           </div>
         </div>
 
-        <div class="effects-grid" v-if="selectedCard.positive_effects || selectedCard.negative_effects">
-          <div class="effect-block" v-if="hasEffects(selectedCard.positive_effects)">
+        <div v-if="selectedCard.positive_effects || selectedCard.negative_effects" class="effects-grid">
+          <div v-if="hasEffects(selectedCard.positive_effects)" class="effect-block">
             <h4 class="effect-title success">On Success</h4>
-            <p class="flavor-text" v-if="selectedCard.positive_flavor">{{ selectedCard.positive_flavor }}</p>
+            <p v-if="selectedCard.positive_flavor" class="flavor-text">{{ selectedCard.positive_flavor }}</p>
             <div class="effect-list">
               <div v-for="(val, key) in filteredEffects(selectedCard.positive_effects)" :key="key" class="effect-item">
                 <span class="effect-key">{{ formatEffectKey(key) }}</span>
@@ -171,9 +171,9 @@
               </div>
             </div>
           </div>
-          <div class="effect-block" v-if="hasEffects(selectedCard.negative_effects)">
+          <div v-if="hasEffects(selectedCard.negative_effects)" class="effect-block">
             <h4 class="effect-title failure">On Failure</h4>
-            <p class="flavor-text" v-if="selectedCard.negative_flavor">{{ selectedCard.negative_flavor }}</p>
+            <p v-if="selectedCard.negative_flavor" class="flavor-text">{{ selectedCard.negative_flavor }}</p>
             <div class="effect-list">
               <div v-for="(val, key) in filteredEffects(selectedCard.negative_effects)" :key="key" class="effect-item">
                 <span class="effect-key">{{ formatEffectKey(key) }}</span>
@@ -189,7 +189,7 @@
         </div>
 
         <div class="detail-actions">
-          <router-link :to="'/admin/cards'" class="btn-edit" @click.native="selectedCard = null">Edit in Card Manager</router-link>
+          <router-link to="/admin/cards" class="btn-edit" @click="selectedCard = null">Edit in Card Manager</router-link>
         </div>
       </div>
     </div>
@@ -205,15 +205,15 @@
               <h3>{{ selectedCharacter.name }}</h3>
               <div class="detail-badges">
                 <span class="badge">Wild: {{ selectedCharacter.wild_value }}</span>
-                <span class="badge" v-if="selectedCharacter.wild_ability">{{ selectedCharacter.wild_ability }}</span>
+                <span v-if="selectedCharacter.wild_ability" class="badge">{{ selectedCharacter.wild_ability }}</span>
               </div>
             </div>
           </div>
         </div>
 
-        <p class="detail-description" v-if="selectedCharacter.description">{{ selectedCharacter.description }}</p>
+        <p v-if="selectedCharacter.description" class="detail-description">{{ selectedCharacter.description }}</p>
 
-        <p class="wild-desc" v-if="selectedCharacter.wild_ability_description">
+        <p v-if="selectedCharacter.wild_ability_description" class="wild-desc">
           <strong>Wild Ability:</strong> {{ selectedCharacter.wild_ability_description }}
         </p>
 
@@ -232,7 +232,7 @@
           </div>
         </div>
 
-        <div class="dice-section" v-if="selectedCharacter.dice">
+        <div v-if="selectedCharacter.dice" class="dice-section">
           <h4 class="section-label">Dice</h4>
           <div class="dice-grid">
             <div v-for="(die, i) in selectedCharacter.dice" :key="i" class="die-row">
@@ -250,7 +250,7 @@
         </div>
 
         <div class="detail-actions">
-          <router-link :to="'/admin/characters'" class="btn-edit" @click.native="selectedCharacter = null">Edit in Character Manager</router-link>
+          <router-link to="/admin/characters" class="btn-edit" @click="selectedCharacter = null">Edit in Character Manager</router-link>
         </div>
       </div>
     </div>
@@ -263,12 +263,12 @@
           <h3 :class="{ 'negative-item': selectedItem.is_negative }">{{ selectedItem.name }}</h3>
           <div class="detail-badges">
             <span class="badge">{{ selectedItem.effect_type }}</span>
-            <span class="badge negative-badge" v-if="selectedItem.is_negative">Negative</span>
-            <span class="badge" v-if="selectedItem.is_consumable">Consumable</span>
+            <span v-if="selectedItem.is_negative" class="badge negative-badge">Negative</span>
+            <span v-if="selectedItem.is_consumable" class="badge">Consumable</span>
           </div>
         </div>
 
-        <p class="detail-description" v-if="selectedItem.description">{{ selectedItem.description }}</p>
+        <p v-if="selectedItem.description" class="detail-description">{{ selectedItem.description }}</p>
 
         <div class="detail-stats">
           <div class="detail-stat">
@@ -289,7 +289,7 @@
           </div>
         </div>
 
-        <div class="effect-block" v-if="selectedItem.effect && Object.keys(selectedItem.effect).length">
+        <div v-if="selectedItem.effect && Object.keys(selectedItem.effect).length > 0" class="effect-block">
           <h4 class="section-label">Effect</h4>
           <div class="effect-list">
             <div v-for="(val, key) in selectedItem.effect" :key="key" class="effect-item">
@@ -305,7 +305,7 @@
         </div>
 
         <div class="detail-actions">
-          <router-link :to="'/admin/items'" class="btn-edit" @click.native="selectedItem = null">Edit in Item Manager</router-link>
+          <router-link to="/admin/items" class="btn-edit" @click="selectedItem = null">Edit in Item Manager</router-link>
         </div>
       </div>
     </div>
@@ -317,11 +317,11 @@
         <div class="detail-header">
           <h3>{{ selectedEvent.title }}</h3>
           <div class="detail-badges">
-            <span class="badge" v-if="selectedEvent.mechanic">{{ selectedEvent.mechanic }}</span>
+            <span v-if="selectedEvent.mechanic" class="badge">{{ selectedEvent.mechanic }}</span>
           </div>
         </div>
 
-        <p class="detail-description" v-if="selectedEvent.effect">{{ selectedEvent.effect }}</p>
+        <p v-if="selectedEvent.effect" class="detail-description">{{ selectedEvent.effect }}</p>
 
         <div class="detail-stats">
           <div class="detail-stat">
@@ -334,7 +334,7 @@
           </div>
         </div>
 
-        <div class="effect-block" v-if="selectedEvent.stat_modifiers && hasEffects(selectedEvent.stat_modifiers)">
+        <div v-if="selectedEvent.stat_modifiers && hasEffects(selectedEvent.stat_modifiers)" class="effect-block">
           <h4 class="section-label">Stat Modifiers</h4>
           <div class="effect-list">
             <div v-for="(val, key) in filteredEffects(selectedEvent.stat_modifiers)" :key="key" class="effect-item">
@@ -344,7 +344,7 @@
           </div>
         </div>
 
-        <div class="effect-block" v-if="selectedEvent.mechanic_data && Object.keys(selectedEvent.mechanic_data).length">
+        <div v-if="selectedEvent.mechanic_data && Object.keys(selectedEvent.mechanic_data).length > 0" class="effect-block">
           <h4 class="section-label">Mechanic Data</h4>
           <div class="effect-list">
             <div v-for="(val, key) in selectedEvent.mechanic_data" :key="key" class="effect-item">
@@ -360,151 +360,278 @@
         </div>
 
         <div class="detail-actions">
-          <router-link :to="'/admin/events'" class="btn-edit" @click.native="selectedEvent = null">Edit in Event Manager</router-link>
+          <router-link to="/admin/events" class="btn-edit" @click="selectedEvent = null">Edit in Event Manager</router-link>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios from "axios";
 
-export default {
-  name: 'AdminBalance',
-  data() {
-    return {
-      tab: 'cards',
-      filters: { game_mode: '', game_type: '', date_from: '', date_to: '' },
-      cards: [],
-      characters: [],
-      items: [],
-      events: [],
-      sortKey: '',
-      sortAsc: true,
-      selectedCard: null,
-      selectedCardStats: {},
-      selectedCharacter: null,
-      selectedCharStats: {},
-      selectedItem: null,
-      selectedItemStats: {},
-      selectedEvent: null,
-      selectedEventStats: {},
-    };
-  },
-  computed: {
-    sortedCards() {
-      return this.sorted(this.cards);
-    },
-    sortedCharacters() {
-      return this.sorted(this.characters);
-    },
-    sortedItems() {
-      return this.sorted(this.items);
-    },
-    sortedEvents() {
-      return this.sorted(this.events);
-    },
-  },
-  async mounted() {
-    await this.loadTab();
-  },
-  methods: {
-    async loadTab() {
-      const params = {};
-      Object.entries(this.filters).forEach(([k, v]) => { if (v) params[k] = v; });
-      this.sortKey = '';
+type EffectMap = Record<string, number | boolean | string | undefined>;
 
-      try {
-        if (this.tab === 'cards') {
-          const res = await axios.get('/api/admin/balance/cards', { params });
-          this.cards = res.data;
-        } else if (this.tab === 'characters') {
-          const res = await axios.get('/api/admin/balance/characters', { params });
-          this.characters = res.data;
-        } else if (this.tab === 'items') {
-          const res = await axios.get('/api/admin/balance/items', { params });
-          this.items = res.data;
-        } else if (this.tab === 'events') {
-          const res = await axios.get('/api/admin/balance/events', { params });
-          this.events = res.data;
-        }
-      } catch {}
-    },
-    async openCardModal(cardStats) {
-      this.selectedCardStats = cardStats;
-      try {
-        const res = await axios.get(`/api/admin/cards/${cardStats.id}`);
-        this.selectedCard = res.data;
-      } catch {
-        this.selectedCard = { title: cardStats.title, difficulty: cardStats.difficulty, category: cardStats.category };
-      }
-    },
-    async openCharacterModal(charStats) {
-      this.selectedCharStats = charStats;
-      try {
-        const res = await axios.get(`/api/admin/characters/${charStats.id}`);
-        this.selectedCharacter = res.data;
-      } catch {
-        this.selectedCharacter = { name: charStats.name };
-      }
-    },
-    async openItemModal(itemStats) {
-      this.selectedItemStats = itemStats;
-      try {
-        const res = await axios.get(`/api/admin/items/${itemStats.id}`);
-        this.selectedItem = res.data;
-      } catch {
-        this.selectedItem = { name: itemStats.name, effect_type: itemStats.effect_type, is_negative: itemStats.is_negative };
-      }
-    },
-    async openEventModal(eventStats) {
-      this.selectedEventStats = eventStats;
-      try {
-        const res = await axios.get(`/api/admin/events/${eventStats.id}`);
-        this.selectedEvent = res.data;
-      } catch {
-        this.selectedEvent = { title: eventStats.title, effect: eventStats.effect, mechanic: eventStats.mechanic };
-      }
-    },
-    hasEffects(effects) {
-      if (!effects) return false;
-      return Object.values(effects).some(v => v !== 0 && v !== false && v !== null);
-    },
-    filteredEffects(effects) {
-      if (!effects) return {};
-      const filtered = {};
-      for (const [k, v] of Object.entries(effects)) {
-        if (v !== 0 && v !== false && v !== null) filtered[k] = v;
-      }
-      return filtered;
-    },
-    formatEffectKey(key) {
-      return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    },
-    sortBy(key) {
-      if (this.sortKey === key) {
-        this.sortAsc = !this.sortAsc;
-      } else {
-        this.sortKey = key;
-        this.sortAsc = true;
-      }
-    },
-    sorted(arr) {
-      if (!this.sortKey) return arr;
-      return [...arr].sort((a, b) => {
-        const va = a[this.sortKey], vb = b[this.sortKey];
-        const cmp = typeof va === 'string' ? va.localeCompare(vb) : (va ?? 0) - (vb ?? 0);
-        return this.sortAsc ? cmp : -cmp;
-      });
-    },
-    rateClass(rate) {
-      if (rate >= 70) return 'rate-high';
-      if (rate >= 40) return 'rate-mid';
-      return 'rate-low';
-    },
-  },
-};
+interface CardStats {
+  id: number;
+  title: string;
+  difficulty: number;
+  category: string | undefined;
+  appearances: number;
+  success_count: number;
+  success_rate: number;
+}
+
+interface CardDetail {
+  title: string;
+  difficulty?: number;
+  category?: string;
+  description?: string;
+  positive_effects?: EffectMap;
+  negative_effects?: EffectMap;
+  positive_flavor?: string;
+  negative_flavor?: string;
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+}
+
+interface CharacterStats {
+  id: number;
+  name: string;
+  pick_count: number;
+  win_count: number;
+  win_rate: number;
+}
+
+interface CharacterDetail {
+  name: string;
+  description?: string;
+  image_url?: string;
+  wild_value?: number;
+  wild_ability?: string;
+  wild_ability_description?: string;
+  dice?: string[][];
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+}
+
+interface ItemStats {
+  id: number;
+  name: string;
+  effect_type: string;
+  is_negative: boolean;
+  times_acquired: number;
+  games_appeared_in: number;
+  times_used: number;
+  times_cursed: number;
+}
+
+interface ItemDetail {
+  name: string;
+  effect_type: string;
+  is_negative?: boolean;
+  is_consumable?: boolean;
+  description?: string;
+  effect?: EffectMap;
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+}
+
+interface EventStats {
+  id: number;
+  title: string;
+  mechanic: string | undefined;
+  effect?: string;
+  times_drawn: number;
+  total_games: number;
+}
+
+interface EventDetail {
+  title: string;
+  mechanic?: string;
+  effect?: string;
+  stat_modifiers?: EffectMap;
+  mechanic_data?: EffectMap;
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+}
+
+interface BalanceFilters {
+  game_mode: string;
+  game_type: string;
+  date_from: string;
+  date_to: string;
+}
+
+const tab = ref("cards");
+const filters = reactive<BalanceFilters>({ game_mode: "", game_type: "", date_from: "", date_to: "" });
+const cards = ref<CardStats[]>([]);
+const characters = ref<CharacterStats[]>([]);
+const items = ref<ItemStats[]>([]);
+const events = ref<EventStats[]>([]);
+const sortKey = ref("");
+const sortAsc = ref(true);
+const selectedCard = ref<CardDetail | undefined>(undefined);
+const selectedCardStats = ref<Partial<CardStats>>({});
+const selectedCharacter = ref<CharacterDetail | undefined>(undefined);
+const selectedCharStats = ref<Partial<CharacterStats>>({});
+const selectedItem = ref<ItemDetail | undefined>(undefined);
+const selectedItemStats = ref<Partial<ItemStats>>({});
+const selectedEvent = ref<EventDetail | undefined>(undefined);
+const selectedEventStats = ref<Partial<EventStats>>({});
+
+const sortedCards = computed<CardStats[]>(() => sorted(cards.value));
+const sortedCharacters = computed<CharacterStats[]>(() => sorted(characters.value));
+const sortedItems = computed<ItemStats[]>(() => sorted(items.value));
+const sortedEvents = computed<EventStats[]>(() => sorted(events.value));
+
+async function loadTab(): Promise<void> {
+  const parameters: Record<string, string> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) {
+      parameters[key] = value;
+    }
+  }
+  sortKey.value = "";
+
+  try {
+    switch (tab.value) {
+    case "cards": {
+      const response = await axios.get<CardStats[]>("/api/admin/balance/cards", { params: parameters });
+      cards.value = response.data;
+    
+    break;
+    }
+    case "characters": {
+      const response = await axios.get<CharacterStats[]>("/api/admin/balance/characters", { params: parameters });
+      characters.value = response.data;
+    
+    break;
+    }
+    case "items": {
+      const response = await axios.get<ItemStats[]>("/api/admin/balance/items", { params: parameters });
+      items.value = response.data;
+    
+    break;
+    }
+    case "events": {
+      const response = await axios.get<EventStats[]>("/api/admin/balance/events", { params: parameters });
+      events.value = response.data;
+    
+    break;
+    }
+    // No default
+    }
+  } catch { /* ignore */ }
+}
+
+async function openCardModal(cardStats: CardStats): Promise<void> {
+  selectedCardStats.value = cardStats;
+  try {
+    const response = await axios.get<CardDetail>(`/api/admin/cards/${cardStats.id}`);
+    selectedCard.value = response.data;
+  } catch {
+    selectedCard.value = { title: cardStats.title, difficulty: cardStats.difficulty, category: cardStats.category };
+  }
+}
+
+async function openCharacterModal(charStats: CharacterStats): Promise<void> {
+  selectedCharStats.value = charStats;
+  try {
+    const response = await axios.get<CharacterDetail>(`/api/admin/characters/${charStats.id}`);
+    selectedCharacter.value = response.data;
+  } catch {
+    selectedCharacter.value = { name: charStats.name };
+  }
+}
+
+async function openItemModal(itemStats: ItemStats): Promise<void> {
+  selectedItemStats.value = itemStats;
+  try {
+    const response = await axios.get<ItemDetail>(`/api/admin/items/${itemStats.id}`);
+    selectedItem.value = response.data;
+  } catch {
+    selectedItem.value = { name: itemStats.name, effect_type: itemStats.effect_type, is_negative: itemStats.is_negative };
+  }
+}
+
+async function openEventModal(eventStats: EventStats): Promise<void> {
+  selectedEventStats.value = eventStats;
+  try {
+    const response = await axios.get<EventDetail>(`/api/admin/events/${eventStats.id}`);
+    selectedEvent.value = response.data;
+  } catch {
+    selectedEvent.value = { title: eventStats.title, effect: eventStats.effect, mechanic: eventStats.mechanic };
+  }
+}
+
+function hasEffects(effects: EffectMap | undefined): boolean {
+  if (!effects) {
+    return false;
+  }
+  return Object.values(effects).some((value) => value !== 0 && value !== false && value !== undefined);
+}
+
+function filteredEffects(effects: EffectMap | undefined): EffectMap {
+  if (!effects) {
+    return {};
+  }
+  const filtered: EffectMap = {};
+  for (const [key, value] of Object.entries(effects)) {
+    if (value !== 0 && value !== false && value !== undefined) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
+function formatEffectKey(key: string): string {
+  return key.replaceAll('_', " ").replaceAll(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function sortBy(key: string): void {
+  if (sortKey.value === key) {
+    sortAsc.value = !sortAsc.value;
+  } else {
+    sortKey.value = key;
+    sortAsc.value = true;
+  }
+}
+
+function fieldValue(row: object, key: string): unknown {
+  const record: Record<string, unknown> = { ...row };
+  return record[key];
+}
+
+function sorted<T extends object>(rows: T[]): T[] {
+  if (!sortKey.value) {
+    return rows;
+  }
+  const key = sortKey.value;
+  return rows.toSorted((first, second) => {
+    const firstValue = fieldValue(first, key);
+    const secondValue = fieldValue(second, key);
+    const comparison = typeof firstValue === "string"
+      ? firstValue.localeCompare(typeof secondValue === "string" ? secondValue : "")
+      : (typeof firstValue === "number" ? firstValue : 0) - (typeof secondValue === "number" ? secondValue : 0);
+    return sortAsc.value ? comparison : -comparison;
+  });
+}
+
+function rateClass(rate: number): string {
+  if (rate >= 70) {
+    return "rate-high";
+  }
+  if (rate >= 40) {
+    return "rate-mid";
+  }
+  return "rate-low";
+}
+
+onMounted(async () => {
+  await loadTab();
+});
 </script>
 
 <style scoped>

@@ -21,69 +21,63 @@
   </div>
 </template>
 
-<script>
-import { playSound } from '../sounds';
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { playSound } from "../sounds";
 
-export default {
-  name: 'StoryIntro',
-  props: {
-    numPlayers: { type: Number, default: 2 },
-  },
-  emits: ['continue'],
-  data() {
-    return {
-      visibleLines: 0,
-      timer: null,
-    };
-  },
-  computed: {
-    councilWord() {
-      if (this.numPlayers === 1) return 'most trusted advisor';
-      return this.numPlayers + ' most trusted advisors';
-    },
-    lines() {
-      return [
-        'England, 1280 AD.',
-        'The kingdom teeters on the brink of chaos.',
-        'Bandits roam the roads. Rival lords plot rebellion.',
-        'The people grow restless. Famine threatens the land.',
-        `The King has summoned his ${this.councilWord}`,
-        '\u2014 you \u2014',
-        'and appointed a five-year plan to restore order.',
-        'Each month brings new crises and impossible choices.',
-        'You cannot fix everything. Choose which fires to fight,',
-        'and which to let burn.',
-        'Keep the kingdom standing. That is all that matters.',
-      ];
-    },
-    allVisible() {
-      return this.visibleLines >= this.lines.length;
-    },
-  },
-  mounted() {
-    this.timer = setInterval(() => {
-      if (this.visibleLines < this.lines.length) {
-        this.visibleLines++;
-      } else {
-        clearInterval(this.timer);
-      }
-    }, 800);
-  },
-  beforeUnmount() {
-    clearInterval(this.timer);
-  },
-  methods: {
-    handleClick() {
-      if (!this.allVisible) {
-        clearInterval(this.timer);
-        this.visibleLines = this.lines.length;
-      } else {
-        playSound('clickButton');
-        this.$emit('continue');
-      }
-    },
-  },
-};
+const { numberPlayers = 2 } = defineProps<{ numberPlayers?: number }>();
+
+const emit = defineEmits<{ continue: [] }>();
+
+const visibleLines = ref(0);
+const timer = ref<ReturnType<typeof setInterval>>();
+
+const councilWord = computed(() => {
+  if (numberPlayers === 1) {
+    return "most trusted advisor";
+  }
+  return `${numberPlayers} most trusted advisors`;
+});
+
+const lines = computed(() => [
+  "England, 1280 AD.",
+  "The kingdom teeters on the brink of chaos.",
+  "Bandits roam the roads. Rival lords plot rebellion.",
+  "The people grow restless. Famine threatens the land.",
+  `The King has summoned his ${councilWord.value}`,
+  "\u{2014} you \u{2014}",
+  "and appointed a five-year plan to restore order.",
+  "Each month brings new crises and impossible choices.",
+  "You cannot fix everything. Choose which fires to fight,",
+  "and which to let burn.",
+  "Keep the kingdom standing. That is all that matters.",
+]);
+
+const allVisible = computed(() => visibleLines.value >= lines.value.length);
+
+onMounted(() => {
+  timer.value = setInterval(() => {
+    if (visibleLines.value < lines.value.length) {
+      visibleLines.value++;
+    } else {
+      clearInterval(timer.value);
+    }
+  }, 800);
+});
+
+onBeforeUnmount(() => {
+  clearInterval(timer.value);
+});
+
+function handleClick(): void {
+  if (allVisible.value) {
+    playSound("clickButton");
+    emit("continue");
+  } else {
+    clearInterval(timer.value);
+    visibleLines.value = lines.value.length;
+  }
+}
 </script>
 
 <style scoped>

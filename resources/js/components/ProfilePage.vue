@@ -24,10 +24,10 @@
           <span v-else class="referral-code dim">Loading...</span>
         </div>
         <div class="referral-buttons">
-          <button class="btn-referral btn-copy" @click="copyCode" :disabled="!referralCode">
+          <button class="btn-referral btn-copy" :disabled="!referralCode" @click="copyCode">
             {{ copied ? 'Copied!' : 'Copy Code' }}
           </button>
-          <button v-if="canShare" class="btn-referral btn-share" @click="shareCode" :disabled="!referralCode">Share</button>
+          <button v-if="canShare" class="btn-referral btn-share" :disabled="!referralCode" @click="shareCode">Share</button>
         </div>
 
         <div v-if="referralStats" class="referral-stats">
@@ -57,7 +57,7 @@
               maxlength="10"
               @keyup.enter="applyReferralCode"
             />
-            <button class="btn-referral btn-apply" @click="applyReferralCode" :disabled="!referralInput.trim() || applyingReferral">
+            <button class="btn-referral btn-apply" :disabled="!referralInput.trim() || applyingReferral" @click="applyReferralCode">
               {{ applyingReferral ? 'Applying...' : 'Apply' }}
             </button>
           </div>
@@ -187,7 +187,7 @@
         <p class="modal-body">Your premium access will continue until the end of your current billing period. You won't be charged again.</p>
         <div class="modal-actions">
           <button @click="showCancelConfirm = false">Keep Subscription</button>
-          <button class="btn-danger" @click="confirmCancel" :disabled="cancelling">
+          <button class="btn-danger" :disabled="cancelling" @click="confirmCancel">
             {{ cancelling ? 'Cancelling...' : 'Yes, Cancel' }}
           </button>
         </div>
@@ -207,184 +207,254 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'ProfilePage',
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast };
-  },
-  data() {
-    return {
-      gameStats: {},
-      statsLoading: true,
-      referralCode: null,
-      referralStats: null,
-      copied: false,
-      canShare: !!navigator.share,
-      referralInput: '',
-      applyingReferral: false,
-      referralError: '',
-      referralApplied: false,
-      subDetails: null,
-      subLoading: false,
-      showCancelConfirm: false,
-      cancelling: false,
+interface GameStats {
+  total_games?: number;
+  total_wins?: number;
+  total_losses?: number;
+  online_wins?: number;
+  single_wins?: number;
+  pnp_wins?: number;
+  xp?: number;
+  level?: number;
+  xp_for_next_level?: number;
+  elo_rating?: number;
+  login_streak?: number;
+  max_login_streak?: number;
+}
+
+interface ReferralStats {
+  total_referred: number;
+  verified_count: number;
+  total_coins_earned: number;
+}
+
+interface SubscriptionDetails {
+  is_premium: boolean;
+  platform?: string;
+  status?: string;
+  cancel_at_period_end?: boolean;
+  current_period_end?: string;
+  interval?: string;
+  interval_count?: number;
+  amount_cents?: number;
+  currency?: string;
+}
+
+const auth = useAuth();
+const toast = useToast();
+
+const gameStats = reactive<GameStats>({});
+const statsLoading = ref(true);
+const referralCode = ref<string | undefined>(undefined);
+const referralStats = ref<ReferralStats | undefined>(undefined);
+const copied = ref(false);
+const canShare = Boolean(navigator.share);
+const referralInput = ref("");
+const applyingReferral = ref(false);
+const referralError = ref("");
+const referralApplied = ref(false);
+const subDetails = ref<SubscriptionDetails | undefined>(undefined);
+const subLoading = ref(false);
+const showCancelConfirm = ref(false);
+const cancelling = ref(false);
+const copyResetTimer = ref<ReturnType<typeof setTimeout>>();
+
+const platformLabel = computed<string>(() => {
+  const platform = subDetails.value?.platform;
+  if (platform === "stripe") {
+    return "Stripe";
+  }
+  if (platform === "apple") {
+    return "Apple";
+  }
+  if (platform === "google") {
+    return "Google Play";
+  }
+  return platform || "Unknown";
+});
+
+const subStatusLabel = computed<string>(() => {
+  if (subDetails.value?.cancel_at_period_end) {
+    return "Cancelling";
+  }
+  return subDetails.value?.status === "active" ? "Active" : (subDetails.value?.status || "Active");
+});
+
+const subStatusClass = computed<string>(() => {
+  if (subDetails.value?.cancel_at_period_end) {
+    return "sub-cancelling";
+  }
+  return subDetails.value?.status === "active" ? "sub-active" : "";
+});
+
+const intervalLabel = computed<string>(() => {
+  const interval = subDetails.value?.interval;
+  if (!interval) {
+    return "";
+  }
+  const count = subDetails.value?.interval_count || 1;
+  const labels: Record<string, string> = { day: "Daily", week: "Weekly", month: "Monthly", year: "Yearly" };
+  if (count === 1) {
+    return labels[interval] || interval;
+  }
+  return `Every ${count} ${interval}s`;
+});
+
+const formattedPrice = computed<string>(() => {
+  const cents = subDetails.value?.amount_cents;
+  if (cents === undefined) {
+    return "";
+  }
+  const currency = subDetails.value?.currency || "USD";
+  try {
+    return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(cents / 100);
+  } catch {
+    return `${(cents / 100).toFixed(2)} ${currency}`;
+  }
+});
+
+const xpPercent = computed<number>(() => {
+  const xp = gameStats.xp || 0;
+  const level = gameStats.level || 1;
+  const currentLevelXp = (100 * (level - 1) * level) / 2;
+  const nextLevelXp = gameStats.xp_for_next_level || (100 * level * (level + 1) / 2);
+  const range = nextLevelXp - currentLevelXp;
+  if (range <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.round(((xp - currentLevelXp) / range) * 100));
+});
+
+async function handleLogout(): Promise<void> {
+  await auth.logout();
+  window.location.reload();
+}
+
+async function fetchReferralData(): Promise<void> {
+  const [codeResult, statsResult] = await Promise.allSettled([
+    axios.get<{ code: string }>("/api/referral/code"),
+    axios.get<ReferralStats>("/api/referral/stats"),
+  ]);
+  if (codeResult.status === "fulfilled") {
+    referralCode.value = codeResult.value.data.code;
+  }
+  if (statsResult.status === "fulfilled") {
+    referralStats.value = statsResult.value.data;
+  }
+}
+
+async function copyCode(): Promise<void> {
+  const code = referralCode.value;
+  if (!code) {
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(code);
+  } catch {
+    // Fallback for non-HTTPS or unsupported contexts
+    const textarea = document.createElement("textarea");
+    textarea.value = code;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+  copied.value = true;
+  clearTimeout(copyResetTimer.value);
+  copyResetTimer.value = setTimeout(() => {
+    copied.value = false;
+  }, 2000);
+}
+
+async function shareCode(): Promise<void> {
+  const code = referralCode.value;
+  if (!code || !navigator.share) {
+    return;
+  }
+  try {
+    await navigator.share({
+      title: "Join Trusted Advisors!",
+      text: `Use my referral code: ${code}`,
+    });
+  } catch { /* ignore share cancellation */ }
+}
+
+async function fetchSubscriptionDetails(): Promise<void> {
+  subLoading.value = true;
+  try {
+    const response = await axios.get<SubscriptionDetails>("/api/premium/details");
+    subDetails.value = response.data;
+  } catch {
+    // fallback to basic info
+    subDetails.value = {
+      is_premium: true,
+      status: "active",
     };
-  },
-  computed: {
-    platformLabel() {
-      const p = this.subDetails?.platform;
-      if (p === 'stripe') return 'Stripe';
-      if (p === 'apple') return 'Apple';
-      if (p === 'google') return 'Google Play';
-      return p || 'Unknown';
-    },
-    subStatusLabel() {
-      if (this.subDetails?.cancel_at_period_end) {
-        return 'Cancelling';
-      }
-      return this.subDetails?.status === 'active' ? 'Active' : (this.subDetails?.status || 'Active');
-    },
-    subStatusClass() {
-      if (this.subDetails?.cancel_at_period_end) return 'sub-cancelling';
-      return this.subDetails?.status === 'active' ? 'sub-active' : '';
-    },
-    intervalLabel() {
-      const interval = this.subDetails?.interval;
-      const count = this.subDetails?.interval_count || 1;
-      if (!interval) return '';
-      const labels = { day: 'Daily', week: 'Weekly', month: 'Monthly', year: 'Yearly' };
-      if (count === 1) return labels[interval] || interval;
-      return `Every ${count} ${interval}s`;
-    },
-    formattedPrice() {
-      const cents = this.subDetails?.amount_cents;
-      const currency = this.subDetails?.currency || 'USD';
-      if (!cents && cents !== 0) return '';
-      try {
-        return new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(cents / 100);
-      } catch {
-        return `${(cents / 100).toFixed(2)} ${currency}`;
-      }
-    },
-    xpPercent() {
-      const xp = this.gameStats.xp || 0;
-      const level = this.gameStats.level || 1;
-      const currentLevelXp = (100 * (level - 1) * level) / 2;
-      const nextLevelXp = this.gameStats.xp_for_next_level || (100 * level * (level + 1) / 2);
-      const range = nextLevelXp - currentLevelXp;
-      if (range <= 0) return 0;
-      return Math.min(100, Math.round(((xp - currentLevelXp) / range) * 100));
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/auth/stats');
-      this.gameStats = res.data;
-    } catch {}
-    this.statsLoading = false;
-    this.fetchReferralData();
-    if (this.auth.state.user?.is_premium) {
-      this.fetchSubscriptionDetails();
+  }
+  subLoading.value = false;
+}
+
+async function confirmCancel(): Promise<void> {
+  cancelling.value = true;
+  try {
+    const response = await axios.post<{ ends_at?: string }>("/api/premium/cancel");
+    showCancelConfirm.value = false;
+    if (subDetails.value) {
+      subDetails.value.cancel_at_period_end = true;
+      subDetails.value.current_period_end = response.data.ends_at ?? undefined;
     }
-  },
-  methods: {
-    async handleLogout() {
-      await this.auth.logout();
-      window.location.reload();
-    },
-    async fetchReferralData() {
-      try {
-        const [codeRes, statsRes] = await Promise.allSettled([
-          axios.get('/api/referral/code'),
-          axios.get('/api/referral/stats'),
-        ]);
-        if (codeRes.status === 'fulfilled') this.referralCode = codeRes.value.data.code;
-        if (statsRes.status === 'fulfilled') this.referralStats = statsRes.value.data;
-      } catch {}
-    },
-    async copyCode() {
-      if (!this.referralCode) return;
-      try {
-        await navigator.clipboard.writeText(this.referralCode);
-      } catch {
-        // Fallback for non-HTTPS or unsupported contexts
-        const ta = document.createElement('textarea');
-        ta.value = this.referralCode;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      }
-      this.copied = true;
-      setTimeout(() => { this.copied = false; }, 2000);
-    },
-    async shareCode() {
-      if (!this.referralCode || !navigator.share) return;
-      try {
-        await navigator.share({
-          title: 'Join Trusted Advisors!',
-          text: `Use my referral code: ${this.referralCode}`,
-        });
-      } catch {}
-    },
-    async fetchSubscriptionDetails() {
-      this.subLoading = true;
-      try {
-        const res = await axios.get('/api/premium/details');
-        this.subDetails = res.data;
-      } catch {
-        // fallback to basic info
-        this.subDetails = {
-          is_premium: true,
-          status: 'active',
-        };
-      }
-      this.subLoading = false;
-    },
-    async confirmCancel() {
-      this.cancelling = true;
-      try {
-        const res = await axios.post('/api/premium/cancel');
-        this.showCancelConfirm = false;
-        if (this.subDetails) {
-          this.subDetails.cancel_at_period_end = true;
-          this.subDetails.current_period_end = res.data.ends_at;
-        }
-      } catch {
-        this.toast.error('Failed to cancel subscription. Please try again.');
-      }
-      this.cancelling = false;
-    },
-    formatDate(isoString) {
-      if (!isoString) return '';
-      return new Date(isoString).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-    },
-    async applyReferralCode() {
-      const code = this.referralInput.trim();
-      if (!code) return;
-      this.applyingReferral = true;
-      this.referralError = '';
-      try {
-        await axios.post('/api/referral/apply', { code });
-        this.referralApplied = true;
-        this.referralInput = '';
-      } catch (e) {
-        this.referralError = e.response?.data?.message || 'Invalid referral code.';
-      } finally {
-        this.applyingReferral = false;
-      }
-    },
-  },
-};
+  } catch {
+    toast.error("Failed to cancel subscription. Please try again.");
+  }
+  cancelling.value = false;
+}
+
+function formatDate(isoString: string | undefined): string {
+  if (!isoString) {
+    return "";
+  }
+  return new Date(isoString).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
+}
+
+async function applyReferralCode(): Promise<void> {
+  const code = referralInput.value.trim();
+  if (!code) {
+    return;
+  }
+  applyingReferral.value = true;
+  referralError.value = "";
+  try {
+    await axios.post("/api/referral/apply", { code });
+    referralApplied.value = true;
+    referralInput.value = "";
+  } catch (error) {
+    referralError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Invalid referral code.")
+      : "Invalid referral code.";
+  } finally {
+    applyingReferral.value = false;
+  }
+}
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<GameStats>("/api/auth/stats");
+    Object.assign(gameStats, response.data);
+  } catch { /* ignore */ }
+  statsLoading.value = false;
+  fetchReferralData();
+  if (auth.state.user?.is_premium) {
+    fetchSubscriptionDetails();
+  }
+});
 </script>
 
 <style scoped>

@@ -27,7 +27,7 @@
 
       <!-- Navigation -->
       <div class="tutorial-nav">
-        <button v-if="step > 0" class="nav-btn" @click="prevStep">Back</button>
+        <button v-if="step > 0" class="nav-btn" @click="previousStep">Back</button>
         <span v-else></span>
         <button v-if="step < totalSteps - 1" class="nav-btn btn-primary" @click="nextStep">Next</button>
         <button v-else class="nav-btn btn-primary" @click="$emit('close')">Begin!</button>
@@ -36,23 +36,17 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'Tutorial',
-  emits: ['close'],
-  data() {
-    return {
-      step: 0,
-      visibleLines: 0,
-      timer: null,
-    };
-  },
-  computed: {
-    totalSteps() {
-      return this.steps.length;
-    },
-    steps() {
-      return [
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+
+defineEmits<{ close: [] }>();
+
+const step = ref(0);
+const visibleLines = ref(0);
+const timer = ref<ReturnType<typeof setInterval>>();
+
+const steps = computed<string[][]>(() => {
+  return [
         [
           'Welcome, Advisor.',
           '',
@@ -145,44 +139,53 @@ export default {
           '',
           'Good luck, Advisor. The kingdom awaits!',
         ],
-      ];
-    },
-    currentLines() {
-      return this.steps[this.step];
-    },
-  },
-  watch: {
-    step() {
-      this.startLineAnimation();
-    },
-  },
-  mounted() {
-    this.startLineAnimation();
-  },
-  beforeUnmount() {
-    if (this.timer) clearInterval(this.timer);
-  },
-  methods: {
-    startLineAnimation() {
-      if (this.timer) clearInterval(this.timer);
-      this.visibleLines = 0;
-      const total = this.currentLines.length;
-      this.timer = setInterval(() => {
-        this.visibleLines++;
-        if (this.visibleLines >= total) {
-          clearInterval(this.timer);
-          this.timer = null;
-        }
-      }, 150);
-    },
-    nextStep() {
-      if (this.step < this.totalSteps - 1) this.step++;
-    },
-    prevStep() {
-      if (this.step > 0) this.step--;
-    },
-  },
-};
+  ];
+});
+
+const totalSteps = computed(() => steps.value.length);
+
+const currentLines = computed(() => steps.value[step.value]);
+
+function startLineAnimation(): void {
+  if (timer.value) {
+    clearInterval(timer.value);
+  }
+  visibleLines.value = 0;
+  const total = currentLines.value.length;
+  timer.value = setInterval(() => {
+    visibleLines.value++;
+    if (visibleLines.value >= total) {
+      clearInterval(timer.value);
+      timer.value = undefined;
+    }
+  }, 150);
+}
+
+function nextStep(): void {
+  if (step.value < totalSteps.value - 1) {
+    step.value++;
+  }
+}
+
+function previousStep(): void {
+  if (step.value > 0) {
+    step.value--;
+  }
+}
+
+watch(step, () => {
+  startLineAnimation();
+});
+
+onMounted(() => {
+  startLineAnimation();
+});
+
+onBeforeUnmount(() => {
+  if (timer.value) {
+    clearInterval(timer.value);
+  }
+});
 </script>
 
 <style scoped>

@@ -31,7 +31,7 @@
             <span class="modal-stat-num">{{ profile.elo_rating }}</span>
             <span class="modal-stat-label">ELO</span>
           </div>
-          <div class="modal-stat" v-if="profile.login_streak">
+          <div v-if="profile.login_streak" class="modal-stat">
             <span class="modal-stat-num">&#128293; {{ profile.login_streak }}</span>
             <span class="modal-stat-label">Streak</span>
           </div>
@@ -77,7 +77,7 @@
         </div>
 
         <!-- Recent achievements -->
-        <div v-if="profile.recent_achievements && profile.recent_achievements.length" class="modal-achievements">
+        <div v-if="profile.recent_achievements && profile.recent_achievements.length > 0" class="modal-achievements">
           <h3 class="modal-section-title">Recent Achievements</h3>
           <div v-for="ach in profile.recent_achievements" :key="ach.id" class="ach-item">
             <span class="ach-icon">{{ iconMap[ach.icon] || '\u{1F3C6}' }}</span>
@@ -99,96 +99,129 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'PlayerProfile',
-  props: {
-    userId: { type: [Number, String], required: true },
-    friendshipId: { type: [Number, String], default: null },
-  },
-  emits: ['close', 'removed'],
-  data() {
-    return {
-      profile: null,
-      loading: true,
-      error: null,
-      confirmRemove: false,
-      iconMap: {
-        trophy: '\u{1F3C6}',
-        shield: '\u{1F6E1}',
-        crown: '\u{1F451}',
-        flame: '\u{1F525}',
-        lightning: '\u{26A1}',
-        star: '\u{2B50}',
-        swords: '\u{2694}',
-        crossed_swords: '\u{2694}',
-        scroll: '\u{1F4DC}',
-        arrow_up: '\u{2B06}',
-        diamond: '\u{1F48E}',
-        book: '\u{1F4D6}',
-        wizard: '\u{1F9D9}',
-        castle: '\u{1F3F0}',
-        people: '\u{1F465}',
-        person: '\u{1F9D1}',
-        calendar: '\u{1F4C5}',
-        handshake: '\u{1F91D}',
-        globe: '\u{1F30D}',
-        muscle: '\u{1F4AA}',
-        sparkles: '\u{2728}',
-      },
-    };
-  },
-  computed: {
-    xpPercent() {
-      if (!this.profile) return 0;
-      const level = this.profile.level || 1;
-      const xp = this.profile.xp || 0;
-      const currentLevelXp = (100 * (level - 1) * level) / 2;
-      const nextLevelXp = this.profile.xp_for_next_level || (100 * level * (level + 1) / 2);
-      const range = nextLevelXp - currentLevelXp;
-      if (range <= 0) return 0;
-      return Math.min(100, Math.round(((xp - currentLevelXp) / range) * 100));
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get(`/api/users/${this.userId}/profile`);
-      this.profile = res.data;
-    } catch {
-      this.error = 'Could not load profile.';
-    }
-    this.loading = false;
-  },
-  methods: {
-    async removeFriend() {
-      try {
-        await axios.delete(`/api/friends/${this.friendshipId}`);
-        this.$emit('removed');
-      } catch {
-        this.error = 'Failed to remove friend.';
-      }
-    },
-    async requestDuel() {
-      try {
-        // Create a new online duel game and invite this friend
-        const gameRes = await axios.post('/api/games', {
-          game_mode: 'online',
-          game_type: 'duel',
-          num_players: 2,
-          total_rounds: 24,
-        });
-        const gameId = gameRes.data.id;
-        await axios.post(`/api/games/${gameId}/invite`, { user_id: this.userId });
-        this.$emit('close');
-        this.$router.push(`/game/${gameId}`);
-      } catch (e) {
-        this.error = e.response?.data?.error || 'Failed to create duel invite.';
-      }
-    },
-  },
+interface RecentAchievement {
+  id: number;
+  icon: string;
+  name: string;
+  description: string;
+}
+
+interface Profile {
+  name?: string;
+  level: number;
+  xp: number;
+  xp_for_next_level?: number;
+  elo_rating: number;
+  login_streak?: number;
+  active_dice_theme?: string;
+  active_kingdom_style?: string;
+  total_games: number;
+  total_wins: number;
+  total_losses: number;
+  duel_wins: number;
+  games_together?: number;
+  recent_achievements?: RecentAchievement[];
+}
+
+interface CreateGameResponse {
+  id: number;
+}
+
+const { userId, friendshipId = undefined } = defineProps<{
+  userId: number | string;
+  friendshipId?: number | string;
+}>();
+
+const emit = defineEmits<{ close: []; removed: [] }>();
+
+const router = useRouter();
+
+const profile = ref<Profile>();
+const loading = ref(true);
+const error = ref("");
+const confirmRemove = ref(false);
+const iconMap: Record<string, string> = {
+  trophy: "\u{1F3C6}",
+  shield: "\u{1F6E1}",
+  crown: "\u{1F451}",
+  flame: "\u{1F525}",
+  lightning: "\u{26A1}",
+  star: "\u{2B50}",
+  swords: "\u{2694}",
+  crossed_swords: "\u{2694}",
+  scroll: "\u{1F4DC}",
+  arrow_up: "\u{2B06}",
+  diamond: "\u{1F48E}",
+  book: "\u{1F4D6}",
+  wizard: "\u{1F9D9}",
+  castle: "\u{1F3F0}",
+  people: "\u{1F465}",
+  person: "\u{1F9D1}",
+  calendar: "\u{1F4C5}",
+  handshake: "\u{1F91D}",
+  globe: "\u{1F30D}",
+  muscle: "\u{1F4AA}",
+  sparkles: "\u{2728}",
 };
+
+const xpPercent = computed(() => {
+  if (!profile.value) {
+    return 0;
+  }
+  const level = profile.value.level || 1;
+  const xp = profile.value.xp || 0;
+  const currentLevelXp = (100 * (level - 1) * level) / 2;
+  const nextLevelXp = profile.value.xp_for_next_level || (100 * level * (level + 1)) / 2;
+  const range = nextLevelXp - currentLevelXp;
+  if (range <= 0) {
+    return 0;
+  }
+  return Math.min(100, Math.round(((xp - currentLevelXp) / range) * 100));
+});
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<Profile>(`/api/users/${userId}/profile`);
+    profile.value = response.data;
+  } catch {
+    error.value = "Could not load profile.";
+  }
+  loading.value = false;
+});
+
+async function removeFriend(): Promise<void> {
+  try {
+    await axios.delete(`/api/friends/${friendshipId}`);
+    emit("removed");
+  } catch {
+    error.value = "Failed to remove friend.";
+  }
+}
+
+async function requestDuel(): Promise<void> {
+  try {
+    // Create a new online duel game and invite this friend
+    const gameResponse = await axios.post<CreateGameResponse>("/api/games", {
+      game_mode: "online",
+      game_type: "duel",
+      num_players: 2,
+      total_rounds: 24,
+    });
+    const gameId = gameResponse.data.id;
+    await axios.post(`/api/games/${gameId}/invite`, { user_id: userId });
+    emit("close");
+    router.push(`/game/${gameId}`);
+  } catch (error_) {
+    error.value = isAxiosError<{ error?: string }>(error_)
+      ? (error_.response?.data?.error ?? "Failed to create duel invite.")
+      : "Failed to create duel invite.";
+  }
+}
 </script>
 
 <style scoped>

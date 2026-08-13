@@ -92,7 +92,7 @@
       </div>
     </transition>
 
-    <Tutorial v-if="showTutorial" @close="showTutorial = false" />
+    <TutorialOverlay v-if="showTutorial" @close="showTutorial = false" />
     <ToastContainer />
 
     <ConfirmModal
@@ -107,249 +107,312 @@
   </div>
 </template>
 
-<script>
+<script setup lang="ts">
 import axios from 'axios';
+import { computed, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import AppIcon from './components/AppIcon.vue';
 import ConfirmModal from './components/ConfirmModal.vue';
 import HowToPlay from './components/HowToPlay.vue';
 import NotificationsDrawer from './components/NotificationsDrawer.vue';
 import SplashScreen from './components/SplashScreen.vue';
 import ToastContainer from './components/ToastContainer.vue';
-import Tutorial from './components/Tutorial.vue';
+import TutorialOverlay from './components/TutorialOverlay.vue';
 import { useAuth } from './stores/auth';
-import { useIcons } from './stores/icons';
+import type { StreakNotification } from './stores/auth';
 import { useToast } from './stores/toast';
 import { playSound } from './sounds';
 import { initOneSignal, promptPushPermission } from './onesignal';
 
-export default {
-  name: 'App',
-  components: { AppIcon, ConfirmModal, HowToPlay, NotificationsDrawer, SplashScreen, ToastContainer, Tutorial },
-  setup() {
-    const auth = useAuth();
-    const { getIcon } = useIcons();
-    const toast = useToast();
-    return { auth, getIcon, toast };
-  },
-  provide() {
-    return {
-      openNotifications: () => { this.showNotifications = true; },
-      openRules: () => { this.showHowToPlay = true; },
-      openTutorial: () => { this.showTutorial = true; },
-      setActiveGameType: (type) => { this.activeGameType = type; },
-    };
-  },
-  data() {
-    const isIosSafari = /iPhone|iPad/.test(navigator.userAgent)
-      && /Safari/.test(navigator.userAgent)
-      && !navigator.userAgent.includes('wtn')
-      && !navigator.userAgent.includes('WebToNative');
-    return {
-      showAppBanner: isIosSafari && !localStorage.getItem('app_banner_dismissed'),
-      showSplash: false,
-      showHowToPlay: false,
-      showNotifications: false,
-      showMenuPopup: false,
-      showLogoutConfirm: false,
-      notifCount: 0,
-      streakToast: null,
-      showTutorial: false,
-      homepageBgUrl: null,
-      classicGameBgUrl: null,
-      duelGameBgUrl: null,
-      activeGameType: null,
-    };
-  },
-  watch: {
-    'auth.state.streakNotification'(val) {
-      if (val) {
-        this.streakToast = val;
-        this.auth.state.streakNotification = null;
-        setTimeout(() => { this.streakToast = null; }, 4000);
-      }
-    },
-    '$route.path'() {
-      if (!this.isGamePage) {
-        this.activeGameType = null;
-      }
-    },
-  },
-  computed: {
-    appDeepLink() {
-      return 'ta://open' + this.$route.fullPath;
-    },
-    isAdmin() {
-      return this.$route.path.startsWith('/admin');
-    },
-    xpProgress() {
-      const user = this.auth.state.user;
-      if (!user) return 0;
-      const level = user.level ?? 1;
-      const xp = user.xp ?? 0;
-      const currentLevelXp = 100 * (level - 1) * level / 2;
-      const nextLevelXp = 100 * level * (level + 1) / 2;
-      const range = nextLevelXp - currentLevelXp;
-      if (range <= 0) return 1;
-      return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
-    },
-    xpRingCircumference() {
-      return 2 * Math.PI * 20; // r=20
-    },
-    xpRingOffset() {
-      return this.xpRingCircumference * (1 - this.xpProgress);
-    },
-    isGamePage() {
-      return /^\/game\/\d+(\/.*)?$/.test(this.$route.path);
-    },
-    isHomePage() {
-      return !this.isAdmin && !this.isGamePage && ['/', '/collection', '/shop', '/friends', '/profile', '/leaderboard'].includes(this.$route.path);
-    },
-    gameBgUrl() {
-      if (!this.isGamePage || localStorage.getItem('game_bg_enabled') === 'false') return null;
-      return this.activeGameType === 'duel' ? this.duelGameBgUrl : this.classicGameBgUrl;
-    },
-    mainBgStyle() {
-      const bgUrl = this.isHomePage ? this.homepageBgUrl : (this.isGamePage ? this.gameBgUrl : null);
-      if (!bgUrl) return {};
-      return {
-        backgroundImage: `url(${bgUrl})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundAttachment: 'scroll',
-        position: 'relative',
-      };
-    },
-    isInGame() {
-      return /^\/game\/\d+$/.test(this.$route.path);
-    },
-    isGameOver() {
-      return /^\/game\/\d+\/over$/.test(this.$route.path);
-    },
-  },
-  mounted() {
-    // Fetch site settings (homepage background)
-    axios.get('/api/site-settings').then(res => {
-      this.homepageBgUrl = res.data?.homepage_background_url || null;
-      this.classicGameBgUrl = res.data?.classic_game_background_url || null;
-      this.duelGameBgUrl = res.data?.duel_game_background_url || null;
-    }).catch(() => {});
-    // fetchUser() is already called in app.js router guard; just wait for it
-    let checkAttempts = 0;
-    const check = () => {
-      if (!this.auth.state.loading && this.auth.state.user) {
-        // Auto-show tutorial for first-time visitors (after login)
-        if (!localStorage.getItem('has_seen_tutorial')) {
-          this.showTutorial = true;
-          localStorage.setItem('has_seen_tutorial', '1');
-        }
-        this.fetchNotifCount();
-        this.subscribeNotifChannel();
-        initOneSignal().then(() => promptPushPermission());
-      } else if (this.auth.state.loading && checkAttempts < 300) {
-        checkAttempts++;
-        setTimeout(check, 50);
-      }
-    };
-    check();
-    this._closeMenuOnClick = () => { this.showMenuPopup = false; };
-    document.addEventListener('click', this._closeMenuOnClick);
-  },
-  beforeUnmount() {
-    if (this._notifChannel) {
-      this._notifChannel.stopListening('GameInviteReceived');
-      this._notifChannel.stopListening('FriendRequestReceived');
-      this._notifChannel.stopListening('UserNotificationReceived');
-      this._notifChannel.stopListening('PremiumStatusChanged');
+interface SiteSettings {
+  homepage_background_url?: string;
+  classic_game_background_url?: string;
+  duel_game_background_url?: string;
+}
+
+interface GameInvitesResponse {
+  length: number;
+}
+
+interface FriendsResponse {
+  pending_received?: unknown[];
+}
+
+interface UnreadCountResponse {
+  count?: number;
+}
+
+interface PremiumStatusChangedEvent {
+  is_premium: boolean;
+}
+
+interface EchoChannel {
+  listen: (event: string, callback: (data: PremiumStatusChangedEvent) => void) => EchoChannel;
+  stopListening: (event: string) => void;
+}
+
+interface EchoInstance {
+  private: (channel: string) => EchoChannel;
+}
+
+const auth = useAuth();
+const toast = useToast();
+const router = useRouter();
+const route = useRoute();
+
+const isIosSafari = /iPhone|iPad/.test(navigator.userAgent)
+  && /Safari/.test(navigator.userAgent)
+  && !navigator.userAgent.includes('wtn')
+  && !navigator.userAgent.includes('WebToNative');
+
+const showAppBanner = ref(isIosSafari && !localStorage.getItem('app_banner_dismissed'));
+const showSplash = ref(false);
+const showHowToPlay = ref(false);
+const showNotifications = ref(false);
+const showMenuPopup = ref(false);
+const showLogoutConfirm = ref(false);
+const notifCount = ref(0);
+const streakToast = ref<StreakNotification | undefined>(undefined);
+const showTutorial = ref(false);
+const homepageBgUrl = ref<string | undefined>(undefined);
+const classicGameBgUrl = ref<string | undefined>(undefined);
+const duelGameBgUrl = ref<string | undefined>(undefined);
+const activeGameType = ref<string | undefined>(undefined);
+
+const homeReset = ref(0);
+const notifChannel = ref<EchoChannel | undefined>(undefined);
+const streakToastTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+const closeMenuOnClick = ref<(() => void) | undefined>(undefined);
+
+provide('openNotifications', () => { showNotifications.value = true; });
+provide('openRules', () => { showHowToPlay.value = true; });
+provide('openTutorial', () => { showTutorial.value = true; });
+provide('setActiveGameType', (type: string | undefined) => { activeGameType.value = type; });
+
+function getEcho(): EchoInstance | undefined {
+  return (window as unknown as { Echo?: EchoInstance }).Echo;
+}
+
+const appDeepLink = computed(() => 'ta://open' + route.fullPath);
+
+const isAdmin = computed(() => route.path.startsWith('/admin'));
+
+const xpProgress = computed(() => {
+  const user = auth.state.user;
+  if (!user) {
+    return 0;
+  }
+  const level = user.level ?? 1;
+  const xp = user.xp ?? 0;
+  const currentLevelXp = 100 * (level - 1) * level / 2;
+  const nextLevelXp = 100 * level * (level + 1) / 2;
+  const range = nextLevelXp - currentLevelXp;
+  if (range <= 0) {
+    return 1;
+  }
+  return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
+});
+
+const xpRingCircumference = computed(() => 2 * Math.PI * 20); // r=20
+
+const xpRingOffset = computed(() => xpRingCircumference.value * (1 - xpProgress.value));
+
+const isGamePage = computed(() => /^\/game\/\d+(\/.*)?$/.test(route.path));
+
+const isHomePage = computed(() => !isAdmin.value
+  && !isGamePage.value
+  && ['/', '/collection', '/shop', '/friends', '/profile', '/leaderboard'].includes(route.path));
+
+const gameBgUrl = computed(() => {
+  if (!isGamePage.value || localStorage.getItem('game_bg_enabled') === 'false') {
+    return undefined;
+  }
+  return activeGameType.value === 'duel' ? duelGameBgUrl.value : classicGameBgUrl.value;
+});
+
+const mainBgStyle = computed(() => {
+  const bgUrl = isHomePage.value ? homepageBgUrl.value : (isGamePage.value ? gameBgUrl.value : undefined);
+  if (!bgUrl) {
+    return {};
+  }
+  return {
+    backgroundImage: `url(${bgUrl})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundAttachment: 'scroll',
+    position: 'relative',
+  };
+});
+
+watch(
+  () => auth.state.streakNotification,
+  (value) => {
+    if (!value) {
+    	return;
     }
-    document.removeEventListener('click', this._closeMenuOnClick);
+
+    streakToast.value = value;
+    auth.state.streakNotification = undefined;
+    streakToastTimer.value = setTimeout(() => { streakToast.value = undefined; }, 4000);
   },
-  methods: {
-    dismissAppBanner() {
-      this.showAppBanner = false;
-      localStorage.setItem('app_banner_dismissed', '1');
-    },
-    splashDone() {
-      this.showSplash = false;
-      const expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toUTCString();
-      document.cookie = `splash_seen=1; expires=${expires}; path=/`;
-    },
-    goHome() {
-      playSound('clickNav');
-      if (this.$route.path === '/') {
-        // Already on home - emit event to reset GameSetup
-        this._homeReset = (this._homeReset || 0) + 1;
-        this.$router.replace({ path: '/', query: { r: this._homeReset } });
-      } else {
-        this.$router.push('/');
-      }
-    },
-    navSound() {
-      playSound('clickNav');
-    },
-    menuSound() {
-      playSound('clickMenu');
-    },
-    async stopImpersonating() {
-      try {
-        await axios.post('/api/impersonate/stop');
-        window.location.href = '/admin';
-      } catch {
-        this.toast.error('Failed to stop impersonating');
-      }
-    },
-    async handleLogout() {
-      this.showLogoutConfirm = false;
-      this.showMenuPopup = false;
-      if (this._notifChannel) {
-        this._notifChannel.stopListening('GameInviteReceived');
-        this._notifChannel.stopListening('FriendRequestReceived');
-        this._notifChannel.stopListening('UserNotificationReceived');
-        this._notifChannel.stopListening('PremiumStatusChanged');
-        this._notifChannel = null;
-      }
-      await this.auth.logout();
-      this.notifCount = 0;
-      if (this.$route.path === '/') {
-        window.location.reload();
-      } else {
-        this.$router.replace('/');
-      }
-    },
-    async fetchNotifCount() {
-      if (!this.auth.state.user) return;
-      try {
-        const [invitesRes, friendsRes, unreadRes] = await Promise.all([
-          axios.get('/api/game-invites/pending'),
-          axios.get('/api/friends'),
-          axios.get('/api/notifications/unread-count'),
-        ]);
-        const invites = invitesRes.data?.length || 0;
-        const friends = friendsRes.data?.pending_received?.length || 0;
-        const dbUnread = unreadRes.data?.count || 0;
-        this.notifCount = invites + friends + dbUnread;
-      } catch {
-        // ignore
-      }
-    },
-    subscribeNotifChannel() {
-      const userId = this.auth.state.user?.id;
-      if (!userId || !window.Echo) return;
-      this._notifChannel = window.Echo.private(`user.${userId}`)
-        .listen('GameInviteReceived', () => {
-          this.notifCount++;
-        })
-        .listen('FriendRequestReceived', () => {
-          this.notifCount++;
-        })
-        .listen('UserNotificationReceived', () => {
-          this.notifCount++;
-        })
-        .listen('PremiumStatusChanged', (data) => {
-          this.auth.updateUserStats({ is_premium: data.is_premium });
-        });
-    },
+);
+
+watch(
+  () => route.path,
+  () => {
+    if (!isGamePage.value) {
+      activeGameType.value = undefined;
+    }
   },
-};
+);
+
+function dismissAppBanner(): void {
+  showAppBanner.value = false;
+  localStorage.setItem('app_banner_dismissed', '1');
+}
+
+function splashDone(): void {
+  showSplash.value = false;
+  // Client-only dismissal flag (matches app_banner_dismissed above); nothing
+  // reads splash_seen server-side, so localStorage replaces the old cookie.
+  localStorage.setItem('splash_seen', '1');
+}
+
+function goHome(): void {
+  playSound('clickNav');
+  if (route.path === '/') {
+    // Already on home - emit event to reset GameSetup
+    homeReset.value += 1;
+    void router.replace({ path: '/', query: { r: homeReset.value } });
+  } else {
+    void router.push('/');
+  }
+}
+
+function navSound(): void {
+  playSound('clickNav');
+}
+
+async function stopImpersonating(): Promise<void> {
+  try {
+    await axios.post('/api/impersonate/stop');
+    window.location.assign('/admin');
+  } catch {
+    toast.error('Failed to stop impersonating');
+  }
+}
+
+function stopListeningNotifChannel(): void {
+  if (!notifChannel.value) {
+    return;
+  }
+  notifChannel.value.stopListening('GameInviteReceived');
+  notifChannel.value.stopListening('FriendRequestReceived');
+  notifChannel.value.stopListening('UserNotificationReceived');
+  notifChannel.value.stopListening('PremiumStatusChanged');
+}
+
+async function handleLogout(): Promise<void> {
+  showLogoutConfirm.value = false;
+  showMenuPopup.value = false;
+  if (notifChannel.value) {
+    stopListeningNotifChannel();
+    notifChannel.value = undefined;
+  }
+  await auth.logout();
+  notifCount.value = 0;
+  if (route.path === '/') {
+    window.location.reload();
+  } else {
+    void router.replace('/');
+  }
+}
+
+async function fetchNotifCount(): Promise<void> {
+  if (!auth.state.user) {
+    return;
+  }
+  try {
+    const [invitesResponse, friendsResponse, unreadResponse] = await Promise.all([
+      axios.get<GameInvitesResponse>('/api/game-invites/pending'),
+      axios.get<FriendsResponse>('/api/friends'),
+      axios.get<UnreadCountResponse>('/api/notifications/unread-count'),
+    ]);
+    const invites = invitesResponse.data?.length || 0;
+    const friends = friendsResponse.data?.pending_received?.length || 0;
+    const databaseUnread = unreadResponse.data?.count || 0;
+    notifCount.value = invites + friends + databaseUnread;
+  } catch {
+    // ignore
+  }
+}
+
+function subscribeNotifChannel(): void {
+  const userId = auth.state.user?.id;
+  const echo = getEcho();
+  if (!userId || !echo) {
+    return;
+  }
+  notifChannel.value = echo.private(`user.${userId}`)
+    .listen('GameInviteReceived', () => {
+      notifCount.value++;
+    })
+    .listen('FriendRequestReceived', () => {
+      notifCount.value++;
+    })
+    .listen('UserNotificationReceived', () => {
+      notifCount.value++;
+    })
+    .listen('PremiumStatusChanged', (data) => {
+      auth.updateUserStats({ is_premium: data.is_premium });
+    });
+}
+
+async function fetchSiteSettings(): Promise<void> {
+  // Fetch site settings (homepage background)
+  try {
+    const response = await axios.get<SiteSettings>('/api/site-settings');
+    homepageBgUrl.value = response.data?.homepage_background_url || undefined;
+    classicGameBgUrl.value = response.data?.classic_game_background_url || undefined;
+    duelGameBgUrl.value = response.data?.duel_game_background_url || undefined;
+  } catch {
+    // ignore
+  }
+}
+
+onMounted(() => {
+  void fetchSiteSettings();
+  // fetchUser() is already called in app.js router guard; just wait for it
+  let checkAttempts = 0;
+  const check = (): void => {
+    if (!auth.state.loading && auth.state.user) {
+      // Auto-show tutorial for first-time visitors (after login)
+      if (!localStorage.getItem('has_seen_tutorial')) {
+        showTutorial.value = true;
+        localStorage.setItem('has_seen_tutorial', '1');
+      }
+      void fetchNotifCount();
+      subscribeNotifChannel();
+      void initOneSignal().then(() => promptPushPermission());
+    } else if (auth.state.loading && checkAttempts < 300) {
+      checkAttempts++;
+      setTimeout(check, 50);
+    }
+  };
+  check();
+  closeMenuOnClick.value = (): void => { showMenuPopup.value = false; };
+  document.addEventListener('click', closeMenuOnClick.value);
+});
+
+onBeforeUnmount(() => {
+  stopListeningNotifChannel();
+  if (closeMenuOnClick.value) {
+    document.removeEventListener('click', closeMenuOnClick.value);
+  }
+  if (streakToastTimer.value !== undefined) {
+    clearTimeout(streakToastTimer.value);
+  }
+});
 </script>
 
 <style>

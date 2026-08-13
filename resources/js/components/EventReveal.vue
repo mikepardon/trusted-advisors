@@ -9,7 +9,7 @@
           <h2 class="card-title">{{ event.title }}</h2>
           <p class="card-effect">{{ event.effect }}</p>
 
-          <div v-if="statModifiers.length" class="card-modifiers">
+          <div v-if="statModifiers.length > 0" class="card-modifiers">
             <div
               v-for="mod in statModifiers"
               :key="mod.stat"
@@ -31,63 +31,81 @@
   </transition>
 </template>
 
-<script>
-export default {
-  name: 'EventReveal',
-  props: {
-    event: { type: Object, required: true },
-  },
-  emits: ['dismiss'],
-  data() {
-    return {
-      visible: false,
-      cardVisible: false,
-    };
-  },
-  computed: {
-    introText() {
-      return 'A new event unfolds...';
-    },
-    statModifiers() {
-      if (!this.event?.stat_modifiers) return [];
-      return Object.entries(this.event.stat_modifiers).map(([stat, value]) => ({
-        stat,
-        label: stat.charAt(0).toUpperCase() + stat.slice(1),
-        value,
-      }));
-    },
-    mechanicLabel() {
-      if (!this.event?.mechanic) return '';
-      if (this.event.mechanic === 'reduce_dice') {
-        const amount = this.event.mechanic_data?.amount || 1;
-        return `Each advisor loses ${amount} die`;
-      }
-      if (this.event.mechanic === 'altered_deal') {
-        const pos = this.event.mechanic_data?.positive_cards || 1;
-        const neg = this.event.mechanic_data?.negative_cards || 1;
-        return `Deal ${pos} positive, ${neg} negative cards`;
-      }
-      if (this.event.mechanic === 'grant_items') {
-        return 'All advisors receive an item';
-      }
-      return '';
-    },
-  },
-  mounted() {
-    this.visible = true;
-    setTimeout(() => {
-      this.cardVisible = true;
-    }, 600);
-  },
-  methods: {
-    dismiss() {
-      this.visible = false;
-      setTimeout(() => {
-        this.$emit('dismiss');
-      }, 300);
-    },
-  },
-};
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+
+interface RevealEvent {
+  title?: string;
+  effect?: string;
+  mechanic?: string;
+  stat_modifiers?: Record<string, number>;
+  mechanic_data?: {
+    amount?: number;
+    positive_cards?: number;
+    negative_cards?: number;
+  };
+}
+
+interface StatModifier {
+  stat: string;
+  label: string;
+  value: number;
+}
+
+const { event } = defineProps<{
+  event: RevealEvent;
+}>();
+
+const emit = defineEmits<{ dismiss: [] }>();
+
+const visible = ref(false);
+const cardVisible = ref(false);
+
+const introText = computed(() => "A new event unfolds...");
+
+const statModifiers = computed<StatModifier[]>(() => {
+  if (!event?.stat_modifiers) {
+    return [];
+  }
+  return Object.entries(event.stat_modifiers).map(([stat, value]) => ({
+    stat,
+    label: stat.charAt(0).toUpperCase() + stat.slice(1),
+    value,
+  }));
+});
+
+const mechanicLabel = computed(() => {
+  if (!event?.mechanic) {
+    return "";
+  }
+  if (event.mechanic === "reduce_dice") {
+    const amount = event.mechanic_data?.amount || 1;
+    return `Each advisor loses ${amount} die`;
+  }
+  if (event.mechanic === "altered_deal") {
+    const pos = event.mechanic_data?.positive_cards || 1;
+    const neg = event.mechanic_data?.negative_cards || 1;
+    return `Deal ${pos} positive, ${neg} negative cards`;
+  }
+  if (event.mechanic === "grant_items") {
+    return "All advisors receive an item";
+  }
+  return "";
+});
+
+onMounted(() => {
+  visible.value = true;
+  setTimeout(() => {
+    cardVisible.value = true;
+  }, 600);
+});
+
+function dismiss(): void {
+  visible.value = false;
+  setTimeout(() => {
+    emit("dismiss");
+  }, 300);
+}
 </script>
 
 <style scoped>

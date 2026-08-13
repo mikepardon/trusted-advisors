@@ -19,16 +19,11 @@
   </teleport>
 </template>
 
-<script>
-import { useToast } from '../stores/toast';
+<script setup lang="ts">
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'ToastContainer',
-  setup() {
-    const { state, dismiss } = useToast();
-    return { toasts: state.toasts, dismiss };
-  },
-};
+const { state, dismiss } = useToast();
+const toasts = state.toasts;
 </script>
 
 <style>

@@ -38,7 +38,7 @@
               <div v-for="stat in stats" :key="stat.key" class="final-stat">
                 <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
                 <span class="stat-label">{{ stat.label }}</span>
-                <span class="stat-val" :class="getValClass(kingdom[stat.key])">
+                <span class="stat-val" :class="getValueClass(kingdom[stat.key])">
                   {{ kingdom[stat.key] }}
                 </span>
               </div>
@@ -90,11 +90,11 @@
               <span class="level-up-star">&#11088;</span>
             </div>
           </transition>
-          <div v-if="myUnlocks.length && showLevelUp" class="new-unlocks">
+          <div v-if="myUnlocks.length > 0 && showLevelUp" class="new-unlocks">
             <div v-for="unlock in myUnlocks" :key="unlock.id" class="unlock-item">
               <span class="unlock-icon">&#127381;</span>
               <span class="unlock-name">{{ unlock.name }}</span>
-              <button class="btn-unlock-claim" @click="$router.push('/shop')">View</button>
+              <button class="btn-unlock-claim" @click="router.push('/shop')">View</button>
             </div>
           </div>
         </div>
@@ -107,12 +107,12 @@
             <span v-if="myCharXp.leveled_up" class="char-xp-lvlup">Lv.{{ myCharXp.new_level }}!</span>
           </div>
           <div v-if="myCharXp.pending_upgrades > 0" class="char-xp-pending">
-            <button class="btn-char-upgrade" @click="$router.push('/collection')">Level Up Available!</button>
+            <button class="btn-char-upgrade" @click="router.push('/collection')">Level Up Available!</button>
           </div>
         </div>
 
         <div class="button-row">
-          <button class="btn-primary play-again" @click="$router.push('/')">Home</button>
+          <button class="btn-primary play-again" @click="router.push('/')">Home</button>
           <button class="play-again share-btn" @click="shareReplay">
             {{ shareCopied ? 'Copied!' : 'Share Replay' }}
           </button>
@@ -134,7 +134,7 @@
           <div v-for="stat in stats" :key="stat.key" class="final-stat">
             <span class="stat-icon"><AppIcon :type="stat.type" :value="stat.value" /></span>
             <span class="stat-label">{{ stat.label }}</span>
-            <span class="stat-val" :class="getValClass(gameData.game[stat.key])">
+            <span class="stat-val" :class="getValueClass(gameData.game[stat.key])">
               {{ gameData.game[stat.key] }}
             </span>
           </div>
@@ -194,7 +194,7 @@
             :class="{ 'clickable-name': player.user_id }"
             @click="player.user_id && (showProfileUserId = player.user_id)"
           >{{ player.character.name }}</strong>
-          <div v-if="player.items && player.items.length" class="advisor-items">
+          <div v-if="player.items && player.items.length > 0" class="advisor-items">
             <span
               v-for="pi in player.items"
               :key="pi.id"
@@ -252,11 +252,11 @@
             <span class="level-up-star">&#11088;</span>
           </div>
         </transition>
-        <div v-if="myUnlocks.length && showLevelUp" class="new-unlocks">
+        <div v-if="myUnlocks.length > 0 && showLevelUp" class="new-unlocks">
           <div v-for="unlock in myUnlocks" :key="unlock.id" class="unlock-item">
             <span class="unlock-icon">&#127381;</span>
             <span class="unlock-name">{{ unlock.name }}</span>
-            <button class="btn-unlock-claim" @click="$router.push('/shop')">View</button>
+            <button class="btn-unlock-claim" @click="router.push('/shop')">View</button>
           </div>
         </div>
       </div>
@@ -269,12 +269,12 @@
           <span v-if="myCharXp.leveled_up" class="char-xp-lvlup">Lv.{{ myCharXp.new_level }}!</span>
         </div>
         <div v-if="myCharXp.pending_upgrades > 0" class="char-xp-pending">
-          <button class="btn-char-upgrade" @click="$router.push('/collection')">Level Up Available!</button>
+          <button class="btn-char-upgrade" @click="router.push('/collection')">Level Up Available!</button>
         </div>
       </div>
 
       <div class="button-row">
-        <button class="btn-primary play-again" @click="$router.push('/')">Home</button>
+        <button class="btn-primary play-again" @click="router.push('/')">Home</button>
         <button class="play-again share-btn" @click="shareReplay">
           {{ shareCopied ? 'Copied!' : 'Share Replay' }}
         </button>
@@ -282,474 +282,565 @@
     </div>
     </template>
 
-    <PlayerProfile v-if="showProfileUserId" :userId="showProfileUserId" @close="showProfileUserId = null" />
+    <PlayerProfile v-if="showProfileUserId" :user-id="showProfileUserId" @close="showProfileUserId = undefined" />
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { playSound } from '../sounds';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
-import { checkAndPromptReview } from '../services/appReviewService';
-import AppIcon from './AppIcon.vue';
-import { useIcons } from '../stores/icons';
-import PlayerProfile from './PlayerProfile.vue';
+<script setup lang="ts">
+import { computed, nextTick, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import axios from "axios";
+import { playSound } from "../sounds";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
+import { checkAndPromptReview } from "../services/app-review-service";
+import AppIcon from "./AppIcon.vue";
+import { useIcons } from "../stores/icons";
+import PlayerProfile from "./PlayerProfile.vue";
 
-export default {
-  name: 'GameOver',
-  components: { AppIcon, PlayerProfile },
-  props: {
-    id: { type: [String, Number], required: true },
-  },
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast };
-  },
-  data() {
-    return {
-      gameData: null,
-      completion: null,
-      loading: true,
-      rematchLoading: false,
-      shareCopied: false,
-      showProfileUserId: null,
-      timedOutPlayerNumber: null,
-      xpBarPercent: 0,
-      xpBarLevel: 0,
-      xpBarDisplayXp: 0,
-      showLevelUp: false,
-      stats: useIcons().getStatIcons(),
-    };
-  },
-  computed: {
-    isSinglePlayer() {
-      return this.gameData?.game?.game_mode === 'single';
-    },
-    isDuel() {
-      return this.gameData?.game?.game_type === 'duel' || this.gameData?.game_type === 'duel';
-    },
-    duelKingdoms() {
-      return this.gameData?.player_kingdoms || [];
-    },
-    isDuelWinner() {
-      if (!this.isDuel) return false;
-      if (this.isBothTimeout) return false;
-      if (this.didITimeout) return false;
-      if (this.isTimeout && !this.didITimeout) return true;
-      const winner = this.gameData?.game?.winner_player_number;
-      if (!winner || !this.myPlayerNumber) return true;
-      return winner === this.myPlayerNumber;
-    },
-    isTimeout() {
-      return this.timedOutPlayerNumber != null && this.timedOutPlayerNumber !== null;
-    },
-    isBothTimeout() {
-      return this.timedOutPlayerNumber === 0;
-    },
-    myPlayerNumber() {
-      const userId = this.auth.state.user?.id;
-      const myPlayer = this.gameData?.game?.players?.find(p => p.user_id === userId);
-      return myPlayer?.player_number || null;
-    },
-    didITimeout() {
-      if (!this.isTimeout || !this.myPlayerNumber) return false;
-      if (this.isBothTimeout) return true;
-      return this.timedOutPlayerNumber === this.myPlayerNumber;
-    },
-    duelEndTitle() {
-      if (this.isBothTimeout) return 'Draw — Both Timed Out';
-      if (this.isTimeout) {
-        if (this.didITimeout) return 'You Timed Out!';
-        const winner = this.gameData?.game?.winner_player_number;
-        const player = this.gameData?.game?.players?.find(p => p.player_number === winner);
-        const name = player?.user?.name || player?.character?.name || 'Player ' + winner;
-        return `${name} Wins!`;
-      }
-      const winner = this.gameData?.game?.winner_player_number;
-      if (!winner) return 'The Duel is Over';
-      const player = this.gameData?.game?.players?.find(p => p.player_number === winner);
-      const name = player?.user?.name || player?.character?.name || 'Player ' + winner;
-      return `${name} Wins!`;
-    },
-    duelEndFlavor() {
-      if (this.isBothTimeout) {
-        return 'Neither ruler could act in time. The kingdoms stand in uneasy stalemate.';
-      }
-      if (this.isTimeout) {
-        if (this.didITimeout) {
-          return 'You ran out of time. Your opponent claims victory by forfeit.';
-        }
-        return 'Your opponent ran out of time. Victory is yours by forfeit!';
-      }
-      const winner = this.gameData?.game?.winner_player_number;
-      if (!winner) return 'The campaign has ended.';
-      const loser = winner === 1 ? 2 : 1;
-      const winKingdom = this.duelKingdoms.find(k => k.player?.player_number === winner);
-      const loseKingdom = this.duelKingdoms.find(k => k.player?.player_number === loser);
+interface StatIcon {
+  key: string;
+  label: string;
+  short: string;
+  type: string;
+  value: string;
+  icon: string;
+}
 
-      if (loseKingdom) {
-        const stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-        const collapsed = stats.find(s => loseKingdom[s] <= 0);
-        if (collapsed) {
-          return `The rival kingdom collapsed when ${collapsed} reached zero.`;
-        }
-        const atMax = stats.filter(s => winKingdom && winKingdom[s] >= 20).length;
-        if (atMax >= 3) {
-          return 'Three pillars of the kingdom reached their zenith. A decisive victory!';
-        }
-      }
-      return 'After a long campaign, the stronger kingdom prevails.';
-    },
-    isWin() {
-      return this.gameData?.game?.win === true;
-    },
-    totalScore() {
-      if (!this.gameData) return 0;
-      const g = this.gameData.game;
-      return g.wealth + g.influence + g.security + g.religion + g.food + g.happiness;
-    },
-    scoreBreakdown() {
-      // Use stored breakdown from the game-over response, or compute client-side
-      const stored = this.gameData?._scoreBreakdown;
-      if (stored) return stored;
-      // Compute from game data
-      const g = this.gameData?.game;
-      if (!g) return null;
-      const base = g.wealth + g.influence + g.security + g.religion + g.food + g.happiness;
-      const stats = [g.wealth, g.influence, g.security, g.religion, g.food, g.happiness];
-      const spread = Math.max(...stats) - Math.min(...stats);
-      const balanceBonus = Math.max(0, 30 - spread * 3);
-      const years = Math.floor((g.current_round || 0) / 12) + 1;
-      const multipliers = { 1: 1.0, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2.0 };
-      const yearMult = multipliers[years] || 2.0;
-      const yearsCompleted = Math.floor((g.current_round || 0) / 12);
-      const yearBonus = yearsCompleted * 50;
-      const bonusScore = g.bonus_score || 0;
-      const statVals = stats;
-      let stackingBonus = 0;
-      statVals.forEach(v => {
-        if (v >= 15) stackingBonus += 10;
-        if (v >= 20) stackingBonus += 20;
-      });
-      const scoreModifier = g.score_modifier || 0;
-      const rawTotal = Math.floor(base * yearMult) + balanceBonus + yearBonus + stackingBonus + bonusScore;
-      const finalScore = g.final_score ?? Math.floor(rawTotal * (1 + scoreModifier / 100));
-      return { base_score: base, year_multiplier: yearMult, balance_bonus: balanceBonus, year_bonus: yearBonus, stacking_bonus: stackingBonus, bonus_score: bonusScore, score_modifier: scoreModifier, final_score: finalScore };
-    },
-    finalScore() {
-      return this.scoreBreakdown?.final_score ?? this.totalScore;
-    },
-    scoreRank() {
-      if (!this.isWin) return 'The Kingdom has fallen. Better luck next time.';
-      const s = this.finalScore;
-      if (s >= 200) return 'Legendary - The kingdom enters a new Golden Age!';
-      if (s >= 150) return 'Excellent - Your wisdom will be remembered for centuries.';
-      if (s >= 100) return 'Good - The kingdom stands strong thanks to your guidance.';
-      if (s >= 60) return 'Adequate - The kingdom survives, but just barely.';
-      return 'Poor - The kingdom limps on, weakened by your counsel.';
-    },
-    endTitle() {
-      if (!this.isWin) return 'The Kingdom Has Fallen';
-      const s = this.finalScore;
-      if (s >= 150) return 'God Save the King!';
-      if (s >= 60) return 'The Kingdom Endures';
-      return 'A Narrow Survival';
-    },
-    endFlavor() {
-      const g = this.gameData?.game;
-      if (!g) return '';
+interface GameCharacter {
+  name?: string;
+}
 
-      if (!this.isWin) {
-        const tooLow = this.stats.find(s => g[s.key] <= 0);
-        if (tooLow) {
-          return `The kingdom collapsed when ${tooLow.label.toLowerCase()} reached zero. The people lost faith in their advisors.`;
-        }
-        return 'The campaign has ended in defeat.';
-      }
+interface GamePlayerUser {
+  name?: string;
+}
 
-      const years = Math.max(1, Math.floor((g.total_rounds || 24) / 12));
-      const yearWord = years === 1 ? 'one year' : years === 2 ? 'two years' : years === 3 ? 'three years' : years === 4 ? 'four years' : 'five years';
-      return `Your advisors have guided the kingdom through ${yearWord} of crisis. The realm celebrates, and your deeds are judged.`;
-    },
-    resultAnimationClass() {
-      if (!this.isDuel) return '';
-      if (this.isBothTimeout) return 'result-loss';
-      return this.isDuelWinner ? 'result-win' : 'result-loss';
-    },
-    myXp() {
-      if (!this.completion?.xp_awards) return null;
-      const vals = Object.values(this.completion.xp_awards);
-      return vals.length > 0 ? vals[0] : null;
-    },
-    myLevelUp() {
-      if (!this.completion?.level_ups) return null;
-      const vals = Object.values(this.completion.level_ups);
-      return vals.length > 0 ? vals[0] : null;
-    },
-    myEloChange() {
-      if (!this.completion?.elo_changes) return null;
-      const vals = Object.values(this.completion.elo_changes);
-      return vals.length > 0 ? vals[0]?.change : null;
-    },
-    myAchievements() {
-      if (!this.completion?.achievements_unlocked) return [];
-      const vals = Object.values(this.completion.achievements_unlocked);
-      return vals.length > 0 ? vals[0] : [];
-    },
-    myXpDetails() {
-      if (!this.completion?.xp_details) return null;
-      const vals = Object.values(this.completion.xp_details);
-      return vals.length > 0 ? vals[0] : null;
-    },
-    myCoins() {
-      if (!this.completion?.coin_awards) return null;
-      const vals = Object.values(this.completion.coin_awards);
-      return vals.length > 0 ? vals[0]?.coins : null;
-    },
-    myCharXp() {
-      if (!this.completion?.character_xp_awards) return null;
-      const vals = Object.values(this.completion.character_xp_awards);
-      return vals.length > 0 ? vals[0] : null;
-    },
-    myUnlocks() {
-      if (!this.completion?.new_unlocks) return [];
-      const vals = Object.values(this.completion.new_unlocks);
-      return vals.length > 0 ? vals[0] : [];
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get(`/api/games/${this.id}`);
-      this.gameData = res.data;
+interface GameItem {
+  name?: string;
+}
 
-      // Load completion data from sessionStorage (set by GameBoard/DuelBoard)
-      const stored = sessionStorage.getItem(`game_completion_${this.id}`);
-      if (stored) {
-        this.completion = JSON.parse(stored);
-        sessionStorage.removeItem(`game_completion_${this.id}`);
-      }
+interface GamePlayerItem {
+  id: number;
+  is_cursed: boolean;
+  item: GameItem;
+}
 
-      // Load timeout data from sessionStorage or game API
-      const storedTimeout = sessionStorage.getItem(`game_timeout_${this.id}`);
-      if (storedTimeout) {
-        this.timedOutPlayerNumber = JSON.parse(storedTimeout);
-        sessionStorage.removeItem(`game_timeout_${this.id}`);
-      } else if (this.gameData?.timed_out_player_number != null) {
-        this.timedOutPlayerNumber = this.gameData.timed_out_player_number;
-      } else if (this.gameData?.game?.timed_out_player_number != null) {
-        this.timedOutPlayerNumber = this.gameData.game.timed_out_player_number;
-      }
+interface GamePlayer {
+  id: number;
+  player_number: number;
+  user_id?: number;
+  character_id?: number;
+  is_bot?: boolean;
+  bot_difficulty?: string;
+  character?: GameCharacter;
+  user?: GamePlayerUser;
+  items?: GamePlayerItem[];
+}
 
-      // Load score breakdown from sessionStorage
-      const storedBreakdown = sessionStorage.getItem(`game_score_breakdown_${this.id}`);
-      if (storedBreakdown) {
-        this.gameData._scoreBreakdown = JSON.parse(storedBreakdown);
-        sessionStorage.removeItem(`game_score_breakdown_${this.id}`);
-      }
+type KingdomStatKey = "wealth" | "influence" | "security" | "religion" | "food" | "happiness";
 
-      this.$nextTick(() => {
-        if (this.isDuel) {
-          playSound('win');
-        } else if (this.isWin) {
-          playSound('win');
-        } else {
-          playSound('totalLoss');
-        }
-        // Animate XP bar
-        this.animateXpBar();
-        // Update auth store with new stats
-        if (this.myXpDetails) {
-          const coinAwards = this.completion?.coin_awards ? Object.values(this.completion.coin_awards) : [];
-          const newCoins = coinAwards.length > 0 ? coinAwards[0]?.new_coins : undefined;
-          this.auth.updateUserStats({
-            xp: this.myXpDetails.new_xp,
-            level: this.myXpDetails.new_level,
-            coins: newCoins,
-          });
-        }
-        // Prompt for app review after a short delay
-        setTimeout(() => checkAndPromptReview(), 3000);
-      });
-    } catch (e) {
-      this.toast.error('Failed to load results');
+interface Game {
+  game_mode?: string;
+  game_type?: string;
+  winner_player_number?: number;
+  win?: boolean;
+  wealth: number;
+  influence: number;
+  security: number;
+  religion: number;
+  food: number;
+  happiness: number;
+  current_round: number;
+  total_rounds: number;
+  bonus_score?: number;
+  score_modifier?: number;
+  final_score?: number;
+  num_players?: number;
+  timed_out_player_number?: number;
+  players?: GamePlayer[];
+}
+
+interface DuelKingdom {
+  id: number;
+  wealth: number;
+  influence: number;
+  security: number;
+  religion: number;
+  food: number;
+  happiness: number;
+  player?: GamePlayer;
+}
+
+interface ScoreBreakdown {
+  base_score: number;
+  year_multiplier: number;
+  balance_bonus: number;
+  year_bonus: number;
+  stacking_bonus: number;
+  bonus_score: number;
+  score_modifier: number;
+  final_score: number;
+}
+
+interface GameData {
+  game: Game;
+  game_type?: string;
+  player_kingdoms?: DuelKingdom[];
+  timed_out_player_number?: number;
+  _scoreBreakdown?: ScoreBreakdown;
+}
+
+interface EloChange {
+  new?: number;
+  change?: number;
+}
+
+interface CoinAward {
+  coins?: number;
+  new_coins?: number;
+}
+
+interface XpDetails {
+  old_xp: number;
+  new_xp: number;
+  old_level: number;
+  new_level: number;
+}
+
+interface AchievementReward {
+  id: number;
+  name: string;
+}
+
+interface UnlockReward {
+  id: number;
+  name: string;
+}
+
+interface CharacterXpAward {
+  character_name: string;
+  xp_earned: number;
+  leveled_up?: boolean;
+  new_level?: number;
+  pending_upgrades: number;
+}
+
+interface CompletionData {
+  xp_awards?: Record<string, number>;
+  level_ups?: Record<string, number>;
+  elo_changes?: Record<string, EloChange>;
+  achievements_unlocked?: Record<string, AchievementReward[]>;
+  xp_details?: Record<string, XpDetails>;
+  coin_awards?: Record<string, CoinAward>;
+  character_xp_awards?: Record<string, CharacterXpAward>;
+  new_unlocks?: Record<string, UnlockReward[]>;
+  challenge_completed?: {
+    title: string;
+    reward_xp: number;
+  };
+}
+
+const { id } = defineProps<{
+  id: string | number;
+}>();
+
+const router = useRouter();
+const auth = useAuth();
+const toast = useToast();
+
+const gameData = ref<GameData | undefined>(undefined);
+const completion = ref<CompletionData | undefined>(undefined);
+const loading = ref(true);
+const shareCopied = ref(false);
+const showProfileUserId = ref<number | undefined>(undefined);
+const timedOutPlayerNumber = ref<number | undefined>(undefined);
+const xpBarPercent = ref(0);
+const xpBarLevel = ref(0);
+const xpBarDisplayXp = ref(0);
+const showLevelUp = ref(false);
+const stats = ref<StatIcon[]>(useIcons().getStatIcons());
+
+const isDuel = computed<boolean>(() => gameData.value?.game?.game_type === "duel" || gameData.value?.game_type === "duel");
+
+const duelKingdoms = computed<DuelKingdom[]>(() => gameData.value?.player_kingdoms || []);
+
+const isTimeout = computed<boolean>(() => timedOutPlayerNumber.value !== undefined);
+
+const isBothTimeout = computed<boolean>(() => timedOutPlayerNumber.value === 0);
+
+const myPlayerNumber = computed<number | undefined>(() => {
+  const userId = auth.state.user?.id;
+  const myPlayer = gameData.value?.game?.players?.find((player) => player.user_id === userId);
+  return myPlayer?.player_number || undefined;
+});
+
+const didITimeout = computed<boolean>(() => {
+  if (!isTimeout.value || !myPlayerNumber.value) return false;
+  if (isBothTimeout.value) return true;
+  return timedOutPlayerNumber.value === myPlayerNumber.value;
+});
+
+const isDuelWinner = computed<boolean>(() => {
+  if (!isDuel.value) return false;
+  if (isBothTimeout.value) return false;
+  if (didITimeout.value) return false;
+  if (isTimeout.value && !didITimeout.value) return true;
+  const winner = gameData.value?.game?.winner_player_number;
+  if (!winner || !myPlayerNumber.value) return true;
+  return winner === myPlayerNumber.value;
+});
+
+const duelEndTitle = computed<string>(() => {
+  if (isBothTimeout.value) return "Draw — Both Timed Out";
+  if (isTimeout.value) {
+    if (didITimeout.value) return "You Timed Out!";
+    const winner = gameData.value?.game?.winner_player_number;
+    const player = gameData.value?.game?.players?.find((entry) => entry.player_number === winner);
+    const name = player?.user?.name || player?.character?.name || "Player " + winner;
+    return `${name} Wins!`;
+  }
+  const winner = gameData.value?.game?.winner_player_number;
+  if (!winner) return "The Duel is Over";
+  const player = gameData.value?.game?.players?.find((entry) => entry.player_number === winner);
+  const name = player?.user?.name || player?.character?.name || "Player " + winner;
+  return `${name} Wins!`;
+});
+
+const duelEndFlavor = computed<string>(() => {
+  if (isBothTimeout.value) {
+    return "Neither ruler could act in time. The kingdoms stand in uneasy stalemate.";
+  }
+  if (isTimeout.value) {
+    if (didITimeout.value) {
+      return "You ran out of time. Your opponent claims victory by forfeit.";
     }
-    this.loading = false;
-  },
-  methods: {
-    monthsToYears(months) {
-      const years = Math.floor(months / 12);
-      const rem = months % 12;
-      if (years === 0) return `${months} months`;
-      const yearWord = years === 1 ? '1 year' : `${years} years`;
-      if (rem === 0) return yearWord;
-      return `${yearWord} and ${rem} month${rem !== 1 ? 's' : ''}`;
-    },
-    playerDisplayName(player) {
-      if (player?.user?.name) return player.user.name;
-      return player?.character?.name || 'Player';
-    },
-    playerNewElo(player) {
-      if (!this.completion?.elo_changes || !player?.user_id) return null;
-      const elo = this.completion.elo_changes[player.user_id];
-      return elo?.new ?? null;
-    },
-    playerEloChange(player) {
-      if (!this.completion?.elo_changes || !player?.user_id) return null;
-      const elo = this.completion.elo_changes[player.user_id];
-      return elo?.change ?? null;
-    },
-    getValClass(val) {
-      if (val <= 3) return 'val-critical';
-      if (val <= 7) return 'val-danger';
-      if (val <= 12) return 'val-low';
-      if (val >= 18) return 'val-high';
-      return 'val-normal';
-    },
-    kingdomTotal(k) {
-      return (k.wealth || 0) + (k.influence || 0) + (k.security || 0)
-        + (k.religion || 0) + (k.food || 0) + (k.happiness || 0);
-    },
-    xpForLevel(level) {
-      return Math.floor(100 * (level - 1) * level / 2);
-    },
-    animateXpBar() {
-      const d = this.myXpDetails;
-      if (!d) return;
-      const oldXp = d.old_xp;
-      const newXp = d.new_xp;
-      const oldLevel = d.old_level;
-      const newLevel = d.new_level;
+    return "Your opponent ran out of time. Victory is yours by forfeit!";
+  }
+  const winner = gameData.value?.game?.winner_player_number;
+  if (!winner) return "The campaign has ended.";
+  const loser = winner === 1 ? 2 : 1;
+  const winKingdom = duelKingdoms.value.find((kingdom) => kingdom.player?.player_number === winner);
+  const loseKingdom = duelKingdoms.value.find((kingdom) => kingdom.player?.player_number === loser);
 
-      // Start at old position
-      const oldLevelStart = this.xpForLevel(oldLevel);
-      const oldLevelEnd = this.xpForLevel(oldLevel + 1);
-      const oldPercent = oldLevelEnd > oldLevelStart
-        ? ((oldXp - oldLevelStart) / (oldLevelEnd - oldLevelStart)) * 100 : 0;
+  if (loseKingdom) {
+    const statKeys: KingdomStatKey[] = ["wealth", "influence", "security", "religion", "food", "happiness"];
+    const collapsed = statKeys.find((statKey) => loseKingdom[statKey] <= 0);
+    if (collapsed) {
+      return `The rival kingdom collapsed when ${collapsed} reached zero.`;
+    }
+    const atMax = statKeys.filter((statKey) => winKingdom && winKingdom[statKey] >= 20).length;
+    if (atMax >= 3) {
+      return "Three pillars of the kingdom reached their zenith. A decisive victory!";
+    }
+  }
+  return "After a long campaign, the stronger kingdom prevails.";
+});
 
-      this.xpBarLevel = oldLevel;
-      this.xpBarPercent = Math.min(100, Math.max(0, oldPercent));
-      this.xpBarDisplayXp = oldXp;
-      this.showLevelUp = false;
+const isWin = computed<boolean>(() => gameData.value?.game?.win === true);
 
-      // Animate the XP counter
-      this.animateXpCounter(oldXp, newXp, newLevel > oldLevel ? 1200 : 1600);
+const totalScore = computed<number>(() => {
+  const game = gameData.value?.game;
+  if (!game) return 0;
+  return game.wealth + game.influence + game.security + game.religion + game.food + game.happiness;
+});
 
-      // Animate after a short delay
-      setTimeout(() => {
-        if (newLevel > oldLevel) {
-          // Fill current bar to 100%, then reset for new level
-          this.xpBarPercent = 100;
-          setTimeout(() => {
-            this.xpBarLevel = newLevel;
-            this.xpBarPercent = 0;
-            this.showLevelUp = true;
-            playSound('win');
-            setTimeout(() => {
-              const newLevelStart = this.xpForLevel(newLevel);
-              const newLevelEnd = this.xpForLevel(newLevel + 1);
-              const newPercent = newLevelEnd > newLevelStart
-                ? ((newXp - newLevelStart) / (newLevelEnd - newLevelStart)) * 100 : 0;
-              this.xpBarPercent = Math.min(100, Math.max(0, newPercent));
-            }, 300);
-          }, 1000);
-        } else {
-          // Same level, just animate to new position
-          const levelStart = this.xpForLevel(oldLevel);
-          const levelEnd = this.xpForLevel(oldLevel + 1);
-          const newPercent = levelEnd > levelStart
-            ? ((newXp - levelStart) / (levelEnd - levelStart)) * 100 : 0;
-          this.xpBarPercent = Math.min(100, Math.max(0, newPercent));
-        }
-      }, 600);
-    },
-    animateXpCounter(from, to, duration) {
-      const start = performance.now();
-      const step = (now) => {
-        const elapsed = now - start;
-        const progress = Math.min(elapsed / duration, 1);
-        // Ease-out cubic
-        const eased = 1 - Math.pow(1 - progress, 3);
-        this.xpBarDisplayXp = Math.round(from + (to - from) * eased);
-        if (progress < 1) {
-          requestAnimationFrame(step);
-        }
-      };
+const scoreBreakdown = computed<ScoreBreakdown | undefined>(() => {
+  // Use stored breakdown from the game-over response, or compute client-side
+  const stored = gameData.value?._scoreBreakdown;
+  if (stored) return stored;
+  // Compute from game data
+  const game = gameData.value?.game;
+  if (!game) return undefined;
+  const base = game.wealth + game.influence + game.security + game.religion + game.food + game.happiness;
+  const statValues = [game.wealth, game.influence, game.security, game.religion, game.food, game.happiness];
+  const spread = Math.max(...statValues) - Math.min(...statValues);
+  const balanceBonus = Math.max(0, 30 - spread * 3);
+  const years = Math.floor((game.current_round || 0) / 12) + 1;
+  const multipliers: Record<number, number> = { 1: 1, 2: 1.4, 3: 1.7, 4: 1.9, 5: 2 };
+  const yearMultiplier = multipliers[years] || 2;
+  const yearsCompleted = Math.floor((game.current_round || 0) / 12);
+  const yearBonus = yearsCompleted * 50;
+  const bonusScore = game.bonus_score || 0;
+  let stackingBonus = 0;
+  for (const value of statValues) {
+    if (value >= 15) stackingBonus += 10;
+    if (value >= 20) stackingBonus += 20;
+  }
+  const scoreModifier = game.score_modifier || 0;
+  const rawTotal = Math.floor(base * yearMultiplier) + balanceBonus + yearBonus + stackingBonus + bonusScore;
+  const finalScoreValue = game.final_score ?? Math.floor(rawTotal * (1 + scoreModifier / 100));
+  return { base_score: base, year_multiplier: yearMultiplier, balance_bonus: balanceBonus, year_bonus: yearBonus, stacking_bonus: stackingBonus, bonus_score: bonusScore, score_modifier: scoreModifier, final_score: finalScoreValue };
+});
+
+const finalScore = computed<number>(() => scoreBreakdown.value?.final_score ?? totalScore.value);
+
+const scoreRank = computed<string>(() => {
+  if (!isWin.value) return "The Kingdom has fallen. Better luck next time.";
+  const score = finalScore.value;
+  if (score >= 200) return "Legendary - The kingdom enters a new Golden Age!";
+  if (score >= 150) return "Excellent - Your wisdom will be remembered for centuries.";
+  if (score >= 100) return "Good - The kingdom stands strong thanks to your guidance.";
+  if (score >= 60) return "Adequate - The kingdom survives, but just barely.";
+  return "Poor - The kingdom limps on, weakened by your counsel.";
+});
+
+const endTitle = computed<string>(() => {
+  if (!isWin.value) return "The Kingdom Has Fallen";
+  const score = finalScore.value;
+  if (score >= 150) return "God Save the King!";
+  if (score >= 60) return "The Kingdom Endures";
+  return "A Narrow Survival";
+});
+
+const endFlavor = computed<string>(() => {
+  const game = gameData.value?.game;
+  if (!game) return "";
+
+  if (!isWin.value) {
+    const tooLow = stats.value.find((stat) => game[stat.key as KingdomStatKey] <= 0);
+    if (tooLow) {
+      return `The kingdom collapsed when ${tooLow.label.toLowerCase()} reached zero. The people lost faith in their advisors.`;
+    }
+    return "The campaign has ended in defeat.";
+  }
+
+  const years = Math.max(1, Math.floor((game.total_rounds || 24) / 12));
+  const yearWord = years === 1 ? "one year" : years === 2 ? "two years" : years === 3 ? "three years" : years === 4 ? "four years" : "five years";
+  return `Your advisors have guided the kingdom through ${yearWord} of crisis. The realm celebrates, and your deeds are judged.`;
+});
+
+const resultAnimationClass = computed<string>(() => {
+  if (!isDuel.value) return "";
+  if (isBothTimeout.value) return "result-loss";
+  return isDuelWinner.value ? "result-win" : "result-loss";
+});
+
+const myXp = computed<number | undefined>(() => {
+  if (!completion.value?.xp_awards) return undefined;
+  const values = Object.values(completion.value.xp_awards);
+  return values.length > 0 ? values[0] : undefined;
+});
+
+const myLevelUp = computed<number | undefined>(() => {
+  if (!completion.value?.level_ups) return undefined;
+  const values = Object.values(completion.value.level_ups);
+  return values.length > 0 ? values[0] : undefined;
+});
+
+const myEloChange = computed<number | undefined>(() => {
+  if (!completion.value?.elo_changes) return undefined;
+  const values = Object.values(completion.value.elo_changes);
+  return values.length > 0 ? values[0]?.change : undefined;
+});
+
+const myAchievements = computed<AchievementReward[]>(() => {
+  if (!completion.value?.achievements_unlocked) return [];
+  const values = Object.values(completion.value.achievements_unlocked);
+  return values.length > 0 ? values[0] : [];
+});
+
+const myXpDetails = computed<XpDetails | undefined>(() => {
+  if (!completion.value?.xp_details) return undefined;
+  const values = Object.values(completion.value.xp_details);
+  return values.length > 0 ? values[0] : undefined;
+});
+
+const myCoins = computed<number | undefined>(() => {
+  if (!completion.value?.coin_awards) return undefined;
+  const values = Object.values(completion.value.coin_awards);
+  return values.length > 0 ? values[0]?.coins : undefined;
+});
+
+const myCharXp = computed<CharacterXpAward | undefined>(() => {
+  if (!completion.value?.character_xp_awards) return undefined;
+  const values = Object.values(completion.value.character_xp_awards);
+  return values.length > 0 ? values[0] : undefined;
+});
+
+const myUnlocks = computed<UnlockReward[]>(() => {
+  if (!completion.value?.new_unlocks) return [];
+  const values = Object.values(completion.value.new_unlocks);
+  return values.length > 0 ? values[0] : [];
+});
+
+function monthsToYears(months: number): string {
+  const years = Math.floor(months / 12);
+  if (years === 0) return `${months} months`;
+  const remainder = months % 12;
+  const yearWord = years === 1 ? "1 year" : `${years} years`;
+  if (remainder === 0) return yearWord;
+  return `${yearWord} and ${remainder} month${remainder === 1 ? "" : "s"}`;
+}
+
+function playerDisplayName(player: GamePlayer | undefined): string {
+  if (player?.user?.name) return player.user.name;
+  return player?.character?.name || "Player";
+}
+
+function playerNewElo(player: GamePlayer | undefined): number | undefined {
+  if (!completion.value?.elo_changes || !player?.user_id) return undefined;
+  const elo = completion.value.elo_changes[player.user_id];
+  return elo?.new ?? undefined;
+}
+
+function playerEloChange(player: GamePlayer | undefined): number | undefined {
+  if (!completion.value?.elo_changes || !player?.user_id) return undefined;
+  const elo = completion.value.elo_changes[player.user_id];
+  return elo?.change ?? undefined;
+}
+
+function getValueClass(value: number): string {
+  if (value <= 3) return "val-critical";
+  if (value <= 7) return "val-danger";
+  if (value <= 12) return "val-low";
+  if (value >= 18) return "val-high";
+  return "val-normal";
+}
+
+function kingdomTotal(kingdom: DuelKingdom): number {
+  return (kingdom.wealth || 0) + (kingdom.influence || 0) + (kingdom.security || 0)
+    + (kingdom.religion || 0) + (kingdom.food || 0) + (kingdom.happiness || 0);
+}
+
+function xpForLevel(level: number): number {
+  return Math.floor((100 * (level - 1) * level) / 2);
+}
+
+function animateXpCounter(from: number, to: number, duration: number): void {
+  const start = performance.now();
+  const step = (now: number): void => {
+    const elapsed = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    // Ease-out cubic
+    const eased = 1 - Math.pow(1 - progress, 3);
+    xpBarDisplayXp.value = Math.round(from + (to - from) * eased);
+    if (progress < 1) {
       requestAnimationFrame(step);
-    },
-    async shareReplay() {
-      try {
-        const res = await axios.post(`/api/games/${this.id}/share`);
-        await navigator.clipboard.writeText(res.data.share_url);
-        this.shareCopied = true;
-        setTimeout(() => { this.shareCopied = false; }, 2000);
-      } catch {
-        this.toast.error('Failed to generate share link');
+    }
+  };
+  requestAnimationFrame(step);
+}
+
+function animateXpBar(): void {
+  const details = myXpDetails.value;
+  if (!details) return;
+  const oldXp = details.old_xp;
+  const newXp = details.new_xp;
+  const oldLevel = details.old_level;
+  const newLevel = details.new_level;
+
+  // Start at old position
+  const oldLevelStart = xpForLevel(oldLevel);
+  const oldLevelEnd = xpForLevel(oldLevel + 1);
+  const oldPercent = oldLevelEnd > oldLevelStart
+    ? ((oldXp - oldLevelStart) / (oldLevelEnd - oldLevelStart)) * 100 : 0;
+
+  xpBarLevel.value = oldLevel;
+  xpBarPercent.value = Math.min(100, Math.max(0, oldPercent));
+  xpBarDisplayXp.value = oldXp;
+  showLevelUp.value = false;
+
+  // Animate the XP counter
+  animateXpCounter(oldXp, newXp, newLevel > oldLevel ? 1200 : 1600);
+
+  // Animate after a short delay
+  setTimeout(() => {
+    if (newLevel > oldLevel) {
+      // Fill current bar to 100%, then reset for new level
+      xpBarPercent.value = 100;
+      setTimeout(() => {
+        xpBarLevel.value = newLevel;
+        xpBarPercent.value = 0;
+        showLevelUp.value = true;
+        playSound("win");
+        setTimeout(() => {
+          const newLevelStart = xpForLevel(newLevel);
+          const newLevelEnd = xpForLevel(newLevel + 1);
+          const newPercent = newLevelEnd > newLevelStart
+            ? ((newXp - newLevelStart) / (newLevelEnd - newLevelStart)) * 100 : 0;
+          xpBarPercent.value = Math.min(100, Math.max(0, newPercent));
+        }, 300);
+      }, 1000);
+    } else {
+      // Same level, just animate to new position
+      const levelStart = xpForLevel(oldLevel);
+      const levelEnd = xpForLevel(oldLevel + 1);
+      const newPercent = levelEnd > levelStart
+        ? ((newXp - levelStart) / (levelEnd - levelStart)) * 100 : 0;
+      xpBarPercent.value = Math.min(100, Math.max(0, newPercent));
+    }
+  }, 600);
+}
+
+async function shareReplay(): Promise<void> {
+  try {
+    const response = await axios.post<{ share_url: string }>(`/api/games/${id}/share`);
+    await navigator.clipboard.writeText(response.data.share_url);
+    shareCopied.value = true;
+    setTimeout(() => {
+      shareCopied.value = false;
+    }, 2000);
+  } catch {
+    toast.error("Failed to generate share link");
+  }
+}
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<GameData>(`/api/games/${id}`);
+    gameData.value = response.data;
+
+    // Load completion data from sessionStorage (set by GameBoard/DuelBoard)
+    const stored = sessionStorage.getItem(`game_completion_${id}`);
+    if (stored) {
+      completion.value = JSON.parse(stored) as CompletionData;
+      sessionStorage.removeItem(`game_completion_${id}`);
+    }
+
+    // Load timeout data from sessionStorage or game API
+    const storedTimeout = sessionStorage.getItem(`game_timeout_${id}`);
+    if (storedTimeout) {
+      timedOutPlayerNumber.value = JSON.parse(storedTimeout) as number;
+      sessionStorage.removeItem(`game_timeout_${id}`);
+    } else if (gameData.value?.timed_out_player_number !== undefined && gameData.value.timed_out_player_number !== null) {
+      timedOutPlayerNumber.value = gameData.value.timed_out_player_number;
+    } else if (gameData.value?.game?.timed_out_player_number !== undefined && gameData.value.game.timed_out_player_number !== null) {
+      timedOutPlayerNumber.value = gameData.value.game.timed_out_player_number;
+    }
+
+    // Load score breakdown from sessionStorage
+    const storedBreakdown = sessionStorage.getItem(`game_score_breakdown_${id}`);
+    if (storedBreakdown && gameData.value) {
+      gameData.value._scoreBreakdown = JSON.parse(storedBreakdown) as ScoreBreakdown;
+      sessionStorage.removeItem(`game_score_breakdown_${id}`);
+    }
+
+    await nextTick(() => {
+      if (isDuel.value || isWin.value) {
+        playSound("win");
+      } else {
+        playSound("totalLoss");
       }
-    },
-    async rematch() {
-      this.rematchLoading = true;
-      try {
-        const game = this.gameData.game;
-        const res = await axios.post('/api/games', {
-          game_mode: game.game_mode,
-          game_type: game.game_type || 'cooperative',
-          num_players: game.num_players || game.players?.length || 1,
-          total_rounds: game.total_rounds,
+      // Animate XP bar
+      animateXpBar();
+      // Update auth store with new stats
+      if (myXpDetails.value) {
+        const coinAwards = completion.value?.coin_awards ? Object.values(completion.value.coin_awards) : [];
+        const newCoins = coinAwards.length > 0 ? coinAwards[0]?.new_coins : undefined;
+        auth.updateUserStats({
+          xp: myXpDetails.value.new_xp,
+          level: myXpDetails.value.new_level,
+          coins: newCoins,
         });
-        const newGameId = res.data.id;
-
-        if (game.game_mode === 'online') {
-          // For online games, invite the other players and go to lobby
-          if (game.players) {
-            const currentUserId = this.auth.state.user?.id;
-            const opponents = game.players.filter(p => p.user_id && p.user_id !== currentUserId);
-            for (const opp of opponents) {
-              try {
-                await axios.post(`/api/games/${newGameId}/invite`, { user_id: opp.user_id });
-              } catch {
-                // Invite may fail if user blocked, etc. - continue
-              }
-            }
-          }
-          this.$router.push(`/game/${newGameId}`);
-        } else {
-          // For single/pass_and_play: reuse same characters and start immediately
-          const currentUserId = this.auth.state.user?.id;
-          const myPlayer = game.players?.find(p => p.user_id === currentUserId) || game.players?.[0];
-          const botPlayer = game.players?.find(p => p.is_bot);
-
-          let characterIds;
-          if (game.game_type === 'duel' && game.game_mode === 'single') {
-            // Single-player duel: only send the human's character
-            characterIds = [myPlayer?.character_id].filter(Boolean);
-          } else {
-            // Cooperative or pass-and-play: send all non-bot characters in order
-            characterIds = (game.players || [])
-              .filter(p => !p.is_bot)
-              .sort((a, b) => a.player_number - b.player_number)
-              .map(p => p.character_id)
-              .filter(Boolean);
-          }
-
-          if (characterIds.length) {
-            const startPayload = { characters: characterIds };
-            if (botPlayer?.bot_difficulty) {
-              startPayload.bot_difficulty = botPlayer.bot_difficulty;
-            }
-            await axios.post(`/api/games/${newGameId}/start`, startPayload);
-          }
-
-          this.$router.push(`/game/${newGameId}`);
-        }
-      } catch {
-        this.toast.error('Failed to create rematch.');
       }
-      this.rematchLoading = false;
-    },
-  },
-};
+      // Prompt for app review after a short delay
+      setTimeout(() => checkAndPromptReview(), 3000);
+    });
+  } catch {
+    toast.error("Failed to load results");
+  }
+  loading.value = false;
+});
 </script>
 
 <style scoped>

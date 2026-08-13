@@ -73,7 +73,7 @@
             <div class="form-group">
               <label>Active</label>
               <label class="toggle-label">
-                <input type="checkbox" v-model="form.is_active" />
+                <input v-model="form.is_active" type="checkbox" />
                 <span>{{ form.is_active ? 'Yes' : 'No' }}</span>
               </label>
             </div>
@@ -91,108 +91,154 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminAnnouncements',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      announcements: [],
-      showModal: false,
-      editing: null,
-      saving: false,
-      formError: '',
-      form: this.emptyForm(),
-    };
-  },
-  async mounted() {
-    await this.load();
-  },
-  methods: {
-    emptyForm() {
-      return {
-        title: '',
-        description: '',
-        link_url: '',
-        link_label: '',
-        is_active: true,
-        starts_at: '',
-        ends_at: '',
-        sort_order: 0,
-      };
-    },
-    async load() {
-      const res = await axios.get('/api/admin/announcements');
-      this.announcements = res.data;
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = this.emptyForm();
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(a) {
-      this.editing = a;
-      this.form = {
-        title: a.title,
-        description: a.description,
-        link_url: a.link_url || '',
-        link_label: a.link_label || '',
-        is_active: a.is_active,
-        starts_at: a.starts_at ? a.starts_at.slice(0, 16) : '',
-        ends_at: a.ends_at ? a.ends_at.slice(0, 16) : '',
-        sort_order: a.sort_order || 0,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.saving = true;
-      this.formError = '';
-      try {
-        const payload = { ...this.form };
-        if (!payload.link_url) payload.link_url = null;
-        if (!payload.link_label) payload.link_label = null;
-        if (!payload.starts_at) payload.starts_at = null;
-        if (!payload.ends_at) payload.ends_at = null;
+interface Announcement {
+  id: number;
+  title: string;
+  description: string;
+  link_url?: string;
+  link_label?: string;
+  is_active: boolean;
+  starts_at?: string;
+  ends_at?: string;
+  sort_order?: number;
+  dismissal_count?: number;
+  creator?: { name: string };
+}
 
-        if (this.editing) {
-          await axios.put(`/api/admin/announcements/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/announcements', payload);
-        }
-        this.showModal = false;
-        await this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Failed to save';
-      }
-      this.saving = false;
-    },
-    async remove(a) {
-      if (!window.confirm(`Delete announcement "${a.title}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/announcements/${a.id}`);
-        await this.load();
-      } catch (e) {
-        this.toast.error(e.response?.data?.message || 'Failed to delete');
-      }
-    },
-    formatDateRange(start, end) {
-      const fmt = (d) => d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
-      if (start && end) return `${fmt(start)} – ${fmt(end)}`;
-      if (start) return `From ${fmt(start)}`;
-      if (end) return `Until ${fmt(end)}`;
-      return '';
-    },
-    truncate(str, len) {
-      if (!str) return '';
-      return str.length > len ? str.slice(0, len) + '...' : str;
-    },
-  },
-};
+interface AnnouncementForm {
+  title: string;
+  description: string;
+  link_url: string;
+  link_label: string;
+  is_active: boolean;
+  starts_at: string;
+  ends_at: string;
+  sort_order: number;
+}
+
+const toast = useToast();
+
+function emptyForm(): AnnouncementForm {
+  return {
+    title: "",
+    description: "",
+    link_url: "",
+    link_label: "",
+    is_active: true,
+    starts_at: "",
+    ends_at: "",
+    sort_order: 0,
+  };
+}
+
+const announcements = ref<Announcement[]>([]);
+const showModal = ref(false);
+const editing = ref<Announcement>();
+const saving = ref(false);
+const formError = ref("");
+const form = ref<AnnouncementForm>(emptyForm());
+
+async function load(): Promise<void> {
+  const response = await axios.get<Announcement[]>("/api/admin/announcements");
+  announcements.value = response.data;
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  form.value = emptyForm();
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(a: Announcement): void {
+  editing.value = a;
+  form.value = {
+    title: a.title,
+    description: a.description,
+    link_url: a.link_url || "",
+    link_label: a.link_label || "",
+    is_active: a.is_active,
+    starts_at: a.starts_at ? a.starts_at.slice(0, 16) : "",
+    ends_at: a.ends_at ? a.ends_at.slice(0, 16) : "",
+    sort_order: a.sort_order || 0,
+  };
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  saving.value = true;
+  formError.value = "";
+  try {
+    // Empty optional fields are cleared server-side: Laravel's global
+    // ConvertEmptyStringsToNull middleware maps "" to null before validation,
+    // so the form's empty strings clear the columns without sending null here.
+    const payload = { ...form.value };
+
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/announcements/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/announcements", payload);
+    }
+    showModal.value = false;
+    await load();
+  } catch (error) {
+    const message = isAxiosError<{ message?: string }>(error)
+      ? error.response?.data?.message
+      : undefined;
+    formError.value = message ?? "Failed to save";
+  }
+  saving.value = false;
+}
+
+async function remove(a: Announcement): Promise<void> {
+  if (!window.confirm(`Delete announcement "${a.title}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/announcements/${a.id}`);
+    await load();
+  } catch (error) {
+    const message = isAxiosError<{ message?: string }>(error)
+      ? error.response?.data?.message
+      : undefined;
+    toast.error(message ?? "Failed to delete");
+  }
+}
+
+function formatShortDate(d?: string): string {
+  return d ? new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "";
+}
+
+function formatDateRange(start?: string, end?: string): string {
+  if (start && end) {
+    return `${formatShortDate(start)} – ${formatShortDate(end)}`;
+  }
+  if (start) {
+    return `From ${formatShortDate(start)}`;
+  }
+  if (end) {
+    return `Until ${formatShortDate(end)}`;
+  }
+  return "";
+}
+
+function truncate(string_: string, length_: number): string {
+  if (!string_) {
+    return "";
+  }
+  return string_.length > length_ ? `${string_.slice(0, length_)}...` : string_;
+}
+
+onMounted(async () => {
+  await load();
+});
 </script>
 
 <style scoped>

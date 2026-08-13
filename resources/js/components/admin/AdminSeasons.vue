@@ -16,7 +16,7 @@
           <div class="list-dates">{{ formatDate(s.starts_at) }} &mdash; {{ formatDate(s.ends_at) }}</div>
         </div>
         <div class="list-actions">
-          <button v-if="s.is_active" class="btn-sm btn-end" @click="endSeason(s)" :disabled="endingSeasonId === s.id">
+          <button v-if="s.is_active" class="btn-sm btn-end" :disabled="endingSeasonId === s.id" @click="endSeason(s)">
             {{ endingSeasonId === s.id ? 'Ending...' : 'End Season' }}
           </button>
           <button class="btn-sm" @click="openRewards(s)">Rewards</button>
@@ -46,7 +46,7 @@
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" v-model="form.is_active" /> Active
+              <input v-model="form.is_active" type="checkbox" /> Active
             </label>
           </div>
           <div v-if="formError" class="form-error">{{ formError }}</div>
@@ -62,7 +62,7 @@
       <div class="modal-content rewards-modal">
         <h3>Rewards: {{ rewardsSeason?.name }}</h3>
 
-        <template v-if="rewards.length">
+        <template v-if="rewards.length > 0">
           <div v-for="(group, metric) in groupedRewards" :key="metric" class="metric-group">
             <h4 class="metric-label">{{ metricLabel(metric) }}</h4>
             <table class="rewards-table">
@@ -99,7 +99,7 @@
         <p v-else class="empty">No rewards defined yet.</p>
 
         <h4 class="reward-form-title">{{ editingReward ? 'Edit Reward' : 'Add Reward' }}</h4>
-        <form @submit.prevent="saveReward" class="reward-form">
+        <form class="reward-form" @submit.prevent="saveReward">
           <div class="reward-form-row">
             <div class="form-group">
               <label>Metric</label>
@@ -165,180 +165,276 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminSeasons',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      seasons: [],
-      showModal: false,
-      editing: null,
-      formError: '',
-      form: { name: '', starts_at: '', ends_at: '', is_active: false },
-      // Rewards
-      showRewardsModal: false,
-      rewardsSeason: null,
-      rewards: [],
-      allCharacters: [],
-      allDiceThemes: [],
-      allKingdomStyles: [],
-      editingReward: null,
-      rewardFormError: '',
-      rewardForm: { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null, reward_title: '' },
-      endingSeasonId: null,
-    };
-  },
-  computed: {
-    groupedRewards() {
-      const groups = {};
-      for (const r of this.rewards) {
-        const m = r.metric || 'elo';
-        if (!groups[m]) groups[m] = [];
-        groups[m].push(r);
+interface Season {
+  id: number;
+  name: string;
+  starts_at: string | undefined;
+  ends_at: string | undefined;
+  is_active: boolean;
+}
+
+interface EntityOption {
+  id: number;
+  name: string;
+}
+
+interface SeasonReward {
+  id: number;
+  metric: string | undefined;
+  placement: number;
+  reward_xp: number;
+  reward_coins: number;
+  reward_character_id: number | undefined;
+  reward_dice_theme_id: number | undefined;
+  reward_kingdom_style_id: number | undefined;
+  reward_title: string | undefined;
+  reward_character: EntityOption | undefined;
+  reward_dice_theme: EntityOption | undefined;
+  reward_kingdom_style: EntityOption | undefined;
+}
+
+interface SeasonForm {
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+}
+
+interface RewardForm {
+  metric: string;
+  placement_from: number;
+  placement_to: number;
+  reward_xp: number;
+  reward_coins: number;
+  reward_character_id: number | undefined;
+  reward_dice_theme_id: number | undefined;
+  reward_kingdom_style_id: number | undefined;
+  reward_title: string;
+}
+
+function emptySeasonForm(): SeasonForm {
+  return { name: "", starts_at: "", ends_at: "", is_active: false };
+}
+
+function emptyRewardForm(): RewardForm {
+  return {
+    metric: "elo",
+    placement_from: 1,
+    placement_to: 1,
+    reward_xp: 0,
+    reward_coins: 0,
+    reward_character_id: undefined,
+    reward_dice_theme_id: undefined,
+    reward_kingdom_style_id: undefined,
+    reward_title: "",
+  };
+}
+
+const toast = useToast();
+
+const seasons = ref<Season[]>([]);
+const showModal = ref(false);
+const editing = ref<number | undefined>(undefined);
+const formError = ref("");
+const form = reactive<SeasonForm>(emptySeasonForm());
+// Rewards
+const showRewardsModal = ref(false);
+const rewardsSeason = ref<Season | undefined>(undefined);
+const rewards = ref<SeasonReward[]>([]);
+const allCharacters = ref<EntityOption[]>([]);
+const allDiceThemes = ref<EntityOption[]>([]);
+const allKingdomStyles = ref<EntityOption[]>([]);
+const editingReward = ref<number | undefined>(undefined);
+const rewardFormError = ref("");
+const rewardForm = reactive<RewardForm>(emptyRewardForm());
+const endingSeasonId = ref<number | undefined>(undefined);
+
+const groupedRewards = computed<Record<string, SeasonReward[]>>(() => {
+  const groups: Record<string, SeasonReward[]> = {};
+  for (const reward of rewards.value) {
+    const metric = reward.metric || "elo";
+    (groups[metric] ??= []).push(reward);
+  }
+  return groups;
+});
+
+async function load(): Promise<void> {
+  const response = await axios.get<Season[]>("/api/admin/seasons");
+  seasons.value = response.data;
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, emptySeasonForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(season: Season): void {
+  editing.value = season.id;
+  Object.assign(form, {
+    name: season.name,
+    starts_at: season.starts_at?.slice(0, 16) || "",
+    ends_at: season.ends_at?.slice(0, 16) || "",
+    is_active: season.is_active,
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  try {
+    const data = { ...form };
+    if (editing.value) {
+      await axios.put(`/api/admin/seasons/${editing.value}`, data);
+    } else {
+      await axios.post("/api/admin/seasons", data);
+    }
+    showModal.value = false;
+    await load();
+  } catch (error) {
+    formError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.error ?? error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function endSeason(season: Season): Promise<void> {
+  if (!confirm(`End season "${season.name}" and distribute rewards? This cannot be undone.`)) {
+    return;
+  }
+  endingSeasonId.value = season.id;
+  try {
+    const response = await axios.post<{ rewards_distributed: number }>(`/api/admin/seasons/${season.id}/end`);
+    toast.success(`Season ended! ${response.data.rewards_distributed} rewards distributed.`);
+    await load();
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? "Failed to end season")
+      : "Failed to end season";
+    toast.error(message);
+  }
+  endingSeasonId.value = undefined;
+}
+
+async function deleteSeason(season: Season): Promise<void> {
+  if (!confirm(`Delete "${season.name}"?`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/seasons/${season.id}`);
+  await load();
+}
+
+async function openRewards(season: Season): Promise<void> {
+  rewardsSeason.value = season;
+  resetRewardForm();
+  showRewardsModal.value = true;
+  const [rewardsResponse, charactersResponse, diceResponse, kingdomStylesResponse] = await Promise.all([
+    axios.get<SeasonReward[]>(`/api/admin/seasons/${season.id}/rewards`),
+    axios.get<EntityOption[]>("/api/characters"),
+    axios.get<EntityOption[]>("/api/admin/dice-themes"),
+    axios.get<EntityOption[]>("/api/admin/kingdom-styles"),
+  ]);
+  rewards.value = rewardsResponse.data;
+  allCharacters.value = charactersResponse.data;
+  allDiceThemes.value = diceResponse.data;
+  allKingdomStyles.value = kingdomStylesResponse.data;
+}
+
+function resetRewardForm(): void {
+  editingReward.value = undefined;
+  rewardFormError.value = "";
+  Object.assign(rewardForm, emptyRewardForm());
+}
+
+function editReward(reward: SeasonReward): void {
+  editingReward.value = reward.id;
+  Object.assign(rewardForm, {
+    metric: reward.metric || "elo",
+    placement_from: reward.placement,
+    placement_to: reward.placement,
+    reward_xp: reward.reward_xp,
+    reward_coins: reward.reward_coins,
+    reward_character_id: reward.reward_character_id,
+    reward_dice_theme_id: reward.reward_dice_theme_id ?? undefined,
+    reward_kingdom_style_id: reward.reward_kingdom_style_id ?? undefined,
+    reward_title: reward.reward_title || "",
+  });
+}
+
+function metricLabel(metric: string): string {
+  const labels: Record<string, string> = { elo: "ELO Rating", score: "Highest Score", wins: "Most Wins" };
+  return labels[metric] || metric;
+}
+
+async function saveReward(): Promise<void> {
+  rewardFormError.value = "";
+  const from = rewardForm.placement_from;
+  const to = rewardForm.placement_to;
+  const season = rewardsSeason.value;
+  if (!season) {
+    return;
+  }
+  if (to < from) {
+    rewardFormError.value = '"To" must be >= "From"';
+    return;
+  }
+  try {
+    if (editingReward.value) {
+      // Editing a single reward — use placement_from as the placement
+      const payload = { ...rewardForm, placement: from };
+      await axios.put(`/api/admin/seasons/${season.id}/rewards/${editingReward.value}`, payload);
+    } else {
+      // Create one reward per placement in the range
+      for (let placement = from; placement <= to; placement++) {
+        const payload = { ...rewardForm, placement };
+        await axios.post(`/api/admin/seasons/${season.id}/rewards`, payload);
       }
-      return groups;
-    },
-  },
-  async mounted() { this.load(); },
-  methods: {
-    async load() {
-      const res = await axios.get('/api/admin/seasons');
-      this.seasons = res.data;
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = { name: '', starts_at: '', ends_at: '', is_active: false };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(s) {
-      this.editing = s.id;
-      this.form = {
-        name: s.name,
-        starts_at: s.starts_at?.slice(0, 16) || '',
-        ends_at: s.ends_at?.slice(0, 16) || '',
-        is_active: s.is_active,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      try {
-        const data = { ...this.form };
-        if (this.editing) {
-          await axios.put(`/api/admin/seasons/${this.editing}`, data);
-        } else {
-          await axios.post('/api/admin/seasons', data);
-        }
-        this.showModal = false;
-        this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.error || e.response?.data?.message || 'Error';
-      }
-    },
-    async endSeason(s) {
-      if (!confirm(`End season "${s.name}" and distribute rewards? This cannot be undone.`)) return;
-      this.endingSeasonId = s.id;
-      try {
-        const res = await axios.post(`/api/admin/seasons/${s.id}/end`);
-        this.toast.success(`Season ended! ${res.data.rewards_distributed} rewards distributed.`);
-        this.load();
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to end season');
-      }
-      this.endingSeasonId = null;
-    },
-    async deleteSeason(s) {
-      if (!confirm(`Delete "${s.name}"?`)) return;
-      await axios.delete(`/api/admin/seasons/${s.id}`);
-      this.load();
-    },
-    async openRewards(s) {
-      this.rewardsSeason = s;
-      this.resetRewardForm();
-      this.showRewardsModal = true;
-      const [rewardsRes, charsRes, diceRes, ksRes] = await Promise.all([
-        axios.get(`/api/admin/seasons/${s.id}/rewards`),
-        axios.get('/api/characters'),
-        axios.get('/api/admin/dice-themes'),
-        axios.get('/api/admin/kingdom-styles'),
-      ]);
-      this.rewards = rewardsRes.data;
-      this.allCharacters = charsRes.data;
-      this.allDiceThemes = diceRes.data;
-      this.allKingdomStyles = ksRes.data;
-    },
-    resetRewardForm() {
-      this.editingReward = null;
-      this.rewardFormError = '';
-      this.rewardForm = { metric: 'elo', placement_from: 1, placement_to: 1, reward_xp: 0, reward_coins: 0, reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null, reward_title: '' };
-    },
-    editReward(r) {
-      this.editingReward = r.id;
-      this.rewardForm = {
-        metric: r.metric || 'elo',
-        placement_from: r.placement,
-        placement_to: r.placement,
-        reward_xp: r.reward_xp,
-        reward_coins: r.reward_coins,
-        reward_character_id: r.reward_character_id,
-        reward_dice_theme_id: r.reward_dice_theme_id || null,
-        reward_kingdom_style_id: r.reward_kingdom_style_id || null,
-        reward_title: r.reward_title || '',
-      };
-    },
-    metricLabel(m) {
-      const labels = { elo: 'ELO Rating', score: 'Highest Score', wins: 'Most Wins' };
-      return labels[m] || m;
-    },
-    async saveReward() {
-      this.rewardFormError = '';
-      const from = this.rewardForm.placement_from;
-      const to = this.rewardForm.placement_to;
-      if (to < from) {
-        this.rewardFormError = '"To" must be >= "From"';
-        return;
-      }
-      try {
-        if (this.editingReward) {
-          // Editing a single reward — use placement_from as the placement
-          const payload = { ...this.rewardForm, placement: from };
-          await axios.put(`/api/admin/seasons/${this.rewardsSeason.id}/rewards/${this.editingReward}`, payload);
-        } else {
-          // Create one reward per placement in the range
-          for (let p = from; p <= to; p++) {
-            const payload = { ...this.rewardForm, placement: p };
-            await axios.post(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`, payload);
-          }
-        }
-        const res = await axios.get(`/api/admin/seasons/${this.rewardsSeason.id}/rewards`);
-        this.rewards = res.data;
-        this.resetRewardForm();
-      } catch (e) {
-        this.rewardFormError = e.response?.data?.error || e.response?.data?.message || 'Error';
-      }
-    },
-    async deleteReward(r) {
-      if (!confirm(`Delete reward for ${this.ordinal(r.placement)} place?`)) return;
-      await axios.delete(`/api/admin/seasons/${this.rewardsSeason.id}/rewards/${r.id}`);
-      this.rewards = this.rewards.filter(rw => rw.id !== r.id);
-    },
-    ordinal(n) {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    },
-    formatDate(d) {
-      if (!d) return '';
-      return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    },
-  },
-};
+    }
+    const response = await axios.get<SeasonReward[]>(`/api/admin/seasons/${season.id}/rewards`);
+    rewards.value = response.data;
+    resetRewardForm();
+  } catch (error) {
+    rewardFormError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.error ?? error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function deleteReward(reward: SeasonReward): Promise<void> {
+  const season = rewardsSeason.value;
+  if (!season) {
+    return;
+  }
+  if (!confirm(`Delete reward for ${ordinal(reward.placement)} place?`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/seasons/${season.id}/rewards/${reward.id}`);
+  rewards.value = rewards.value.filter((rewardEntry) => rewardEntry.id !== reward.id);
+}
+
+function ordinal(value: number): string {
+  const suffixes = ["th", "st", "nd", "rd"];
+  const remainder = value % 100;
+  return value + (suffixes[(remainder - 20) % 10] || suffixes[remainder] || suffixes[0]);
+}
+
+function formatDate(date: string | undefined): string {
+  if (!date) {
+    return "";
+  }
+  return new Date(date).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+onMounted(() => {
+  load();
+});
 </script>
 
 <style scoped>

@@ -1,7 +1,28 @@
 import { reactive } from 'vue';
 import axios from 'axios';
 
-const DEFAULTS = {
+interface Icon {
+  type: string;
+  value: string;
+  label?: string;
+  category?: string;
+}
+
+interface StatIcon {
+  key: string;
+  label: string;
+  short: string;
+  type: string;
+  value: string;
+  icon: string;
+}
+
+interface IconsState {
+  icons: Record<string, Icon>;
+  loaded: boolean;
+}
+
+const DEFAULTS: Record<string, Icon> = {
   nav_shop: { type: 'emoji', value: '\u{1F6D2}', label: 'Shop', category: 'navigation' },
   nav_collection: { type: 'emoji', value: '\u{1F0CF}', label: 'Collection', category: 'navigation' },
   nav_campaigns: { type: 'emoji', value: '\u{2694}', label: 'Campaigns', category: 'navigation' },
@@ -17,15 +38,15 @@ const DEFAULTS = {
   ui_elo_trophy: { type: 'emoji', value: '\u{1F3C6}', label: 'ELO Trophy', category: 'ui' },
 };
 
-const state = reactive({ icons: { ...DEFAULTS }, loaded: false });
+const state = reactive<IconsState>({ icons: { ...DEFAULTS }, loaded: false });
 
 export function useIcons() {
-  function getIcon(key) {
+  function getIcon(key: string): Icon {
     return state.icons[key] || DEFAULTS[key] || { type: 'emoji', value: '?' };
   }
 
-  function getStatIcons() {
-    const make = (key, label, short, iconKey) => {
+  function getStatIcons(): StatIcon[] {
+    const make = (key: string, label: string, short: string, iconKey: string): StatIcon => {
       const icon = getIcon(iconKey);
       return { key, label, short, type: icon.type, value: icon.value, icon: icon.type === 'emoji' ? icon.value : '' };
     };
@@ -39,9 +60,9 @@ export function useIcons() {
     ];
   }
 
-  async function fetchIcons() {
+  async function fetchIcons(): Promise<void> {
     try {
-      const { data } = await axios.get('/api/app-icons');
+      const { data } = await axios.get<Record<string, Icon>>('/api/app-icons');
       Object.assign(state.icons, data);
       state.loaded = true;
     } catch {

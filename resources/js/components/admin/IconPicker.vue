@@ -25,9 +25,9 @@
       <div v-if="iconType === 'emoji'" class="emoji-section">
         <input
           :value="modelValue"
-          @input="$emit('update:modelValue', $event.target.value)"
           class="emoji-input"
           placeholder="Paste emoji..."
+          @input="$emit('update:modelValue', $event.target.value)"
         />
         <div class="emoji-grid">
           <button
@@ -59,39 +59,40 @@
   </div>
 </template>
 
-<script>
-import AppIcon from '../AppIcon.vue';
-import MediaLibraryModal from './MediaLibraryModal.vue';
+<script setup lang="ts">
+import { ref } from "vue";
+import AppIcon from "../AppIcon.vue";
+import MediaLibraryModal from "./MediaLibraryModal.vue";
 
-export default {
-  name: 'IconPicker',
-  components: { AppIcon, MediaLibraryModal },
-  props: {
-    modelValue: { type: String, default: '' },
-    iconType: { type: String, default: 'emoji' },
-  },
-  emits: ['update:modelValue', 'update:iconType'],
-  data() {
-    return {
-      showMedia: false,
-      commonEmojis: [
-        '\u{1F6D2}', '\u{1F0CF}', '\u{2694}', '\u{1F465}', '\u{1F464}',
-        '\u{1FA99}', '\u{1F3DB}', '\u{1F6E1}', '\u{1F54C}', '\u{1F33E}',
-        '\u{1F3AD}', '\u{1F3C6}', '\u{1F9E9}',
-        '\u{1F451}', '\u{1F525}', '\u{26A1}', '\u{2B50}', '\u{1F48E}',
-        '\u{1F4DC}', '\u{2B06}', '\u{1F4D6}', '\u{1F9D9}', '\u{1F3F0}',
-        '\u{1F4C5}', '\u{1F91D}', '\u{1F30D}', '\u{1F4AA}', '\u{2728}',
-      ],
-    };
-  },
-  methods: {
-    onMediaSelect(item) {
-      this.$emit('update:modelValue', item.url);
-      this.$emit('update:iconType', 'image');
-      this.showMedia = false;
-    },
-  },
-};
+const { modelValue = "", iconType = "emoji" } = defineProps<{
+  modelValue?: string;
+  iconType?: string;
+}>();
+
+const emit = defineEmits<{
+  "update:modelValue": [value: string];
+  "update:iconType": [value: string];
+}>();
+
+interface MediaItem {
+  url: string;
+}
+
+const showMedia = ref(false);
+const commonEmojis = [
+  "\u{1F6D2}", "\u{1F0CF}", "\u{2694}", "\u{1F465}", "\u{1F464}",
+  "\u{1FA99}", "\u{1F3DB}", "\u{1F6E1}", "\u{1F54C}", "\u{1F33E}",
+  "\u{1F3AD}", "\u{1F3C6}", "\u{1F9E9}",
+  "\u{1F451}", "\u{1F525}", "\u{26A1}", "\u{2B50}", "\u{1F48E}",
+  "\u{1F4DC}", "\u{2B06}", "\u{1F4D6}", "\u{1F9D9}", "\u{1F3F0}",
+  "\u{1F4C5}", "\u{1F91D}", "\u{1F30D}", "\u{1F4AA}", "\u{2728}",
+];
+
+function onMediaSelect(item: MediaItem): void {
+  emit("update:modelValue", item.url);
+  emit("update:iconType", "image");
+  showMedia.value = false;
+}
 </script>
 
 <style scoped>

@@ -12,14 +12,14 @@
         <p v-if="!choosingItem" class="item-prompt-text">Use an item before rolling?</p>
         <div v-if="!choosingItem" class="item-prompt-btns">
           <button class="btn-item-yes" @click="choosingItem = true">Yes</button>
-          <button class="btn-item-no" @click="$emit('skip-item')">No</button>
+          <button class="btn-item-no" @click="$emit('skipItem')">No</button>
         </div>
         <div v-else class="item-choose-list">
           <div
             v-for="pi in usableItems"
             :key="pi.id"
             class="item-choose-card"
-            @click="$emit('use-item', pi.id)"
+            @click="$emit('useItem', pi.id)"
           >
             <span class="item-choose-name">{{ pi.item?.name }}</span>
             <span class="item-choose-effect">{{ itemEffectLabel(pi.item) }}</span>
@@ -36,7 +36,7 @@
 
     <!-- Wild/ability trigger info -->
     <template v-if="hasRolled">
-      <div v-if="rollData.ability_effects && rollData.ability_effects.length" class="wild-section">
+      <div v-if="rollData.ability_effects && rollData.ability_effects.length > 0" class="wild-section">
         <div v-for="(desc, i) in rollData.ability_effects" :key="i" class="wild-trigger">
           {{ desc }}
         </div>
@@ -49,7 +49,7 @@
         v-if="!abilityActivated"
         class="btn-ability"
         :disabled="activatingAbility"
-        @click="$emit('use-ability')"
+        @click="$emit('useAbility')"
       >
         &#9733; {{ ability.name }}: {{ ability.description }}
         <span class="ability-uses-badge">({{ abilityUses }} use{{ abilityUses > 1 ? 's' : '' }} left)</span>
@@ -60,7 +60,7 @@
     </div>
 
     <!-- Shadow peek (if shadow ability was used) -->
-    <div v-if="peekedCards && peekedCards.length" class="peek-section">
+    <div v-if="peekedCards && peekedCards.length > 0" class="peek-section">
       <p class="peek-title">&#128065; Glimpse of the Future:</p>
       <div v-for="(pc, i) in peekedCards" :key="i" class="peek-card">
         {{ pc.title }} (Difficulty {{ pc.difficulty }})
@@ -68,7 +68,7 @@
     </div>
 
     <!-- Show assigned cards (1 or 2) -->
-    <div v-if="displayCards.length" class="roll-cards">
+    <div v-if="displayCards.length > 0" class="roll-cards">
       <div v-for="(c, idx) in displayCards" :key="idx" class="roll-card">
         <h3 class="card-title">{{ c.title }}</h3>
         <p v-if="!hasRolled" class="card-desc">{{ c.description }}</p>
@@ -89,7 +89,7 @@
         </div>
         <!-- Pre-roll: show colored chips (no details) -->
         <template v-if="!hasRolled">
-          <div v-if="c.positive_effects && Object.keys(c.positive_effects).length" class="effects-row card-effects">
+          <div v-if="c.positive_effects && Object.keys(c.positive_effects).length > 0" class="effects-row card-effects">
             <span class="effects-label">On Success:</span>
             <span
               v-for="(val, stat) in c.positive_effects"
@@ -97,7 +97,7 @@
               class="effect-badge effect-positive"
             >{{ stat }}</span>
           </div>
-          <div v-if="c.negative_effects && Object.keys(c.negative_effects).length" class="effects-row card-effects">
+          <div v-if="c.negative_effects && Object.keys(c.negative_effects).length > 0" class="effects-row card-effects">
             <span class="effects-label">On Failure:</span>
             <span
               v-for="(val, stat) in c.negative_effects"
@@ -112,7 +112,7 @@
     <!-- Post-roll actions -->
     <template v-if="hasRolled">
       <!-- Combined effects summary -->
-      <div v-if="Object.keys(combinedEffects).length" class="combined-effects">
+      <div v-if="Object.keys(combinedEffects).length > 0" class="combined-effects">
         <p class="combined-label">Combined Effects:</p>
         <div class="effects-row">
           <span
@@ -125,7 +125,7 @@
           </span>
         </div>
       </div>
-      <div v-else-if="!cardResults.length" class="no-effects">
+      <div v-else-if="cardResults.length === 0" class="no-effects">
         No stat changes this round.
       </div>
 
@@ -151,162 +151,292 @@
   </div>
 </template>
 
-<script>
-import { playSound } from '../sounds';
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from "vue";
+import { playSound } from "../sounds";
 
-export default {
-  name: 'DuelRollPhase',
-  props: {
-    cards: { type: Array, default: () => [] },
-    card: { type: Object, default: null },
-    playerName: { type: String, default: 'Player' },
-    diceCount: { type: Number, default: 4 },
-    canRoll: { type: Boolean, default: false },
-    rollData: { type: Object, default: null },
-    ability: { type: Object, default: null },
-    abilityUses: { type: Number, default: 0 },
-    abilityActivated: { type: Boolean, default: false },
-    activatingAbility: { type: Boolean, default: false },
-    peekedCards: { type: Array, default: null },
-    rerolling: { type: Boolean, default: false },
-    needsContinue: { type: Boolean, default: false },
-    use3dDice: { type: Boolean, default: false },
-    playerItems: { type: Array, default: () => [] },
-    itemDecided: { type: Boolean, default: false },
-    hideRollButton: { type: Boolean, default: false },
-    hideRerollSection: { type: Boolean, default: false },
-    currentRound: { type: Number, default: 0 },
-  },
-  emits: ['roll', 'use-ability', 'reroll', 'continue', 'use-item', 'skip-item'],
-  data() {
-    return {
-      isRolling: false,
-      submitting: false,
-      choosingItem: false,
-    };
-  },
-  computed: {
-    hasRolled() {
-      return this.rollData !== null;
-    },
-    isRerollAbility() {
-      if (!this.ability) return false;
-      return ['rally', 'gamble'].includes(this.ability.name);
-    },
-    showRerollOption() {
-      return this.hasRolled && this.isRerollAbility
-        && this.abilityUses > 0 && !this.abilityActivated && !this.rollData?.rerolled;
-    },
-    rerollLabel() {
-      if (!this.ability) return '';
-      if (this.ability.name === 'rally') return 'Reroll lowest die?';
-      if (this.ability.name === 'gamble') return 'Reroll all dice?';
-      return this.ability.description;
-    },
-    displayCards() {
-      if (this.cards && this.cards.length) {
-        return this.cards.map(c => c.card || c);
-      }
-      if (this.card) return [this.card];
-      // Fall back to cards from rollData (for opponent view)
-      if (this.rollData?.cards) {
-        return this.rollData.cards.map(cr => cr.card).filter(Boolean);
-      }
-      if (this.rollData?.card) return [this.rollData.card];
-      return [];
-    },
-    cardResults() {
-      if (!this.rollData) return [];
-      if (this.rollData.cards) return this.rollData.cards;
-      if (this.rollData.card) {
-        return [{
-          card: this.rollData.card,
-          difficulty: this.rollData.difficulty,
-          success: this.rollData.success,
-          effects: this.rollData.effects || {},
-        }];
-      }
-      return [];
-    },
-    totalDifficulty() {
-      if (!this.cardResults.length) return 0;
-      return this.cardResults.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
-    },
-    cardResultMap() {
-      if (!this.hasRolled || !this.cardResults.length) return {};
-      const map = {};
-      this.cardResults.forEach((cr, idx) => {
-        map[idx] = cr;
-      });
-      return map;
-    },
-    cardEffectsMap() {
-      if (!this.hasRolled || !this.cardResults.length) return {};
-      const map = {};
-      this.cardResults.forEach((cr, idx) => {
-        if (cr.effects && Object.keys(cr.effects).length) {
-          map[idx] = cr.effects;
-        }
-      });
-      return map;
-    },
-    combinedEffects() {
-      if (!this.rollData) return {};
-      if (this.rollData.combined_effects) return this.rollData.combined_effects;
-      if (this.rollData.effects) return this.rollData.effects;
-      return {};
-    },
-    usableItems() {
-      return (this.playerItems || []).filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === this.currentRound));
-    },
-  },
-  methods: {
-    startRolling() {
-      if (this.isRolling || this.hasRolled || this.submitting) return;
+interface CardEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+  stat?: string;
+}
 
-      if (!this.use3dDice) {
-        playSound('dice');
-      }
+interface DuelCard {
+  title?: string;
+  description?: string;
+  difficulty?: number;
+  positive_flavor?: string;
+  negative_flavor?: string;
+  positive_effects?: Record<string, number>;
+  negative_effects?: Record<string, number>;
+  effect?: CardEffect;
+  name?: string;
+}
 
-      this.isRolling = true;
-      this.submitting = true;
+interface DuelCardEntry {
+  card?: DuelCard;
+}
 
-      this.$emit('roll');
-    },
-    itemEffectLabel(item) {
-      if (!item?.effect) return '';
-      const type = item.effect.bonus_type || '';
-      const value = item.effect.bonus_value ?? 0;
-      switch (type) {
-        case 'roll_bonus': return `+${value} to roll`;
-        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
-        case 'stat_boost': return `+${value} ${item.effect.stat || 'stat'}`;
-        case 'heal_die': return 'Recover a lost die';
-        case 'shield_negative': return 'Block negative effects';
-        case 'debuff_roll': return `${value} to opponent roll`;
-        case 'increase_difficulty': return `+${Math.abs(value)} opponent difficulty`;
-        case 'peek_cards': return 'Peek at opponent cards';
-        case 'steal_stat': return `Steal ${value} stat point`;
-        default: return item.description || 'Use this item';
+interface DuelCardResult {
+  card?: DuelCard;
+  difficulty?: number;
+  success?: boolean;
+  effects?: Record<string, number>;
+}
+
+interface RollData {
+  cards?: DuelCardResult[];
+  card?: DuelCard;
+  difficulty?: number;
+  success?: boolean;
+  effects?: Record<string, number>;
+  combined_effects?: Record<string, number>;
+  ability_effects?: string[];
+  rerolled?: boolean;
+}
+
+interface Ability {
+  name: string;
+  description: string;
+}
+
+interface PeekedCard {
+  title: string;
+  difficulty: number;
+}
+
+interface PlayerItem {
+  id: number;
+  item?: DuelCard;
+  is_used?: boolean;
+  used_round?: number;
+  description?: string;
+}
+
+// diceCount and needsContinue are part of the component's prop contract (passed by
+// DuelBoard) but are not referenced in this component's script or template.
+const {
+  cards = [],
+  card = undefined,
+  playerName = "Player",
+  canRoll = false,
+  rollData = undefined,
+  ability = undefined,
+  abilityUses = 0,
+  abilityActivated = false,
+  activatingAbility = false,
+  peekedCards = undefined,
+  rerolling = false,
+  use3dDice = false,
+  playerItems = [],
+  itemDecided = false,
+  hideRollButton = false,
+  hideRerollSection = false,
+  currentRound = 0,
+} = defineProps<{
+  cards?: DuelCardEntry[];
+  card?: DuelCard;
+  playerName?: string;
+  diceCount?: number;
+  canRoll?: boolean;
+  rollData?: RollData;
+  ability?: Ability;
+  abilityUses?: number;
+  abilityActivated?: boolean;
+  activatingAbility?: boolean;
+  peekedCards?: PeekedCard[];
+  rerolling?: boolean;
+  needsContinue?: boolean;
+  use3dDice?: boolean;
+  playerItems?: PlayerItem[];
+  itemDecided?: boolean;
+  hideRollButton?: boolean;
+  hideRerollSection?: boolean;
+  currentRound?: number;
+}>();
+
+const emit = defineEmits<{
+  roll: [];
+  "useAbility": [];
+  reroll: [];
+  continue: [];
+  "useItem": [itemId: number];
+  "skipItem": [];
+}>();
+
+const isRolling = ref(false);
+const submitting = ref(false);
+const choosingItem = ref(false);
+
+const hasRolled = computed<boolean>(() => rollData !== undefined);
+
+const isRerollAbility = computed<boolean>(() => {
+  if (!ability) {
+    return false;
+  }
+  return ["rally", "gamble"].includes(ability.name);
+});
+
+const showRerollOption = computed<boolean>(() => hasRolled.value && isRerollAbility.value
+  && abilityUses > 0 && !abilityActivated && !rollData?.rerolled);
+
+const rerollLabel = computed<string>(() => {
+  if (!ability) {
+    return "";
+  }
+  if (ability.name === "rally") {
+    return "Reroll lowest die?";
+  }
+  if (ability.name === "gamble") {
+    return "Reroll all dice?";
+  }
+  return ability.description;
+});
+
+const displayCards = computed<DuelCard[]>(() => {
+  if (cards && cards.length > 0) {
+    return cards.map((entry) => entry.card ?? (entry as DuelCard));
+  }
+  if (card) {
+    return [card];
+  }
+  // Fall back to cards from rollData (for opponent view)
+  if (rollData?.cards) {
+    return rollData.cards.map((cr) => cr.card).filter((value): value is DuelCard => Boolean(value));
+  }
+  if (rollData?.card) {
+    return [rollData.card];
+  }
+  return [];
+});
+
+const cardResults = computed<DuelCardResult[]>(() => {
+  if (!rollData) {
+    return [];
+  }
+  if (rollData.cards) {
+    return rollData.cards;
+  }
+  if (rollData.card) {
+    return [{
+      card: rollData.card,
+      difficulty: rollData.difficulty,
+      success: rollData.success,
+      effects: rollData.effects || {},
+    }];
+  }
+  return [];
+});
+
+const cardResultMap = computed<Record<number, DuelCardResult>>(() => {
+  if (!hasRolled.value || cardResults.value.length === 0) {
+    return {};
+  }
+  const map: Record<number, DuelCardResult> = Object.fromEntries(cardResults.value.entries());
+  return map;
+});
+
+const cardEffectsMap = computed<Record<number, Record<string, number>>>(() => {
+  if (!hasRolled.value || cardResults.value.length === 0) {
+    return {};
+  }
+  const map: Record<number, Record<string, number>> = {};
+  for (const [index, cr] of cardResults.value.entries()) {
+    if (cr.effects && Object.keys(cr.effects).length > 0) {
+      map[index] = cr.effects;
+    }
+  }
+  return map;
+});
+
+const combinedEffects = computed<Record<string, number>>(() => {
+  if (!rollData) {
+    return {};
+  }
+  if (rollData.combined_effects) {
+    return rollData.combined_effects;
+  }
+  if (rollData.effects) {
+    return rollData.effects;
+  }
+  return {};
+});
+
+const usableItems = computed<PlayerItem[]>(() => (playerItems || []).filter((pi) => !pi.is_used && !(pi.used_round && pi.used_round === currentRound)));
+
+function startRolling(): void {
+  if (isRolling.value || hasRolled.value || submitting.value) {
+    return;
+  }
+
+  if (!use3dDice) {
+    playSound("dice");
+  }
+
+  isRolling.value = true;
+  submitting.value = true;
+
+  emit("roll");
+}
+
+function itemEffectLabel(item: DuelCard | undefined): string {
+  if (!item?.effect) {
+    return "";
+  }
+  const type = item.effect.bonus_type || "";
+  const value = item.effect.bonus_value ?? 0;
+  switch (type) {
+    case "roll_bonus": {
+      return `+${value} to roll`;
+    }
+    case "difficulty_reduction": {
+      return `-${Math.abs(value)} difficulty`;
+    }
+    case "stat_boost": {
+      return `+${value} ${item.effect?.stat || "stat"}`;
+    }
+    case "heal_die": {
+      return "Recover a lost die";
+    }
+    case "shield_negative": {
+      return "Block negative effects";
+    }
+    case "debuff_roll": {
+      return `${value} to opponent roll`;
+    }
+    case "increase_difficulty": {
+      return `+${Math.abs(value)} opponent difficulty`;
+    }
+    case "peek_cards": {
+      return "Peek at opponent cards";
+    }
+    case "steal_stat": {
+      return `Steal ${value} stat point`;
+    }
+    default: {
+      return item.description || "Use this item";
+    }
+  }
+}
+
+watch(
+  () => rollData,
+  (value) => {
+    if (!value) {
+    	return;
+    }
+
+    isRolling.value = false;
+    nextTick(() => {
+      const anySuccess = (value.cards || []).some((cr) => cr.success) || value.success;
+      if (anySuccess) {
+        playSound("win");
+      } else {
+        playSound("fail");
       }
-    },
+    });
   },
-  watch: {
-    rollData(val) {
-      if (val) {
-        this.isRolling = false;
-        this.$nextTick(() => {
-          const anySuccess = (val.cards || []).some(c => c.success) || val.success;
-          if (anySuccess) {
-            playSound('win');
-          } else {
-            playSound('fail');
-          }
-        });
-      }
-    },
-  },
-};
+);
 </script>
 
 <style scoped>

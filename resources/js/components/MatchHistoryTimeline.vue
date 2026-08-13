@@ -2,12 +2,12 @@
   <div class="timeline-section">
     <!-- Filters -->
     <div class="filter-bar">
-      <select v-model="filterType" @change="resetAndFetch" class="filter-select">
+      <select v-model="filterType" class="filter-select" @change="resetAndFetch">
         <option value="">All Types</option>
         <option value="cooperative">Classic</option>
         <option value="duel">Duel</option>
       </select>
-      <select v-model="filterMode" @change="resetAndFetch" class="filter-select">
+      <select v-model="filterMode" class="filter-select" @change="resetAndFetch">
         <option value="">All Modes</option>
         <option value="single">Solo</option>
         <option value="pass_and_play">Local</option>
@@ -52,99 +52,142 @@
         </div>
       </template>
 
-      <button v-if="hasMore" class="load-more-btn" @click="loadNext" :disabled="loading">
+      <button v-if="hasMore" class="load-more-btn" :disabled="loading" @click="loadNext">
         {{ loading ? 'Loading...' : 'Load More' }}
       </button>
     </template>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios from "axios";
 
-export default {
-  name: 'MatchHistoryTimeline',
-  data() {
-    return {
-      entries: [],
-      loading: false,
-      currentPage: 1,
-      lastPage: 1,
-      filterType: '',
-      filterMode: '',
-    };
-  },
-  computed: {
-    hasMore() {
-      return this.currentPage < this.lastPage;
-    },
-    groupedEntries() {
-      const groups = {};
-      for (const entry of this.entries) {
-        const date = entry.played_at.substring(0, 10);
-        if (!groups[date]) groups[date] = [];
-        groups[date].push(entry);
-      }
-      return groups;
-    },
-  },
-  async mounted() {
-    await this.fetchPage();
-  },
-  methods: {
-    formatDuration(minutes) {
-      const m = Math.floor(minutes);
-      const s = Math.round((minutes - m) * 60);
-      if (m === 0) return `${s}s`;
-      if (s === 0) return `${m}m`;
-      return `${m}m ${s}s`;
-    },
-    async fetchPage() {
-      if (this.loading) return;
-      this.loading = true;
-      try {
-        const params = { page: this.currentPage };
-        if (this.filterType) params.game_type = this.filterType;
-        if (this.filterMode) params.game_mode = this.filterMode;
-        const res = await axios.get('/api/games/timeline', { params });
-        this.entries.push(...res.data.data);
-        this.lastPage = res.data.last_page;
-      } catch {}
-      this.loading = false;
-    },
-    async resetAndFetch() {
-      this.entries = [];
-      this.currentPage = 1;
-      this.lastPage = 1;
-      await this.fetchPage();
-    },
-    async loadNext() {
-      if (this.hasMore && !this.loading) {
-        this.currentPage++;
-        await this.fetchPage();
-      }
-    },
-    formatDateHeader(dateStr) {
-      const date = new Date(dateStr + 'T00:00:00');
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
+interface MatchPlayer {
+  character_image?: string;
+  character_name?: string;
+  username?: string;
+}
 
-      if (date.getTime() === today.getTime()) return 'Today';
-      if (date.getTime() === yesterday.getTime()) return 'Yesterday';
-      return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
-    },
-    outcomeLabel(outcome) {
-      const labels = { win: 'Victory', loss: 'Defeat', draw: 'Draw', cancelled: 'Cancelled' };
-      return labels[outcome] || outcome;
-    },
-    modeLabel(mode) {
-      const labels = { single: 'Solo', pass_and_play: 'Local', online: 'Online' };
-      return labels[mode] || mode;
-    },
-  },
-};
+interface RotatingEvent {
+  name: string;
+}
+
+interface MatchEntry {
+  id: number;
+  outcome: string;
+  game_type: string;
+  game_mode: string;
+  rotating_event?: RotatingEvent;
+  players: MatchPlayer[];
+  score: number;
+  duration_minutes?: number;
+  played_at: string;
+}
+
+interface TimelineResponse {
+  data: MatchEntry[];
+  last_page: number;
+}
+
+const entries = ref<MatchEntry[]>([]);
+const loading = ref(false);
+const currentPage = ref(1);
+const lastPage = ref(1);
+const filterType = ref("");
+const filterMode = ref("");
+
+const hasMore = computed(() => currentPage.value < lastPage.value);
+
+const groupedEntries = computed(() => {
+  const groups: Record<string, MatchEntry[]> = {};
+  for (const entry of entries.value) {
+    const date = entry.played_at.slice(0, 10);
+    groups[date] ??= [];
+    groups[date].push(entry);
+  }
+  return groups;
+});
+
+function formatDuration(minutes: number): string {
+  const wholeMinutes = Math.floor(minutes);
+  const seconds = Math.round((minutes - wholeMinutes) * 60);
+  if (wholeMinutes === 0) {
+    return `${seconds}s`;
+  }
+  if (seconds === 0) {
+    return `${wholeMinutes}m`;
+  }
+  return `${wholeMinutes}m ${seconds}s`;
+}
+
+async function fetchPage(): Promise<void> {
+  if (loading.value) {
+    return;
+  }
+  loading.value = true;
+  try {
+    const parameters: Record<string, string | number> = { page: currentPage.value };
+    if (filterType.value) {
+      parameters.game_type = filterType.value;
+    }
+    if (filterMode.value) {
+      parameters.game_mode = filterMode.value;
+    }
+    const response = await axios.get<TimelineResponse>("/api/games/timeline", { params: parameters });
+    entries.value.push(...response.data.data);
+    lastPage.value = response.data.last_page;
+  } catch {
+    // Ignore fetch failures; the list simply stays as-is.
+  }
+  loading.value = false;
+}
+
+async function resetAndFetch(): Promise<void> {
+  entries.value = [];
+  currentPage.value = 1;
+  lastPage.value = 1;
+  await fetchPage();
+}
+
+async function loadNext(): Promise<void> {
+  if (!hasMore.value || loading.value) {
+  	return;
+  }
+
+  currentPage.value++;
+  await fetchPage();
+}
+
+function formatDateHeader(dateString: string): string {
+  const date = new Date(`${dateString}T00:00:00`);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  if (date.getTime() === today.getTime()) {
+    return "Today";
+  }
+  if (date.getTime() === yesterday.getTime()) {
+    return "Yesterday";
+  }
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric" });
+}
+
+function outcomeLabel(outcome: string): string {
+  const labels: Record<string, string> = { win: "Victory", loss: "Defeat", draw: "Draw", cancelled: "Cancelled" };
+  return labels[outcome] || outcome;
+}
+
+function modeLabel(mode: string): string {
+  const labels: Record<string, string> = { single: "Solo", pass_and_play: "Local", online: "Online" };
+  return labels[mode] || mode;
+}
+
+onMounted(async () => {
+  await fetchPage();
+});
 </script>
 
 <style scoped>

@@ -29,17 +29,17 @@
     <template v-if="tab !== 'rewards'">
       <!-- Filters -->
       <div class="filters-row">
-        <select v-model="metric" @change="onMetricChange" class="filter-select">
+        <select v-model="metric" class="filter-select" @change="onMetricChange">
           <option value="wins">Wins</option>
           <option value="score">Score</option>
           <option value="xp">XP</option>
           <option value="elo">ELO</option>
         </select>
-        <select v-model="seasonId" @change="fetchData()" class="filter-select" v-if="metric !== 'elo' && metric !== 'xp'">
+        <select v-if="metric !== 'elo' && metric !== 'xp'" v-model="seasonId" class="filter-select" @change="fetchData()">
           <option :value="null">All Seasons</option>
           <option v-for="s in seasons" :key="s.id" :value="s.id">{{ s.name }}</option>
         </select>
-        <select v-model="gameType" @change="fetchData()" class="filter-select" v-if="metric === 'wins'">
+        <select v-if="metric === 'wins'" v-model="gameType" class="filter-select" @change="fetchData()">
           <option :value="null">All Types</option>
           <option value="cooperative">Cooperative</option>
           <option value="duel">Duel</option>
@@ -57,9 +57,9 @@
         <div
           v-for="entry in entries"
           :key="entry.user_id"
+          :ref="entry.is_current_user ? 'currentUserRow' : undefined"
           class="lb-row"
           :class="{ 'lb-current': entry.is_current_user }"
-          :ref="entry.is_current_user ? 'currentUserRow' : undefined"
         >
           <span class="lb-rank">{{ entry.rank }}</span>
           <span class="lb-name lb-clickable" @click="showProfileUserId = entry.user_id">
@@ -86,7 +86,7 @@
     <!-- Ranking Rewards view -->
     <template v-if="tab === 'rewards'">
       <div v-if="loadingRewards" class="lb-loading">Loading rewards...</div>
-      <div v-else-if="!Object.keys(rewardsByMetric).length" class="lb-empty">No ranking rewards set for this season.</div>
+      <div v-else-if="Object.keys(rewardsByMetric).length === 0" class="lb-empty">No ranking rewards set for this season.</div>
       <div v-else>
         <!-- Metric sub-tabs -->
         <div class="metric-tabs">
@@ -119,208 +119,292 @@
       </div>
     </template>
 
-    <PlayerProfile v-if="showProfileUserId" :userId="showProfileUserId" @close="showProfileUserId = null" />
+    <PlayerProfile v-if="showProfileUserId" :user-id="showProfileUserId" @close="showProfileUserId = null" />
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import HintBubble from './HintBubble.vue';
-import PlayerProfile from './PlayerProfile.vue';
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import axios from "axios";
+import HintBubble from "./HintBubble.vue";
+import PlayerProfile from "./PlayerProfile.vue";
 
-export default {
-  name: 'LeaderboardPage',
-  components: { HintBubble, PlayerProfile },
-  data() {
-    return {
-      tab: 'global',
-      showProfileUserId: null,
-      metric: 'elo',
-      seasonId: null,
-      gameType: null,
-      entries: [],
-      seasons: [],
-      loading: true,
-      currentUserVisible: true,
-      loadingRewards: false,
-      rewardsByMetric: {},
-      rewardMetric: 'elo',
-    };
-  },
-  computed: {
-    currentUserEntry() {
-      return this.entries.find(e => e.is_current_user) || null;
-    },
-    rewardMetrics() {
-      return Object.keys(this.rewardsByMetric);
-    },
-    activeSeason() {
-      const now = new Date();
-      return this.seasons.find(s => new Date(s.starts_at) <= now && new Date(s.ends_at) >= now) || null;
-    },
-    seasonPercent() {
-      if (!this.activeSeason) return 0;
-      const start = new Date(this.activeSeason.starts_at).getTime();
-      const end = new Date(this.activeSeason.ends_at).getTime();
-      const now = Date.now();
-      return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
-    },
-    seasonTimeLeft() {
-      if (!this.activeSeason) return '';
-      const end = new Date(this.activeSeason.ends_at).getTime();
-      const diff = end - Date.now();
-      if (diff <= 0) return 'Ended';
-      const days = Math.floor(diff / 86400000);
-      if (days > 1) return days + ' days left';
-      const hours = Math.floor(diff / 3600000);
-      return hours + ' hours left';
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/seasons');
-      this.seasons = res.data;
-    } catch {}
-    this.fetchData();
-  },
-  beforeUnmount() {
-    if (this._observer) this._observer.disconnect();
-  },
-  methods: {
-    onMetricChange() {
-      if (this.metric === 'score') {
-        if (this.activeSeason) {
-          this.seasonId = this.activeSeason.id;
-        }
-        this.gameType = 'cooperative';
-      } else if (this.metric === 'elo' || this.metric === 'xp') {
-        this.seasonId = null;
-        this.gameType = null;
-      }
-      this.fetchData();
-    },
-    async fetchData() {
-      this.loading = true;
-      try {
-        const params = { metric: this.metric };
-        if (this.seasonId) params.season_id = this.seasonId;
-        if (this.gameType) params.game_type = this.gameType;
+interface LeaderboardEntry {
+  user_id: number;
+  rank: number;
+  username: string;
+  level: number;
+  value: number;
+  is_current_user: boolean;
+}
 
-        const url = this.tab === 'friends' ? '/api/leaderboards/friends' : '/api/leaderboards/global';
-        const res = await axios.get(url, { params });
-        this.entries = res.data;
-      } catch {}
-      this.loading = false;
-      this.$nextTick(() => this.setupVisibilityObserver());
-    },
-    async fetchRewards() {
-      if (!this.activeSeason) return;
-      this.loadingRewards = true;
-      try {
-        const res = await axios.get(`/api/seasons/${this.activeSeason.id}`);
-        const rewards = res.data.season?.rewards || [];
-        this.rewardsByMetric = this.buildGroupedTiers(rewards);
-        const metrics = Object.keys(this.rewardsByMetric);
-        if (metrics.length && !metrics.includes(this.rewardMetric)) {
-          this.rewardMetric = metrics[0];
-        }
-      } catch {}
-      this.loadingRewards = false;
-    },
-    buildGroupedTiers(rewards) {
-      if (!rewards.length) return {};
+interface Season {
+  id: number;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+}
 
-      // Group by metric first
-      const byMetric = {};
-      for (const r of rewards) {
-        const m = r.metric || 'elo';
-        if (!byMetric[m]) byMetric[m] = [];
-        byMetric[m].push(r);
-      }
+interface RewardCharacter {
+  name?: string;
+}
 
-      // Build tiers per metric
-      const result = {};
-      for (const [metric, items] of Object.entries(byMetric)) {
-        items.sort((a, b) => a.placement - b.placement);
-        result[metric] = this.buildTiers(items);
-      }
-      return result;
-    },
-    buildTiers(rewards) {
-      const tiers = [];
-      let i = 0;
-      while (i < rewards.length) {
-        const current = rewards[i];
-        let end = i;
-        while (
-          end + 1 < rewards.length &&
-          rewards[end + 1].reward_xp === current.reward_xp &&
-          rewards[end + 1].reward_coins === current.reward_coins &&
-          rewards[end + 1].reward_character_id === current.reward_character_id &&
-          rewards[end + 1].reward_title === current.reward_title
-        ) {
-          end++;
-        }
+interface Reward {
+  metric?: string;
+  placement: number;
+  reward_xp?: number;
+  reward_coins?: number;
+  reward_character_id?: number;
+  reward_title?: string;
+  reward_character?: RewardCharacter;
+}
 
-        const startPlace = current.placement;
-        const endPlace = rewards[end].placement;
-        const label = startPlace === endPlace
-          ? this.ordinal(startPlace)
-          : `${this.ordinal(startPlace)} - ${this.ordinal(endPlace)}`;
+interface RewardTier {
+  label: string;
+  xp: number;
+  coins: number;
+  character: string | undefined;
+  title: string | undefined;
+  tierClass: string;
+}
 
-        let tierClass = '';
-        if (startPlace === 1) tierClass = 'reward-gold';
-        else if (startPlace <= 3) tierClass = 'reward-silver';
-        else if (startPlace <= 10) tierClass = 'reward-bronze';
+interface LeaderboardParameters {
+  metric: string;
+  season_id?: number;
+  game_type?: string;
+}
 
-        tiers.push({
-          label,
-          xp: current.reward_xp || 0,
-          coins: current.reward_coins || 0,
-          character: current.reward_character?.name || null,
-          title: current.reward_title || null,
-          tierClass,
-        });
+const tab = ref("global");
+const showProfileUserId = ref<number | undefined>(undefined);
+const metric = ref("elo");
+const seasonId = ref<number | undefined>(undefined);
+const gameType = ref<string | undefined>(undefined);
+const entries = ref<LeaderboardEntry[]>([]);
+const seasons = ref<Season[]>([]);
+const loading = ref(true);
+const currentUserVisible = ref(true);
+const loadingRewards = ref(false);
+const rewardsByMetric = ref<Record<string, RewardTier[]>>({});
+const rewardMetric = ref("elo");
 
-        i = end + 1;
-      }
-      return tiers;
+const currentUserRow = useTemplateRef<HTMLElement | HTMLElement[]>("currentUserRow");
+
+const observer = ref<IntersectionObserver | undefined>(undefined);
+
+const currentUserEntry = computed<LeaderboardEntry | undefined>(() => entries.value.find((entry) => entry.is_current_user));
+
+const rewardMetrics = computed<string[]>(() => Object.keys(rewardsByMetric.value));
+
+const activeSeason = computed<Season | undefined>(() => {
+  const now = new Date();
+  return seasons.value.find((season) => new Date(season.starts_at) <= now && new Date(season.ends_at) >= now);
+});
+
+const seasonPercent = computed<number>(() => {
+  if (!activeSeason.value) {
+    return 0;
+  }
+  const start = new Date(activeSeason.value.starts_at).getTime();
+  const end = new Date(activeSeason.value.ends_at).getTime();
+  const now = Date.now();
+  return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
+});
+
+const seasonTimeLeft = computed<string>(() => {
+  if (!activeSeason.value) {
+    return "";
+  }
+  const end = new Date(activeSeason.value.ends_at).getTime();
+  const diff = end - Date.now();
+  if (diff <= 0) {
+    return "Ended";
+  }
+  const days = Math.floor(diff / 86_400_000);
+  if (days > 1) {
+    return `${days} days left`;
+  }
+  const hours = Math.floor(diff / 3_600_000);
+  return `${hours} hours left`;
+});
+
+onMounted(async () => {
+  try {
+    const response = await axios.get("/api/seasons");
+    seasons.value = response.data;
+  } catch {
+    // Ignore season fetch failures; leaderboard still loads.
+  }
+  fetchData();
+});
+
+onBeforeUnmount(() => {
+  observer.value?.disconnect();
+});
+
+function onMetricChange(): void {
+  if (metric.value === "score") {
+    if (activeSeason.value) {
+      seasonId.value = activeSeason.value.id;
+    }
+    gameType.value = "cooperative";
+  } else if (metric.value === "elo" || metric.value === "xp") {
+    seasonId.value = undefined;
+    gameType.value = undefined;
+  }
+  fetchData();
+}
+
+async function fetchData(): Promise<void> {
+  loading.value = true;
+  try {
+    const parameters: LeaderboardParameters = { metric: metric.value };
+    if (seasonId.value) {
+      parameters.season_id = seasonId.value;
+    }
+    if (gameType.value) {
+      parameters.game_type = gameType.value;
+    }
+
+    const url = tab.value === "friends" ? "/api/leaderboards/friends" : "/api/leaderboards/global";
+    const response = await axios.get(url, { params: parameters });
+    entries.value = response.data;
+  } catch {
+    // Ignore fetch failures; empty state handles it.
+  }
+  loading.value = false;
+  nextTick(() => setupVisibilityObserver());
+}
+
+async function fetchRewards(): Promise<void> {
+  if (!activeSeason.value) {
+    return;
+  }
+  loadingRewards.value = true;
+  try {
+    const response = await axios.get(`/api/seasons/${activeSeason.value.id}`);
+    const rewards = response.data.season?.rewards || [];
+    rewardsByMetric.value = buildGroupedTiers(rewards);
+    const metrics = Object.keys(rewardsByMetric.value);
+    if (metrics.length > 0 && !metrics.includes(rewardMetric.value)) {
+      rewardMetric.value = metrics[0];
+    }
+  } catch {
+    // Ignore reward fetch failures; empty state handles it.
+  }
+  loadingRewards.value = false;
+}
+
+function buildGroupedTiers(rewards: Reward[]): Record<string, RewardTier[]> {
+  if (rewards.length === 0) {
+    return {};
+  }
+
+  // Group by metric first
+  const byMetric: Record<string, Reward[]> = {};
+  for (const reward of rewards) {
+    const key = reward.metric || "elo";
+    if (!Object.hasOwn(byMetric, key)) {
+      byMetric[key] = [];
+    }
+    byMetric[key].push(reward);
+  }
+
+  // Build tiers per metric
+  const result: Record<string, RewardTier[]> = {};
+  for (const [key, items] of Object.entries(byMetric)) {
+    const sorted = items.toSorted((a, b) => a.placement - b.placement);
+    result[key] = buildTiers(sorted);
+  }
+  return result;
+}
+
+function buildTiers(rewards: Reward[]): RewardTier[] {
+  const tiers: RewardTier[] = [];
+  let index = 0;
+  while (index < rewards.length) {
+    const current = rewards[index];
+    let end = index;
+    while (
+      end + 1 < rewards.length
+      && rewards[end + 1].reward_xp === current.reward_xp
+      && rewards[end + 1].reward_coins === current.reward_coins
+      && rewards[end + 1].reward_character_id === current.reward_character_id
+      && rewards[end + 1].reward_title === current.reward_title
+    ) {
+      end++;
+    }
+
+    const startPlace = current.placement;
+    const endPlace = rewards[end].placement;
+    const label = startPlace === endPlace
+      ? ordinal(startPlace)
+      : `${ordinal(startPlace)} - ${ordinal(endPlace)}`;
+
+    let tierClass = "";
+    if (startPlace === 1) {
+      tierClass = "reward-gold";
+    } else if (startPlace <= 3) {
+      tierClass = "reward-silver";
+    } else if (startPlace <= 10) {
+      tierClass = "reward-bronze";
+    }
+
+    tiers.push({
+      label,
+      xp: current.reward_xp || 0,
+      coins: current.reward_coins || 0,
+      character: current.reward_character?.name ?? undefined,
+      title: current.reward_title ?? undefined,
+      tierClass,
+    });
+
+    index = end + 1;
+  }
+  return tiers;
+}
+
+function metricLabel(key: string): string {
+  const labels: Record<string, string> = { elo: "ELO Rating", score: "Highest Score", wins: "Most Wins" };
+  return labels[key] || key;
+}
+
+function ordinal(value: number): string {
+  const suffixes = ["th", "st", "nd", "rd"];
+  const remainder = value % 100;
+  return value + (suffixes[(remainder - 20) % 10] || suffixes[remainder] || suffixes[0]);
+}
+
+function setupVisibilityObserver(): void {
+  observer.value?.disconnect();
+  const rowReference = currentUserRow.value;
+  const row = Array.isArray(rowReference) ? rowReference[0] : rowReference;
+  if (!row) {
+    currentUserVisible.value = !currentUserEntry.value;
+    return;
+  }
+  observer.value = new IntersectionObserver(
+    ([entry]) => {
+      currentUserVisible.value = entry.isIntersecting;
     },
-    metricLabel(m) {
-      const labels = { elo: 'ELO Rating', score: 'Highest Score', wins: 'Most Wins' };
-      return labels[m] || m;
-    },
-    ordinal(n) {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    },
-    setupVisibilityObserver() {
-      if (this._observer) this._observer.disconnect();
-      const row = Array.isArray(this.$refs.currentUserRow)
-        ? this.$refs.currentUserRow[0]
-        : this.$refs.currentUserRow;
-      if (!row) {
-        this.currentUserVisible = !this.currentUserEntry;
-        return;
-      }
-      this._observer = new IntersectionObserver(
-        ([entry]) => { this.currentUserVisible = entry.isIntersecting; },
-        { threshold: 0.5 }
-      );
-      this._observer.observe(row);
-    },
-    formatValue(val) {
-      if (val >= 1000) return (val / 1000).toFixed(1) + 'k';
-      return val;
-    },
-    formatDate(dateStr) {
-      if (!dateStr) return '';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    },
-  },
-};
+    { threshold: 0.5 },
+  );
+  observer.value.observe(row);
+}
+
+function formatValue(value: number): number | string {
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(1)}k`;
+  }
+  return value;
+}
+
+function formatDate(dateString: string): string {
+  if (!dateString) {
+    return "";
+  }
+  const date = new Date(dateString);
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
 </script>
 
 <style scoped>

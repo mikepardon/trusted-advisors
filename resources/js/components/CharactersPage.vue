@@ -29,7 +29,7 @@
     <!-- Dice Tab -->
     <div v-if="collectionTab === 'dice'">
       <div v-if="diceLoading" class="loading-text">Loading dice...</div>
-      <div v-else-if="!myDice.length" class="loading-text">No dice themes available yet.</div>
+      <div v-else-if="myDice.length === 0" class="loading-text">No dice themes available yet.</div>
       <div v-else class="dice-grid">
         <div
           v-for="d in myDice"
@@ -58,7 +58,7 @@
     <!-- Styles Tab -->
     <div v-if="collectionTab === 'styles'">
       <div v-if="stylesLoading" class="loading-text">Loading styles...</div>
-      <div v-else-if="!myStyles.length" class="loading-text">No kingdom styles available yet.</div>
+      <div v-else-if="myStyles.length === 0" class="loading-text">No kingdom styles available yet.</div>
       <div v-else class="ks-grid">
         <div
           v-for="s in myStyles"
@@ -90,7 +90,7 @@
     <AdvisorDetailModal
       v-if="selectedAdvisor"
       :advisor="selectedAdvisor"
-      @close="selectedAdvisor = null"
+      @close="selectedAdvisor = undefined"
       @level-up="openLevelUp"
       @updated="reloadAdvisors"
     />
@@ -99,7 +99,7 @@
     <LevelUpChoice
       v-if="levelUpAdvisor"
       :advisor="levelUpAdvisor"
-      @close="levelUpAdvisor = null"
+      @close="levelUpAdvisor = undefined"
       @chosen="onUpgradeChosen"
     />
 
@@ -108,171 +108,258 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { createDddiceInstance, isDddiceAvailable } from '../dddiceService';
-import { useToast } from '../stores/toast';
-import AdvisorManagement from './AdvisorManagement.vue';
-import AdvisorDetailModal from './AdvisorDetailModal.vue';
-import LevelUpChoice from './LevelUpChoice.vue';
-import '../styles/kingdom-styles.css';
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import type { CSSProperties } from "vue";
+import axios, { isAxiosError } from "axios";
+import { createDddiceInstance, isDddiceAvailable } from "../dddice-service";
+import { useToast } from "../stores/toast";
+import AdvisorManagement from "./AdvisorManagement.vue";
+import AdvisorDetailModal from "./AdvisorDetailModal.vue";
+import LevelUpChoice from "./LevelUpChoice.vue";
+import "../styles/kingdom-styles.css";
 
-export default {
-  name: 'CollectionPage',
-  components: { AdvisorManagement, AdvisorDetailModal, LevelUpChoice },
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return {
-      myAdvisors: [],
-      advisorsLoading: true,
-      selectedAdvisor: null,
-      levelUpAdvisor: null,
-      myDice: [],
-      diceLoading: true,
-      myStyles: [],
-      stylesLoading: true,
-      collectionTab: 'advisors',
-      activatingDice: false,
-      activatingStyle: false,
-      diceInstance: null,
-    };
-  },
-  computed: {
-    collectionTabs() {
-      const tabs = [];
-      const advisorCount = this.myAdvisors.length;
-      if (advisorCount > 0 || this.advisorsLoading) {
-        tabs.push({ key: 'advisors', icon: '\u{1F9D9}', label: 'Advisors', count: advisorCount });
-      }
-      const diceCount = this.myDice.length;
-      if (diceCount > 0 || this.diceLoading) {
-        tabs.push({ key: 'dice', icon: '\u{1F3B2}', label: 'Dice', count: diceCount });
-      }
-      const styleCount = this.myStyles.length;
-      if (styleCount > 0 || this.stylesLoading) {
-        tabs.push({ key: 'styles', icon: '\u{1F3F0}', label: 'Styles', count: styleCount });
-      }
-      return tabs;
-    },
-  },
-  async mounted() {
-    const [advisorRes, diceRes, ksRes] = await Promise.allSettled([
-      axios.get('/api/my-advisors'),
-      axios.get('/api/my-dice'),
-      axios.get('/api/my-kingdom-styles'),
-    ]);
-    this.myAdvisors = advisorRes.status === 'fulfilled' ? advisorRes.value.data : [];
-    this.advisorsLoading = false;
-    this.myDice = diceRes.status === 'fulfilled' ? diceRes.value.data : [];
-    this.diceLoading = false;
-    this.myStyles = ksRes.status === 'fulfilled' ? ksRes.value.data : [];
-    this.stylesLoading = false;
-    this.initDiceCanvas();
-  },
-  methods: {
-    ksCardStyle(style) {
-      const s = {};
-      if (style.css_vars) {
-        const cv = style.css_vars;
-        if (cv.border_color) s['--ks-border-color'] = cv.border_color;
-        if (cv.border_glow) s['--ks-border-glow'] = cv.border_glow;
-        if (cv.border_color_rgb) s['--ks-border-color-rgb'] = cv.border_color_rgb;
-        if (cv.bg_tint) s['--ks-bg-tint'] = cv.bg_tint;
-        if (cv.bg_color) s['--ks-bg-color'] = cv.bg_color;
-        if (cv.name_accent) s['--ks-name-accent'] = cv.name_accent;
-        if (cv.total_accent) s['--ks-total-accent'] = cv.total_accent;
-        if (cv.bar_safe) s['--ks-bar-safe'] = cv.bar_safe;
-        if (cv.bar_caution) s['--ks-bar-caution'] = cv.bar_caution;
-      }
-      if (style.background_image_url) {
-        s.backgroundImage = `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${style.background_image_url})`;
-        s.backgroundSize = 'cover';
-        s.backgroundPosition = 'center';
-      }
-      return s;
-    },
-    async activateStyle(style) {
-      this.activatingStyle = true;
-      try {
-        const res = await axios.post(`/api/my-kingdom-styles/${style.id}/activate`);
-        this.myStyles = res.data;
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to activate kingdom style.');
-      }
-      this.activatingStyle = false;
-    },
-    openAdvisorDetail(advisor) {
-      this.selectedAdvisor = advisor;
-    },
-    openLevelUp(advisor) {
-      this.selectedAdvisor = null;
-      this.levelUpAdvisor = advisor;
-    },
-    async onUpgradeChosen() {
-      this.levelUpAdvisor = null;
-      await this.reloadAdvisors();
-    },
-    async reloadAdvisors() {
-      try {
-        const res = await axios.get('/api/my-advisors');
-        this.myAdvisors = res.data;
-        // If we had a selected advisor, refresh it
-        if (this.selectedAdvisor) {
-          this.selectedAdvisor = this.myAdvisors.find(a => a.id === this.selectedAdvisor.id) || null;
-        }
-      } catch (e) {
-        // silent
-      }
-    },
-    async activateDice(dice) {
-      this.activatingDice = true;
-      try {
-        const res = await axios.post(`/api/my-dice/${dice.id}/activate`);
-        this.myDice = res.data;
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to activate dice theme.');
-      }
-      this.activatingDice = false;
-    },
-    async initDiceCanvas() {
-      if (!isDddiceAvailable()) return;
-      const canvas = this.$refs.diceCanvas;
-      if (!canvas) return;
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      this.diceInstance = createDddiceInstance();
-      await this.diceInstance.init(canvas);
-      this._onResize = () => {
-        if (this.$refs.diceCanvas && this.diceInstance) {
-          this.$refs.diceCanvas.width = window.innerWidth;
-          this.$refs.diceCanvas.height = window.innerHeight;
-          this.diceInstance.resize(window.innerWidth, window.innerHeight);
-        }
-      };
-      window.addEventListener('resize', this._onResize);
-    },
-    async testDice(dice) {
-      if (!this.diceInstance?.isReady()) return;
-      const slug = dice.slug;
-      this.diceInstance.roll([
-        { theme: slug, value: Math.ceil(Math.random() * 6) },
-        { theme: slug, value: Math.ceil(Math.random() * 6) },
-        { theme: slug, value: Math.ceil(Math.random() * 6) },
-      ]);
-    },
-  },
-  beforeUnmount() {
-    if (this.diceInstance) {
-      this.diceInstance.destroy();
-      this.diceInstance = null;
+interface KingdomStyleCssVariables {
+  border_color?: string;
+  border_glow?: string;
+  border_color_rgb?: string;
+  border_anim?: string;
+  bg_tint?: string;
+  bg_color?: string;
+  name_accent?: string;
+  total_accent?: string;
+  bar_safe?: string;
+  bar_caution?: string;
+}
+
+interface AdvisorUpgrade {
+  chosen_at_level: number;
+  option_name: string;
+  option_description: string;
+  option_type: string;
+  user_choice?: { die_index?: number; face_index?: number; faces?: { die_index?: number; face_index?: number }[] };
+}
+
+interface Advisor {
+  id: number;
+  display_name: string;
+  character: { image_url?: string; dice?: string[][] };
+  level: number;
+  max_level?: number;
+  incarnation: number;
+  xp: number;
+  xp_for_current_level: number;
+  xp_for_next_level: number;
+  modified_dice: string[][];
+  extra_item_slots: number;
+  card_redraws: number;
+  passive_bonuses?: Record<string, number>;
+  upgrades?: AdvisorUpgrade[];
+  pending_upgrades: number;
+  can_immortalise: boolean;
+}
+
+interface DiceTheme {
+  id: number;
+  name: string;
+  slug: string;
+  description?: string;
+  preview_image?: string;
+  is_active_selection?: boolean;
+}
+
+interface KingdomStyle {
+  id: number;
+  name: string;
+  slug: string;
+  css_vars?: KingdomStyleCssVariables;
+  background_image_url?: string;
+  is_active_selection?: boolean;
+}
+
+interface CollectionTab {
+  key: string;
+  icon: string;
+  label: string;
+  count: number;
+}
+
+const toast = useToast();
+
+const myAdvisors = ref<Advisor[]>([]);
+const advisorsLoading = ref(true);
+const selectedAdvisor = ref<Advisor | undefined>(undefined);
+const levelUpAdvisor = ref<Advisor | undefined>(undefined);
+const myDice = ref<DiceTheme[]>([]);
+const diceLoading = ref(true);
+const myStyles = ref<KingdomStyle[]>([]);
+const stylesLoading = ref(true);
+const collectionTab = ref("advisors");
+const activatingDice = ref(false);
+const activatingStyle = ref(false);
+
+// createDddiceInstance() comes from an untyped .js module, so its instance type is implicit any.
+const diceInstance = ref<ReturnType<typeof createDddiceInstance> | undefined>(undefined);
+const onResize = ref<(() => void) | undefined>(undefined);
+
+const diceCanvas = useTemplateRef<HTMLCanvasElement>("diceCanvas");
+
+const collectionTabs = computed<CollectionTab[]>(() => {
+  const tabs: CollectionTab[] = [];
+  const advisorCount = myAdvisors.value.length;
+  if (advisorCount > 0 || advisorsLoading.value) {
+    tabs.push({ key: "advisors", icon: "\u{1F9D9}", label: "Advisors", count: advisorCount });
+  }
+  const diceCount = myDice.value.length;
+  if (diceCount > 0 || diceLoading.value) {
+    tabs.push({ key: "dice", icon: "\u{1F3B2}", label: "Dice", count: diceCount });
+  }
+  const styleCount = myStyles.value.length;
+  if (styleCount > 0 || stylesLoading.value) {
+    tabs.push({ key: "styles", icon: "\u{1F3F0}", label: "Styles", count: styleCount });
+  }
+  return tabs;
+});
+
+function activationErrorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error ?? fallback;
+  }
+  return fallback;
+}
+
+function ksCardStyle(style: KingdomStyle): CSSProperties {
+  const s: CSSProperties = {};
+  if (style.css_vars) {
+    const cv = style.css_vars;
+    if (cv.border_color) s["--ks-border-color"] = cv.border_color;
+    if (cv.border_glow) s["--ks-border-glow"] = cv.border_glow;
+    if (cv.border_color_rgb) s["--ks-border-color-rgb"] = cv.border_color_rgb;
+    if (cv.bg_tint) s["--ks-bg-tint"] = cv.bg_tint;
+    if (cv.bg_color) s["--ks-bg-color"] = cv.bg_color;
+    if (cv.name_accent) s["--ks-name-accent"] = cv.name_accent;
+    if (cv.total_accent) s["--ks-total-accent"] = cv.total_accent;
+    if (cv.bar_safe) s["--ks-bar-safe"] = cv.bar_safe;
+    if (cv.bar_caution) s["--ks-bar-caution"] = cv.bar_caution;
+  }
+  if (style.background_image_url) {
+    s.backgroundImage = `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${style.background_image_url})`;
+    s.backgroundSize = "cover";
+    s.backgroundPosition = "center";
+  }
+  return s;
+}
+
+async function activateStyle(style: KingdomStyle): Promise<void> {
+  activatingStyle.value = true;
+  try {
+    const styleResponse = await axios.post<KingdomStyle[]>(`/api/my-kingdom-styles/${style.id}/activate`);
+    myStyles.value = styleResponse.data;
+  } catch (error) {
+    toast.error(activationErrorMessage(error, "Failed to activate kingdom style."));
+  }
+  activatingStyle.value = false;
+}
+
+function openAdvisorDetail(advisor: Advisor): void {
+  selectedAdvisor.value = advisor;
+}
+
+function openLevelUp(advisor: Advisor): void {
+  selectedAdvisor.value = undefined;
+  levelUpAdvisor.value = advisor;
+}
+
+async function onUpgradeChosen(): Promise<void> {
+  levelUpAdvisor.value = undefined;
+  await reloadAdvisors();
+}
+
+async function reloadAdvisors(): Promise<void> {
+  try {
+    const response = await axios.get<Advisor[]>("/api/my-advisors");
+    myAdvisors.value = response.data;
+    // If we had a selected advisor, refresh it
+    const current = selectedAdvisor.value;
+    if (current) {
+      selectedAdvisor.value = myAdvisors.value.find((a) => a.id === current.id) ?? undefined;
     }
-    if (this._onResize) {
-      window.removeEventListener('resize', this._onResize);
+  } catch {
+    // silent
+  }
+}
+
+async function activateDice(dice: DiceTheme): Promise<void> {
+  activatingDice.value = true;
+  try {
+    const response = await axios.post<DiceTheme[]>(`/api/my-dice/${dice.id}/activate`);
+    myDice.value = response.data;
+  } catch (error) {
+    toast.error(activationErrorMessage(error, "Failed to activate dice theme."));
+  }
+  activatingDice.value = false;
+}
+
+async function initDiceCanvas(): Promise<void> {
+  if (!isDddiceAvailable()) {
+    return;
+  }
+  const canvas = diceCanvas.value;
+  if (!canvas) {
+    return;
+  }
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  diceInstance.value = createDddiceInstance();
+  await diceInstance.value.init(canvas);
+  onResize.value = () => {
+    if (!(diceInstance.value && diceCanvas.value)) {
+      return;
     }
-  },
-};
+
+    diceCanvas.value.width = window.innerWidth;
+    diceCanvas.value.height = window.innerHeight;
+    diceInstance.value.resize(window.innerWidth, window.innerHeight);
+  };
+  window.addEventListener("resize", onResize.value);
+}
+
+function testDice(dice: DiceTheme): void {
+  if (!diceInstance.value?.isReady()) {
+    return;
+  }
+  const slug = dice.slug;
+  diceInstance.value.roll([
+    { theme: slug, value: Math.ceil(Math.random() * 6) },
+    { theme: slug, value: Math.ceil(Math.random() * 6) },
+    { theme: slug, value: Math.ceil(Math.random() * 6) },
+  ]);
+}
+
+onMounted(async () => {
+  const [advisorResult, diceResult, kingdomStyleResult] = await Promise.allSettled([
+    axios.get<Advisor[]>("/api/my-advisors"),
+    axios.get<DiceTheme[]>("/api/my-dice"),
+    axios.get<KingdomStyle[]>("/api/my-kingdom-styles"),
+  ]);
+  myAdvisors.value = advisorResult.status === "fulfilled" ? advisorResult.value.data : [];
+  advisorsLoading.value = false;
+  myDice.value = diceResult.status === "fulfilled" ? diceResult.value.data : [];
+  diceLoading.value = false;
+  myStyles.value = kingdomStyleResult.status === "fulfilled" ? kingdomStyleResult.value.data : [];
+  stylesLoading.value = false;
+  await initDiceCanvas();
+});
+
+onBeforeUnmount(() => {
+  if (diceInstance.value) {
+    diceInstance.value.destroy();
+    diceInstance.value = undefined;
+  }
+  if (onResize.value) {
+    window.removeEventListener("resize", onResize.value);
+  }
+});
 </script>
 
 <style scoped>

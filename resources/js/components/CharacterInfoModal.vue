@@ -45,7 +45,7 @@
       </div>
 
       <!-- Items -->
-      <div v-if="items.length" class="char-section">
+      <div v-if="items.length > 0" class="char-section">
         <h3 class="section-label">Items ({{ items.length }})</h3>
         <div class="item-list">
           <div v-for="pi in items" :key="pi.id" class="item-row">
@@ -62,37 +62,72 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'CharacterInfoModal',
-  props: {
-    character: { type: Object, required: true },
-    activeDice: { type: Number, default: 3 },
-    abilityUses: { type: Number, default: null },
-    items: { type: Array, default: () => [] },
-  },
-  emits: ['close'],
-  computed: {
-    abilityDisplayName() {
-      const name = this.character.wild_ability || '';
-      return name.charAt(0).toUpperCase() + name.slice(1);
-    },
-    bonusLabel() {
-      const b = this.character.starting_bonus;
-      if (!b) return '';
-      const parts = [];
-      if (b.extra_dice) parts.push(`+${b.extra_dice} Extra ${b.extra_dice === 1 ? 'Die' : 'Dice'}`);
-      if (b.random_item) parts.push('Starts with a Random Item');
-      if (b.stat_boosts) {
-        for (const [stat, val] of Object.entries(b.stat_boosts)) {
-          const label = stat.charAt(0).toUpperCase() + stat.slice(1);
-          parts.push(`${val > 0 ? '+' : ''}${val} ${label}`);
-        }
-      }
-      return parts.join(', ');
-    },
-  },
-};
+<script setup lang="ts">
+import { computed } from "vue";
+
+interface StartingBonus {
+  extra_dice?: number;
+  random_item?: boolean;
+  stat_boosts?: Record<string, number>;
+}
+
+interface CharacterInfo {
+  name?: string;
+  image_url?: string;
+  description?: string;
+  dice?: string[][];
+  wild_ability?: string;
+  wild_ability_description?: string;
+  starting_bonus?: StartingBonus;
+}
+
+interface HeldItem {
+  id: number;
+  item?: {
+    name?: string;
+    description?: string;
+  };
+}
+
+const {
+  character,
+  activeDice = 3,
+  abilityUses = undefined,
+  items = [],
+} = defineProps<{
+  character: CharacterInfo;
+  activeDice?: number;
+  abilityUses?: number;
+  items?: HeldItem[];
+}>();
+
+defineEmits<{ close: [] }>();
+
+const abilityDisplayName = computed(() => {
+  const name = character.wild_ability || "";
+  return name.charAt(0).toUpperCase() + name.slice(1);
+});
+
+const bonusLabel = computed(() => {
+  const bonus = character.starting_bonus;
+  if (!bonus) {
+    return "";
+  }
+  const parts: string[] = [];
+  if (bonus.extra_dice) {
+    parts.push(`+${bonus.extra_dice} Extra ${bonus.extra_dice === 1 ? "Die" : "Dice"}`);
+  }
+  if (bonus.random_item) {
+    parts.push("Starts with a Random Item");
+  }
+  if (bonus.stat_boosts) {
+    for (const [stat, value] of Object.entries(bonus.stat_boosts)) {
+      const label = stat.charAt(0).toUpperCase() + stat.slice(1);
+      parts.push(`${value > 0 ? "+" : ""}${value} ${label}`);
+    }
+  }
+  return parts.join(", ");
+});
 </script>
 
 <style scoped>

@@ -48,19 +48,19 @@
             <input v-model.number="settings.app_review_trigger.value" type="number" min="1" />
           </div>
         </div>
-        <button class="btn-primary" @click="saveSettings" :disabled="saving" style="margin-top: 12px;">
+        <button class="btn-primary" :disabled="saving" style="margin-top: 12px;" @click="saveSettings">
           {{ saving ? 'Saving...' : 'Save Settings' }}
         </button>
-        <span v-if="saveMsg" class="save-msg">{{ saveMsg }}</span>
+        <span v-if="saveMessage" class="save-msg">{{ saveMessage }}</span>
       </div>
 
       <div class="card-panel">
         <h3 class="sub-title">Stripe Config</h3>
         <p class="config-hint">Configured via .env: STRIPE_KEY, STRIPE_SECRET, STRIPE_WEBHOOK_SECRET, STRIPE_PREMIUM_PRICE_ID</p>
-        <p class="config-value" v-if="settings.premium_price_id">
+        <p v-if="settings.premium_price_id" class="config-value">
           Premium Price ID: <code>{{ settings.premium_price_id }}</code>
         </p>
-        <p class="config-value" v-else>
+        <p v-else class="config-value">
           Premium Price ID: <em>Not configured</em>
         </p>
       </div>
@@ -111,109 +111,162 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import axios, { isAxiosError } from "axios";
+import { onMounted, reactive, ref, watch } from "vue";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminPayments',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      tab: 'settings',
-      settings: {
-        payments_enabled: true,
-        premium_price_id: '',
-        app_review_enabled: false,
-        app_review_trigger: { type: 'games_completed', value: 3 },
-      },
-      saving: false,
-      saveMsg: '',
-      subscribers: [],
-      loadingSubs: false,
-      purchases: [],
-      loadingPurchases: false,
-    };
-  },
-  watch: {
-    tab(val) {
-      if (val === 'subscribers' && this.subscribers.length === 0) this.loadSubscribers();
-      if (val === 'purchases' && this.purchases.length === 0) this.loadPurchases();
-    },
-  },
-  async mounted() {
-    this.loadSettings();
-  },
-  methods: {
-    async loadSettings() {
-      try {
-        const res = await axios.get('/api/admin/payment-settings');
-        this.settings = {
-          payments_enabled: res.data.payments_enabled ?? true,
-          premium_price_id: res.data.premium_price_id || '',
-          app_review_enabled: res.data.app_review_enabled || false,
-          app_review_trigger: res.data.app_review_trigger || { type: 'games_completed', value: 3 },
-        };
-      } catch {}
-    },
-    async togglePayments() {
-      this.settings.payments_enabled = !this.settings.payments_enabled;
-      try {
-        await axios.put('/api/admin/payment-settings', {
-          payments_enabled: this.settings.payments_enabled,
-        });
-        this.toast.success(this.settings.payments_enabled ? 'Payments enabled' : 'Payments disabled');
-      } catch (e) {
-        this.settings.payments_enabled = !this.settings.payments_enabled;
-        this.toast.error('Failed to update');
-      }
-    },
-    async saveSettings() {
-      this.saving = true;
-      this.saveMsg = '';
-      try {
-        await axios.put('/api/admin/payment-settings', {
-          app_review_enabled: this.settings.app_review_enabled,
-          app_review_trigger: this.settings.app_review_trigger,
-        });
-        this.saveMsg = 'Saved!';
-        setTimeout(() => { this.saveMsg = ''; }, 2000);
-      } catch (e) {
-        this.saveMsg = 'Error: ' + (e.response?.data?.message || 'Failed');
-      }
-      this.saving = false;
-    },
-    async loadSubscribers() {
-      this.loadingSubs = true;
-      try {
-        const res = await axios.get('/api/admin/subscribers');
-        this.subscribers = res.data.subscribers;
-      } catch {}
-      this.loadingSubs = false;
-    },
-    async loadPurchases() {
-      this.loadingPurchases = true;
-      try {
-        const res = await axios.get('/api/admin/purchases');
-        this.purchases = res.data.purchases;
-      } catch {}
-      this.loadingPurchases = false;
-    },
-    async revokePremium(subscriber) {
-      if (!confirm(`Revoke premium from ${subscriber.name}?`)) return;
-      try {
-        await axios.post(`/api/admin/users/${subscriber.id}/revoke-premium`);
-        this.subscribers = this.subscribers.filter(s => s.id !== subscriber.id);
-      } catch (e) {
-        this.toast.error(e.response?.data?.message || 'Failed');
-      }
-    },
-    formatDate(d) {
-      if (!d) return 'N/A';
-      return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    },
-  },
-};
+interface AppReviewTrigger {
+  type: string;
+  value: number;
+}
+
+interface PaymentSettings {
+  payments_enabled: boolean;
+  premium_price_id: string;
+  app_review_enabled: boolean;
+  app_review_trigger: AppReviewTrigger;
+}
+
+interface Subscriber {
+  id: number;
+  name: string;
+  email: string;
+  platform?: string;
+  premium_expires_at?: string;
+}
+
+interface PurchaseUser {
+  name?: string;
+}
+
+interface Purchase {
+  id: number;
+  user?: PurchaseUser;
+  user_id: number;
+  platform: string;
+  status: string;
+  product_id: string;
+  type: string;
+  amount_cents: number;
+  currency?: string;
+  created_at?: string;
+}
+
+const toast = useToast();
+
+const tab = ref("settings");
+const settings = reactive<PaymentSettings>({
+  payments_enabled: true,
+  premium_price_id: "",
+  app_review_enabled: false,
+  app_review_trigger: { type: "games_completed", value: 3 },
+});
+const saving = ref(false);
+const saveMessage = ref("");
+const subscribers = ref<Subscriber[]>([]);
+const loadingSubs = ref(false);
+const purchases = ref<Purchase[]>([]);
+const loadingPurchases = ref(false);
+
+async function loadSettings(): Promise<void> {
+  try {
+    const response = await axios.get<Partial<PaymentSettings>>("/api/admin/payment-settings");
+    settings.payments_enabled = response.data.payments_enabled ?? true;
+    settings.premium_price_id = response.data.premium_price_id || "";
+    settings.app_review_enabled = response.data.app_review_enabled || false;
+    settings.app_review_trigger = response.data.app_review_trigger || { type: "games_completed", value: 3 };
+  } catch {
+    // ignore load errors
+  }
+}
+
+async function togglePayments(): Promise<void> {
+  settings.payments_enabled = !settings.payments_enabled;
+  try {
+    await axios.put("/api/admin/payment-settings", {
+      payments_enabled: settings.payments_enabled,
+    });
+    toast.success(settings.payments_enabled ? "Payments enabled" : "Payments disabled");
+  } catch {
+    settings.payments_enabled = !settings.payments_enabled;
+    toast.error("Failed to update");
+  }
+}
+
+async function saveSettings(): Promise<void> {
+  saving.value = true;
+  saveMessage.value = "";
+  try {
+    await axios.put("/api/admin/payment-settings", {
+      app_review_enabled: settings.app_review_enabled,
+      app_review_trigger: settings.app_review_trigger,
+    });
+    saveMessage.value = "Saved!";
+    setTimeout(() => {
+      saveMessage.value = "";
+    }, 2000);
+  } catch (error) {
+    const message = isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined;
+    saveMessage.value = `Error: ${message || "Failed"}`;
+  }
+  saving.value = false;
+}
+
+async function loadSubscribers(): Promise<void> {
+  loadingSubs.value = true;
+  try {
+    const response = await axios.get<{ subscribers: Subscriber[] }>("/api/admin/subscribers");
+    subscribers.value = response.data.subscribers;
+  } catch {
+    // ignore load errors
+  }
+  loadingSubs.value = false;
+}
+
+async function loadPurchases(): Promise<void> {
+  loadingPurchases.value = true;
+  try {
+    const response = await axios.get<{ purchases: Purchase[] }>("/api/admin/purchases");
+    purchases.value = response.data.purchases;
+  } catch {
+    // ignore load errors
+  }
+  loadingPurchases.value = false;
+}
+
+async function revokePremium(subscriber: Subscriber): Promise<void> {
+  if (!confirm(`Revoke premium from ${subscriber.name}?`)) {
+    return;
+  }
+  try {
+    await axios.post(`/api/admin/users/${subscriber.id}/revoke-premium`);
+    subscribers.value = subscribers.value.filter((s) => s.id !== subscriber.id);
+  } catch (error) {
+    const message = isAxiosError<{ message?: string }>(error) ? error.response?.data?.message : undefined;
+    toast.error(message || "Failed");
+  }
+}
+
+function formatDate(d: string | undefined): string {
+  if (!d) {
+    return "N/A";
+  }
+  return new Date(d).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+watch(tab, (value) => {
+  if (value === "subscribers" && subscribers.value.length === 0) {
+    loadSubscribers();
+  }
+  if (value === "purchases" && purchases.value.length === 0) {
+    loadPurchases();
+  }
+});
+
+onMounted(() => {
+  loadSettings();
+});
 </script>
 
 <style scoped>

@@ -35,7 +35,7 @@
         <div v-else class="simple-chart">
           <div v-for="(day, i) in activeUsers" :key="i" class="chart-bar-wrap" :title="day.date + ': ' + day.active_users + ' active'">
             <div class="chart-bar" :style="{ height: barHeight(day.active_users) + '%' }"></div>
-            <div class="chart-bar-label" v-if="i % labelInterval === 0">{{ shortDate(day.date) }}</div>
+            <div v-if="i % labelInterval === 0" class="chart-bar-label">{{ shortDate(day.date) }}</div>
           </div>
         </div>
       </div>
@@ -111,74 +111,146 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios from "axios";
 
-export default {
-  name: 'AdminRetention',
-  data() {
-    return {
-      period: '30d',
-      overview: {},
-      activeUsers: [],
-      cohorts: [],
-      churn: {},
-      completion: {},
-    };
-  },
-  computed: {
-    maxActive() {
-      return Math.max(1, ...this.activeUsers.map(d => d.active_users));
-    },
-    labelInterval() {
-      if (this.activeUsers.length <= 14) return 1;
-      if (this.activeUsers.length <= 30) return 3;
-      return 7;
-    },
-  },
-  async mounted() {
-    await this.loadAll();
-  },
-  methods: {
-    async loadAll() {
-      await Promise.all([
-        this.loadOverview(),
-        this.loadActiveUsers(),
-        this.loadCohorts(),
-        this.loadChurn(),
-        this.loadCompletion(),
-      ]);
-    },
-    async loadOverview() {
-      try { this.overview = (await axios.get('/api/admin/retention/overview')).data; } catch {}
-    },
-    async loadActiveUsers() {
-      try { this.activeUsers = (await axios.get('/api/admin/retention/active-users', { params: { period: this.period } })).data; } catch {}
-    },
-    async loadCohorts() {
-      try { this.cohorts = (await axios.get('/api/admin/retention/cohorts')).data; } catch {}
-    },
-    async loadChurn() {
-      try { this.churn = (await axios.get('/api/admin/retention/churn')).data; } catch {}
-    },
-    async loadCompletion() {
-      try { this.completion = (await axios.get('/api/admin/retention/completion', { params: { period: this.period } })).data; } catch {}
-    },
-    barHeight(val) {
-      return Math.max(2, (val / this.maxActive) * 100);
-    },
-    shortDate(d) {
-      const dt = new Date(d);
-      return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-    },
-    retentionClass(val) {
-      if (val === null) return '';
-      if (val >= 40) return 'ret-good';
-      if (val >= 20) return 'ret-mid';
-      return 'ret-low';
-    },
-  },
-};
+interface Overview {
+  dau?: number;
+  wau?: number;
+  mau?: number;
+  new_today?: number;
+}
+
+interface ActiveUsersDay {
+  date: string;
+  active_users: number;
+}
+
+interface Cohort {
+  week: string;
+  cohort_size: number;
+  day_1: number | undefined;
+  day_7: number | undefined;
+  day_14: number | undefined;
+  day_30: number | undefined;
+}
+
+interface Churn {
+  inactive_7d?: number;
+  inactive_14d?: number;
+  inactive_30d?: number;
+}
+
+interface Completion {
+  completion_rate?: number;
+  cancelled?: number;
+  timed_out?: number;
+}
+
+const period = ref("30d");
+const overview = ref<Overview>({});
+const activeUsers = ref<ActiveUsersDay[]>([]);
+const cohorts = ref<Cohort[]>([]);
+const churn = ref<Churn>({});
+const completion = ref<Completion>({});
+
+const maxActive = computed(() => Math.max(1, ...activeUsers.value.map((d) => d.active_users)));
+
+const labelInterval = computed(() => {
+  if (activeUsers.value.length <= 14) {
+    return 1;
+  }
+  if (activeUsers.value.length <= 30) {
+    return 3;
+  }
+  return 7;
+});
+
+async function loadOverview(): Promise<void> {
+  try {
+    const response = await axios.get<Overview>("/api/admin/retention/overview");
+    overview.value = response.data;
+  } catch {
+    // Ignore load failures; UI shows placeholder dashes.
+  }
+}
+
+async function loadActiveUsers(): Promise<void> {
+  try {
+    const response = await axios.get<ActiveUsersDay[]>("/api/admin/retention/active-users", {
+      params: { period: period.value },
+    });
+    activeUsers.value = response.data;
+  } catch {
+    // Ignore load failures; UI shows placeholder dashes.
+  }
+}
+
+async function loadCohorts(): Promise<void> {
+  try {
+    const response = await axios.get<Cohort[]>("/api/admin/retention/cohorts");
+    cohorts.value = response.data;
+  } catch {
+    // Ignore load failures; UI shows placeholder dashes.
+  }
+}
+
+async function loadChurn(): Promise<void> {
+  try {
+    const response = await axios.get<Churn>("/api/admin/retention/churn");
+    churn.value = response.data;
+  } catch {
+    // Ignore load failures; UI shows placeholder dashes.
+  }
+}
+
+async function loadCompletion(): Promise<void> {
+  try {
+    const response = await axios.get<Completion>("/api/admin/retention/completion", {
+      params: { period: period.value },
+    });
+    completion.value = response.data;
+  } catch {
+    // Ignore load failures; UI shows placeholder dashes.
+  }
+}
+
+async function loadAll(): Promise<void> {
+  await Promise.all([
+    loadOverview(),
+    loadActiveUsers(),
+    loadCohorts(),
+    loadChurn(),
+    loadCompletion(),
+  ]);
+}
+
+function barHeight(value: number): number {
+  return Math.max(2, (value / maxActive.value) * 100);
+}
+
+function shortDate(d: string): string {
+  const dt = new Date(d);
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function retentionClass(value: number | undefined): string {
+  if (value == undefined) {
+    return "";
+  }
+  if (value >= 40) {
+    return "ret-good";
+  }
+  if (value >= 20) {
+    return "ret-mid";
+  }
+  return "ret-low";
+}
+
+onMounted(async () => {
+  await loadAll();
+});
 </script>
 
 <style scoped>

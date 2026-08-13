@@ -27,7 +27,7 @@
     </div>
 
     <!-- Category Tabs -->
-    <div v-if="!loading && items.length" class="shop-tabs-wrap">
+    <div v-if="!loading && items.length > 0" class="shop-tabs-wrap">
       <div class="shop-tabs">
         <button
           v-for="tab in tabs"
@@ -178,7 +178,7 @@
           Send <strong>{{ giftItem.name }}</strong> (&#129689; {{ giftItem.price }})
         </p>
         <div v-if="friendsLoading" class="shop-loading">Loading friends...</div>
-        <div v-else-if="!friends.length" class="shop-empty" style="padding: 10px;">No friends yet. Add friends first!</div>
+        <div v-else-if="friends.length === 0" class="shop-empty" style="padding: 10px;">No friends yet. Add friends first!</div>
         <div v-else class="friend-list">
           <div
             v-for="f in friends"
@@ -224,7 +224,7 @@
         <div v-if="selectedChar.dice" class="char-modal-dice">
           <div v-for="(die, di) in selectedChar.dice" :key="di" class="dice-row">
             <span class="dice-label">Die {{ di + 1 }}:</span>
-            <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face }}</span>
+            <span v-for="(face, fi) in die" :key="fi" class="dice-face">{{ face }}</span>
           </div>
         </div>
         <div v-if="selectedChar.wild_ability" class="char-modal-wild">
@@ -266,328 +266,442 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import HintBubble from './HintBubble.vue';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
-import { createDddiceInstance, isDddiceAvailable } from '../dddiceService';
-import { isWebToNative, getPaymentPlatform, stripeCheckout, completePurchaseIAP, restorePurchases, restorePurchasesBackend } from '../services/paymentService';
-import '../styles/kingdom-styles.css';
+<script setup lang="ts">
+import { ref, computed, onMounted, onBeforeUnmount, useTemplateRef } from "vue";
+import type { CSSProperties } from "vue";
+import axios, { isAxiosError } from "axios";
+import HintBubble from "./HintBubble.vue";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
+import { createDddiceInstance, isDddiceAvailable } from "../dddice-service";
+import { isWebToNative, getPaymentPlatform, stripeCheckout, completePurchaseIAP, restorePurchases, restorePurchasesBackend } from "../services/payment-service";
+import "../styles/kingdom-styles.css";
 
-export default {
-  name: 'ShopPage',
-  components: { HintBubble },
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return {
-      items: [],
-      coins: 0,
-      isPremium: false,
-      premiumProduct: null,
-      loading: true,
-      purchasing: null,
-      premiumLoading: false,
-      restoring: false,
-      confirmItem: null,
-      showHistory: false,
-      loadingHistory: false,
-      transactions: [],
-      selectedChar: null,
-      previewStyle: null,
-      diceInstance: null,
-      activeTab: 'dice_theme',
-      giftItem: null,
-      friends: [],
-      friendsLoading: false,
-      giftingTo: null,
-      gifting: false,
-      tryingDice: null,
-      isNativeApp: isWebToNative(),
-    };
-  },
-  computed: {
-    paymentsEnabled() {
-      return useAuth().state.user?.payments_enabled ?? true;
-    },
-    tabs() {
-      const typeCounts = {};
-      for (const item of this.items) {
-        typeCounts[item.type] = (typeCounts[item.type] || 0) + 1;
-      }
-      const allTabs = [
-        { key: 'dice_theme', icon: '\u{1F3B2}', label: 'Dice', count: typeCounts.dice_theme || 0 },
-        { key: 'character', icon: '\u{1F9D9}', label: 'Advisors', count: typeCounts.character || 0 },
-        { key: 'kingdom_style', icon: '\u{1F3F0}', label: 'Styles', count: typeCounts.kingdom_style || 0 },
-      ];
-      return allTabs.filter(t => t.count > 0);
-    },
-    filteredItems() {
-      return this.items.filter(i => i.type === this.activeTab);
-    },
-  },
-  async mounted() {
-    await this.fetchShop();
-    this.initDiceCanvas();
-  },
-  methods: {
-    typeLabel(type) {
-      const labels = {
-        character: 'Character',
-        dice_theme: 'Dice',
-        kingdom_style: 'Kingdom Style',
-        item: 'Item',
-      };
-      return labels[type] || type;
-    },
-    typeIcon(type) {
-      const icons = {
-        character: '\u{1F9D9}',
-        dice_theme: '\u{1F3B2}',
-        kingdom_style: '\u{1F3F0}',
-        item: '\u{1F4E6}',
-      };
-      return icons[type] || '\u{1F4E6}';
-    },
-    async fetchShop() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/shop');
-        this.items = res.data.items;
-        this.coins = res.data.coins;
-        this.isPremium = res.data.is_premium;
-        this.premiumProduct = res.data.premium_product;
-      } catch {}
-      this.loading = false;
-    },
-    confirmPurchase(item) {
-      this.confirmItem = item;
-    },
-    async doPurchase(item) {
-      this.confirmItem = null;
-      this.purchasing = item.id;
-      try {
-        const res = await axios.post(`/api/shop/${item.id}/purchase`);
-        item.owned = true;
-        this.coins = res.data.new_coins;
-        const { updateUserStats } = useAuth();
-        updateUserStats({ coins: this.coins });
-      } catch (e) {
-        const msg = e.response?.data?.error || 'Purchase failed.';
-        this.toast.error(msg);
-      }
-      this.purchasing = null;
-    },
-    async toggleHistory() {
-      this.showHistory = !this.showHistory;
-      if (this.showHistory && this.transactions.length === 0) {
-        this.loadingHistory = true;
-        try {
-          const res = await axios.get('/api/coin-transactions');
-          this.transactions = (res.data.transactions || []).filter(tx => tx.amount !== 0);
-        } catch {}
-        this.loadingHistory = false;
-      }
-    },
-    formatDate(dateStr) {
-      if (!dateStr) return '';
-      const d = new Date(dateStr);
-      return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-    },
-    // --- Character view ---
-    viewCharacter(item) {
-      this.selectedChar = item;
-    },
-    // --- Dice canvas (persistent) ---
-    async initDiceCanvas() {
-      if (!isDddiceAvailable()) return;
-      const canvas = this.$refs.diceCanvas;
-      if (!canvas) return;
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-      this.diceInstance = createDddiceInstance();
-      await this.diceInstance.init(canvas);
-      this._onResize = () => {
-        if (this.$refs.diceCanvas && this.diceInstance) {
-          this.$refs.diceCanvas.width = window.innerWidth;
-          this.$refs.diceCanvas.height = window.innerHeight;
-          this.diceInstance.resize(window.innerWidth, window.innerHeight);
-        }
-      };
-      window.addEventListener('resize', this._onResize);
-    },
-    async tryDice(item) {
-      if (!this.diceInstance?.isReady() || this.tryingDice) return;
-      this.tryingDice = item.id;
-      const slug = item.slug;
-      try {
-        await this.diceInstance.roll([
-          { theme: slug, value: Math.ceil(Math.random() * 6) },
-          { theme: slug, value: Math.ceil(Math.random() * 6) },
-          { theme: slug, value: Math.ceil(Math.random() * 6) },
-        ]);
-      } catch {}
-      setTimeout(() => { this.tryingDice = null; }, 2000);
-    },
-    // --- Gifting ---
-    async openGiftPicker(item) {
-      this.giftItem = item;
-      this.friendsLoading = true;
-      try {
-        const res = await axios.get('/api/friends');
-        this.friends = (res.data.friends || []).map(f => ({
-          id: f.user.id,
-          name: f.user.name,
-          level: f.user.level,
-        }));
-      } catch {
-        this.friends = [];
-      }
-      this.friendsLoading = false;
-    },
-    confirmGift(friend) {
-      this.giftingTo = { item: this.giftItem, friend };
-    },
-    async doGift() {
-      if (!this.giftingTo) return;
-      this.gifting = true;
-      const { item, friend } = this.giftingTo;
-      try {
-        const res = await axios.post(`/api/shop/${item.id}/gift`, { friend_id: friend.id });
-        this.coins = res.data.new_coins;
-        const { updateUserStats } = useAuth();
-        updateUserStats({ coins: this.coins });
-        this.toast.success(res.data.message);
-        this.giftingTo = null;
-        this.giftItem = null;
-      } catch (e) {
-        const msg = e.response?.data?.error || 'Gift failed.';
-        this.toast.error(msg);
-      }
-      this.gifting = false;
-    },
-    // --- Premium / Cash purchases ---
-    async subscribePremium() {
-      this.premiumLoading = true;
-      try {
-        const platform = getPaymentPlatform();
-        if (platform === 'stripe') {
-          await stripeCheckout('subscription');
-        } else {
-          const productId = platform === 'apple'
-            ? this.premiumProduct?.apple_product_id
-            : this.premiumProduct?.google_product_id;
-          await completePurchaseIAP(productId, true);
-          this.isPremium = true;
-        }
-      } catch (e) {
-        const msg = e.response?.data?.error || e.message || 'Purchase failed.';
-        this.toast.error(msg);
-      }
-      this.premiumLoading = false;
-    },
-    async purchaseCash(item) {
-      this.purchasing = item.id;
-      try {
-        const platform = getPaymentPlatform();
-        if (platform === 'stripe') {
-          await stripeCheckout('one_time', item.id);
-        } else {
-          const productId = platform === 'apple' ? item.apple_product_id : item.google_product_id;
-          await completePurchaseIAP(productId);
-          item.owned = true;
-          await this.fetchShop();
-        }
-      } catch (e) {
-        const msg = e.response?.data?.error || e.message || 'Purchase failed.';
-        this.toast.error(msg);
-      }
-      this.purchasing = null;
-    },
-    async doRestorePurchases() {
-      this.restoring = true;
-      try {
-        const platform = getPaymentPlatform();
-        const purchases = await restorePurchases();
-        const receipts = purchases.map(p => ({
-          product_id: p.productId || p.product_id,
-          transaction_id: p.transactionId || p.transaction_id,
-          receipt_data: p.receiptData || p.receipt_data,
-        }));
-        if (receipts.length) {
-          const res = await restorePurchasesBackend(platform, receipts);
-          this.isPremium = res.data.is_premium;
-          this.toast.success(res.data.message);
-        } else {
-          this.toast.show('No purchases to restore.');
-        }
-        await this.fetchShop();
-      } catch (e) {
-        this.toast.error(e.message || 'Failed to restore purchases.');
-      }
-      this.restoring = false;
-    },
-    // --- Kingdom style view ---
-    viewKingdomStyle(item) {
-      this.previewStyle = item;
-    },
-    ksPreviewStyle(item) {
-      const s = {};
-      if (item.css_vars) {
-        const cv = item.css_vars;
-        if (cv.border_color) s['--ks-border-color'] = cv.border_color;
-        if (cv.border_glow) s['--ks-border-glow'] = cv.border_glow;
-        if (cv.border_color_rgb) s['--ks-border-color-rgb'] = cv.border_color_rgb;
-        if (cv.bg_tint) s['--ks-bg-tint'] = cv.bg_tint;
-        if (cv.bg_color) s['--ks-bg-color'] = cv.bg_color;
-        if (cv.bar_safe) s['--ks-bar-safe'] = cv.bar_safe;
-        if (cv.bar_caution) s['--ks-bar-caution'] = cv.bar_caution;
-      }
-      if (item.background_image_url) {
-        s.backgroundImage = `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${item.background_image_url})`;
-        s.backgroundSize = 'cover';
-        s.backgroundPosition = 'center';
-      }
-      return s;
-    },
-    ksModalStyle(item) {
-      const s = {};
-      if (item.css_vars) {
-        const cv = item.css_vars;
-        if (cv.border_color) s['--ks-border-color'] = cv.border_color;
-        if (cv.border_glow) s['--ks-border-glow'] = cv.border_glow;
-        if (cv.border_color_rgb) s['--ks-border-color-rgb'] = cv.border_color_rgb;
-        if (cv.bg_tint) s['--ks-bg-tint'] = cv.bg_tint;
-        if (cv.bg_color) s['--ks-bg-color'] = cv.bg_color;
-        if (cv.name_accent) s['--ks-name-accent'] = cv.name_accent;
-        if (cv.total_accent) s['--ks-total-accent'] = cv.total_accent;
-        if (cv.bar_safe) s['--ks-bar-safe'] = cv.bar_safe;
-        if (cv.bar_caution) s['--ks-bar-caution'] = cv.bar_caution;
-      }
-      const borderColor = item.css_vars?.border_color || 'transparent';
-      s.border = `2px solid ${borderColor}`;
-      if (item.background_image_url) {
-        s.backgroundImage = `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url(${item.background_image_url})`;
-        s.backgroundSize = 'cover';
-        s.backgroundPosition = 'center';
-      } else {
-        s.backgroundColor = item.css_vars?.bg_color || item.css_vars?.bg_tint || 'var(--bg-primary)';
-      }
-      return s;
-    },
-  },
-  beforeUnmount() {
-    if (this.diceInstance) {
-      this.diceInstance.destroy();
-      this.diceInstance = null;
+type ShopItemType = "character" | "dice_theme" | "kingdom_style" | "item";
+
+interface KingdomStyleCssVariables {
+  border_color?: string;
+  border_glow?: string;
+  border_color_rgb?: string;
+  border_anim?: string;
+  bg_tint?: string;
+  bg_color?: string;
+  name_accent?: string;
+  total_accent?: string;
+  bar_safe?: string;
+  bar_caution?: string;
+}
+
+interface ShopItem {
+  id: number;
+  type: ShopItemType;
+  name: string;
+  description?: string;
+  slug?: string;
+  image_url?: string;
+  preview_image?: string;
+  background_image_url?: string;
+  css_vars?: KingdomStyleCssVariables;
+  price?: number;
+  cash_price_cents?: number;
+  owned?: boolean;
+  apple_product_id?: string;
+  google_product_id?: string;
+  dice?: number[][];
+  wild_ability?: string;
+  wild_value?: number;
+  wild_ability_description?: string;
+}
+
+interface PremiumProduct {
+  apple_product_id?: string;
+  google_product_id?: string;
+}
+
+interface CoinTransaction {
+  id: number;
+  type: string;
+  amount: number;
+  description: string;
+  created_at?: string;
+}
+
+interface ShopFriend {
+  id: number;
+  name: string;
+  level?: number;
+}
+
+interface GiftTarget {
+  item: ShopItem;
+  friend: ShopFriend;
+}
+
+interface ShopTab {
+  key: ShopItemType;
+  icon: string;
+  label: string;
+  count: number;
+}
+
+interface DddiceInstance {
+  init(canvas: HTMLCanvasElement): Promise<boolean>;
+  isReady(): boolean;
+  roll(diceSpecs: { theme?: string; value: number }[]): Promise<void>;
+  resize(width: number, height: number): void;
+  destroy(): void;
+}
+
+const { updateUserStats, state: authState } = useAuth();
+const toast = useToast();
+
+const items = ref<ShopItem[]>([]);
+const coins = ref(0);
+const isPremium = ref(false);
+const premiumProduct = ref<PremiumProduct>();
+const loading = ref(true);
+const purchasing = ref<number>();
+const restoring = ref(false);
+const confirmItem = ref<ShopItem>();
+const showHistory = ref(false);
+const loadingHistory = ref(false);
+const transactions = ref<CoinTransaction[]>([]);
+const selectedChar = ref<ShopItem>();
+const previewStyle = ref<ShopItem>();
+const diceInstance = ref<DddiceInstance>();
+const activeTab = ref<ShopItemType>("dice_theme");
+const giftItem = ref<ShopItem>();
+const friends = ref<ShopFriend[]>([]);
+const friendsLoading = ref(false);
+const giftingTo = ref<GiftTarget>();
+const gifting = ref(false);
+const tryingDice = ref<number>();
+const isNativeApp = isWebToNative();
+
+const diceCanvas = useTemplateRef<HTMLCanvasElement>("diceCanvas");
+const onResize = ref<() => void>();
+
+const paymentsEnabled = computed(() => authState.user?.payments_enabled ?? true);
+
+const tabs = computed<ShopTab[]>(() => {
+  const typeCounts: Record<string, number> = {};
+  for (const item of items.value) {
+    typeCounts[item.type] = (typeCounts[item.type] ?? 0) + 1;
+  }
+  const allTabs: ShopTab[] = [
+    { key: "dice_theme", icon: "\u{1F3B2}", label: "Dice", count: typeCounts.dice_theme ?? 0 },
+    { key: "character", icon: "\u{1F9D9}", label: "Advisors", count: typeCounts.character ?? 0 },
+    { key: "kingdom_style", icon: "\u{1F3F0}", label: "Styles", count: typeCounts.kingdom_style ?? 0 },
+  ];
+  return allTabs.filter(tab => tab.count > 0);
+});
+
+const filteredItems = computed(() => items.value.filter(item => item.type === activeTab.value));
+
+onMounted(async () => {
+  await fetchShop();
+  await initDiceCanvas();
+});
+
+onBeforeUnmount(() => {
+  if (diceInstance.value) {
+    diceInstance.value.destroy();
+    diceInstance.value = undefined;
+  }
+  if (onResize.value) {
+    window.removeEventListener("resize", onResize.value);
+  }
+});
+
+function typeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    character: "Character",
+    dice_theme: "Dice",
+    kingdom_style: "Kingdom Style",
+    item: "Item",
+  };
+  return labels[type] ?? type;
+}
+
+function typeIcon(type: string): string {
+  const icons: Record<string, string> = {
+    character: "\u{1F9D9}",
+    dice_theme: "\u{1F3B2}",
+    kingdom_style: "\u{1F3F0}",
+    item: "\u{1F4E6}",
+  };
+  return icons[type] ?? "\u{1F4E6}";
+}
+
+interface ShopResponse {
+  items: ShopItem[];
+  coins: number;
+  is_premium: boolean;
+  premium_product?: PremiumProduct;
+}
+
+async function fetchShop(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<ShopResponse>("/api/shop");
+    items.value = response.data.items;
+    coins.value = response.data.coins;
+    isPremium.value = response.data.is_premium;
+    premiumProduct.value = response.data.premium_product;
+  } catch {
+    // Shop may be unavailable
+  }
+  loading.value = false;
+}
+
+function confirmPurchase(item: ShopItem): void {
+  confirmItem.value = item;
+}
+
+function purchaseErrorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error ?? error.message ?? fallback;
+  }
+  if (error instanceof Error) {
+    return error.message || fallback;
+  }
+  return fallback;
+}
+
+async function doPurchase(item: ShopItem): Promise<void> {
+  confirmItem.value = undefined;
+  purchasing.value = item.id;
+  try {
+    const response = await axios.post<{ new_coins: number }>(`/api/shop/${item.id}/purchase`);
+    item.owned = true;
+    coins.value = response.data.new_coins;
+    updateUserStats({ coins: coins.value });
+  } catch (error) {
+    toast.error(purchaseErrorMessage(error, "Purchase failed."));
+  }
+  purchasing.value = undefined;
+}
+
+async function toggleHistory(): Promise<void> {
+  showHistory.value = !showHistory.value;
+  if (showHistory.value && transactions.value.length === 0) {
+    loadingHistory.value = true;
+    try {
+      const response = await axios.get<{ transactions?: CoinTransaction[] }>("/api/coin-transactions");
+      transactions.value = (response.data.transactions ?? []).filter(tx => tx.amount !== 0);
+    } catch {
+      // History may be unavailable
     }
-    if (this._onResize) {
-      window.removeEventListener('resize', this._onResize);
+    loadingHistory.value = false;
+  }
+}
+
+function formatDate(dateString?: string): string {
+  if (!dateString) {
+    return "";
+  }
+  const date = new Date(dateString);
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+}
+
+// --- Character view ---
+function viewCharacter(item: ShopItem): void {
+  selectedChar.value = item;
+}
+
+// --- Dice canvas (persistent) ---
+async function initDiceCanvas(): Promise<void> {
+  if (!isDddiceAvailable()) {
+    return;
+  }
+  const canvas = diceCanvas.value;
+  if (!canvas) {
+    return;
+  }
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  const instance: DddiceInstance = createDddiceInstance();
+  diceInstance.value = instance;
+  await instance.init(canvas);
+  onResize.value = () => {
+    if (!(diceCanvas.value && diceInstance.value)) {
+      return;
     }
-  },
-};
+
+    diceCanvas.value.width = window.innerWidth;
+    diceCanvas.value.height = window.innerHeight;
+    diceInstance.value.resize(window.innerWidth, window.innerHeight);
+  };
+  window.addEventListener("resize", onResize.value);
+}
+
+async function tryDice(item: ShopItem): Promise<void> {
+  if (!diceInstance.value?.isReady() || tryingDice.value !== undefined) {
+    return;
+  }
+  tryingDice.value = item.id;
+  const slug = item.slug;
+  try {
+    await diceInstance.value.roll([
+      { theme: slug, value: Math.ceil(Math.random() * 6) },
+      { theme: slug, value: Math.ceil(Math.random() * 6) },
+      { theme: slug, value: Math.ceil(Math.random() * 6) },
+    ]);
+  } catch {
+    // Roll failed
+  }
+  setTimeout(() => { tryingDice.value = undefined; }, 2000);
+}
+
+// --- Gifting ---
+interface FriendResponse {
+  friends?: { user: { id: number; name: string; level?: number } }[];
+}
+
+async function openGiftPicker(item: ShopItem): Promise<void> {
+  giftItem.value = item;
+  friendsLoading.value = true;
+  try {
+    const response = await axios.get<FriendResponse>("/api/friends");
+    friends.value = (response.data.friends ?? []).map(friend => ({
+      id: friend.user.id,
+      name: friend.user.name,
+      level: friend.user.level,
+    }));
+  } catch {
+    friends.value = [];
+  }
+  friendsLoading.value = false;
+}
+
+function confirmGift(friend: ShopFriend): void {
+  if (!giftItem.value) {
+    return;
+  }
+  giftingTo.value = { item: giftItem.value, friend };
+}
+
+async function doGift(): Promise<void> {
+  if (!giftingTo.value) {
+    return;
+  }
+  gifting.value = true;
+  const { item, friend } = giftingTo.value;
+  try {
+    const response = await axios.post<{ new_coins: number; message: string }>(`/api/shop/${item.id}/gift`, { friend_id: friend.id });
+    coins.value = response.data.new_coins;
+    updateUserStats({ coins: coins.value });
+    toast.success(response.data.message);
+    giftingTo.value = undefined;
+    giftItem.value = undefined;
+  } catch (error) {
+    toast.error(purchaseErrorMessage(error, "Gift failed."));
+  }
+  gifting.value = false;
+}
+
+// --- Cash purchases ---
+async function purchaseCash(item: ShopItem): Promise<void> {
+  purchasing.value = item.id;
+  try {
+    const platform = getPaymentPlatform();
+    if (platform === "stripe") {
+      await stripeCheckout("one_time", item.id);
+    } else {
+      const productId = platform === "apple" ? item.apple_product_id : item.google_product_id;
+      await completePurchaseIAP(productId, false);
+      item.owned = true;
+      await fetchShop();
+    }
+  } catch (error) {
+    toast.error(purchaseErrorMessage(error, "Purchase failed."));
+  }
+  purchasing.value = undefined;
+}
+
+interface RestoreReceipt {
+  productId?: string;
+  product_id?: string;
+  transactionId?: string;
+  transaction_id?: string;
+  receiptData?: string;
+  receipt_data?: string;
+}
+
+async function doRestorePurchases(): Promise<void> {
+  restoring.value = true;
+  try {
+    const platform = getPaymentPlatform();
+    const purchases: RestoreReceipt[] = await restorePurchases();
+    const receipts = purchases.map(purchase => ({
+      product_id: purchase.productId ?? purchase.product_id,
+      transaction_id: purchase.transactionId ?? purchase.transaction_id,
+      receipt_data: purchase.receiptData ?? purchase.receipt_data,
+    }));
+    if (receipts.length > 0) {
+      const response = await restorePurchasesBackend(platform, receipts);
+      isPremium.value = response.data.is_premium;
+      toast.success(response.data.message);
+    } else {
+      toast.show("No purchases to restore.");
+    }
+    await fetchShop();
+  } catch (error) {
+    toast.error(purchaseErrorMessage(error, "Failed to restore purchases."));
+  }
+  restoring.value = false;
+}
+
+// --- Kingdom style view ---
+function viewKingdomStyle(item: ShopItem): void {
+  previewStyle.value = item;
+}
+
+function ksPreviewStyle(item: ShopItem): CSSProperties {
+  const style: CSSProperties = {};
+  if (item.css_vars) {
+    const cv = item.css_vars;
+    if (cv.border_color) style["--ks-border-color"] = cv.border_color;
+    if (cv.border_glow) style["--ks-border-glow"] = cv.border_glow;
+    if (cv.border_color_rgb) style["--ks-border-color-rgb"] = cv.border_color_rgb;
+    if (cv.bg_tint) style["--ks-bg-tint"] = cv.bg_tint;
+    if (cv.bg_color) style["--ks-bg-color"] = cv.bg_color;
+    if (cv.bar_safe) style["--ks-bar-safe"] = cv.bar_safe;
+    if (cv.bar_caution) style["--ks-bar-caution"] = cv.bar_caution;
+  }
+  if (item.background_image_url) {
+    style.backgroundImage = `linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url(${item.background_image_url})`;
+    style.backgroundSize = "cover";
+    style.backgroundPosition = "center";
+  }
+  return style;
+}
+
+function ksModalStyle(item: ShopItem): CSSProperties {
+  const style: CSSProperties = {};
+  if (item.css_vars) {
+    const cv = item.css_vars;
+    if (cv.border_color) style["--ks-border-color"] = cv.border_color;
+    if (cv.border_glow) style["--ks-border-glow"] = cv.border_glow;
+    if (cv.border_color_rgb) style["--ks-border-color-rgb"] = cv.border_color_rgb;
+    if (cv.bg_tint) style["--ks-bg-tint"] = cv.bg_tint;
+    if (cv.bg_color) style["--ks-bg-color"] = cv.bg_color;
+    if (cv.name_accent) style["--ks-name-accent"] = cv.name_accent;
+    if (cv.total_accent) style["--ks-total-accent"] = cv.total_accent;
+    if (cv.bar_safe) style["--ks-bar-safe"] = cv.bar_safe;
+    if (cv.bar_caution) style["--ks-bar-caution"] = cv.bar_caution;
+  }
+  const borderColor = item.css_vars?.border_color ?? "transparent";
+  style.border = `2px solid ${borderColor}`;
+  if (item.background_image_url) {
+    style.backgroundImage = `linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0.55)), url(${item.background_image_url})`;
+    style.backgroundSize = "cover";
+    style.backgroundPosition = "center";
+  } else {
+    style.backgroundColor = item.css_vars?.bg_color ?? item.css_vars?.bg_tint ?? "var(--bg-primary)";
+  }
+  return style;
+}
 </script>
 
 <style scoped>

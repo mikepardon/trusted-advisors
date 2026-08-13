@@ -19,56 +19,76 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import axios from "axios";
 
-export default {
-  name: 'RotatingEventBanner',
-  data() {
-    return {
-      events: [],
-      timer: null,
-    };
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/rotating-events');
-      this.events = res.data;
-    } catch {}
+interface RotatingEvent {
+  id: number;
+  name: string;
+  ends_at: string;
+  theme_color?: string;
+}
 
-    this.timer = setInterval(() => this.$forceUpdate(), 60000);
-  },
-  beforeUnmount() {
-    if (this.timer) clearInterval(this.timer);
-  },
-  methods: {
-    bannerStyle(event) {
-      if (!event.theme_color) return {};
-      return {
-        borderColor: event.theme_color,
-        background: `rgba(${this.hexToRgb(event.theme_color)}, 0.1)`,
-      };
-    },
-    hexToRgb(hex) {
-      const h = hex.replace('#', '');
-      const r = parseInt(h.substring(0, 2), 16);
-      const g = parseInt(h.substring(2, 4), 16);
-      const b = parseInt(h.substring(4, 6), 16);
-      return `${r}, ${g}, ${b}`;
-    },
-    timeLeft(event) {
-      const end = new Date(event.ends_at);
-      const now = new Date();
-      const diff = end - now;
-      if (diff <= 0) return 'Ended';
-      const hours = Math.floor(diff / 3600000);
-      const days = Math.floor(hours / 24);
-      if (days > 0) return `${days}d ${hours % 24}h left`;
-      const mins = Math.floor((diff % 3600000) / 60000);
-      return `${hours}h ${mins}m left`;
-    },
-  },
-};
+const events = ref<RotatingEvent[]>([]);
+const timer = ref<ReturnType<typeof setInterval>>();
+// Reactive tick that forces the countdown text to recompute on each interval.
+const tick = ref(0);
+
+function hexToRgb(hex: string): string {
+  const h = hex.replace("#", "");
+  const r = Number.parseInt(h.slice(0, 2), 16);
+  const g = Number.parseInt(h.slice(2, 4), 16);
+  const b = Number.parseInt(h.slice(4, 6), 16);
+  return `${r}, ${g}, ${b}`;
+}
+
+function bannerStyle(event: RotatingEvent): Record<string, string> {
+  if (!event.theme_color) {
+    return {};
+  }
+  return {
+    borderColor: event.theme_color,
+    background: `rgba(${hexToRgb(event.theme_color)}, 0.1)`,
+  };
+}
+
+function timeLeft(event: RotatingEvent): string {
+  // Reference tick so the interval re-renders the countdown.
+  void tick.value;
+  const end = new Date(event.ends_at);
+  const now = new Date();
+  const diff = end.getTime() - now.getTime();
+  if (diff <= 0) {
+    return "Ended";
+  }
+  const hours = Math.floor(diff / 3_600_000);
+  const days = Math.floor(hours / 24);
+  if (days > 0) {
+    return `${days}d ${hours % 24}h left`;
+  }
+  const mins = Math.floor((diff % 3_600_000) / 60_000);
+  return `${hours}h ${mins}m left`;
+}
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<RotatingEvent[]>("/api/rotating-events");
+    events.value = response.data;
+  } catch {
+    // Ignore failed fetch; banner simply stays empty.
+  }
+
+  timer.value = setInterval(() => {
+    tick.value += 1;
+  }, 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (timer.value) {
+    clearInterval(timer.value);
+  }
+});
 </script>
 
 <style scoped>

@@ -37,25 +37,33 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'CardDisplay',
-  props: {
-    card: { type: Object, default: null },
-  },
-  methods: {
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      for (const [key, val] of Object.entries(effects)) {
-        if (key !== 'grant_item_id') {
-          result[key] = val;
-        }
-      }
-      return result;
-    },
-  },
-};
+<script setup lang="ts">
+type CardEffects = Record<string, number>;
+
+interface Card {
+  title?: string;
+  description?: string;
+  difficulty?: number | string;
+  positive_effects?: CardEffects;
+  negative_effects?: CardEffects;
+}
+
+const { card = undefined } = defineProps<{
+  card?: Card;
+}>();
+
+function filterStatEffects(effects: CardEffects | undefined): CardEffects {
+  if (!effects) {
+    return {};
+  }
+  const result: CardEffects = {};
+  for (const [key, value] of Object.entries(effects)) {
+    if (key !== "grant_item_id") {
+      result[key] = value;
+    }
+  }
+  return result;
+}
 </script>
 
 <style scoped>

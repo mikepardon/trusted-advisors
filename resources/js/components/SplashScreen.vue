@@ -9,68 +9,69 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'SplashScreen',
-  emits: ['done'],
-  data() {
-    return {
-      progress: 0,
-      currentBlurb: '',
-      fadingOut: false,
-      blurbs: [
-        'Restocking the granary...',
-        'Sharpening the swords...',
-        'Consulting the oracle...',
-        'Rallying the troops...',
-        'Forging alliances...',
-        'Scouting the borders...',
-        'Training the squires...',
-        'Brewing the mead...',
-        'Polishing the crown...',
-        'Reading the scrolls...',
-        'Feeding the horses...',
-        'Raising the banners...',
-        'Lighting the torches...',
-        'Summoning the council...',
-      ],
-    };
-  },
-  mounted() {
-    this.currentBlurb = this.randomBlurb();
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
 
-    const duration = 3000;
-    const interval = 30;
-    const step = (100 / duration) * interval;
-    this._progressTimer = setInterval(() => {
-      this.progress = Math.min(this.progress + step, 100);
-      if (this.progress >= 100) {
-        clearInterval(this._progressTimer);
-        this.fadeOut();
-      }
-    }, interval);
+const emit = defineEmits<{ done: [] }>();
 
-    this._blurbTimer = setInterval(() => {
-      this.currentBlurb = this.randomBlurb();
-    }, 600);
-  },
-  beforeUnmount() {
-    clearInterval(this._progressTimer);
-    clearInterval(this._blurbTimer);
-  },
-  methods: {
-    randomBlurb() {
-      return this.blurbs[Math.floor(Math.random() * this.blurbs.length)];
-    },
-    fadeOut() {
-      clearInterval(this._blurbTimer);
-      this.fadingOut = true;
-      setTimeout(() => {
-        this.$emit('done');
-      }, 500);
-    },
-  },
-};
+const progress = ref(0);
+const currentBlurb = ref("");
+const fadingOut = ref(false);
+const blurbs = [
+  "Restocking the granary...",
+  "Sharpening the swords...",
+  "Consulting the oracle...",
+  "Rallying the troops...",
+  "Forging alliances...",
+  "Scouting the borders...",
+  "Training the squires...",
+  "Brewing the mead...",
+  "Polishing the crown...",
+  "Reading the scrolls...",
+  "Feeding the horses...",
+  "Raising the banners...",
+  "Lighting the torches...",
+  "Summoning the council...",
+];
+
+const progressTimer = ref<ReturnType<typeof setInterval>>();
+const blurbTimer = ref<ReturnType<typeof setInterval>>();
+
+function randomBlurb(): string {
+  return blurbs[Math.floor(Math.random() * blurbs.length)];
+}
+
+function fadeOut(): void {
+  clearInterval(blurbTimer.value);
+  fadingOut.value = true;
+  setTimeout(() => {
+    emit("done");
+  }, 500);
+}
+
+onMounted(() => {
+  currentBlurb.value = randomBlurb();
+
+  const duration = 3000;
+  const interval = 30;
+  const step = (100 / duration) * interval;
+  progressTimer.value = setInterval(() => {
+    progress.value = Math.min(progress.value + step, 100);
+    if (progress.value >= 100) {
+      clearInterval(progressTimer.value);
+      fadeOut();
+    }
+  }, interval);
+
+  blurbTimer.value = setInterval(() => {
+    currentBlurb.value = randomBlurb();
+  }, 600);
+});
+
+onBeforeUnmount(() => {
+  clearInterval(progressTimer.value);
+  clearInterval(blurbTimer.value);
+});
 </script>
 
 <style scoped>

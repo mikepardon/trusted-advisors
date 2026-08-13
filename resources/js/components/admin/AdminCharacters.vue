@@ -5,17 +5,17 @@
       <div class="header-buttons">
         <button class="btn-csv" @click="exportCsv">Export CSV</button>
         <button class="btn-csv" @click="triggerImport">Import CSV</button>
-        <input type="file" ref="csvInput" accept=".csv" style="display:none" @change="handleImportFile" />
+        <input ref="csvInput" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
         <button class="btn-primary" @click="openCreate">+ New Character</button>
         <button class="btn-ai" @click="showAiModal = true">Generate with AI</button>
       </div>
     </div>
 
-    <div v-if="importResult" class="import-result" :class="importResult.errors.length ? 'import-warn' : 'import-ok'">
+    <div v-if="importResult" class="import-result" :class="importResult.errors.length > 0 ? 'import-warn' : 'import-ok'">
       CSV Import: {{ importResult.created }} created, {{ importResult.updated }} updated.
-      <span v-if="importResult.errors.length"> {{ importResult.errors.length }} error(s).</span>
+      <span v-if="importResult.errors.length > 0"> {{ importResult.errors.length }} error(s).</span>
       <div v-for="(err, i) in importResult.errors" :key="i" class="import-error-line">{{ err }}</div>
-      <button class="import-dismiss" @click="importResult = null">Dismiss</button>
+      <button class="import-dismiss" @click="importResult = undefined">Dismiss</button>
     </div>
 
     <!-- Dice per player count rules -->
@@ -30,8 +30,8 @@
             min="1"
             max="3"
             :value="diceRules[n]"
-            @change="updateDiceRule(n, $event.target.value)"
             class="rule-input"
+            @change="updateDiceRule(n, $event)"
           />
           <span class="rule-dice-text">{{ diceRules[n] === 1 ? 'die' : 'dice' }}</span>
         </div>
@@ -103,11 +103,11 @@
       <table class="admin-table">
         <thead>
           <tr>
-            <SortableHeader label="ID" field="id" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="ID" field="id" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
             <th>Image</th>
-            <SortableHeader label="Name" field="name" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="Name" field="name" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
             <th>Description</th>
-            <SortableHeader label="Wild" field="wild_value" :currentSort="sortField" :currentDir="sortDir" @sort="toggleSort" />
+            <SortableHeader label="Wild" field="wild_value" :current-sort="sortField" :current-dir="sortDirection" @sort="toggleSort" />
             <th>Ability</th>
             <th>Die 1</th>
             <th>Die 2</th>
@@ -125,7 +125,7 @@
               <td class="name-col">
                 {{ c.name }}
                 <span v-if="c.is_available === false" class="unavailable-tag">Unavailable</span>
-                <div v-if="c.unlock_info && c.unlock_info.length" class="unlock-tags">
+                <div v-if="c.unlock_info && c.unlock_info.length > 0" class="unlock-tags">
                   <span v-for="u in c.unlock_info" :key="u.id" class="unlock-tag">
                     {{ u.method === 'level' ? 'Lvl ' + u.value : 'Achievement #' + u.value }}
                   </span>
@@ -197,7 +197,7 @@
           <!-- Duel Dice Override -->
           <div style="border: 1px solid rgba(138, 58, 185, 0.3); background: rgba(138, 58, 185, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
-              <input type="checkbox" v-model="form.useDuelDice" />
+              <input v-model="form.useDuelDice" type="checkbox" />
               <span style="color: #c890e0; font-weight: 700;">Use different dice for Duel mode</span>
             </label>
             <template v-if="form.useDuelDice">
@@ -231,7 +231,7 @@
           <!-- Starting Bonus -->
           <div style="border: 1px solid rgba(40, 160, 80, 0.3); background: rgba(40, 160, 80, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
-              <input type="checkbox" v-model="form.hasStartingBonus" />
+              <input v-model="form.hasStartingBonus" type="checkbox" />
               <span style="color: #5ab87a; font-weight: 700;">Starting Bonus</span>
             </label>
             <template v-if="form.hasStartingBonus">
@@ -241,7 +241,7 @@
               </div>
               <div class="form-group">
                 <label style="display: flex; align-items: center; gap: 8px;">
-                  <input type="checkbox" v-model="form.bonusRandomItem" />
+                  <input v-model="form.bonusRandomItem" type="checkbox" />
                   <span>Starts with a Random Item</span>
                 </label>
               </div>
@@ -253,10 +253,10 @@
                     <input
                       type="number"
                       :value="form.bonusStatBoosts[stat] || 0"
-                      @input="setStatBoost(stat, $event.target.value)"
                       min="-10"
                       max="10"
                       style="width: 56px;"
+                      @input="setStatBoost(stat, $event)"
                     />
                   </div>
                 </div>
@@ -267,7 +267,7 @@
           <div class="form-group">
             <label>Addon</label>
             <select v-model="form.addon_id">
-              <option :value="null">Base Game</option>
+              <option :value="undefined">Base Game</option>
               <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
           </div>
@@ -275,14 +275,14 @@
           <div class="form-group">
             <label style="color: var(--accent-gold); font-weight: 600;">Availability</label>
             <div style="display: flex; gap: 16px; margin-top: 4px;">
-              <label><input type="checkbox" v-model="form.available_cooperative" /> Co-op</label>
-              <label><input type="checkbox" v-model="form.available_duel" /> Duel</label>
+              <label><input v-model="form.available_cooperative" type="checkbox" /> Co-op</label>
+              <label><input v-model="form.available_duel" type="checkbox" /> Duel</label>
             </div>
           </div>
 
           <div class="form-group">
             <label style="display: flex; align-items: center; gap: 8px;">
-              <input type="checkbox" v-model="form.is_available" />
+              <input v-model="form.is_available" type="checkbox" />
               <span :style="form.is_available ? '' : 'color: #d05040; font-weight: 600;'">
                 {{ form.is_available ? 'Available (shown to all players)' : 'Unavailable (hidden unless owned)' }}
               </span>
@@ -297,7 +297,7 @@
             </div>
 
             <div v-if="showLevelOptions" class="lo-body">
-              <div v-if="!charLevelOptions.length" class="lo-empty">No level options for this character.</div>
+              <div v-if="charLevelOptions.length === 0" class="lo-empty">No level options for this character.</div>
               <table v-else class="admin-table lo-table">
                 <thead>
                   <tr>
@@ -368,7 +368,7 @@
                     <input v-model="loForm.description" />
                   </div>
                   <div class="form-group">
-                    <label><input type="checkbox" v-model="loForm.is_active" /> Active</label>
+                    <label><input v-model="loForm.is_active" type="checkbox" /> Active</label>
                   </div>
 
                   <!-- Type-specific config -->
@@ -434,457 +434,747 @@
     <!-- Media Library Modal for character image -->
     <MediaLibraryModal
       :visible="showMediaLibrary"
-      :selectMode="true"
+      :select-mode="true"
       @close="showMediaLibrary = false"
       @select="onMediaSelected"
     />
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
-import AdminSearchInput from './AdminSearchInput.vue';
-import SortableHeader from './SortableHeader.vue';
-import MediaLibraryModal from './MediaLibraryModal.vue';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
+import AdminSearchInput from "./AdminSearchInput.vue";
+import SortableHeader from "./SortableHeader.vue";
+import MediaLibraryModal from "./MediaLibraryModal.vue";
 
-export default {
-  name: 'AdminCharacters',
-  components: { AdminSearchInput, SortableHeader, MediaLibraryModal },
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      characters: [],
-      addons: [],
-      loading: true,
-      searchQuery: '',
-      sortField: 'id',
-      sortDir: 'asc',
-      showModal: false,
-      editing: null,
-      saving: false,
-      formError: '',
-      form: { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '', hasStartingBonus: false, bonusExtraDice: 0, bonusRandomItem: false, bonusStatBoosts: {} },
-      showMediaLibrary: false,
-      die1Input: '',
-      die2Input: '',
-      die3Input: '',
-      die1DuelInput: '',
-      die2DuelInput: '',
-      die3DuelInput: '',
-      diceRules: { 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 },
-      rulesSaved: false,
-      imageUploaded: false,
-      showAiModal: false,
-      aiPrompt: '',
-      aiGenerating: false,
-      aiError: '',
-      importResult: null,
-      showBalanceStats: false,
-      // Level options
-      showLevelOptions: false,
-      charLevelOptions: [],
-      showLoForm: false,
-      editingLo: null,
-      loFormError: '',
-      loForm: { name: '', type: 'bump_dice_face', available_at_level: 1, is_active: true, max_selections: 0, sort_order: 0, description: '', icon: '' },
-      loConfigStat: 'wealth',
-      loConfigValue: 1,
-      loConfigItemId: null,
-      loConfigCurseId: null,
-    };
-  },
-  computed: {
-    filteredCharacters() {
-      let list = this.characters;
-      const q = this.searchQuery.toLowerCase().trim();
-      if (q) {
-        list = list.filter(c =>
-          c.name.toLowerCase().includes(q) ||
-          (c.description || '').toLowerCase().includes(q) ||
-          (c.wild_ability || '').toLowerCase().includes(q)
-        );
-      }
-      const field = this.sortField;
-      const dir = this.sortDir === 'asc' ? 1 : -1;
-      return [...list].sort((a, b) => {
-        const av = a[field] ?? '';
-        const bv = b[field] ?? '';
-        if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
-        return String(av).localeCompare(String(bv)) * dir;
-      });
-    },
-    loStatOptions() {
-      return ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-    },
-    characterBalanceStats() {
-      if (!this.characters.length) return null;
-      const charStats = this.characters.map(c => {
-        const dieAvgs = (c.dice || []).map(die => {
-          if (!die || !die.length) return 0;
-          const values = die.map(f => f === 'WILD' ? c.wild_value : Number(f));
-          return values.reduce((s, v) => s + v, 0) / values.length;
-        });
-        const totalAvg = dieAvgs.reduce((s, v) => s + v, 0);
-        return { name: c.name, dieAvgs, totalAvg, wildValue: c.wild_value };
-      });
-      const sorted = [...charStats].sort((a, b) => b.totalAvg - a.totalAvg);
-      const overallAvg = charStats.reduce((s, c) => s + c.totalAvg, 0) / charStats.length;
-      const highest = sorted[0];
-      const lowest = sorted[sorted.length - 1];
-      const wildDist = {};
-      this.characters.forEach(c => {
-        const wv = c.wild_value;
-        wildDist[wv] = (wildDist[wv] || 0) + 1;
-      });
-      const avgWild = this.characters.reduce((s, c) => s + c.wild_value, 0) / this.characters.length;
-      return { sorted, overallAvg, highest, lowest, wildDist, avgWild };
-    },
-  },
-  async mounted() {
-    await Promise.all([this.fetch(), this.fetchRules(), this.fetchAddons()]);
-  },
-  methods: {
-    toggleSort(field) {
-      if (this.sortField === field) {
-        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
-      } else {
-        this.sortField = field;
-        this.sortDir = 'asc';
-      }
-    },
-    async fetch() {
-      this.loading = true;
-      const res = await axios.get('/api/admin/characters');
-      this.characters = res.data;
-      this.loading = false;
-    },
-    async fetchAddons() {
-      try {
-        const res = await axios.get('/api/admin/addons');
-        this.addons = res.data;
-      } catch { /* ignore */ }
-    },
-    async fetchRules() {
-      try {
-        const res = await axios.get('/api/admin/rules');
-        if (res.data.dice_per_player_count) {
-          this.diceRules = { ...this.diceRules, ...res.data.dice_per_player_count };
-        }
-      } catch {
-        // use defaults
-      }
-    },
-    async updateDiceRule(count, value) {
-      const num = Math.max(1, Math.min(3, parseInt(value) || 3));
-      this.diceRules[count] = num;
-      try {
-        await axios.put('/api/admin/rules/dice_per_player_count', {
-          value: { ...this.diceRules },
-        });
-        this.rulesSaved = true;
-        setTimeout(() => { this.rulesSaved = false; }, 1500);
-      } catch {
-        // silently fail
-      }
-    },
-    truncate(str, len) {
-      return str.length > len ? str.substring(0, len) + '...' : str;
-    },
-    parseDie(input) {
-      return input.split(',').map(f => f.trim()).filter(Boolean);
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = { name: '', description: '', wild_value: 3, wild_ability: '', wild_ability_description: '', addon_id: null, available_cooperative: true, available_duel: true, is_available: true, useDuelDice: false, wild_value_duel: 3, wild_ability_duel: '', wild_ability_description_duel: '', hasStartingBonus: false, bonusExtraDice: 0, bonusRandomItem: false, bonusStatBoosts: {} };
-      this.die1Input = '';
-      this.die2Input = '';
-      this.die3Input = '';
-      this.die1DuelInput = '';
-      this.die2DuelInput = '';
-      this.die3DuelInput = '';
-      this.formError = '';
-      this.imageUploaded = false;
-      this.showLevelOptions = false;
-      this.charLevelOptions = [];
-      this.showLoForm = false;
-      this.showModal = true;
-    },
-    openEdit(c) {
-      this.editing = c;
-      this.imageUploaded = false;
-      const hasDuelDice = c.dice_duel != null || c.wild_value_duel != null;
-      const bonus = c.starting_bonus || {};
-      const hasBonus = !!(bonus.extra_dice || bonus.random_item || (bonus.stat_boosts && Object.keys(bonus.stat_boosts).length));
-      this.form = {
-        name: c.name,
-        description: c.description,
-        wild_value: c.wild_value,
-        wild_ability: c.wild_ability,
-        wild_ability_description: c.wild_ability_description || '',
-        addon_id: c.addon_id || null,
-        available_cooperative: c.available_cooperative ?? true,
-        available_duel: c.available_duel ?? true,
-        is_available: c.is_available ?? true,
-        useDuelDice: hasDuelDice,
-        wild_value_duel: c.wild_value_duel ?? c.wild_value,
-        wild_ability_duel: c.wild_ability_duel ?? c.wild_ability ?? '',
-        wild_ability_description_duel: c.wild_ability_description_duel ?? c.wild_ability_description ?? '',
-        hasStartingBonus: hasBonus,
-        bonusExtraDice: bonus.extra_dice || 0,
-        bonusRandomItem: !!bonus.random_item,
-        bonusStatBoosts: { ...(bonus.stat_boosts || {}) },
-      };
-      this.die1Input = c.dice[0]?.join(', ') || '';
-      this.die2Input = c.dice[1]?.join(', ') || '';
-      this.die3Input = c.dice[2]?.join(', ') || '';
-      this.die1DuelInput = hasDuelDice ? (c.dice_duel?.[0]?.join(', ') || '') : '';
-      this.die2DuelInput = hasDuelDice ? (c.dice_duel?.[1]?.join(', ') || '') : '';
-      this.die3DuelInput = hasDuelDice ? (c.dice_duel?.[2]?.join(', ') || '') : '';
-      this.formError = '';
-      this.showLevelOptions = false;
-      this.showLoForm = false;
-      this.showModal = true;
-      this.fetchLevelOptions(c.id);
-    },
-    async save() {
-      this.formError = '';
-      const die1 = this.parseDie(this.die1Input);
-      const die2 = this.parseDie(this.die2Input);
-      const die3 = this.parseDie(this.die3Input);
+type DieFace = number | "WILD";
+type Die = DieFace[];
+type StatBoosts = Record<string, number>;
 
-      if (die1.length !== 6 || die2.length !== 6 || die3.length !== 6) {
-        this.formError = 'Each die must have exactly 6 faces.';
-        return;
-      }
+interface StartingBonus {
+  extra_dice?: number;
+  random_item?: boolean;
+  stat_boosts?: StatBoosts;
+}
 
-      // Validate faces are numbers or WILD
-      for (const f of [...die1, ...die2, ...die3]) {
-        if (f !== 'WILD' && isNaN(Number(f))) {
-          this.formError = `Invalid face "${f}". Use numbers (1-5) or WILD.`;
-          return;
-        }
-      }
+interface UnlockInfo {
+  id: number;
+  method: string;
+  value: number;
+}
 
-      // Convert numeric strings to numbers, keep WILD as string
-      const processDie = (die) => die.map(f => f === 'WILD' ? 'WILD' : Number(f));
+interface Character {
+  id: number;
+  name: string;
+  description: string;
+  wild_value: number;
+  wild_ability: string;
+  wild_ability_description?: string;
+  dice: Die[];
+  dice_duel?: Die[];
+  wild_value_duel?: number;
+  wild_ability_duel?: string;
+  wild_ability_description_duel?: string;
+  starting_bonus?: StartingBonus;
+  addon_id?: number;
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+  is_available?: boolean;
+  image_url?: string;
+  unlock_info?: UnlockInfo[];
+}
 
-      let diceDuel = null;
-      let wildValueDuel = null;
-      let wildAbilityDuel = null;
-      let wildAbilityDescDuel = null;
-      if (this.form.useDuelDice) {
-        const dDie1 = this.parseDie(this.die1DuelInput);
-        const dDie2 = this.parseDie(this.die2DuelInput);
-        const dDie3 = this.parseDie(this.die3DuelInput);
-        if (dDie1.length === 6 && dDie2.length === 6 && dDie3.length === 6) {
-          diceDuel = [processDie(dDie1), processDie(dDie2), processDie(dDie3)];
-        }
-        wildValueDuel = this.form.wild_value_duel || null;
-        wildAbilityDuel = this.form.wild_ability_duel || null;
-        wildAbilityDescDuel = this.form.wild_ability_description_duel || null;
-      }
+interface Addon {
+  id: number;
+  name: string;
+}
 
-      // Build starting_bonus
-      let startingBonus = null;
-      if (this.form.hasStartingBonus) {
-        startingBonus = {};
-        if (this.form.bonusExtraDice > 0) startingBonus.extra_dice = this.form.bonusExtraDice;
-        if (this.form.bonusRandomItem) startingBonus.random_item = true;
-        const boosts = {};
-        for (const [stat, val] of Object.entries(this.form.bonusStatBoosts)) {
-          if (val && val !== 0) boosts[stat] = Number(val);
-        }
-        if (Object.keys(boosts).length) startingBonus.stat_boosts = boosts;
-        if (!Object.keys(startingBonus).length) startingBonus = null;
-      }
+interface CharacterForm {
+  name: string;
+  description: string;
+  wild_value: number;
+  wild_ability: string;
+  wild_ability_description: string;
+  addon_id: number | undefined;
+  available_cooperative: boolean;
+  available_duel: boolean;
+  is_available: boolean;
+  useDuelDice: boolean;
+  wild_value_duel: number;
+  wild_ability_duel: string;
+  wild_ability_description_duel: string;
+  hasStartingBonus: boolean;
+  bonusExtraDice: number;
+  bonusRandomItem: boolean;
+  bonusStatBoosts: StatBoosts;
+}
 
-      const { useDuelDice, wild_value_duel, wild_ability_duel, wild_ability_description_duel, hasStartingBonus, bonusExtraDice, bonusRandomItem, bonusStatBoosts, ...formFields } = this.form;
-      const payload = {
-        ...formFields,
-        addon_id: this.form.addon_id || null,
-        dice: [processDie(die1), processDie(die2), processDie(die3)],
-        dice_duel: diceDuel,
-        wild_value_duel: wildValueDuel,
-        wild_ability_duel: wildAbilityDuel,
-        wild_ability_description_duel: wildAbilityDescDuel,
-        starting_bonus: startingBonus,
-      };
+interface LevelOptionConfig {
+  stat?: string;
+  value?: number;
+  item_id?: number;
+  curse_id?: number;
+  random?: boolean;
+}
 
-      this.saving = true;
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/characters/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/characters', payload);
-        }
-        this.showModal = false;
-        await this.fetch();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Save failed';
+interface LevelOption {
+  id: number;
+  character_id: number;
+  name: string;
+  type: string;
+  available_at_level: number;
+  is_active: boolean;
+  max_selections: number;
+  sort_order: number;
+  description?: string;
+  icon?: string;
+  config?: LevelOptionConfig;
+}
+
+interface LevelOptionForm {
+  name: string;
+  type: string;
+  available_at_level: number;
+  is_active: boolean;
+  max_selections: number;
+  sort_order: number;
+  description: string;
+  icon: string;
+}
+
+interface AiCharacterResponse {
+  name?: string;
+  description?: string;
+  wild_value?: number;
+  wild_ability?: string;
+  wild_ability_description?: string;
+  dice?: Die[];
+}
+
+interface MediaItem {
+  id: number;
+}
+
+interface ImportResult {
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
+type DiceRules = Record<number, number>;
+
+interface CharacterStat {
+  name: string;
+  dieAvgs: number[];
+  totalAvg: number;
+  wildValue: number;
+}
+
+interface CharacterBalanceStats {
+  sorted: CharacterStat[];
+  overallAvg: number;
+  highest: CharacterStat;
+  lowest: CharacterStat;
+  wildDist: Record<number, number>;
+  avgWild: number;
+}
+
+function defaultForm(): CharacterForm {
+  return {
+    name: "",
+    description: "",
+    wild_value: 3,
+    wild_ability: "",
+    wild_ability_description: "",
+    addon_id: undefined,
+    available_cooperative: true,
+    available_duel: true,
+    is_available: true,
+    useDuelDice: false,
+    wild_value_duel: 3,
+    wild_ability_duel: "",
+    wild_ability_description_duel: "",
+    hasStartingBonus: false,
+    bonusExtraDice: 0,
+    bonusRandomItem: false,
+    bonusStatBoosts: {},
+  };
+}
+
+function defaultLevelOptionForm(): LevelOptionForm {
+  return {
+    name: "",
+    type: "bump_dice_face",
+    available_at_level: 1,
+    is_active: true,
+    max_selections: 0,
+    sort_order: 0,
+    description: "",
+    icon: "",
+  };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string; error?: string }>(error)) {
+    return error.response?.data?.message ?? error.response?.data?.error ?? error.message;
+  }
+  return fallback;
+}
+
+const LO_STAT_OPTIONS = ["wealth", "influence", "security", "religion", "food", "happiness"];
+
+const toast = useToast();
+
+const characters = ref<Character[]>([]);
+const addons = ref<Addon[]>([]);
+const loading = ref(true);
+const searchQuery = ref("");
+const sortField = ref("id");
+const sortDirection = ref<"asc" | "desc">("asc");
+const showModal = ref(false);
+const editing = ref<Character | undefined>(undefined);
+const saving = ref(false);
+const formError = ref("");
+const form = reactive<CharacterForm>(defaultForm());
+const showMediaLibrary = ref(false);
+const die1Input = ref("");
+const die2Input = ref("");
+const die3Input = ref("");
+const die1DuelInput = ref("");
+const die2DuelInput = ref("");
+const die3DuelInput = ref("");
+const diceRules = reactive<DiceRules>({ 1: 3, 2: 3, 3: 3, 4: 3, 5: 3, 6: 3 });
+const rulesSaved = ref(false);
+const imageUploaded = ref(false);
+const showAiModal = ref(false);
+const aiPrompt = ref("");
+const aiGenerating = ref(false);
+const aiError = ref("");
+const importResult = ref<ImportResult | undefined>(undefined);
+const showBalanceStats = ref(false);
+// Level options
+const showLevelOptions = ref(false);
+const charLevelOptions = ref<LevelOption[]>([]);
+const showLoForm = ref(false);
+const editingLo = ref<number | undefined>(undefined);
+const loFormError = ref("");
+const loForm = reactive<LevelOptionForm>(defaultLevelOptionForm());
+const loConfigStat = ref("wealth");
+const loConfigValue = ref(1);
+const loConfigItemId = ref<number | undefined>(undefined);
+const loConfigCurseId = ref<number | undefined>(undefined);
+
+const csvInput = useTemplateRef<HTMLInputElement>("csvInput");
+
+const rulesSavedTimeout = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+const imageUploadedTimeout = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+const loStatOptions = computed<string[]>(() => LO_STAT_OPTIONS);
+
+function sortValue(character: Character, field: string): string | number {
+  if (field === "id") {
+    return character.id;
+  }
+  if (field === "name") {
+    return character.name;
+  }
+  if (field === "wild_value") {
+    return character.wild_value;
+  }
+  return "";
+}
+
+const filteredCharacters = computed<Character[]>(() => {
+  let list = characters.value;
+  const query = searchQuery.value.toLowerCase().trim();
+  if (query) {
+    list = list.filter((character) =>
+      character.name.toLowerCase().includes(query)
+      || (character.description || "").toLowerCase().includes(query)
+      || (character.wild_ability || "").toLowerCase().includes(query),
+    );
+  }
+  const field = sortField.value;
+  const direction = sortDirection.value === "asc" ? 1 : -1;
+  return list.toSorted((a, b) => {
+    const av = sortValue(a, field);
+    const bv = sortValue(b, field);
+    if (typeof av === "number" && typeof bv === "number") {
+      return (av - bv) * direction;
+    }
+    return String(av).localeCompare(String(bv)) * direction;
+  });
+});
+
+const characterBalanceStats = computed<CharacterBalanceStats | undefined>(() => {
+  if (characters.value.length === 0) {
+    return undefined;
+  }
+  const charStats: CharacterStat[] = characters.value.map((character) => {
+    const dieAvgs = (character.dice || []).map((die) => {
+      if (!die || die.length === 0) {
+        return 0;
       }
-      this.saving = false;
-    },
-    async generateWithAi() {
-      this.aiError = '';
-      this.aiGenerating = true;
-      try {
-        const res = await axios.post('/api/admin/ai/generate-character', {
-          prompt: this.aiPrompt || undefined,
-        });
-        const data = res.data;
-        this.showAiModal = false;
-        this.aiPrompt = '';
-        // Open create modal pre-filled with AI data
-        this.editing = null;
-        this.form = {
-          name: data.name || '',
-          description: data.description || '',
-          wild_value: data.wild_value || 3,
-          wild_ability: data.wild_ability || '',
-          wild_ability_description: data.wild_ability_description || '',
-          addon_id: null,
-        };
-        this.die1Input = (data.dice?.[0] || []).join(', ');
-        this.die2Input = (data.dice?.[1] || []).join(', ');
-        this.die3Input = (data.dice?.[2] || []).join(', ');
-        this.formError = '';
-        this.showModal = true;
-      } catch (e) {
-        this.aiError = e.response?.data?.message || e.response?.data?.error || 'AI generation failed';
+      const values = die.map((face) => (face === "WILD" ? character.wild_value : Number(face)));
+      let sum = 0;
+      for (const value of values) {
+        sum += value;
       }
-      this.aiGenerating = false;
-    },
-    exportCsv() {
-      window.location.href = '/api/admin/characters/export-csv';
-    },
-    triggerImport() {
-      this.$refs.csvInput.click();
-    },
-    async handleImportFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const res = await axios.post('/api/admin/characters/import-csv', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        this.importResult = res.data;
-        await this.fetch();
-      } catch (e) {
-        this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
+      return sum / values.length;
+    });
+    let totalAvg = 0;
+    for (const value of dieAvgs) {
+      totalAvg += value;
+    }
+    return { name: character.name, dieAvgs, totalAvg, wildValue: character.wild_value };
+  });
+  const sorted = charStats.toSorted((a, b) => b.totalAvg - a.totalAvg);
+  let totalAvgSum = 0;
+  for (const stat of charStats) {
+    totalAvgSum += stat.totalAvg;
+  }
+  const overallAvg = totalAvgSum / charStats.length;
+  const highest = sorted[0];
+  const lowest = sorted.at(-1) ?? highest;
+  const wildDistribution: Record<number, number> = {};
+  let wildSum = 0;
+  for (const character of characters.value) {
+    const wildValue = character.wild_value;
+    wildDistribution[wildValue] = (wildDistribution[wildValue] || 0) + 1;
+    wildSum += wildValue;
+  }
+  const avgWild = wildSum / characters.value.length;
+  return { sorted, overallAvg, highest, lowest, wildDist: wildDistribution, avgWild };
+});
+
+function toggleSort(field: string): void {
+  if (sortField.value === field) {
+    sortDirection.value = sortDirection.value === "asc" ? "desc" : "asc";
+  } else {
+    sortField.value = field;
+    sortDirection.value = "asc";
+  }
+}
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  const response = await axios.get<Character[]>("/api/admin/characters");
+  characters.value = response.data;
+  loading.value = false;
+}
+
+async function fetchAddons(): Promise<void> {
+  try {
+    const response = await axios.get<Addon[]>("/api/admin/addons");
+    addons.value = response.data;
+  } catch {
+    // ignore
+  }
+}
+
+async function fetchRules(): Promise<void> {
+  try {
+    const response = await axios.get<{ dice_per_player_count?: DiceRules }>("/api/admin/rules");
+    if (response.data.dice_per_player_count) {
+      Object.assign(diceRules, response.data.dice_per_player_count);
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function updateDiceRule(count: number, event: Event): Promise<void> {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const parsed = Math.trunc(Number(target.value));
+  const number_ = Math.max(1, Math.min(3, parsed === 0 || Number.isNaN(parsed) ? 3 : parsed));
+  diceRules[count] = number_;
+  try {
+    await axios.put("/api/admin/rules/dice_per_player_count", {
+      value: { ...diceRules },
+    });
+    rulesSaved.value = true;
+    if (rulesSavedTimeout.value) {
+      clearTimeout(rulesSavedTimeout.value);
+    }
+    rulesSavedTimeout.value = setTimeout(() => {
+      rulesSaved.value = false;
+    }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+function truncate(value: string, length: number): string {
+  return value.length > length ? `${value.slice(0, Math.max(0, length))}...` : value;
+}
+
+function parseDie(input: string): string[] {
+  return input.split(",").map((face) => face.trim()).filter(Boolean);
+}
+
+function processDie(die: string[]): Die {
+  return die.map((face) => (face === "WILD" ? "WILD" : Number(face)));
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, defaultForm());
+  die1Input.value = "";
+  die2Input.value = "";
+  die3Input.value = "";
+  die1DuelInput.value = "";
+  die2DuelInput.value = "";
+  die3DuelInput.value = "";
+  formError.value = "";
+  imageUploaded.value = false;
+  showLevelOptions.value = false;
+  charLevelOptions.value = [];
+  showLoForm.value = false;
+  showModal.value = true;
+}
+
+function openEdit(character: Character): void {
+  editing.value = character;
+  imageUploaded.value = false;
+  const hasDuelDice = character.dice_duel != undefined || character.wild_value_duel != undefined;
+  const bonus = character.starting_bonus || {};
+  const hasBonus = Boolean(bonus.extra_dice || bonus.random_item || (bonus.stat_boosts && Object.keys(bonus.stat_boosts).length > 0));
+  Object.assign(form, {
+    name: character.name,
+    description: character.description,
+    wild_value: character.wild_value,
+    wild_ability: character.wild_ability,
+    wild_ability_description: character.wild_ability_description || "",
+    addon_id: character.addon_id || undefined,
+    available_cooperative: character.available_cooperative ?? true,
+    available_duel: character.available_duel ?? true,
+    is_available: character.is_available ?? true,
+    useDuelDice: hasDuelDice,
+    wild_value_duel: character.wild_value_duel ?? character.wild_value,
+    wild_ability_duel: character.wild_ability_duel ?? character.wild_ability ?? "",
+    wild_ability_description_duel: character.wild_ability_description_duel ?? character.wild_ability_description ?? "",
+    hasStartingBonus: hasBonus,
+    bonusExtraDice: bonus.extra_dice || 0,
+    bonusRandomItem: Boolean(bonus.random_item),
+    bonusStatBoosts: { ...bonus.stat_boosts },
+  });
+  die1Input.value = character.dice[0]?.join(", ") || "";
+  die2Input.value = character.dice[1]?.join(", ") || "";
+  die3Input.value = character.dice[2]?.join(", ") || "";
+  die1DuelInput.value = hasDuelDice ? (character.dice_duel?.[0]?.join(", ") || "") : "";
+  die2DuelInput.value = hasDuelDice ? (character.dice_duel?.[1]?.join(", ") || "") : "";
+  die3DuelInput.value = hasDuelDice ? (character.dice_duel?.[2]?.join(", ") || "") : "";
+  formError.value = "";
+  showLevelOptions.value = false;
+  showLoForm.value = false;
+  showModal.value = true;
+  void fetchLevelOptions(character.id);
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  const die1 = parseDie(die1Input.value);
+  const die2 = parseDie(die2Input.value);
+  const die3 = parseDie(die3Input.value);
+
+  if (die1.length !== 6 || die2.length !== 6 || die3.length !== 6) {
+    formError.value = "Each die must have exactly 6 faces.";
+    return;
+  }
+
+  // Validate faces are numbers or WILD
+  for (const face of [...die1, ...die2, ...die3]) {
+    if (face !== "WILD" && Number.isNaN(Number(face))) {
+      formError.value = `Invalid face "${face}". Use numbers (1-5) or WILD.`;
+      return;
+    }
+  }
+
+  let diceDuel: Die[] | undefined;
+  let wildValueDuel: number | undefined;
+  let wildAbilityDuel: string | undefined;
+  let wildAbilityDescDuel: string | undefined;
+  if (form.useDuelDice) {
+    const dDie1 = parseDie(die1DuelInput.value);
+    const dDie2 = parseDie(die2DuelInput.value);
+    const dDie3 = parseDie(die3DuelInput.value);
+    if (dDie1.length === 6 && dDie2.length === 6 && dDie3.length === 6) {
+      diceDuel = [processDie(dDie1), processDie(dDie2), processDie(dDie3)];
+    }
+    wildValueDuel = form.wild_value_duel || undefined;
+    wildAbilityDuel = form.wild_ability_duel || undefined;
+    wildAbilityDescDuel = form.wild_ability_description_duel || undefined;
+  }
+
+  // Build starting_bonus
+  let startingBonus: StartingBonus | undefined;
+  if (form.hasStartingBonus) {
+    const bonus: StartingBonus = {};
+    if (form.bonusExtraDice > 0) {
+      bonus.extra_dice = form.bonusExtraDice;
+    }
+    if (form.bonusRandomItem) {
+      bonus.random_item = true;
+    }
+    const boosts: StatBoosts = {};
+    for (const [stat, value] of Object.entries(form.bonusStatBoosts)) {
+      if (value && value !== 0) {
+        boosts[stat] = Number(value);
       }
-      event.target.value = '';
-    },
-    setStatBoost(stat, value) {
-      const num = parseInt(value) || 0;
-      this.form.bonusStatBoosts = { ...this.form.bonusStatBoosts, [stat]: num };
-    },
-    async onMediaSelected(mediaItem) {
-      this.showMediaLibrary = false;
-      if (!this.editing || !mediaItem) return;
-      try {
-        const res = await axios.post(`/api/admin/characters/${this.editing.id}/image-from-media`, {
-          media_id: mediaItem.id,
-        });
-        this.editing.image_url = res.data.image_url;
-        this.imageUploaded = true;
-        setTimeout(() => { this.imageUploaded = false; }, 2000);
-        await this.fetch();
-      } catch (e) {
-        this.formError = 'Failed to update image: ' + (e.response?.data?.message || e.message);
-      }
-    },
-    async confirmDelete(c) {
-      if (!confirm(`Delete character "${c.name}"? This cannot be undone.`)) return;
-      try {
-        await axios.delete(`/api/admin/characters/${c.id}`);
-        await this.fetch();
-      } catch (e) {
-        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
-    // Level option methods
-    async fetchLevelOptions(characterId) {
-      try {
-        const res = await axios.get('/api/admin/character-level-options');
-        this.charLevelOptions = res.data.filter(o => o.character_id === characterId);
-      } catch { this.charLevelOptions = []; }
-    },
-    openCreateLo() {
-      this.editingLo = null;
-      this.loForm = { name: '', type: 'bump_dice_face', available_at_level: 1, is_active: true, max_selections: 0, sort_order: 0, description: '', icon: '' };
-      this.loConfigStat = 'wealth';
-      this.loConfigValue = 1;
-      this.loConfigItemId = null;
-      this.loConfigCurseId = null;
-      this.loFormError = '';
-      this.showLoForm = true;
-    },
-    openEditLo(opt) {
-      this.editingLo = opt.id;
-      this.loForm = {
-        name: opt.name,
-        type: opt.type,
-        available_at_level: opt.available_at_level,
-        is_active: opt.is_active,
-        max_selections: opt.max_selections,
-        sort_order: opt.sort_order,
-        description: opt.description || '',
-        icon: opt.icon || '',
-      };
-      if (opt.type === 'passive_stat_bonus' && opt.config) {
-        this.loConfigStat = opt.config.stat || 'wealth';
-        this.loConfigValue = opt.config.value || 1;
-      }
-      if (opt.type === 'start_with_item' && opt.config) {
-        this.loConfigItemId = opt.config.item_id || null;
-      }
-      if (opt.type === 'start_with_curse' && opt.config) {
-        this.loConfigCurseId = opt.config.curse_id || null;
-      }
-      this.loFormError = '';
-      this.showLoForm = true;
-    },
-    buildLoConfig() {
-      if (this.loForm.type === 'passive_stat_bonus') {
-        return { stat: this.loConfigStat, value: this.loConfigValue };
-      }
-      if (this.loForm.type === 'start_with_item') {
-        return this.loConfigItemId ? { item_id: this.loConfigItemId } : { random: true };
-      }
-      if (this.loForm.type === 'start_with_curse') {
-        return this.loConfigCurseId ? { curse_id: this.loConfigCurseId } : { random: true };
-      }
-      return null;
-    },
-    async saveLo() {
-      this.loFormError = '';
-      const data = { ...this.loForm, config: this.buildLoConfig(), character_id: this.editing.id };
-      try {
-        if (this.editingLo) {
-          await axios.put(`/api/admin/character-level-options/${this.editingLo}`, data);
-        } else {
-          await axios.post('/api/admin/character-level-options', data);
-        }
-        this.showLoForm = false;
-        await this.fetchLevelOptions(this.editing.id);
-      } catch (e) {
-        this.loFormError = e.response?.data?.message || 'Error saving';
-      }
-    },
-    async deleteLo(opt) {
-      if (!confirm(`Delete "${opt.name}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/character-level-options/${opt.id}`);
-        await this.fetchLevelOptions(this.editing.id);
-      } catch (e) {
-        this.loFormError = e.response?.data?.message || 'Error deleting';
-      }
-    },
-  },
-};
+    }
+    if (Object.keys(boosts).length > 0) {
+      bonus.stat_boosts = boosts;
+    }
+    startingBonus = Object.keys(bonus).length > 0 ? bonus : undefined;
+  }
+
+  const payload = {
+    name: form.name,
+    description: form.description,
+    wild_value: form.wild_value,
+    wild_ability: form.wild_ability,
+    wild_ability_description: form.wild_ability_description,
+    is_available: form.is_available,
+    available_cooperative: form.available_cooperative,
+    available_duel: form.available_duel,
+    addon_id: form.addon_id || undefined,
+    dice: [processDie(die1), processDie(die2), processDie(die3)],
+    dice_duel: diceDuel,
+    wild_value_duel: wildValueDuel,
+    wild_ability_duel: wildAbilityDuel,
+    wild_ability_description_duel: wildAbilityDescDuel,
+    starting_bonus: startingBonus,
+  };
+
+  saving.value = true;
+  try {
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/characters/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/characters", payload);
+    }
+    showModal.value = false;
+    await fetch();
+  } catch (error) {
+    formError.value = errorMessage(error, "Save failed");
+  }
+  saving.value = false;
+}
+
+async function generateWithAi(): Promise<void> {
+  aiError.value = "";
+  aiGenerating.value = true;
+  try {
+    const response = await axios.post<AiCharacterResponse>("/api/admin/ai/generate-character", {
+      prompt: aiPrompt.value || undefined,
+    });
+    const data = response.data;
+    showAiModal.value = false;
+    aiPrompt.value = "";
+    // Open create modal pre-filled with AI data
+    editing.value = undefined;
+    Object.assign(form, defaultForm(), {
+      name: data.name || "",
+      description: data.description || "",
+      wild_value: data.wild_value || 3,
+      wild_ability: data.wild_ability || "",
+      wild_ability_description: data.wild_ability_description || "",
+      addon_id: undefined,
+    });
+    die1Input.value = (data.dice?.[0] || []).join(", ");
+    die2Input.value = (data.dice?.[1] || []).join(", ");
+    die3Input.value = (data.dice?.[2] || []).join(", ");
+    formError.value = "";
+    showModal.value = true;
+  } catch (error) {
+    aiError.value = errorMessage(error, "AI generation failed");
+  }
+  aiGenerating.value = false;
+}
+
+function exportCsv(): void {
+  window.location.assign("/api/admin/characters/export-csv");
+}
+
+function triggerImport(): void {
+  csvInput.value?.click();
+}
+
+async function handleImportFile(event: Event): Promise<void> {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await axios.post<ImportResult>("/api/admin/characters/import-csv", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    importResult.value = response.data;
+    await fetch();
+  } catch (error) {
+    importResult.value = { created: 0, updated: 0, errors: [errorMessage(error, "Import failed")] };
+  }
+  target.value = "";
+}
+
+function setStatBoost(stat: string, event: Event): void {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const parsed = Math.trunc(Number(target.value));
+  const number_ = Number.isNaN(parsed) ? 0 : parsed;
+  form.bonusStatBoosts = { ...form.bonusStatBoosts, [stat]: number_ };
+}
+
+async function onMediaSelected(mediaItem: MediaItem | undefined): Promise<void> {
+  showMediaLibrary.value = false;
+  const current = editing.value;
+  if (!current || !mediaItem) {
+    return;
+  }
+  try {
+    const response = await axios.post<{ image_url: string }>(`/api/admin/characters/${current.id}/image-from-media`, {
+      media_id: mediaItem.id,
+    });
+    current.image_url = response.data.image_url;
+    imageUploaded.value = true;
+    if (imageUploadedTimeout.value) {
+      clearTimeout(imageUploadedTimeout.value);
+    }
+    imageUploadedTimeout.value = setTimeout(() => {
+      imageUploaded.value = false;
+    }, 2000);
+    await fetch();
+  } catch (error) {
+    formError.value = `Failed to update image: ${errorMessage(error, "Update failed")}`;
+  }
+}
+
+async function confirmDelete(character: Character): Promise<void> {
+  if (!confirm(`Delete character "${character.name}"? This cannot be undone.`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/characters/${character.id}`);
+    await fetch();
+  } catch (error) {
+    toast.error(`Delete failed: ${errorMessage(error, "Delete failed")}`);
+  }
+}
+
+// Level option methods
+async function fetchLevelOptions(characterId: number): Promise<void> {
+  try {
+    const response = await axios.get<LevelOption[]>("/api/admin/character-level-options");
+    charLevelOptions.value = response.data.filter((option) => option.character_id === characterId);
+  } catch {
+    charLevelOptions.value = [];
+  }
+}
+
+function openCreateLo(): void {
+  editingLo.value = undefined;
+  Object.assign(loForm, defaultLevelOptionForm());
+  loConfigStat.value = "wealth";
+  loConfigValue.value = 1;
+  loConfigItemId.value = undefined;
+  loConfigCurseId.value = undefined;
+  loFormError.value = "";
+  showLoForm.value = true;
+}
+
+function openEditLo(option: LevelOption): void {
+  editingLo.value = option.id;
+  Object.assign(loForm, {
+    name: option.name,
+    type: option.type,
+    available_at_level: option.available_at_level,
+    is_active: option.is_active,
+    max_selections: option.max_selections,
+    sort_order: option.sort_order,
+    description: option.description || "",
+    icon: option.icon || "",
+  });
+  if (option.type === "passive_stat_bonus" && option.config) {
+    loConfigStat.value = option.config.stat || "wealth";
+    loConfigValue.value = option.config.value || 1;
+  }
+  if (option.type === "start_with_item" && option.config) {
+    loConfigItemId.value = option.config.item_id || undefined;
+  }
+  if (option.type === "start_with_curse" && option.config) {
+    loConfigCurseId.value = option.config.curse_id || undefined;
+  }
+  loFormError.value = "";
+  showLoForm.value = true;
+}
+
+function buildLoConfig(): LevelOptionConfig | undefined {
+  if (loForm.type === "passive_stat_bonus") {
+    return { stat: loConfigStat.value, value: loConfigValue.value };
+  }
+  if (loForm.type === "start_with_item") {
+    return loConfigItemId.value ? { item_id: loConfigItemId.value } : { random: true };
+  }
+  if (loForm.type === "start_with_curse") {
+    return loConfigCurseId.value ? { curse_id: loConfigCurseId.value } : { random: true };
+  }
+  return undefined;
+}
+
+async function saveLo(): Promise<void> {
+  loFormError.value = "";
+  const current = editing.value;
+  if (!current) {
+    return;
+  }
+  const data = { ...loForm, config: buildLoConfig(), character_id: current.id };
+  try {
+    const currentLo = editingLo.value;
+    if (currentLo === undefined) {
+      await axios.post("/api/admin/character-level-options", data);
+    } else {
+      await axios.put(`/api/admin/character-level-options/${currentLo}`, data);
+    }
+    showLoForm.value = false;
+    await fetchLevelOptions(current.id);
+  } catch (error) {
+    loFormError.value = errorMessage(error, "Error saving");
+  }
+}
+
+async function deleteLo(option: LevelOption): Promise<void> {
+  const current = editing.value;
+  if (!current) {
+    return;
+  }
+  if (!confirm(`Delete "${option.name}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/character-level-options/${option.id}`);
+    await fetchLevelOptions(current.id);
+  } catch (error) {
+    loFormError.value = errorMessage(error, "Error deleting");
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([fetch(), fetchRules(), fetchAddons()]);
+});
 </script>
 
 <style scoped>

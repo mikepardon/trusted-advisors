@@ -92,7 +92,8 @@
         <div class="chart-wrap">
           <svg :viewBox="`0 0 ${chartWidth} ${chartHeight}`" class="chart-svg">
             <!-- Grid lines -->
-            <line v-for="i in 4" :key="'g'+i"
+            <line
+v-for="i in 4" :key="'g'+i"
               :x1="chartPad" :x2="chartWidth - chartPad"
               :y1="chartPad + (i-1) * (chartInnerH / 3)"
               :y2="chartPad + (i-1) * (chartInnerH / 3)"
@@ -158,89 +159,144 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'StatsPage',
-  data() {
-    return {
-      overview: {},
-      history: {},
-      characters: [],
-      achievementsEarned: 0,
-      achievementsTotal: 0,
-      loading: true,
-      premiumRequired: false,
-      chartWidth: 320,
-      chartHeight: 150,
-      chartPad: 16,
-    };
-  },
-  computed: {
-    chartInnerH() { return this.chartHeight - this.chartPad * 2; },
-    chartInnerW() { return this.chartWidth - this.chartPad * 2; },
-    eloValues() { return (this.history.elo_history || []).map(h => h.elo); },
-    eloMin() { return Math.min(...this.eloValues) - 20; },
-    eloMax() { return Math.max(...this.eloValues) + 20; },
-    eloCoords() {
-      const vals = this.eloValues;
-      if (vals.length < 2) return [];
-      const range = this.eloMax - this.eloMin || 1;
-      return vals.map((v, i) => ({
-        x: this.chartPad + (i / (vals.length - 1)) * this.chartInnerW,
-        y: this.chartPad + this.chartInnerH - ((v - this.eloMin) / range) * this.chartInnerH,
-      }));
-    },
-    eloPoints() { return this.eloCoords.map(p => `${p.x},${p.y}`).join(' '); },
-    maxActivity() { return Math.max(...(this.history.activity || []).map(d => d.count), 1); },
-    barWidth() { return this.chartInnerW / 30; },
-    achievementPercent() {
-      if (!this.achievementsTotal) return 0;
-      return Math.round(this.achievementsEarned / this.achievementsTotal * 100);
-    },
-  },
-  async mounted() {
-    this.loading = true;
-    const [overviewRes, historyRes, charsRes, achRes] = await Promise.allSettled([
-      axios.get('/api/stats/overview'),
-      axios.get('/api/stats/history'),
-      axios.get('/api/stats/characters'),
-      axios.get('/api/achievements'),
-    ]);
+interface ModeStats {
+  wins: number;
+  games: number;
+}
 
-    // Check if any stats endpoint returned 403 with premium_required
-    const premiumBlocked = [overviewRes, historyRes, charsRes].some(
-      r => r.status === 'rejected' && r.reason?.response?.status === 403 && r.reason?.response?.data?.premium_required
-    );
+interface Overview {
+  total_games?: number;
+  win_rate?: number;
+  best_score?: number;
+  current_elo?: number;
+  current_streak?: number;
+  best_streak?: number;
+  highest_elo?: number;
+  favorite_character?: string;
+  by_mode?: Record<string, ModeStats>;
+  by_type?: Record<string, ModeStats>;
+}
 
-    if (premiumBlocked) {
-      this.premiumRequired = true;
-      this.loading = false;
-      return;
-    }
+interface EloHistoryPoint {
+  date: string;
+  elo: number;
+}
 
-    this.overview = overviewRes.status === 'fulfilled' ? overviewRes.value.data : {};
-    this.history = historyRes.status === 'fulfilled' ? historyRes.value.data : {};
-    this.characters = charsRes.status === 'fulfilled' ? charsRes.value.data : [];
-    if (achRes.status === 'fulfilled') {
-      const achs = achRes.value.data;
-      this.achievementsTotal = achs.length;
-      this.achievementsEarned = achs.filter(a => a.earned).length;
-    }
-    this.loading = false;
-  },
-  methods: {
-    modeLabel(mode) {
-      const labels = { single: 'Solo', pass_and_play: 'Local', online: 'Online' };
-      return labels[mode] || mode;
-    },
-    winRate(data) {
-      if (!data.games) return 0;
-      return Math.round(data.wins / data.games * 100);
-    },
-  },
-};
+interface ActivityDay {
+  count: number;
+}
+
+interface History {
+  elo_history?: EloHistoryPoint[];
+  activity?: ActivityDay[];
+}
+
+interface CharacterStat {
+  character_id: number;
+  name: string;
+  image_url?: string;
+  games: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+}
+
+interface Achievement {
+  earned: boolean;
+}
+
+interface EloCoord {
+  x: number;
+  y: number;
+}
+
+const overview = ref<Overview>({});
+const history = ref<History>({});
+const characters = ref<CharacterStat[]>([]);
+const achievementsEarned = ref(0);
+const achievementsTotal = ref(0);
+const loading = ref(true);
+const premiumRequired = ref(false);
+const chartWidth = ref(320);
+const chartHeight = ref(150);
+const chartPad = ref(16);
+
+const chartInnerH = computed(() => chartHeight.value - chartPad.value * 2);
+const chartInnerW = computed(() => chartWidth.value - chartPad.value * 2);
+const eloValues = computed(() => (history.value.elo_history || []).map((point) => point.elo));
+const eloMin = computed(() => Math.min(...eloValues.value) - 20);
+const eloMax = computed(() => Math.max(...eloValues.value) + 20);
+const eloCoords = computed<EloCoord[]>(() => {
+  const values = eloValues.value;
+  if (values.length < 2) {
+    return [];
+  }
+  const range = eloMax.value - eloMin.value || 1;
+  return values.map((value, index) => ({
+    x: chartPad.value + (index / (values.length - 1)) * chartInnerW.value,
+    y: chartPad.value + chartInnerH.value - ((value - eloMin.value) / range) * chartInnerH.value,
+  }));
+});
+const eloPoints = computed(() => eloCoords.value.map((point) => `${point.x},${point.y}`).join(" "));
+const maxActivity = computed(() => Math.max(...(history.value.activity || []).map((day) => day.count), 1));
+const barWidth = computed(() => chartInnerW.value / 30);
+const achievementPercent = computed(() => {
+  if (!achievementsTotal.value) {
+    return 0;
+  }
+  return Math.round((achievementsEarned.value / achievementsTotal.value) * 100);
+});
+
+function modeLabel(mode: string): string {
+  const labels: Record<string, string> = { single: "Solo", pass_and_play: "Local", online: "Online" };
+  return labels[mode] || mode;
+}
+
+function winRate(data: ModeStats): number {
+  if (!data.games) {
+    return 0;
+  }
+  return Math.round((data.wins / data.games) * 100);
+}
+
+onMounted(async () => {
+  loading.value = true;
+  const [overviewResult, historyResult, charactersResult, achievementsResult] = await Promise.allSettled([
+    axios.get<Overview>("/api/stats/overview"),
+    axios.get<History>("/api/stats/history"),
+    axios.get<CharacterStat[]>("/api/stats/characters"),
+    axios.get<Achievement[]>("/api/achievements"),
+  ]);
+
+  // Check if any stats endpoint returned 403 with premium_required
+  const isPremiumBlocked = [overviewResult, historyResult, charactersResult].some(
+    (result) =>
+      result.status === "rejected" &&
+      isAxiosError<{ premium_required?: boolean }>(result.reason) &&
+      result.reason.response?.status === 403 &&
+      result.reason.response?.data?.premium_required,
+  );
+
+  if (isPremiumBlocked) {
+    premiumRequired.value = true;
+    loading.value = false;
+    return;
+  }
+
+  overview.value = overviewResult.status === "fulfilled" ? overviewResult.value.data : {};
+  history.value = historyResult.status === "fulfilled" ? historyResult.value.data : {};
+  characters.value = charactersResult.status === "fulfilled" ? charactersResult.value.data : [];
+  if (achievementsResult.status === "fulfilled") {
+    const achievements = achievementsResult.value.data;
+    achievementsTotal.value = achievements.length;
+    achievementsEarned.value = achievements.filter((achievement) => achievement.earned).length;
+  }
+  loading.value = false;
+});
 </script>
 
 <style scoped>

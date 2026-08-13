@@ -21,22 +21,22 @@
             <tr>
               <td class="name-col">Base Coins</td>
               <td class="desc-col">Awarded to every player who completes a game</td>
-              <td><input type="number" v-model.number="config.base_coins" class="coin-input" min="0" @change="saveConfig" /></td>
+              <td><input v-model.number="config.base_coins" type="number" class="coin-input" min="0" @change="saveConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Win Bonus (Cooperative)</td>
               <td class="desc-col">Extra coins for winning a cooperative game</td>
-              <td><input type="number" v-model.number="config.coop_win_bonus" class="coin-input" min="0" @change="saveConfig" /></td>
+              <td><input v-model.number="config.coop_win_bonus" type="number" class="coin-input" min="0" @change="saveConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Win Bonus (Duel)</td>
               <td class="desc-col">Extra coins for winning a duel game</td>
-              <td><input type="number" v-model.number="config.duel_win_bonus" class="coin-input" min="0" @change="saveConfig" /></td>
+              <td><input v-model.number="config.duel_win_bonus" type="number" class="coin-input" min="0" @change="saveConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Online Multiplier</td>
               <td class="desc-col">Multiplier applied to all coins for online games</td>
-              <td><input type="number" v-model.number="config.online_multiplier" class="coin-input" min="1" max="5" step="0.1" @change="saveConfig" /></td>
+              <td><input v-model.number="config.online_multiplier" type="number" class="coin-input" min="1" max="5" step="0.1" @change="saveConfig" /></td>
             </tr>
           </tbody>
         </table>
@@ -71,49 +71,55 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import axios from "axios";
+import { onMounted, reactive, ref } from "vue";
 
-export default {
-  name: 'AdminCoins',
-  data() {
-    return {
-      loading: true,
-      saved: false,
-      config: {
-        base_coins: 10,
-        coop_win_bonus: 15,
-        duel_win_bonus: 25,
-        online_multiplier: 1.5,
-      },
-    };
-  },
-  async mounted() {
-    await this.loadConfig();
-    this.loading = false;
-  },
-  methods: {
-    async loadConfig() {
-      try {
-        const res = await axios.get('/api/admin/rules');
-        if (res.data.coin_config) {
-          this.config = { ...this.config, ...res.data.coin_config };
-        }
-      } catch {
-        // use defaults
-      }
-    },
-    async saveConfig() {
-      try {
-        await axios.put('/api/admin/rules/coin_config', { value: { ...this.config } });
-        this.saved = true;
-        setTimeout(() => { this.saved = false; }, 1500);
-      } catch {
-        // silently fail
-      }
-    },
-  },
-};
+interface CoinConfig {
+  base_coins: number;
+  coop_win_bonus: number;
+  duel_win_bonus: number;
+  online_multiplier: number;
+}
+
+interface RulesResponse {
+  coin_config?: Partial<CoinConfig>;
+}
+
+const loading = ref(true);
+const saved = ref(false);
+const config = reactive<CoinConfig>({
+  base_coins: 10,
+  coop_win_bonus: 15,
+  duel_win_bonus: 25,
+  online_multiplier: 1.5,
+});
+
+async function loadConfig(): Promise<void> {
+  try {
+    const response = await axios.get<RulesResponse>("/api/admin/rules");
+    if (response.data.coin_config) {
+      Object.assign(config, response.data.coin_config);
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function saveConfig(): Promise<void> {
+  try {
+    await axios.put("/api/admin/rules/coin_config", { value: { ...config } });
+    saved.value = true;
+    setTimeout(() => { saved.value = false; }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+onMounted(async () => {
+  await loadConfig();
+  loading.value = false;
+});
 </script>
 
 <style scoped>

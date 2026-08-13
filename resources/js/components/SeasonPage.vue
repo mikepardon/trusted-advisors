@@ -25,7 +25,7 @@
       </div>
 
       <!-- Placement Rewards -->
-      <div v-if="seasonData.season.rewards && seasonData.season.rewards.length" class="card-panel">
+      <div v-if="seasonData.season.rewards && seasonData.season.rewards.length > 0" class="card-panel">
         <h2 class="section-title">Placement Rewards</h2>
         <div class="rewards-list">
           <div v-for="r in seasonData.season.rewards" :key="r.id" class="reward-row" :class="'reward-place-' + r.placement">
@@ -84,83 +84,130 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios from "axios";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'SeasonPage',
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      loading: true,
-      seasonData: null,
-      allSeasons: [],
-      selectedSeasonId: null,
-    };
-  },
-  computed: {
-    currentUserId() {
-      return this.auth.state.user?.id;
-    },
-    timePercent() {
-      if (!this.seasonData?.season) return 0;
-      const start = new Date(this.seasonData.season.starts_at).getTime();
-      const end = new Date(this.seasonData.season.ends_at).getTime();
-      const now = Date.now();
-      if (now >= end) return 100;
-      if (now <= start) return 0;
-      return Math.round(((now - start) / (end - start)) * 100);
-    },
-    timeLabel() {
-      if (!this.seasonData?.season) return '';
-      const end = new Date(this.seasonData.season.ends_at);
-      const now = new Date();
-      if (now >= end) return 'Season ended';
-      const diff = end - now;
-      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-      if (days > 1) return `${days} days remaining`;
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      return `${hours} hours remaining`;
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/seasons');
-      this.allSeasons = res.data;
-      const active = this.allSeasons.find(s => s.is_active) || this.allSeasons[0];
-      if (active) {
-        await this.loadSeason(active.id);
-      }
-    } catch {}
-    this.loading = false;
-  },
-  methods: {
-    async loadSeason(id) {
-      this.selectedSeasonId = id;
-      this.loading = true;
-      try {
-        const res = await axios.get(`/api/seasons/${id}`);
-        this.seasonData = res.data;
-      } catch {
-        this.seasonData = null;
-      }
-      this.loading = false;
-    },
-    formatDate(d) {
-      if (!d) return '';
-      return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-    },
-    ordinal(n) {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    },
-  },
-};
+interface SeasonRewardCharacter {
+  name: string;
+  image_url: string | undefined;
+}
+
+interface SeasonReward {
+  id: number;
+  placement: number;
+  reward_xp: number | undefined;
+  reward_coins: number | undefined;
+  reward_character: SeasonRewardCharacter | undefined;
+  reward_title: string | undefined;
+}
+
+interface Season {
+  id: number;
+  name: string;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+  rewards: SeasonReward[] | undefined;
+}
+
+interface LeaderboardEntry {
+  user_id: number;
+  rank: number;
+  name: string;
+  wins: number;
+  elo_rating: number;
+}
+
+interface SeasonData {
+  season: Season;
+  user_rank: number | undefined;
+  total_players: number;
+  leaderboard: LeaderboardEntry[];
+}
+
+const auth = useAuth();
+
+const loading = ref(true);
+const seasonData = ref<SeasonData | undefined>(undefined);
+const allSeasons = ref<Season[]>([]);
+const selectedSeasonId = ref<number | undefined>(undefined);
+
+const currentUserId = computed(() => auth.state.user?.id);
+
+const timePercent = computed(() => {
+  if (!seasonData.value?.season) {
+    return 0;
+  }
+  const start = new Date(seasonData.value.season.starts_at).getTime();
+  const end = new Date(seasonData.value.season.ends_at).getTime();
+  const now = Date.now();
+  if (now >= end) {
+    return 100;
+  }
+  if (now <= start) {
+    return 0;
+  }
+  return Math.round(((now - start) / (end - start)) * 100);
+});
+
+const timeLabel = computed(() => {
+  if (!seasonData.value?.season) {
+    return "";
+  }
+  const end = new Date(seasonData.value.season.ends_at).getTime();
+  const now = Date.now();
+  if (now >= end) {
+    return "Season ended";
+  }
+  const diff = end - now;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (days > 1) {
+    return `${days} days remaining`;
+  }
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  return `${hours} hours remaining`;
+});
+
+async function loadSeason(id: number): Promise<void> {
+  selectedSeasonId.value = id;
+  loading.value = true;
+  try {
+    const response = await axios.get<SeasonData>(`/api/seasons/${id}`);
+    seasonData.value = response.data;
+  } catch {
+    seasonData.value = undefined;
+  }
+  loading.value = false;
+}
+
+function formatDate(date: string | undefined): string {
+  if (!date) {
+    return "";
+  }
+  return new Date(date).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function ordinal(n: number): string {
+  const suffixes = ["th", "st", "nd", "rd"];
+  const value = n % 100;
+  return n + (suffixes[(value - 20) % 10] || suffixes[value] || suffixes[0]);
+}
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<Season[]>("/api/seasons");
+    allSeasons.value = response.data;
+    const active = allSeasons.value.find((s) => s.is_active) || allSeasons.value[0];
+    if (active) {
+      await loadSeason(active.id);
+    }
+  } catch {
+    // Ignore load failures; the empty state is rendered instead.
+  }
+  loading.value = false;
+});
 </script>
 
 <style scoped>

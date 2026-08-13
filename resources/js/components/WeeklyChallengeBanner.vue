@@ -19,31 +19,42 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import axios from "axios";
 
-export default {
-  name: 'WeeklyChallengeBanner',
-  data() {
-    return {
-      challenge: null,
-    };
-  },
-  computed: {
-    progressPercent() {
-      if (!this.challenge || !this.challenge.target) return 0;
-      return Math.min(100, (this.challenge.progress / this.challenge.target) * 100);
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/weekly-challenge');
-      if (res.data) {
-        this.challenge = res.data;
-      }
-    } catch {}
-  },
-};
+interface WeeklyChallenge {
+  id: number;
+  title: string;
+  description: string;
+  reward_xp: number;
+  reward_coins: number;
+  criteria: Record<string, unknown>;
+  progress: number;
+  target: number;
+  completed: boolean;
+  week_end: string;
+}
+
+const challenge = ref<WeeklyChallenge | undefined>(undefined);
+
+const progressPercent = computed<number>(() => {
+  if (!challenge.value || !challenge.value.target) {
+    return 0;
+  }
+  return Math.min(100, (challenge.value.progress / challenge.value.target) * 100);
+});
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<WeeklyChallenge | null>("/api/weekly-challenge");
+    if (response.data) {
+      challenge.value = response.data;
+    }
+  } catch {
+    // No active challenge or request failed; banner stays hidden.
+  }
+});
 </script>
 
 <style scoped>

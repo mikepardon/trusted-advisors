@@ -6,7 +6,7 @@
       <div class="selection-counter">
         <span
           class="counter-pip"
-          :class="{ filled: selectedIds.length >= 1 }"
+          :class="{ filled: selectedIds.length > 0 }"
         ></span>
         <span
           class="counter-pip"
@@ -57,7 +57,7 @@
         <!-- Dice display -->
         <div class="dice-section">
           <span class="section-label">Dice</span>
-          <div class="dice-row" v-for="(die, di) in char.dice" :key="di">
+          <div v-for="(die, di) in char.dice" :key="di" class="dice-row">
             <span
               v-for="(face, fi) in die"
               :key="fi"
@@ -68,14 +68,14 @@
         </div>
 
         <!-- Wild ability -->
-        <div class="ability-section" v-if="char.wild_ability">
+        <div v-if="char.wild_ability" class="ability-section">
           <span class="section-label">Wild Ability</span>
           <span class="ability-name">{{ char.wild_ability }}</span>
           <p class="ability-desc">{{ char.wild_ability_description }}</p>
         </div>
 
         <!-- Starting bonus -->
-        <div class="bonus-section" v-if="char.starting_bonus">
+        <div v-if="char.starting_bonus" class="bonus-section">
           <span class="section-label">Starting Bonus</span>
           <span class="bonus-value">
             <span v-for="(val, stat) in char.starting_bonus" :key="stat">
@@ -110,9 +110,9 @@
               <div class="upgrade-level-group">
                 <span class="upgrade-level-label">Level {{ level }}</span>
                 <div
-                  class="upgrade-option"
                   v-for="opt in upgradeModalChar.level_options[level]"
                   :key="opt.id"
+                  class="upgrade-option"
                 >
                   <span v-if="opt.icon" class="upgrade-icon">{{ upgradeIconEmoji(opt.icon) }}</span>
                   <div class="upgrade-details">
@@ -128,7 +128,7 @@
     </Transition>
 
     <!-- Confirm button -->
-    <div class="confirm-section" v-if="!loading">
+    <div v-if="!loading" class="confirm-section">
       <button
         class="btn-primary confirm-btn"
         :disabled="selectedIds.length !== 2 || submitting"
@@ -141,90 +141,125 @@
   </div>
 </template>
 
-<script>
-import { useAuth } from '../stores/auth';
-import axios from 'axios';
+<script setup lang="ts">
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import axios, { isAxiosError } from "axios";
+import { useAuth, type User } from "../stores/auth";
 
-export default {
-  name: 'ChooseAdvisors',
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      characters: [],
-      selectedIds: [],
-      upgradeModalChar: null,
-      loading: true,
-      submitting: false,
-      error: '',
-    };
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/starter-advisors');
-      this.characters = res.data;
-    } catch {
-      this.error = 'Failed to load advisors. Please refresh.';
-    } finally {
-      this.loading = false;
-    }
-  },
-  methods: {
-    isSelected(id) {
-      return this.selectedIds.includes(id);
-    },
-    toggleSelect(id) {
-      if (this.isSelected(id)) {
-        this.selectedIds = this.selectedIds.filter(x => x !== id);
-      } else if (this.selectedIds.length < 2) {
-        this.selectedIds.push(id);
-      }
-    },
-    openUpgradeModal(char) {
-      this.upgradeModalChar = char;
-    },
-    upgradeIconEmoji(icon) {
-      const map = {
-        'dice': '\u{1F3B2}', 'dice-multiple': '\u{1F3B2}',
-        'crown': '\u{1F451}', 'coins': '\u{1FA99}',
-        'shield': '\u{1F6E1}', 'church': '\u{26EA}',
-        'wheat': '\u{1F33E}', 'smile': '\u{1F60A}',
-        'star': '\u{2B50}', 'eye': '\u{1F441}',
-        'backpack': '\u{1F392}', 'bag': '\u{1F45C}',
-        'skull': '\u{1F480}',
-      };
-      return map[icon] || icon;
-    },
-    sortedLevels(levelOptions) {
-      if (!levelOptions) return [];
-      return Object.keys(levelOptions)
-        .map(Number)
-        .sort((a, b) => a - b);
-    },
-    async submit() {
-      if (this.selectedIds.length !== 2) return;
-      this.submitting = true;
-      this.error = '';
+interface UpgradeOption {
+  id: number;
+  name: string;
+  description: string;
+  icon?: string;
+}
 
-      try {
-        const res = await axios.post('/api/choose-starter-advisors', {
-          character_ids: this.selectedIds,
-        });
-        this.auth.state.user = res.data;
-        this.$router.push('/');
-      } catch (e) {
-        this.error =
-          e.response?.data?.error ||
-          e.response?.data?.message ||
-          'Something went wrong. Please try again.';
-      } finally {
-        this.submitting = false;
-      }
-    },
-  },
-};
+interface AdvisorCharacter {
+  id: number;
+  name: string;
+  description: string;
+  image_url?: string;
+  dice: string[][];
+  wild_ability?: string;
+  wild_ability_description?: string;
+  starting_bonus?: Record<string, number>;
+  level_options?: Record<string, UpgradeOption[]>;
+}
+
+const auth = useAuth();
+const router = useRouter();
+
+const characters = ref<AdvisorCharacter[]>([]);
+const selectedIds = ref<number[]>([]);
+const upgradeModalChar = ref<AdvisorCharacter>();
+const loading = ref(true);
+const submitting = ref(false);
+const error = ref("");
+
+void loadAdvisors();
+
+async function loadAdvisors(): Promise<void> {
+  try {
+    const response = await axios.get<AdvisorCharacter[]>("/api/starter-advisors");
+    characters.value = response.data;
+  } catch {
+    error.value = "Failed to load advisors. Please refresh.";
+  } finally {
+    loading.value = false;
+  }
+}
+
+function isSelected(id: number): boolean {
+  return selectedIds.value.includes(id);
+}
+
+function toggleSelect(id: number): void {
+  if (isSelected(id)) {
+    selectedIds.value = selectedIds.value.filter((selectedId) => selectedId !== id);
+  } else if (selectedIds.value.length < 2) {
+    selectedIds.value.push(id);
+  }
+}
+
+function openUpgradeModal(char: AdvisorCharacter): void {
+  upgradeModalChar.value = char;
+}
+
+function upgradeIconEmoji(icon: string): string {
+  const map: Record<string, string> = {
+    dice: "\u{1F3B2}",
+    "dice-multiple": "\u{1F3B2}",
+    crown: "\u{1F451}",
+    coins: "\u{1FA99}",
+    shield: "\u{1F6E1}",
+    church: "\u{26EA}",
+    wheat: "\u{1F33E}",
+    smile: "\u{1F60A}",
+    star: "\u{2B50}",
+    eye: "\u{1F441}",
+    backpack: "\u{1F392}",
+    bag: "\u{1F45C}",
+    skull: "\u{1F480}",
+  };
+  return map[icon] ?? icon;
+}
+
+function sortedLevels(levelOptions: Record<string, UpgradeOption[]> | undefined): number[] {
+  if (!levelOptions) {
+    return [];
+  }
+  return Object.keys(levelOptions)
+    .map(Number)
+    .toSorted((first, second) => first - second);
+}
+
+async function submit(): Promise<void> {
+  if (selectedIds.value.length !== 2) {
+    return;
+  }
+  submitting.value = true;
+  error.value = "";
+
+  try {
+    const response = await axios.post<User>("/api/choose-starter-advisors", {
+      character_ids: selectedIds.value,
+    });
+    auth.state.user = response.data;
+    router.push("/");
+  } catch (error_) {
+    error.value = submitErrorMessage(error_);
+  } finally {
+    submitting.value = false;
+  }
+}
+
+function submitErrorMessage(error_: unknown): string {
+  if (isAxiosError<{ error?: string; message?: string }>(error_)) {
+    const data = error_.response?.data;
+    return data?.error ?? data?.message ?? "Something went wrong. Please try again.";
+  }
+  return "Something went wrong. Please try again.";
+}
 </script>
 
 <style scoped>

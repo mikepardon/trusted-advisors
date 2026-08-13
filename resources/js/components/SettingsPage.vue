@@ -161,85 +161,91 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { getSoundSettings, saveSoundSettings, playSound } from '../sounds';
-import { getHintsSetting, setHintsSetting } from '../hints';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import { onMounted, reactive, ref } from "vue";
+import axios from "axios";
+import { getSoundSettings, saveSoundSettings, playSound } from "../sounds";
+import { areHintsEnabled, setHintsEnabled } from "../hints";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'SettingsPage',
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      settings: getSoundSettings(),
-      hintsEnabled: getHintsSetting(),
-      dddiceEnabled: localStorage.getItem('dddice_enabled') !== 'false',
-      notifPrefs: {
-        push_game: true,
-        push_social: true,
-        push_achievement: true,
-        push_season: true,
-        push_admin: true,
-        push_challenge: true,
-      },
-    };
-  },
-  async mounted() {
-    // Load notification preferences from user data
-    const prefs = this.auth.state.user?.notification_preferences;
-    if (prefs) {
-      Object.keys(this.notifPrefs).forEach(key => {
-        if (key in prefs) {
-          this.notifPrefs[key] = prefs[key];
-        }
-      });
+interface SoundSettings {
+  music: boolean;
+  ui: boolean;
+  actions: boolean;
+}
+
+interface NotifPrefs {
+  push_game: boolean;
+  push_social: boolean;
+  push_achievement: boolean;
+  push_season: boolean;
+  push_admin: boolean;
+  push_challenge: boolean;
+}
+
+const auth = useAuth();
+
+const settings = reactive<SoundSettings>(getSoundSettings());
+const hintsEnabled = ref<boolean>(areHintsEnabled());
+const notifPrefs = reactive<NotifPrefs>({
+  push_game: true,
+  push_social: true,
+  push_achievement: true,
+  push_season: true,
+  push_admin: true,
+  push_challenge: true,
+});
+
+onMounted(() => {
+  // Load notification preferences from user data
+  const prefs = auth.state.user?.notification_preferences;
+  if (prefs) {
+    for (const key of Object.keys(notifPrefs) as (keyof NotifPrefs)[]) {
+      if (!Object.hasOwn(prefs, key)) {
+        continue;
+      }
+      const rawValue = prefs[key];
+      notifPrefs[key] = Boolean(rawValue);
     }
+  }
+});
 
-  },
-  methods: {
-    toggle(key) {
-      this.settings[key] = !this.settings[key];
-      saveSoundSettings(this.settings);
-      if (this.settings[key]) {
-        playSound('clickToggle');
-      }
-    },
-    toggleHints() {
-      this.hintsEnabled = !this.hintsEnabled;
-      setHintsSetting(this.hintsEnabled);
-      if (this.hintsEnabled) {
-        playSound('clickToggle');
-      }
-    },
-    toggleDddice() {
-      this.dddiceEnabled = !this.dddiceEnabled;
-      localStorage.setItem('dddice_enabled', this.dddiceEnabled ? 'true' : 'false');
-      if (this.dddiceEnabled) {
-        playSound('clickToggle');
-      }
-    },
-    async toggleNotif(key) {
-      this.notifPrefs[key] = !this.notifPrefs[key];
-      if (this.notifPrefs[key]) {
-        playSound('clickToggle');
-      }
-      try {
-        await axios.put('/api/notifications/preferences', { preferences: { ...this.notifPrefs } });
-        // Update local user data
-        if (this.auth.state.user) {
-          this.auth.state.user.notification_preferences = { ...this.notifPrefs };
-        }
-      } catch {
-        // Revert on failure
-        this.notifPrefs[key] = !this.notifPrefs[key];
-      }
-    },
-  },
-};
+function toggle(key: keyof SoundSettings): void {
+  const previous = settings[key];
+  const shouldEnable = !previous;
+  settings[key] = shouldEnable;
+  saveSoundSettings(settings);
+  if (shouldEnable) {
+    playSound("clickToggle");
+  }
+}
+
+function toggleHints(): void {
+  hintsEnabled.value = !hintsEnabled.value;
+  setHintsEnabled(hintsEnabled.value);
+  if (hintsEnabled.value) {
+    playSound("clickToggle");
+  }
+}
+
+async function toggleNotif(key: keyof NotifPrefs): Promise<void> {
+  const previous = notifPrefs[key];
+  const shouldEnable = !previous;
+  notifPrefs[key] = shouldEnable;
+  if (shouldEnable) {
+    playSound("clickToggle");
+  }
+  try {
+    await axios.put("/api/notifications/preferences", { preferences: { ...notifPrefs } });
+    // Update local user data
+    if (auth.state.user) {
+      auth.state.user.notification_preferences = { ...notifPrefs };
+    }
+  } catch {
+    // Revert on failure: restore the pre-toggle value
+    notifPrefs[key] = previous;
+  }
+}
 </script>
 
 <style scoped>

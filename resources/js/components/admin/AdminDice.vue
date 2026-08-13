@@ -15,7 +15,7 @@
 
     <div v-if="loading" class="loading">Loading...</div>
 
-    <div v-else-if="!filteredThemes.length" class="empty-state">
+    <div v-else-if="filteredThemes.length === 0" class="empty-state">
       <p>No dice themes found. Click "Sync from dddice" to fetch themes from the API.</p>
     </div>
 
@@ -53,14 +53,14 @@
         </div>
         <div class="form-group">
           <label class="toggle-label">
-            <input type="checkbox" v-model="editForm.is_active" />
+            <input v-model="editForm.is_active" type="checkbox" />
             <span>Active</span>
             <span class="toggle-desc">When disabled, theme won't appear in user collections</span>
           </label>
         </div>
         <div class="form-group">
           <label class="toggle-label">
-            <input type="checkbox" v-model="editForm.is_default_unlocked" />
+            <input v-model="editForm.is_default_unlocked" type="checkbox" />
             <span>Default Unlocked</span>
             <span class="toggle-desc">Available to all users without needing to unlock</span>
           </label>
@@ -77,90 +77,120 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import AdminSearchInput from './AdminSearchInput.vue';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import AdminSearchInput from "./AdminSearchInput.vue";
 
-export default {
-  name: 'AdminDice',
-  components: { AdminSearchInput },
-  data() {
-    return {
-      themes: [],
-      loading: true,
-      syncing: false,
-      syncMessage: '',
-      searchQuery: '',
-      editingTheme: null,
-      editForm: { name: '', description: '', is_active: true, is_default_unlocked: false },
-      editSaving: false,
-      editError: '',
-    };
-  },
-  computed: {
-    filteredThemes() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.themes;
-      return this.themes.filter(t =>
-        t.name.toLowerCase().includes(q) ||
-        t.slug.toLowerCase().includes(q)
-      );
-    },
-  },
-  async mounted() {
-    await this.fetch();
-  },
-  methods: {
-    async fetch() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/admin/dice-themes');
-        this.themes = res.data;
-      } catch {
-        // ignore
-      }
-      this.loading = false;
-    },
-    async syncThemes() {
-      this.syncing = true;
-      this.syncMessage = '';
-      try {
-        const res = await axios.post('/api/admin/dice-themes/sync');
-        this.themes = res.data.themes || [];
-        this.syncMessage = res.data.message || 'Sync complete';
-        setTimeout(() => { this.syncMessage = ''; }, 4000);
-      } catch (e) {
-        this.syncMessage = 'Sync failed: ' + (e.response?.data?.error || e.message);
-      }
-      this.syncing = false;
-    },
-    openEdit(theme) {
-      this.editingTheme = theme;
-      this.editForm = {
-        name: theme.name || '',
-        description: theme.description || '',
-        is_active: theme.is_active ?? true,
-        is_default_unlocked: theme.is_default_unlocked ?? false,
-      };
-      this.editError = '';
-    },
-    async saveEdit() {
-      this.editSaving = true;
-      this.editError = '';
-      try {
-        const res = await axios.put(`/api/admin/dice-themes/${this.editingTheme.id}`, this.editForm);
-        const idx = this.themes.findIndex(t => t.id === this.editingTheme.id);
-        if (idx !== -1) {
-          this.themes[idx] = { ...this.themes[idx], ...res.data };
-        }
-        this.editingTheme = null;
-      } catch (e) {
-        this.editError = e.response?.data?.message || 'Save failed';
-      }
-      this.editSaving = false;
-    },
-  },
-};
+interface DiceTheme {
+  id: number;
+  slug: string;
+  name: string;
+  description: string | undefined;
+  preview_image: string | undefined;
+  is_active: boolean;
+  is_default_unlocked: boolean;
+}
+
+interface DiceThemeForm {
+  name: string;
+  description: string;
+  is_active: boolean;
+  is_default_unlocked: boolean;
+}
+
+interface SyncResponse {
+  themes?: DiceTheme[];
+  message?: string;
+}
+
+const themes = ref<DiceTheme[]>([]);
+const loading = ref(true);
+const syncing = ref(false);
+const syncMessage = ref("");
+const searchQuery = ref("");
+const editingTheme = ref<DiceTheme | undefined>(undefined);
+const editForm = reactive<DiceThemeForm>({ name: "", description: "", is_active: true, is_default_unlocked: false });
+const editSaving = ref(false);
+const editError = ref("");
+
+const filteredThemes = computed<DiceTheme[]>(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) {
+    return themes.value;
+  }
+  return themes.value.filter((theme) =>
+    theme.name.toLowerCase().includes(query) ||
+    theme.slug.toLowerCase().includes(query),
+  );
+});
+
+async function fetchThemes(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<DiceTheme[]>("/api/admin/dice-themes");
+    themes.value = response.data;
+  } catch {
+    // ignore
+  }
+  loading.value = false;
+}
+
+async function syncThemes(): Promise<void> {
+  syncing.value = true;
+  syncMessage.value = "";
+  try {
+    const response = await axios.post<SyncResponse>("/api/admin/dice-themes/sync");
+    themes.value = response.data.themes ?? [];
+    syncMessage.value = response.data.message ?? "Sync complete";
+    setTimeout(() => {
+      syncMessage.value = "";
+    }, 4000);
+  } catch (error) {
+    const detail = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? error.message)
+      : "Unknown error";
+    syncMessage.value = `Sync failed: ${detail}`;
+  }
+  syncing.value = false;
+}
+
+function openEdit(theme: DiceTheme): void {
+  editingTheme.value = theme;
+  Object.assign(editForm, {
+    name: theme.name || "",
+    description: theme.description || "",
+    is_active: theme.is_active ?? true,
+    is_default_unlocked: theme.is_default_unlocked ?? false,
+  });
+  editError.value = "";
+}
+
+async function saveEdit(): Promise<void> {
+  const theme = editingTheme.value;
+  if (!theme) {
+    return;
+  }
+  editSaving.value = true;
+  editError.value = "";
+  try {
+    const response = await axios.put<Partial<DiceTheme>>(`/api/admin/dice-themes/${theme.id}`, editForm);
+    const index = themes.value.findIndex((t) => t.id === theme.id);
+    if (index !== -1) {
+      themes.value[index] = { ...themes.value[index], ...response.data };
+    }
+    editingTheme.value = undefined;
+  } catch (error) {
+    editError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Save failed")
+      : "Save failed";
+  }
+  editSaving.value = false;
+}
+
+onMounted(() => {
+  fetchThemes();
+});
 </script>
 
 <style scoped>

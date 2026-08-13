@@ -21,7 +21,7 @@
             <tr>
               <td class="name-col">Default Total Rounds</td>
               <td class="desc-col">Number of rounds for standard cooperative games (12 per year)</td>
-              <td><input type="number" v-model.number="defaultTotalRounds" class="xp-input" min="12" max="120" step="12" @change="saveDefaultRounds" /></td>
+              <td><input v-model.number="defaultTotalRounds" type="number" class="xp-input" min="12" max="120" step="12" @change="saveDefaultRounds" /></td>
             </tr>
           </tbody>
         </table>
@@ -44,17 +44,17 @@
             <tr>
               <td class="name-col">XP Per Level</td>
               <td class="desc-col">Multiplier for the advisor level formula: XP = value &times; (L&minus;1) &times; L / 2</td>
-              <td><input type="number" v-model.number="advisorConfig.xp_per_level" class="xp-input" min="10" step="10" @change="saveAdvisorConfig" /></td>
+              <td><input v-model.number="advisorConfig.xp_per_level" type="number" class="xp-input" min="10" step="10" @change="saveAdvisorConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Max Level</td>
               <td class="desc-col">Maximum advisor level before immortalisation</td>
-              <td><input type="number" v-model.number="advisorConfig.max_level" class="xp-input" min="2" max="20" @change="saveAdvisorConfig" /></td>
+              <td><input v-model.number="advisorConfig.max_level" type="number" class="xp-input" min="2" max="20" @change="saveAdvisorConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Options Per Level-Up</td>
               <td class="desc-col">How many random upgrade choices are offered each level</td>
-              <td><input type="number" v-model.number="advisorConfig.options_per_level_up" class="xp-input" min="1" max="10" @change="saveAdvisorConfig" /></td>
+              <td><input v-model.number="advisorConfig.options_per_level_up" type="number" class="xp-input" min="1" max="10" @change="saveAdvisorConfig" /></td>
             </tr>
           </tbody>
         </table>
@@ -92,26 +92,26 @@
             <tr>
               <td class="name-col">Base</td>
               <td class="desc-col">Awarded to every player who completes a game</td>
-              <td><input type="number" v-model.number="config.base_xp" class="xp-input" min="0" @change="saveConfig" /></td>
-              <td><input type="number" v-model.number="coinConfig.base_coins" class="xp-input" min="0" @change="saveCoinConfig" /></td>
+              <td><input v-model.number="config.base_xp" type="number" class="xp-input" min="0" @change="saveConfig" /></td>
+              <td><input v-model.number="coinConfig.base_coins" type="number" class="xp-input" min="0" @change="saveCoinConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Win Bonus (Cooperative)</td>
               <td class="desc-col">Extra reward for winning a cooperative game</td>
-              <td><input type="number" v-model.number="config.coop_win_bonus" class="xp-input" min="0" @change="saveConfig" /></td>
-              <td><input type="number" v-model.number="coinConfig.coop_win_bonus" class="xp-input" min="0" @change="saveCoinConfig" /></td>
+              <td><input v-model.number="config.coop_win_bonus" type="number" class="xp-input" min="0" @change="saveConfig" /></td>
+              <td><input v-model.number="coinConfig.coop_win_bonus" type="number" class="xp-input" min="0" @change="saveCoinConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Win Bonus (Duel)</td>
               <td class="desc-col">Extra reward for winning a duel game</td>
-              <td><input type="number" v-model.number="config.duel_win_bonus" class="xp-input" min="0" @change="saveConfig" /></td>
-              <td><input type="number" v-model.number="coinConfig.duel_win_bonus" class="xp-input" min="0" @change="saveCoinConfig" /></td>
+              <td><input v-model.number="config.duel_win_bonus" type="number" class="xp-input" min="0" @change="saveConfig" /></td>
+              <td><input v-model.number="coinConfig.duel_win_bonus" type="number" class="xp-input" min="0" @change="saveCoinConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Online Multiplier</td>
               <td class="desc-col">Multiplier applied for online games</td>
-              <td><input type="number" v-model.number="config.online_multiplier" class="xp-input" min="1" max="5" step="0.1" @change="saveConfig" /></td>
-              <td><input type="number" v-model.number="coinConfig.online_multiplier" class="xp-input" min="1" max="5" step="0.1" @change="saveCoinConfig" /></td>
+              <td><input v-model.number="config.online_multiplier" type="number" class="xp-input" min="1" max="5" step="0.1" @change="saveConfig" /></td>
+              <td><input v-model.number="coinConfig.online_multiplier" type="number" class="xp-input" min="1" max="5" step="0.1" @change="saveCoinConfig" /></td>
             </tr>
           </tbody>
         </table>
@@ -197,7 +197,7 @@
                   <div v-for="r in l.rewards" :key="r.id" class="reward-badge">
                     <span class="reward-type">{{ r.type }}</span>
                     {{ r.entity_name }}
-                    <button class="reward-remove" @click="removeUnlock(r.id)" title="Remove">&times;</button>
+                    <button class="reward-remove" title="Remove" @click="removeUnlock(r.id)">&times;</button>
                   </div>
                   <button class="btn-add-unlock" @click="openAddUnlock(l.level)">+ unlock</button>
                 </td>
@@ -238,188 +238,260 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'AdminXp',
-  data() {
-    return {
-      loading: true,
-      saved: false,
-      config: {
-        base_xp: 50,
-        coop_win_bonus: 100,
-        duel_win_bonus: 150,
-        online_multiplier: 1.5,
-      },
-      coinConfig: {
-        base_coins: 10,
-        coop_win_bonus: 15,
-        duel_win_bonus: 25,
-        online_multiplier: 1.5,
-      },
-      levels: [],
-      characters: [],
-      items: [],
-      advisorConfig: {
-        xp_per_level: 100,
-        max_level: 8,
-        options_per_level_up: 2,
-      },
-      advisorSaved: false,
-      defaultTotalRounds: 60,
-      roundsSaved: false,
-      showUnlockModal: false,
-      unlockForm: { level: 1, type: 'character', entity_id: '' },
-      unlockError: '',
-    };
-  },
-  computed: {
-    unlockEntityOptions() {
-      return this.unlockForm.type === 'character' ? this.characters : this.items;
-    },
-    advisorLevelPreview() {
-      const rows = [];
-      const m = this.advisorConfig.xp_per_level || 100;
-      const max = this.advisorConfig.max_level || 8;
-      for (let l = 1; l <= max; l++) {
-        const total = Math.floor(m * (l - 1) * l / 2);
-        const next = l < max ? Math.floor(m * l * (l + 1) / 2) - total : 0;
-        rows.push({ level: l, total, toNext: next });
-      }
-      return rows;
-    },
-  },
-  async mounted() {
-    await Promise.all([this.loadConfig(), this.loadCoinConfig(), this.loadAdvisorConfig(), this.loadLevels(), this.loadEntities(), this.loadDefaultRounds()]);
-    this.loading = false;
-  },
-  methods: {
-    async loadConfig() {
-      try {
-        const res = await axios.get('/api/admin/rules');
-        if (res.data.xp_config) {
-          this.config = { ...this.config, ...res.data.xp_config };
-        }
-      } catch {
-        // use defaults
-      }
-    },
-    async loadCoinConfig() {
-      try {
-        const res = await axios.get('/api/admin/rules');
-        if (res.data.coin_config) {
-          this.coinConfig = { ...this.coinConfig, ...res.data.coin_config };
-        }
-      } catch {
-        // use defaults
-      }
-    },
-    async saveCoinConfig() {
-      try {
-        await axios.put('/api/admin/rules/coin_config', { value: { ...this.coinConfig } });
-        this.saved = true;
-        setTimeout(() => { this.saved = false; }, 1500);
-      } catch {
-        // silently fail
-      }
-    },
-    async loadLevels() {
-      try {
-        const res = await axios.get('/api/admin/levels');
-        this.levels = res.data;
-      } catch {
-        // ignore
-      }
-    },
-    async loadEntities() {
-      try {
-        const res = await axios.get('/api/admin/unlockables');
-        this.characters = res.data.characters || [];
-        this.items = res.data.items || [];
-      } catch {
-        // ignore
-      }
-    },
-    async saveConfig() {
-      try {
-        await axios.put('/api/admin/rules/xp_config', { value: { ...this.config } });
-        this.saved = true;
-        setTimeout(() => { this.saved = false; }, 1500);
-      } catch {
-        // silently fail
-      }
-    },
-    async loadAdvisorConfig() {
-      try {
-        const res = await axios.get('/api/admin/rules');
-        if (res.data.advisor_level_config) {
-          this.advisorConfig = { ...this.advisorConfig, ...res.data.advisor_level_config };
-        }
-      } catch {
-        // use defaults
-      }
-    },
-    async saveAdvisorConfig() {
-      try {
-        await axios.put('/api/admin/rules/advisor_level_config', { value: { ...this.advisorConfig } });
-        this.advisorSaved = true;
-        setTimeout(() => { this.advisorSaved = false; }, 1500);
-      } catch {
-        // silently fail
-      }
-    },
-    async loadDefaultRounds() {
-      try {
-        const res = await axios.get('/api/admin/rules');
-        if (res.data.default_total_rounds != null) {
-          this.defaultTotalRounds = res.data.default_total_rounds;
-        }
-      } catch {
-        // use default
-      }
-    },
-    async saveDefaultRounds() {
-      try {
-        await axios.put('/api/admin/rules/default_total_rounds', { value: this.defaultTotalRounds });
-        this.roundsSaved = true;
-        setTimeout(() => { this.roundsSaved = false; }, 1500);
-      } catch {
-        // silently fail
-      }
-    },
-    openAddUnlock(level) {
-      this.unlockForm = { level, type: 'character', entity_id: '' };
-      this.unlockError = '';
-      this.showUnlockModal = true;
-    },
-    async saveUnlock() {
-      this.unlockError = '';
-      try {
-        await axios.post('/api/admin/unlockables', {
-          type: this.unlockForm.type,
-          entity_id: this.unlockForm.entity_id,
-          unlock_method: 'level',
-          unlock_value: this.unlockForm.level,
-        });
-        this.showUnlockModal = false;
-        await this.loadLevels();
-      } catch (e) {
-        this.unlockError = e.response?.data?.message || 'Error';
-      }
-    },
-    async removeUnlock(id) {
-      if (!confirm('Remove this unlock?')) return;
-      try {
-        await axios.delete(`/api/admin/unlockables/${id}`);
-        await this.loadLevels();
-      } catch {
-        // ignore
-      }
-    },
-  },
-};
+interface XpConfig {
+  base_xp: number;
+  coop_win_bonus: number;
+  duel_win_bonus: number;
+  online_multiplier: number;
+}
+
+interface CoinConfig {
+  base_coins: number;
+  coop_win_bonus: number;
+  duel_win_bonus: number;
+  online_multiplier: number;
+}
+
+interface AdvisorConfig {
+  xp_per_level: number;
+  max_level: number;
+  options_per_level_up: number;
+}
+
+interface LevelReward {
+  id: number;
+  type: string;
+  entity_name: string;
+}
+
+interface LevelRow {
+  level: number;
+  total_xp: number;
+  xp_to_next: number;
+  rewards: LevelReward[];
+}
+
+interface Entity {
+  id: number;
+  name: string;
+}
+
+interface RulesResponse {
+  xp_config?: Partial<XpConfig>;
+  coin_config?: Partial<CoinConfig>;
+  advisor_level_config?: Partial<AdvisorConfig>;
+  default_total_rounds?: number;
+}
+
+interface UnlockablesResponse {
+  characters?: Entity[];
+  items?: Entity[];
+}
+
+interface AdvisorLevelPreviewRow {
+  level: number;
+  total: number;
+  toNext: number;
+}
+
+interface UnlockForm {
+  level: number;
+  type: string;
+  entity_id: number | "";
+}
+
+const loading = ref(true);
+const saved = ref(false);
+const config = reactive<XpConfig>({
+  base_xp: 50,
+  coop_win_bonus: 100,
+  duel_win_bonus: 150,
+  online_multiplier: 1.5,
+});
+const coinConfig = reactive<CoinConfig>({
+  base_coins: 10,
+  coop_win_bonus: 15,
+  duel_win_bonus: 25,
+  online_multiplier: 1.5,
+});
+const levels = ref<LevelRow[]>([]);
+const characters = ref<Entity[]>([]);
+const items = ref<Entity[]>([]);
+const advisorConfig = reactive<AdvisorConfig>({
+  xp_per_level: 100,
+  max_level: 8,
+  options_per_level_up: 2,
+});
+const advisorSaved = ref(false);
+const defaultTotalRounds = ref(60);
+const roundsSaved = ref(false);
+const showUnlockModal = ref(false);
+const unlockForm = reactive<UnlockForm>({ level: 1, type: "character", entity_id: "" });
+const unlockError = ref("");
+
+const unlockEntityOptions = computed(() =>
+  unlockForm.type === "character" ? characters.value : items.value,
+);
+
+const advisorLevelPreview = computed<AdvisorLevelPreviewRow[]>(() => {
+  const rows: AdvisorLevelPreviewRow[] = [];
+  const multiplier = advisorConfig.xp_per_level || 100;
+  const max = advisorConfig.max_level || 8;
+  for (let level = 1; level <= max; level++) {
+    const total = Math.floor((multiplier * (level - 1) * level) / 2);
+    const next = level < max ? Math.floor((multiplier * level * (level + 1)) / 2) - total : 0;
+    rows.push({ level, total, toNext: next });
+  }
+  return rows;
+});
+
+async function loadConfig(): Promise<void> {
+  try {
+    const response = await axios.get<RulesResponse>("/api/admin/rules");
+    if (response.data.xp_config) {
+      Object.assign(config, response.data.xp_config);
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function loadCoinConfig(): Promise<void> {
+  try {
+    const response = await axios.get<RulesResponse>("/api/admin/rules");
+    if (response.data.coin_config) {
+      Object.assign(coinConfig, response.data.coin_config);
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function saveCoinConfig(): Promise<void> {
+  try {
+    await axios.put("/api/admin/rules/coin_config", { value: { ...coinConfig } });
+    saved.value = true;
+    setTimeout(() => { saved.value = false; }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+async function loadLevels(): Promise<void> {
+  try {
+    const response = await axios.get<LevelRow[]>("/api/admin/levels");
+    levels.value = response.data;
+  } catch {
+    // ignore
+  }
+}
+
+async function loadEntities(): Promise<void> {
+  try {
+    const response = await axios.get<UnlockablesResponse>("/api/admin/unlockables");
+    characters.value = response.data.characters ?? [];
+    items.value = response.data.items ?? [];
+  } catch {
+    // ignore
+  }
+}
+
+async function saveConfig(): Promise<void> {
+  try {
+    await axios.put("/api/admin/rules/xp_config", { value: { ...config } });
+    saved.value = true;
+    setTimeout(() => { saved.value = false; }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+async function loadAdvisorConfig(): Promise<void> {
+  try {
+    const response = await axios.get<RulesResponse>("/api/admin/rules");
+    if (response.data.advisor_level_config) {
+      Object.assign(advisorConfig, response.data.advisor_level_config);
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function saveAdvisorConfig(): Promise<void> {
+  try {
+    await axios.put("/api/admin/rules/advisor_level_config", { value: { ...advisorConfig } });
+    advisorSaved.value = true;
+    setTimeout(() => { advisorSaved.value = false; }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+async function loadDefaultRounds(): Promise<void> {
+  try {
+    const response = await axios.get<RulesResponse>("/api/admin/rules");
+    if (response.data.default_total_rounds != undefined) {
+      defaultTotalRounds.value = response.data.default_total_rounds;
+    }
+  } catch {
+    // use default
+  }
+}
+
+async function saveDefaultRounds(): Promise<void> {
+  try {
+    await axios.put("/api/admin/rules/default_total_rounds", { value: defaultTotalRounds.value });
+    roundsSaved.value = true;
+    setTimeout(() => { roundsSaved.value = false; }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+function openAddUnlock(level: number): void {
+  Object.assign(unlockForm, { level, type: "character", entity_id: "" });
+  unlockError.value = "";
+  showUnlockModal.value = true;
+}
+
+async function saveUnlock(): Promise<void> {
+  unlockError.value = "";
+  try {
+    await axios.post("/api/admin/unlockables", {
+      type: unlockForm.type,
+      entity_id: unlockForm.entity_id,
+      unlock_method: "level",
+      unlock_value: unlockForm.level,
+    });
+    showUnlockModal.value = false;
+    await loadLevels();
+  } catch (error) {
+    unlockError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function removeUnlock(id: number): Promise<void> {
+  if (!confirm("Remove this unlock?")) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/unlockables/${id}`);
+    await loadLevels();
+  } catch {
+    // ignore
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadConfig(), loadCoinConfig(), loadAdvisorConfig(), loadLevels(), loadEntities(), loadDefaultRounds()]);
+  loading.value = false;
+});
 </script>
 
 <style scoped>

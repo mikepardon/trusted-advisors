@@ -1,5 +1,5 @@
 <template>
-  <div v-if="announcements.length" class="announcements-banner">
+  <div v-if="announcements.length > 0" class="announcements-banner">
     <Swiper
       v-if="announcements.length > 1"
       :modules="swiperModules"
@@ -11,7 +11,7 @@
     >
       <SwiperSlide v-for="a in announcements" :key="a.id">
         <div class="announcement-slide">
-          <button class="dismiss-btn" @click.stop="dismiss(a)" title="Dismiss">&times;</button>
+          <button class="dismiss-btn" title="Dismiss" @click.stop="dismiss(a)">&times;</button>
           <h3 class="announcement-title">{{ a.title }}</h3>
           <p class="announcement-desc">{{ a.description }}</p>
           <a
@@ -27,7 +27,7 @@
     </Swiper>
 
     <div v-else class="announcement-slide single">
-      <button class="dismiss-btn" @click.stop="dismiss(announcements[0])" title="Dismiss">&times;</button>
+      <button class="dismiss-btn" title="Dismiss" @click.stop="dismiss(announcements[0])">&times;</button>
       <h3 class="announcement-title">{{ announcements[0].title }}</h3>
       <p class="announcement-desc">{{ announcements[0].description }}</p>
       <a
@@ -42,41 +42,42 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { Autoplay, Pagination } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/pagination';
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import axios from "axios";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { Autoplay, Pagination } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/pagination";
 
-export default {
-  name: 'AnnouncementsBanner',
-  components: { Swiper, SwiperSlide },
-  data() {
-    return {
-      announcements: [],
-    };
-  },
-  computed: {
-    swiperModules() {
-      return [Autoplay, Pagination];
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.get('/api/announcements');
-      this.announcements = res.data;
-    } catch {}
-  },
-  methods: {
-    async dismiss(announcement) {
-      this.announcements = this.announcements.filter(a => a.id !== announcement.id);
-      try {
-        await axios.post(`/api/announcements/${announcement.id}/dismiss`);
-      } catch {}
-    },
-  },
-};
+interface Announcement {
+  id: number;
+  title: string;
+  description: string;
+  link_url?: string;
+  link_label?: string;
+}
+
+const announcements = ref<Announcement[]>([]);
+const swiperModules = [Autoplay, Pagination];
+
+onMounted(async () => {
+  try {
+    const response = await axios.get<Announcement[]>("/api/announcements");
+    announcements.value = response.data;
+  } catch {
+    // ignore fetch errors
+  }
+});
+
+async function dismiss(announcement: Announcement): Promise<void> {
+  announcements.value = announcements.value.filter((a) => a.id !== announcement.id);
+  try {
+    await axios.post(`/api/announcements/${announcement.id}/dismiss`);
+  } catch {
+    // ignore dismiss errors
+  }
+}
 </script>
 
 <style scoped>

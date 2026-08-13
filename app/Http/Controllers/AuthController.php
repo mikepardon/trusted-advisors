@@ -1,7 +1,10 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Http\Controllers;
 
+use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -22,11 +25,11 @@ class AuthController extends Controller
     {
         $user = Auth::user();
 
-        if (!$user) {
+        if ($user === null) {
             return response()->json(null, 204);
         }
 
-        $data = $user->toArray();
+        $data = UserResource::make($user)->resolve($request);
 
         if (!$user->username_chosen) {
             $data['needs_username'] = true;
@@ -50,9 +53,9 @@ class AuthController extends Controller
 
         $paymentsToggle = \App\Models\GameRule::getValue('payments_enabled', true);
         $data['payments_enabled'] = $paymentsToggle && (
-            !empty(config('services.stripe.key'))
-            || !empty(config('services.apple.shared_secret'))
-            || !empty(config('services.google_play.package_name'))
+            filled(config('services.stripe.key'))
+            || filled(config('services.apple.shared_secret'))
+            || filled(config('services.google_play.package_name'))
         );
 
         $tournamentsRule = \App\Models\GameRule::where('key', 'tournaments_enabled')->first();
@@ -104,7 +107,7 @@ class AuthController extends Controller
         $user->username_chosen = true;
 
         // Process referral code if provided and user wasn't already referred
-        if (!empty($validated['referral_code']) && !$user->referred_by) {
+        if (filled($validated['referral_code'] ?? null) && !$user->referred_by) {
             $referrer = User::where('referral_code', strtoupper($validated['referral_code']))
                 ->where('id', '!=', $user->id)
                 ->first();
@@ -115,7 +118,7 @@ class AuthController extends Controller
 
         $user->save();
 
-        $data = $user->toArray();
+        $data = UserResource::make($user)->resolve($request);
         if ($user->needsAdvisors()) {
             $data['needs_advisors'] = true;
         }

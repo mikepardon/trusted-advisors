@@ -76,100 +76,98 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../stores/toast';
-import ConfirmModal from './ConfirmModal.vue';
-import HintBubble from './HintBubble.vue';
-import MatchHistoryTimeline from './MatchHistoryTimeline.vue';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../stores/toast";
+import ConfirmModal from "./ConfirmModal.vue";
+import HintBubble from "./HintBubble.vue";
+import MatchHistoryTimeline from "./MatchHistoryTimeline.vue";
 
-export default {
-  name: 'GameHistory',
-  components: { ConfirmModal, HintBubble, MatchHistoryTimeline },
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return {
-      games: [],
-      activeGames: [],
-      loading: true,
-      cancelTarget: null,
-      hasCompleted: false,
-      activeLimit: 10,
-    };
-  },
-  computed: {
-    visibleActiveGames() {
-      return this.activeGames.slice(0, this.activeLimit);
-    },
-  },
-  async mounted() {
-    await this.fetchGames();
-  },
-  methods: {
-    async fetchGames() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/games/history');
-        this.games = res.data.completed_games || [];
-        this.activeGames = res.data.active_games || [];
-        this.hasCompleted = this.games.length > 0;
-      } catch {
-        // silently fail
-      }
-      this.loading = false;
-    },
-    resumeGame(game) {
-      this.$router.push('/game/' + game.id);
-    },
-    cancelGame(game) {
-      this.cancelTarget = game;
-    },
-    async doCancelGame() {
-      const game = this.cancelTarget;
-      this.cancelTarget = null;
-      try {
-        await axios.post(`/api/games/${game.id}/cancel`);
-        await this.fetchGames();
-      } catch (e) {
-        this.toast.error('Failed to cancel: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    modeLabel(mode) {
-      const labels = { single: 'Solo', pass_and_play: 'Local', online: 'Online' };
-      return labels[mode] || 'Solo';
-    },
-    typeLabel(type) {
-      return type === 'duel' ? 'Duel' : 'Classic';
-    },
-    isWin(game) {
-      if (game.game_type === 'duel') {
-        return game.winner_player_number && game.winner_player_number === game.my_player_number;
-      }
-      return game.win;
-    },
-    outcomeLabel(game) {
-      if (game.game_type === 'duel') {
-        if (!game.winner_player_number) return 'Draw';
-        return game.winner_player_number === game.my_player_number ? 'Victory' : 'Defeat';
-      }
-      return game.win ? 'Victory' : 'Defeat';
-    },
-    playerNames(game) {
-      if (!game.players || game.players.length === 0) {
-        return game.num_players + 'P';
-      }
-      return game.players.map(p => {
-        const name = p.character_name || '?';
-        if (game.game_mode === 'online' && p.username) {
-          return `${name} (${p.username})`;
-        }
-        return name;
-      }).join(', ');
-    },
-  },
-};
+interface GamePlayer {
+  character_name?: string;
+  username?: string;
+}
+
+interface GameEntry {
+  id: number;
+  game_type?: string;
+  game_mode?: string;
+  status?: string;
+  current_round?: number;
+  total_rounds?: number;
+  num_players?: number;
+  players?: GamePlayer[];
+}
+
+interface HistoryResponse {
+  completed_games?: GameEntry[];
+  active_games?: GameEntry[];
+}
+
+const toast = useToast();
+const router = useRouter();
+
+const games = ref<GameEntry[]>([]);
+const activeGames = ref<GameEntry[]>([]);
+const loading = ref(true);
+const cancelTarget = ref<GameEntry>();
+const hasCompleted = ref(false);
+const activeLimit = ref(10);
+
+const visibleActiveGames = computed(() => activeGames.value.slice(0, activeLimit.value));
+
+async function fetchGames(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<HistoryResponse>("/api/games/history");
+    games.value = response.data.completed_games ?? [];
+    activeGames.value = response.data.active_games ?? [];
+    hasCompleted.value = games.value.length > 0;
+  } catch {
+    // silently fail
+  }
+  loading.value = false;
+}
+
+function resumeGame(game: GameEntry): void {
+  router.push("/game/" + game.id);
+}
+
+function cancelGame(game: GameEntry): void {
+  cancelTarget.value = game;
+}
+
+async function doCancelGame(): Promise<void> {
+  const game = cancelTarget.value;
+  cancelTarget.value = undefined;
+  if (!game) {
+    return;
+  }
+  try {
+    await axios.post(`/api/games/${game.id}/cancel`);
+    await fetchGames();
+  } catch (error) {
+    const detail = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? error.message)
+      : "Unknown error";
+    toast.error("Failed to cancel: " + detail);
+  }
+}
+
+function modeLabel(mode?: string): string {
+  const labels: Record<string, string> = { single: "Solo", pass_and_play: "Local", online: "Online" };
+  return (mode !== undefined && labels[mode]) || "Solo";
+}
+
+function typeLabel(type?: string): string {
+  return type === "duel" ? "Duel" : "Classic";
+}
+
+onMounted(async () => {
+  await fetchGames();
+});
 </script>
 
 <style scoped>

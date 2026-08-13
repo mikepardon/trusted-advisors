@@ -57,7 +57,7 @@
             <div v-if="totalItems > 0" class="pagination-info">
               Showing {{ items.length }} of {{ totalItems }}
             </div>
-            <button v-if="hasMorePages" class="btn-load-more" @click="loadMore" :disabled="loadingMore">
+            <button v-if="hasMorePages" class="btn-load-more" :disabled="loadingMore" @click="loadMore">
               {{ loadingMore ? 'Loading...' : 'Load More' }}
             </button>
           </div>
@@ -79,9 +79,9 @@
               <div class="detail-value readonly">{{ selectedItem.formatted_size }}</div>
 
               <label class="detail-label">Tags (comma-separated)</label>
-              <input v-model="editTagsStr" class="detail-input" placeholder="e.g. background, character" />
+              <input v-model="editTagsString" class="detail-input" placeholder="e.g. background, character" />
 
-              <button class="btn-save" @click="saveChanges" :disabled="saving">
+              <button class="btn-save" :disabled="saving" @click="saveChanges">
                 {{ saving ? 'Saving...' : 'Save Changes' }}
               </button>
               <button class="btn-delete" @click="confirmDelete">Delete</button>
@@ -99,234 +99,288 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { markRaw } from 'vue';
-import Uppy from '@uppy/core';
-import Dashboard from '@uppy/dashboard';
-import XHRUpload from '@uppy/xhr-upload';
-import '@uppy/core/css/style.min.css';
-import '@uppy/dashboard/css/style.min.css';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
+import axios from "axios";
+import { markRaw } from "vue";
+import Uppy from "@uppy/core";
+import Dashboard from "@uppy/dashboard";
+import XHRUpload from "@uppy/xhr-upload";
+import "@uppy/core/css/style.min.css";
+import "@uppy/dashboard/css/style.min.css";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'MediaLibraryModal',
-  props: {
-    visible: { type: Boolean, default: false },
-    selectMode: { type: Boolean, default: true },
-    inline: { type: Boolean, default: false },
-  },
-  emits: ['close', 'select'],
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return {
-      activeTab: 'library',
-      items: [],
-      totalItems: 0,
-      currentPage: 1,
-      lastPage: 1,
-      searchQuery: '',
-      filterTag: '',
-      availableTags: [],
-      selectedItem: null,
-      editName: '',
-      editTagsStr: '',
-      saving: false,
-      loadingMore: false,
-      uppy: null,
-      searchTimeout: null,
-    };
-  },
-  computed: {
-    hasMorePages() {
-      return this.currentPage < this.lastPage;
+interface MediaItem {
+  id: number;
+  url: string;
+  display_name: string;
+  original_filename: string;
+  created_at: string;
+  formatted_size: string;
+  tags?: string[];
+}
+
+interface MediaListResponse {
+  data: MediaItem[];
+  current_page: number;
+  last_page: number;
+  total: number;
+}
+
+interface MediaListParameters {
+  page: number;
+  search?: string;
+  tag?: string;
+}
+
+const { visible = false, selectMode = true, inline = false } = defineProps<{
+  visible?: boolean;
+  selectMode?: boolean;
+  inline?: boolean;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  select: [item: MediaItem];
+}>();
+
+const toast = useToast();
+
+const activeTab = ref<"upload" | "library">("library");
+const items = ref<MediaItem[]>([]);
+const totalItems = ref(0);
+const currentPage = ref(1);
+const lastPage = ref(1);
+const searchQuery = ref("");
+const filterTag = ref("");
+const availableTags = ref<string[]>([]);
+const selectedItem = ref<MediaItem | undefined>(undefined);
+const editName = ref("");
+const editTagsString = ref("");
+const saving = ref(false);
+const loadingMore = ref(false);
+const uppy = ref<Uppy | undefined>(undefined);
+const searchTimeout = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+const uppyDashboard = useTemplateRef<HTMLDivElement>("uppyDashboard");
+
+const hasMorePages = computed<boolean>(() => currentPage.value < lastPage.value);
+
+function initUppy(): void {
+  if (uppy.value) {
+    return;
+  }
+
+  const xsrfToken = document.cookie
+    .split("; ")
+    .find((row) => row.startsWith("XSRF-TOKEN="))
+    ?.split("=", 2)[1];
+
+  const instance = markRaw(new Uppy({
+    restrictions: {
+      maxFileSize: 10 * 1024 * 1024,
+      allowedFileTypes: ["image/*"],
     },
-  },
-  watch: {
-    visible(val) {
-      if (val) {
-        this.loadItems(1);
-        this.loadTags();
-        this.$nextTick(() => this.initUppy());
-      } else {
-        this.destroyUppy();
-      }
+  }));
+
+  instance.use(Dashboard, {
+    inline: true,
+    target: uppyDashboard.value ?? undefined,
+    theme: "dark",
+    width: "100%",
+    height: 350,
+    proudlyDisplayPoweredByUppy: false,
+  });
+
+  instance.use(XHRUpload, {
+    endpoint: "/api/admin/media-library",
+    fieldName: "file",
+    headers: {
+      "X-XSRF-TOKEN": xsrfToken ? decodeURIComponent(xsrfToken) : "",
     },
-    selectedItem(item) {
-      if (item) {
-        this.editName = item.display_name;
-        this.editTagsStr = (item.tags || []).join(', ');
-      }
-    },
-  },
-  mounted() {
-    if (this.visible) {
-      this.loadItems(1);
-      this.loadTags();
-      this.$nextTick(() => this.initUppy());
+  });
+
+  instance.on("complete", (result) => {
+    const uploaded = result.successful?.length ?? 0;
+    if (uploaded > 0) {
+      toast.success(`Uploaded ${uploaded} file(s)`);
+      activeTab.value = "library";
+      loadItems(1);
+      loadTags();
+      instance.cancelAll();
     }
-  },
-  beforeUnmount() {
-    this.destroyUppy();
-    if (this.searchTimeout) clearTimeout(this.searchTimeout);
-  },
-  methods: {
-    initUppy() {
-      if (this.uppy) return;
+  });
 
-      const xsrfToken = document.cookie
-        .split('; ')
-        .find(row => row.startsWith('XSRF-TOKEN='))
-        ?.split('=')[1];
+  uppy.value = instance;
+}
 
-      this.uppy = markRaw(new Uppy({
-        restrictions: {
-          maxFileSize: 10 * 1024 * 1024,
-          allowedFileTypes: ['image/*'],
-        },
-      }));
+function destroyUppy(): void {
+  if (!uppy.value) {
+  	return;
+  }
 
-      this.uppy.use(Dashboard, {
-        inline: true,
-        target: this.$refs.uppyDashboard,
-        theme: 'dark',
-        width: '100%',
-        height: 350,
-        proudlyDisplayPoweredByUppy: false,
-      });
+  uppy.value.destroy();
+  uppy.value = undefined;
+}
 
-      this.uppy.use(XHRUpload, {
-        endpoint: '/api/admin/media-library',
-        fieldName: 'file',
-        headers: {
-          'X-XSRF-TOKEN': xsrfToken ? decodeURIComponent(xsrfToken) : '',
-        },
-      });
+async function loadItems(page = 1): Promise<void> {
+  try {
+    const parameters: MediaListParameters = { page };
+    if (searchQuery.value) {
+      parameters.search = searchQuery.value;
+    }
+    if (filterTag.value) {
+      parameters.tag = filterTag.value;
+    }
 
-      this.uppy.on('complete', (result) => {
-        if (result.successful.length > 0) {
-          this.toast.success(`Uploaded ${result.successful.length} file(s)`);
-          this.activeTab = 'library';
-          this.loadItems(1);
-          this.loadTags();
-          this.uppy.cancelAll();
-        }
-      });
-    },
+    const response = await axios.get<MediaListResponse>("/api/admin/media-library", { params: parameters });
 
-    destroyUppy() {
-      if (this.uppy) {
-        this.uppy.destroy();
-        this.uppy = null;
-      }
-    },
+    if (page === 1) {
+      items.value = response.data.data;
+    } else {
+      items.value.push(...response.data.data);
+    }
 
-    async loadItems(page = 1) {
-      try {
-        const params = { page };
-        if (this.searchQuery) params.search = this.searchQuery;
-        if (this.filterTag) params.tag = this.filterTag;
+    currentPage.value = response.data.current_page;
+    lastPage.value = response.data.last_page;
+    totalItems.value = response.data.total;
+  } catch {
+    toast.error("Failed to load media library");
+  }
+}
 
-        const res = await axios.get('/api/admin/media-library', { params });
+async function loadTags(): Promise<void> {
+  try {
+    const response = await axios.get<string[]>("/api/admin/media-library-tags");
+    availableTags.value = response.data;
+  } catch {
+    // ignore
+  }
+}
 
-        if (page === 1) {
-          this.items = res.data.data;
-        } else {
-          this.items.push(...res.data.data);
-        }
+async function loadMore(): Promise<void> {
+  if (loadingMore.value || !hasMorePages.value) {
+    return;
+  }
+  loadingMore.value = true;
+  try {
+    await loadItems(currentPage.value + 1);
+  } finally {
+    loadingMore.value = false;
+  }
+}
 
-        this.currentPage = res.data.current_page;
-        this.lastPage = res.data.last_page;
-        this.totalItems = res.data.total;
-      } catch {
-        this.toast.error('Failed to load media library');
-      }
-    },
+function debouncedSearch(): void {
+  if (searchTimeout.value) {
+    clearTimeout(searchTimeout.value);
+  }
+  searchTimeout.value = setTimeout(() => {
+    selectedItem.value = undefined;
+    loadItems(1);
+  }, 300);
+}
 
-    async loadTags() {
-      try {
-        const res = await axios.get('/api/admin/media-library-tags');
-        this.availableTags = res.data;
-      } catch {
-        // ignore
-      }
-    },
+async function saveChanges(): Promise<void> {
+  const current = selectedItem.value;
+  if (!current) {
+    return;
+  }
+  saving.value = true;
+  try {
+    const tags = editTagsString.value
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean);
 
-    loadMore() {
-      if (this.loadingMore || !this.hasMorePages) return;
-      this.loadingMore = true;
-      this.loadItems(this.currentPage + 1).finally(() => {
-        this.loadingMore = false;
-      });
-    },
+    const response = await axios.put<MediaItem>(`/api/admin/media-library/${current.id}`, {
+      display_name: editName.value,
+      tags,
+    });
 
-    debouncedSearch() {
-      if (this.searchTimeout) clearTimeout(this.searchTimeout);
-      this.searchTimeout = setTimeout(() => {
-        this.selectedItem = null;
-        this.loadItems(1);
-      }, 300);
-    },
+    const index = items.value.findIndex((item) => item.id === current.id);
+    if (index !== -1) {
+      items.value[index] = response.data;
+    }
+    selectedItem.value = response.data;
+    loadTags();
+    toast.success("Saved");
+  } catch {
+    toast.error("Failed to save");
+  }
+  saving.value = false;
+}
 
-    async saveChanges() {
-      if (!this.selectedItem) return;
-      this.saving = true;
-      try {
-        const tags = this.editTagsStr
-          .split(',')
-          .map(t => t.trim())
-          .filter(Boolean);
+async function confirmDelete(): Promise<void> {
+  const current = selectedItem.value;
+  if (!current) {
+    return;
+  }
+  if (!confirm("Delete this image permanently?")) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/media-library/${current.id}`);
+    items.value = items.value.filter((item) => item.id !== current.id);
+    totalItems.value--;
+    selectedItem.value = undefined;
+    loadTags();
+    toast.success("Deleted");
+  } catch {
+    toast.error("Failed to delete");
+  }
+}
 
-        const res = await axios.put(`/api/admin/media-library/${this.selectedItem.id}`, {
-          display_name: this.editName,
-          tags,
-        });
+function emitSelect(): void {
+  if (selectedItem.value) {
+    emit("select", selectedItem.value);
+  }
+}
 
-        // Update item in list
-        const idx = this.items.findIndex(i => i.id === this.selectedItem.id);
-        if (idx !== -1) this.items[idx] = res.data;
-        this.selectedItem = res.data;
-        this.loadTags();
-        this.toast.success('Saved');
-      } catch {
-        this.toast.error('Failed to save');
-      }
-      this.saving = false;
-    },
+function formatDate(dateString: string): string {
+  if (!dateString) {
+    return "";
+  }
+  return new Date(dateString).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
 
-    async confirmDelete() {
-      if (!this.selectedItem) return;
-      if (!confirm('Delete this image permanently?')) return;
-      try {
-        await axios.delete(`/api/admin/media-library/${this.selectedItem.id}`);
-        this.items = this.items.filter(i => i.id !== this.selectedItem.id);
-        this.totalItems--;
-        this.selectedItem = null;
-        this.loadTags();
-        this.toast.success('Deleted');
-      } catch {
-        this.toast.error('Failed to delete');
-      }
-    },
+watch(() => visible, (value) => {
+  if (value) {
+    loadItems(1);
+    loadTags();
+    nextTick(() => initUppy());
+  } else {
+    destroyUppy();
+  }
+});
 
-    emitSelect() {
-      if (this.selectedItem) {
-        this.$emit('select', this.selectedItem);
-      }
-    },
+watch(selectedItem, (item) => {
+  if (!item) {
+  	return;
+  }
 
-    formatDate(dateStr) {
-      if (!dateStr) return '';
-      return new Date(dateStr).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-      });
-    },
-  },
-};
+  editName.value = item.display_name;
+  editTagsString.value = (item.tags || []).join(", ");
+});
+
+onMounted(() => {
+  if (!visible) {
+  	return;
+  }
+
+  loadItems(1);
+  loadTags();
+  nextTick(() => initUppy());
+});
+
+onBeforeUnmount(() => {
+  destroyUppy();
+  if (searchTimeout.value) {
+    clearTimeout(searchTimeout.value);
+  }
+});
 </script>
 
 <style scoped>

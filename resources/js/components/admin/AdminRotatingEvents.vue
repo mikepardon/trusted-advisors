@@ -79,11 +79,11 @@
           <div class="form-grid">
             <div class="form-group">
               <label>Starting Stats Override</label>
-              <input v-model.number="modStartingStats" type="number" min="1" max="20" placeholder="Default (8)" />
+              <input v-model.number="overrideStartingStats" type="number" min="1" max="20" placeholder="Default (8)" />
             </div>
             <div class="form-group">
               <label>XP Multiplier</label>
-              <input v-model.number="modXpMultiplier" type="number" step="0.5" min="0.5" placeholder="Default (1)" />
+              <input v-model.number="overrideXpMultiplier" type="number" step="0.5" min="0.5" placeholder="Default (1)" />
             </div>
           </div>
           <div class="form-group">
@@ -94,7 +94,7 @@
           <!-- Bot Difficulty (for single-player duel events) -->
           <div v-if="form.game_mode === 'single' && form.game_type === 'duel'" class="form-group">
             <label>Bot Difficulty</label>
-            <select v-model="modBotDifficulty">
+            <select v-model="overrideBotDifficulty">
               <option value="easy">Easy</option>
               <option value="medium">Medium</option>
               <option value="hard">Hard</option>
@@ -104,11 +104,11 @@
           <!-- House Rules -->
           <div class="form-section-title">House Rules</div>
           <div class="form-group house-rules-grid">
-            <label class="checkbox-label"><input type="checkbox" v-model="modHouseRules.no_negative_effects" /> No Negative Effects</label>
-            <label class="checkbox-label"><input type="checkbox" v-model="modHouseRules.double_positive_effects" /> Double Positive Effects</label>
-            <label class="checkbox-label"><input type="checkbox" v-model="modHouseRules.random_starting_stats" /> Random Starting Stats</label>
-            <label class="checkbox-label"><input type="checkbox" v-model="modHouseRules.hardcore_mode" /> Hardcore (lose at stat &le; 3)</label>
-            <label class="checkbox-label"><input type="checkbox" v-model="modHouseRules.draw_curse_per_round" /> Draw Curse Each Round</label>
+            <label class="checkbox-label"><input v-model="overrideHouseRules.no_negative_effects" type="checkbox" /> No Negative Effects</label>
+            <label class="checkbox-label"><input v-model="overrideHouseRules.double_positive_effects" type="checkbox" /> Double Positive Effects</label>
+            <label class="checkbox-label"><input v-model="overrideHouseRules.random_starting_stats" type="checkbox" /> Random Starting Stats</label>
+            <label class="checkbox-label"><input v-model="overrideHouseRules.hardcore_mode" type="checkbox" /> Hardcore (lose at stat &le; 3)</label>
+            <label class="checkbox-label"><input v-model="overrideHouseRules.draw_curse_per_round" type="checkbox" /> Draw Curse Each Round</label>
           </div>
 
           <!-- Game Settings -->
@@ -117,7 +117,7 @@
             <div class="form-group">
               <label>Total Rounds</label>
               <select v-model="form.total_rounds">
-                <option :value="null">Player chooses</option>
+                <option :value="undefined">Player chooses</option>
                 <option :value="12">12 (1 Year)</option>
                 <option :value="24">24 (2 Years)</option>
                 <option :value="36">36 (3 Years)</option>
@@ -128,7 +128,7 @@
             <div class="form-group">
               <label>Affects ELO</label>
               <label class="checkbox-label">
-                <input type="checkbox" v-model="form.affects_elo" /> Yes, affects ELO rating
+                <input v-model="form.affects_elo" type="checkbox" /> Yes, affects ELO rating
               </label>
             </div>
           </div>
@@ -137,7 +137,7 @@
           <div class="form-section-title">XP Override</div>
           <div class="form-group">
             <label class="checkbox-label">
-              <input type="checkbox" v-model="useCustomXp" /> Use custom XP config
+              <input v-model="useCustomXp" type="checkbox" /> Use custom XP config
             </label>
           </div>
           <div v-if="useCustomXp" class="form-grid form-grid-3">
@@ -160,7 +160,7 @@
           <div class="form-group">
             <label>Theme Color</label>
             <div class="color-picker-row">
-              <input type="color" v-model="form.theme_color" class="color-input" />
+              <input v-model="form.theme_color" type="color" class="color-input" />
               <input v-model="form.theme_color" placeholder="#8a3ab9" class="color-text" />
               <button v-if="form.theme_color" type="button" class="btn-sm" @click="form.theme_color = ''">Clear</button>
             </div>
@@ -173,12 +173,12 @@
           <div class="form-group">
             <label>
               Cards
-              <span class="pool-chip" v-if="form.card_pool && form.card_pool.length">{{ form.card_pool.length }} selected</span>
-              <span class="pool-chip pool-all" v-else>All cards included</span>
+              <span v-if="form.card_pool && form.card_pool.length > 0" class="pool-chip">{{ form.card_pool.length }} selected</span>
+              <span v-else class="pool-chip pool-all">All cards included</span>
             </label>
             <div class="pool-controls">
               <button type="button" class="btn-sm" @click="togglePool('cards')">{{ showPool.cards ? 'Hide' : 'Select Cards' }}</button>
-              <button v-if="form.card_pool && form.card_pool.length" type="button" class="btn-sm" @click="form.card_pool = null">Clear</button>
+              <button v-if="form.card_pool && form.card_pool.length > 0" type="button" class="btn-sm" @click="form.card_pool = undefined">Clear</button>
               <button type="button" class="btn-sm" @click="selectAllPool('cards')">All</button>
             </div>
             <div v-if="showPool.cards" class="pool-list">
@@ -213,12 +213,12 @@
           <div class="form-group">
             <label>
               Items
-              <span class="pool-chip" v-if="form.item_pool && form.item_pool.length">{{ form.item_pool.length }} selected</span>
-              <span class="pool-chip pool-all" v-else>All items included</span>
+              <span v-if="form.item_pool && form.item_pool.length > 0" class="pool-chip">{{ form.item_pool.length }} selected</span>
+              <span v-else class="pool-chip pool-all">All items included</span>
             </label>
             <div class="pool-controls">
               <button type="button" class="btn-sm" @click="togglePool('items')">{{ showPool.items ? 'Hide' : 'Select Items' }}</button>
-              <button v-if="form.item_pool && form.item_pool.length" type="button" class="btn-sm" @click="form.item_pool = null">Clear</button>
+              <button v-if="form.item_pool && form.item_pool.length > 0" type="button" class="btn-sm" @click="form.item_pool = undefined">Clear</button>
               <button type="button" class="btn-sm" @click="selectAllPool('items')">All</button>
             </div>
             <div v-if="showPool.items" class="pool-list">
@@ -247,12 +247,12 @@
           <div class="form-group">
             <label>
               Events
-              <span class="pool-chip" v-if="form.event_pool && form.event_pool.length">{{ form.event_pool.length }} selected</span>
-              <span class="pool-chip pool-all" v-else>All events included</span>
+              <span v-if="form.event_pool && form.event_pool.length > 0" class="pool-chip">{{ form.event_pool.length }} selected</span>
+              <span v-else class="pool-chip pool-all">All events included</span>
             </label>
             <div class="pool-controls">
               <button type="button" class="btn-sm" @click="togglePool('events')">{{ showPool.events ? 'Hide' : 'Select Events' }}</button>
-              <button v-if="form.event_pool && form.event_pool.length" type="button" class="btn-sm" @click="form.event_pool = null">Clear</button>
+              <button v-if="form.event_pool && form.event_pool.length > 0" type="button" class="btn-sm" @click="form.event_pool = undefined">Clear</button>
               <button type="button" class="btn-sm" @click="selectAllPool('events')">All</button>
             </div>
             <div v-if="showPool.events" class="pool-list">
@@ -280,12 +280,12 @@
           <div class="form-group">
             <label>
               Characters
-              <span class="pool-chip" v-if="form.character_pool && form.character_pool.length">{{ form.character_pool.length }} selected</span>
-              <span class="pool-chip pool-all" v-else>All characters included</span>
+              <span v-if="form.character_pool && form.character_pool.length > 0" class="pool-chip">{{ form.character_pool.length }} selected</span>
+              <span v-else class="pool-chip pool-all">All characters included</span>
             </label>
             <div class="pool-controls">
               <button type="button" class="btn-sm" @click="togglePool('characters')">{{ showPool.characters ? 'Hide' : 'Select Characters' }}</button>
-              <button v-if="form.character_pool && form.character_pool.length" type="button" class="btn-sm" @click="form.character_pool = null">Clear</button>
+              <button v-if="form.character_pool && form.character_pool.length > 0" type="button" class="btn-sm" @click="form.character_pool = undefined">Clear</button>
               <button type="button" class="btn-sm" @click="selectAllPool('characters')">All</button>
             </div>
             <div v-if="showPool.characters" class="pool-list">
@@ -314,12 +314,12 @@
           <div class="form-group">
             <label>
               Curses
-              <span class="pool-chip" v-if="form.curse_pool && form.curse_pool.length">{{ form.curse_pool.length }} selected</span>
-              <span class="pool-chip pool-all" v-else>All curses included</span>
+              <span v-if="form.curse_pool && form.curse_pool.length > 0" class="pool-chip">{{ form.curse_pool.length }} selected</span>
+              <span v-else class="pool-chip pool-all">All curses included</span>
             </label>
             <div class="pool-controls">
               <button type="button" class="btn-sm" @click="togglePool('curses')">{{ showPool.curses ? 'Hide' : 'Select Curses' }}</button>
-              <button v-if="form.curse_pool && form.curse_pool.length" type="button" class="btn-sm" @click="form.curse_pool = null">Clear</button>
+              <button v-if="form.curse_pool && form.curse_pool.length > 0" type="button" class="btn-sm" @click="form.curse_pool = undefined">Clear</button>
               <button type="button" class="btn-sm" @click="selectAllPool('curses')">All</button>
             </div>
             <div v-if="showPool.curses" class="pool-list">
@@ -348,7 +348,7 @@
           <div class="form-group">
             <label>Event for all rounds</label>
             <select v-model="form.fixed_event_id">
-              <option :value="null">Rotate every 3 rounds (default)</option>
+              <option :value="undefined">Rotate every 3 rounds (default)</option>
               <option v-for="ev in allEvents" :key="ev.id" :value="ev.id">{{ ev.title }}</option>
             </select>
           </div>
@@ -366,7 +366,7 @@
           <div class="form-grid">
             <div class="form-group">
               <label>
-                <input type="checkbox" v-model="form.is_active" /> Active
+                <input v-model="form.is_active" type="checkbox" /> Active
               </label>
             </div>
             <div class="form-group">
@@ -388,335 +388,572 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminRotatingEvents',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      events: [],
-      showModal: false,
-      editing: null,
-      saving: false,
-      form: this.emptyForm(),
-      modStartingStats: null,
-      modXpMultiplier: null,
-      modBotDifficulty: 'medium',
-      modHouseRules: { no_negative_effects: false, double_positive_effects: false, random_starting_stats: false, hardcore_mode: false, draw_curse_per_round: false },
-      // XP override
-      useCustomXp: false,
-      xpBase: 50,
-      xpWinBonus: 100,
-      xpOnlineMultiplier: 1.5,
-      // Content pools data
-      allCards: [],
-      allItems: [],
-      allEvents: [],
-      allCharacters: [],
-      allCurses: [],
-      showPool: { cards: false, items: false, events: false, characters: false, curses: false },
-      poolSearch: { cards: '', items: '', events: '', characters: '', curses: '' },
-    };
-  },
-  computed: {
-    filteredCards() {
-      const q = this.poolSearch.cards.toLowerCase();
-      return q ? this.allCards.filter(c => (c.title || '').toLowerCase().includes(q)) : this.allCards;
-    },
-    filteredItems() {
-      const q = this.poolSearch.items.toLowerCase();
-      return q ? this.allItems.filter(c => (c.name || '').toLowerCase().includes(q)) : this.allItems;
-    },
-    filteredEvents() {
-      const q = this.poolSearch.events.toLowerCase();
-      return q ? this.allEvents.filter(c => (c.title || '').toLowerCase().includes(q)) : this.allEvents;
-    },
-    filteredCharacters() {
-      const q = this.poolSearch.characters.toLowerCase();
-      return q ? this.allCharacters.filter(c => (c.name || '').toLowerCase().includes(q)) : this.allCharacters;
-    },
-    filteredCurses() {
-      const q = this.poolSearch.curses.toLowerCase();
-      return q ? this.allCurses.filter(c => (c.name || '').toLowerCase().includes(q)) : this.allCurses;
-    },
-  },
-  async mounted() {
-    await Promise.all([this.fetch(), this.fetchPoolData()]);
-  },
-  methods: {
-    emptyForm() {
-      return {
-        name: '',
-        description: '',
-        image_url: '',
-        game_type: 'cooperative',
-        game_mode: 'single',
-        reward_coins: 0,
-        max_attempts: null,
-        starts_at: '',
-        ends_at: '',
-        is_active: true,
-        visibility: 'all',
-        card_pool: null,
-        item_pool: null,
-        event_pool: null,
-        character_pool: null,
-        curse_pool: null,
-        fixed_event_id: null,
-        total_rounds: null,
-        affects_elo: false,
-        theme_color: '',
-      };
-    },
-    async fetch() {
-      try {
-        const res = await axios.get('/api/admin/rotating-events');
-        this.events = res.data;
-      } catch {}
-    },
-    async fetchPoolData() {
-      try {
-        const [cards, items, events, chars, curses] = await Promise.all([
-          axios.get('/api/admin/cards'),
-          axios.get('/api/admin/items'),
-          axios.get('/api/admin/events'),
-          axios.get('/api/admin/characters'),
-          axios.get('/api/admin/curses'),
-        ]);
-        this.allCards = cards.data.data || cards.data;
-        this.allItems = items.data.data || items.data;
-        this.allEvents = events.data.data || events.data;
-        this.allCharacters = chars.data.data || chars.data;
-        this.allCurses = curses.data.data || curses.data;
-      } catch {}
-    },
-    togglePool(type) {
-      this.showPool[type] = !this.showPool[type];
-    },
-    isInPool(key, id) {
-      return this.form[key] && this.form[key].includes(id);
-    },
-    togglePoolItem(key, id) {
-      if (!this.form[key]) {
-        this.form[key] = [id];
-      } else if (this.form[key].includes(id)) {
-        this.form[key] = this.form[key].filter(x => x !== id);
-        if (this.form[key].length === 0) this.form[key] = null;
-      } else {
-        this.form[key] = [...this.form[key], id];
-      }
-    },
-    selectAllPool(type) {
-      const allMap = { cards: this.allCards, items: this.allItems, events: this.allEvents, characters: this.allCharacters, curses: this.allCurses };
-      const key = { cards: 'card_pool', items: 'item_pool', events: 'event_pool', characters: 'character_pool', curses: 'curse_pool' }[type];
-      const allIds = allMap[type].map(i => i.id);
-      // Toggle: if all selected, clear; otherwise select all
-      if (this.form[key] && this.form[key].length === allIds.length) {
-        this.form[key] = null;
-      } else {
-        this.form[key] = [...allIds];
-      }
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = this.emptyForm();
-      this.modStartingStats = null;
-      this.modXpMultiplier = null;
-      this.modBotDifficulty = 'medium';
-      this.modHouseRules = { no_negative_effects: false, double_positive_effects: false, random_starting_stats: false, hardcore_mode: false, draw_curse_per_round: false };
-      this.useCustomXp = false;
-      this.xpBase = 50;
-      this.xpWinBonus = 100;
-      this.xpOnlineMultiplier = 1.5;
-      this.showPool = { cards: false, items: false, events: false, characters: false, curses: false };
-      this.poolSearch = { cards: '', items: '', events: '', characters: '', curses: '' };
-      this.showModal = true;
-    },
-    openEdit(e) {
-      this.editing = e;
-      this.form = {
-        name: e.name,
-        description: e.description,
-        image_url: e.image_url || '',
-        game_type: e.game_type,
-        game_mode: e.game_mode,
-        reward_coins: e.reward_coins,
-        max_attempts: e.max_attempts || null,
-        starts_at: e.starts_at ? e.starts_at.substring(0, 16) : '',
-        ends_at: e.ends_at ? e.ends_at.substring(0, 16) : '',
-        is_active: e.is_active,
-        visibility: e.visibility || 'all',
-        card_pool: e.card_pool || null,
-        item_pool: e.item_pool || null,
-        event_pool: e.event_pool || null,
-        character_pool: e.character_pool || null,
-        curse_pool: e.curse_pool || null,
-        fixed_event_id: e.fixed_event_id || null,
-        total_rounds: e.total_rounds || null,
-        affects_elo: e.affects_elo || false,
-        theme_color: e.theme_color || '',
-      };
-      this.modStartingStats = e.modifiers?.starting_stats || null;
-      this.modXpMultiplier = e.modifiers?.xp_multiplier || null;
-      this.modBotDifficulty = e.modifiers?.bot_difficulty || 'medium';
-      const hr = e.modifiers?.house_rules || {};
-      this.modHouseRules = {
-        no_negative_effects: !!hr.no_negative_effects,
-        double_positive_effects: !!hr.double_positive_effects,
-        random_starting_stats: !!hr.random_starting_stats,
-        hardcore_mode: !!hr.hardcore_mode,
-        draw_curse_per_round: !!hr.draw_curse_per_round,
-      };
-      // XP config
-      if (e.xp_config) {
-        this.useCustomXp = true;
-        this.xpBase = e.xp_config.base_xp ?? 50;
-        this.xpWinBonus = e.xp_config.win_bonus ?? 100;
-        this.xpOnlineMultiplier = e.xp_config.online_multiplier ?? 1.5;
-      } else {
-        this.useCustomXp = false;
-        this.xpBase = 50;
-        this.xpWinBonus = 100;
-        this.xpOnlineMultiplier = 1.5;
-      }
-      this.showPool = { cards: false, items: false, events: false, characters: false, curses: false };
-      this.poolSearch = { cards: '', items: '', events: '', characters: '', curses: '' };
-      this.showModal = true;
-    },
-    async save() {
-      this.saving = true;
-      const payload = { ...this.form };
-      const modifiers = {};
-      if (this.modStartingStats) modifiers.starting_stats = this.modStartingStats;
-      if (this.modXpMultiplier) modifiers.xp_multiplier = this.modXpMultiplier;
-      if (this.form.game_mode === 'single' && this.form.game_type === 'duel') modifiers.bot_difficulty = this.modBotDifficulty;
-      const hasHouseRules = Object.values(this.modHouseRules).some(v => v);
-      if (hasHouseRules) modifiers.house_rules = { ...this.modHouseRules };
-      payload.modifiers = Object.keys(modifiers).length ? modifiers : null;
+type PoolType = "cards" | "items" | "events" | "characters" | "curses";
+type PoolKey = "card_pool" | "item_pool" | "event_pool" | "character_pool" | "curse_pool";
 
-      // XP config
-      if (this.useCustomXp) {
-        payload.xp_config = {
-          base_xp: this.xpBase,
-          win_bonus: this.xpWinBonus,
-          online_multiplier: this.xpOnlineMultiplier,
-        };
-      } else {
-        payload.xp_config = null;
-      }
+interface HouseRules {
+  no_negative_effects: boolean;
+  double_positive_effects: boolean;
+  random_starting_stats: boolean;
+  hardcore_mode: boolean;
+  draw_curse_per_round: boolean;
+}
 
-      // Clean empty theme_color
-      if (!payload.theme_color) payload.theme_color = null;
+interface EventModifiers {
+  starting_stats?: number;
+  xp_multiplier?: number;
+  bot_difficulty?: string;
+  house_rules?: Partial<HouseRules>;
+}
 
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/rotating-events/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/rotating-events', payload);
-        }
-        this.showModal = false;
-        await this.fetch();
-      } catch (e) {
-        this.toast.error(e.response?.data?.message || 'Failed to save');
-      }
-      this.saving = false;
-    },
-    async remove(e) {
-      if (!confirm(`Delete "${e.name}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/rotating-events/${e.id}`);
-        await this.fetch();
-      } catch {}
-    },
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      const specialKeys = ['grant_item_id', 'draw_item', 'recover_die', 'lose_die', 'discard_item', 'remove_curse'];
-      for (const [key, val] of Object.entries(effects)) {
-        if (!specialKeys.includes(key)) result[key] = val;
-      }
-      return result;
-    },
-    shortStat(stat) {
-      const map = { wealth: 'WLT', influence: 'INF', security: 'SEC', religion: 'REL', food: 'FOD', happiness: 'HAP' };
-      return map[stat] || stat.substring(0, 3).toUpperCase();
-    },
-    itemEffectLabel(item) {
-      const e = item.effect;
-      if (!e) return '?';
-      const labels = {
-        roll_bonus: `Roll ${e.bonus_value > 0 ? '+' : ''}${e.bonus_value}`,
-        difficulty_reduction: `Diff -${e.bonus_value}`,
-        stat_boost: `${e.stat ? this.shortStat(e.stat) : 'Stat'} +${e.bonus_value}`,
-        heal_die: `Heal ${e.bonus_value} Die`,
-        score_bonus: `Score +${e.bonus_value}`,
-        shield_negative: `Shield ${e.bonus_value}x`,
-        debuff_roll: `Roll ${e.bonus_value}`,
-        increase_difficulty: `Diff +${e.bonus_value}`,
-        peek_cards: `Peek ${e.bonus_value}`,
-        steal_stat: `Steal ${e.bonus_value}`,
-      };
-      return labels[e.bonus_type] || e.bonus_type;
-    },
-    eventMechanicLabel(mechanic) {
-      const labels = {
-        stat_modifier: 'Stat Modifier',
-        grant_items: 'Grant Items',
-        reduce_dice: 'Reduce Dice',
-        altered_deal: 'Altered Deal',
-        score_event: 'Score Event',
-      };
-      return labels[mechanic] || mechanic;
-    },
-    eventMechanicClass(mechanic) {
-      const neg = ['reduce_dice', 'stat_modifier'];
-      const pos = ['grant_items', 'score_event'];
-      if (neg.includes(mechanic)) return 'chip-neg';
-      if (pos.includes(mechanic)) return 'chip-pos';
-      return 'chip-special';
-    },
-    isActive(e) {
-      if (!e.is_active) return false;
-      const now = new Date();
-      return new Date(e.starts_at) <= now && new Date(e.ends_at) >= now;
-    },
-    formatDateRange(start, end) {
-      if (!start || !end) return '';
-      const s = new Date(start).toLocaleDateString();
-      const e = new Date(end).toLocaleDateString();
-      return `${s} - ${e}`;
-    },
-    curseNegLabel(curse) {
-      const e = curse.negative_effect;
-      if (!e) return '?';
-      const t = e.type;
-      if (t === 'lose_die') return `Lose ${e.value || 1} die`;
-      if (t === 'stat_per_round') return `${e.value} ${e.stat}/round`;
-      if (t === 'difficulty_modifier') return `+${e.value} diff`;
-      if (t === 'double_negative') return 'Double neg';
-      return t;
-    },
-    cursePosLabel(curse) {
-      const e = curse.positive_effect;
-      if (!e) return '?';
-      const t = e.type;
-      if (t === 'xp_multiplier') return `${e.value}x XP`;
-      if (t === 'stat_per_round') return `+${e.value} ${e.stat}/round`;
-      if (t === 'auto_max_stat') return `Max ${e.count || 1} stat`;
-      if (t === 'score_bonus') return `+${e.value} score`;
-      if (t === 'opponent_difficulty') return `+${e.value} opp diff`;
-      if (t === 'opponent_lose_die') return `Opp lose die`;
-      return t;
-    },
-    truncate(str, len) {
-      if (!str) return '';
-      return str.length > len ? str.substring(0, len) + '...' : str;
-    },
-  },
+interface XpConfig {
+  base_xp?: number;
+  win_bonus?: number;
+  online_multiplier?: number;
+}
+
+interface Creator {
+  name: string;
+}
+
+interface RotatingEvent {
+  id: number;
+  name: string;
+  description: string;
+  image_url?: string;
+  game_type: string;
+  game_mode: string;
+  reward_coins: number;
+  max_attempts?: number;
+  starts_at?: string;
+  ends_at?: string;
+  is_active: boolean;
+  visibility?: string;
+  card_pool?: number[];
+  item_pool?: number[];
+  event_pool?: number[];
+  character_pool?: number[];
+  curse_pool?: number[];
+  fixed_event_id?: number;
+  total_rounds?: number;
+  affects_elo?: boolean;
+  theme_color?: string;
+  modifiers?: EventModifiers;
+  xp_config?: XpConfig;
+  creator?: Creator;
+}
+
+interface EventForm {
+  name: string;
+  description: string;
+  image_url: string;
+  game_type: string;
+  game_mode: string;
+  reward_coins: number;
+  max_attempts: number | undefined;
+  starts_at: string;
+  ends_at: string;
+  is_active: boolean;
+  visibility: string;
+  card_pool: number[] | undefined;
+  item_pool: number[] | undefined;
+  event_pool: number[] | undefined;
+  character_pool: number[] | undefined;
+  curse_pool: number[] | undefined;
+  fixed_event_id: number | undefined;
+  total_rounds: number | undefined;
+  affects_elo: boolean;
+  theme_color: string;
+}
+
+interface CardEffects {
+  draw_item?: number;
+  recover_die?: number;
+  lose_die?: number;
+  discard_item?: number;
+  [key: string]: number | undefined;
+}
+
+interface CardPoolEntry {
+  id: number;
+  title?: string;
+  difficulty?: number;
+  positive_effects?: CardEffects;
+  negative_effects?: CardEffects;
+}
+
+interface ItemEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+  stat?: string;
+}
+
+interface ItemPoolEntry {
+  id: number;
+  name?: string;
+  is_negative?: boolean;
+  is_consumable?: boolean;
+  effect_type?: string;
+  effect?: ItemEffect;
+}
+
+interface EventPoolEntry {
+  id: number;
+  title?: string;
+  mechanic?: string;
+  stat_modifiers?: Record<string, number>;
+}
+
+interface CharacterPoolEntry {
+  id: number;
+  name?: string;
+  image_url?: string;
+  wild_ability?: string;
+  wild_value?: number;
+}
+
+interface CurseEffect {
+  type: string;
+  stat?: string;
+  value?: number;
+  count?: number;
+}
+
+interface CursePoolEntry {
+  id: number;
+  name?: string;
+  negative_effect?: CurseEffect;
+  positive_effect?: CurseEffect;
+}
+
+const poolTypeToKey: Record<PoolType, PoolKey> = {
+  cards: "card_pool",
+  items: "item_pool",
+  events: "event_pool",
+  characters: "character_pool",
+  curses: "curse_pool",
 };
+
+function defaultHouseRules(): HouseRules {
+  return {
+    no_negative_effects: false,
+    double_positive_effects: false,
+    random_starting_stats: false,
+    hardcore_mode: false,
+    draw_curse_per_round: false,
+  };
+}
+
+function emptyForm(): EventForm {
+  return {
+    name: "",
+    description: "",
+    image_url: "",
+    game_type: "cooperative",
+    game_mode: "single",
+    reward_coins: 0,
+    max_attempts: undefined,
+    starts_at: "",
+    ends_at: "",
+    is_active: true,
+    visibility: "all",
+    card_pool: undefined,
+    item_pool: undefined,
+    event_pool: undefined,
+    character_pool: undefined,
+    curse_pool: undefined,
+    fixed_event_id: undefined,
+    total_rounds: undefined,
+    affects_elo: false,
+    theme_color: "",
+  };
+}
+
+const toast = useToast();
+
+const events = ref<RotatingEvent[]>([]);
+const showModal = ref(false);
+const editing = ref<RotatingEvent | undefined>(undefined);
+const saving = ref(false);
+const form = reactive<EventForm>(emptyForm());
+const overrideStartingStats = ref<number | undefined>(undefined);
+const overrideXpMultiplier = ref<number | undefined>(undefined);
+const overrideBotDifficulty = ref("medium");
+const overrideHouseRules = reactive<HouseRules>(defaultHouseRules());
+const useCustomXp = ref(false);
+const xpBase = ref(50);
+const xpWinBonus = ref(100);
+const xpOnlineMultiplier = ref(1.5);
+const allCards = ref<CardPoolEntry[]>([]);
+const allItems = ref<ItemPoolEntry[]>([]);
+const allEvents = ref<EventPoolEntry[]>([]);
+const allCharacters = ref<CharacterPoolEntry[]>([]);
+const allCurses = ref<CursePoolEntry[]>([]);
+const showPool = reactive<Record<PoolType, boolean>>({ cards: false, items: false, events: false, characters: false, curses: false });
+const poolSearch = reactive<Record<PoolType, string>>({ cards: "", items: "", events: "", characters: "", curses: "" });
+
+const filteredCards = computed<CardPoolEntry[]>(() => {
+  const query = poolSearch.cards.toLowerCase();
+  return query ? allCards.value.filter((card) => (card.title || "").toLowerCase().includes(query)) : allCards.value;
+});
+
+const filteredItems = computed<ItemPoolEntry[]>(() => {
+  const query = poolSearch.items.toLowerCase();
+  return query ? allItems.value.filter((item) => (item.name || "").toLowerCase().includes(query)) : allItems.value;
+});
+
+const filteredEvents = computed<EventPoolEntry[]>(() => {
+  const query = poolSearch.events.toLowerCase();
+  return query ? allEvents.value.filter((event) => (event.title || "").toLowerCase().includes(query)) : allEvents.value;
+});
+
+const filteredCharacters = computed<CharacterPoolEntry[]>(() => {
+  const query = poolSearch.characters.toLowerCase();
+  return query ? allCharacters.value.filter((character) => (character.name || "").toLowerCase().includes(query)) : allCharacters.value;
+});
+
+const filteredCurses = computed<CursePoolEntry[]>(() => {
+  const query = poolSearch.curses.toLowerCase();
+  return query ? allCurses.value.filter((curse) => (curse.name || "").toLowerCase().includes(query)) : allCurses.value;
+});
+
+async function fetch(): Promise<void> {
+  try {
+    const response = await axios.get<RotatingEvent[]>("/api/admin/rotating-events");
+    events.value = response.data;
+  } catch {
+    // ignore
+  }
+}
+
+async function fetchPoolData(): Promise<void> {
+  try {
+    const [cards, items, poolEvents, characters, curses] = await Promise.all([
+      axios.get<CardPoolEntry[] | { data: CardPoolEntry[] }>("/api/admin/cards"),
+      axios.get<ItemPoolEntry[] | { data: ItemPoolEntry[] }>("/api/admin/items"),
+      axios.get<EventPoolEntry[] | { data: EventPoolEntry[] }>("/api/admin/events"),
+      axios.get<CharacterPoolEntry[] | { data: CharacterPoolEntry[] }>("/api/admin/characters"),
+      axios.get<CursePoolEntry[] | { data: CursePoolEntry[] }>("/api/admin/curses"),
+    ]);
+    allCards.value = Array.isArray(cards.data) ? cards.data : cards.data.data;
+    allItems.value = Array.isArray(items.data) ? items.data : items.data.data;
+    allEvents.value = Array.isArray(poolEvents.data) ? poolEvents.data : poolEvents.data.data;
+    allCharacters.value = Array.isArray(characters.data) ? characters.data : characters.data.data;
+    allCurses.value = Array.isArray(curses.data) ? curses.data : curses.data.data;
+  } catch {
+    // ignore
+  }
+}
+
+function togglePool(type: PoolType): void {
+  const current = showPool[type];
+  showPool[type] = !current;
+}
+
+function isInPool(key: PoolKey, id: number): boolean {
+  const pool = form[key];
+  return pool !== undefined && pool.includes(id);
+}
+
+function togglePoolItem(key: PoolKey, id: number): void {
+  const pool = form[key];
+  if (!pool) {
+    form[key] = [id];
+  } else if (pool.includes(id)) {
+    const next = pool.filter((existing) => existing !== id);
+    form[key] = next.length === 0 ? undefined : next;
+  } else {
+    form[key] = [...pool, id];
+  }
+}
+
+function selectAllPool(type: PoolType): void {
+  const allMap: Record<PoolType, { id: number }[]> = {
+    cards: allCards.value,
+    items: allItems.value,
+    events: allEvents.value,
+    characters: allCharacters.value,
+    curses: allCurses.value,
+  };
+  const key = poolTypeToKey[type];
+  const allIds = allMap[type].map((entry) => entry.id);
+  const pool = form[key];
+  form[key] = pool && pool.length === allIds.length ? undefined : [...allIds];
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, emptyForm());
+  overrideStartingStats.value = undefined;
+  overrideXpMultiplier.value = undefined;
+  overrideBotDifficulty.value = "medium";
+  Object.assign(overrideHouseRules, defaultHouseRules());
+  useCustomXp.value = false;
+  xpBase.value = 50;
+  xpWinBonus.value = 100;
+  xpOnlineMultiplier.value = 1.5;
+  Object.assign(showPool, { cards: false, items: false, events: false, characters: false, curses: false });
+  Object.assign(poolSearch, { cards: "", items: "", events: "", characters: "", curses: "" });
+  showModal.value = true;
+}
+
+function openEdit(event: RotatingEvent): void {
+  editing.value = event;
+  Object.assign(form, {
+    name: event.name,
+    description: event.description,
+    image_url: event.image_url || "",
+    game_type: event.game_type,
+    game_mode: event.game_mode,
+    reward_coins: event.reward_coins,
+    max_attempts: event.max_attempts || undefined,
+    starts_at: event.starts_at ? event.starts_at.slice(0, 16) : "",
+    ends_at: event.ends_at ? event.ends_at.slice(0, 16) : "",
+    is_active: event.is_active,
+    visibility: event.visibility || "all",
+    card_pool: event.card_pool || undefined,
+    item_pool: event.item_pool || undefined,
+    event_pool: event.event_pool || undefined,
+    character_pool: event.character_pool || undefined,
+    curse_pool: event.curse_pool || undefined,
+    fixed_event_id: event.fixed_event_id || undefined,
+    total_rounds: event.total_rounds || undefined,
+    affects_elo: event.affects_elo || false,
+    theme_color: event.theme_color || "",
+  });
+  overrideStartingStats.value = event.modifiers?.starting_stats || undefined;
+  overrideXpMultiplier.value = event.modifiers?.xp_multiplier || undefined;
+  overrideBotDifficulty.value = event.modifiers?.bot_difficulty || "medium";
+  const houseRules = event.modifiers?.house_rules || {};
+  Object.assign(overrideHouseRules, {
+    no_negative_effects: !!houseRules.no_negative_effects,
+    double_positive_effects: !!houseRules.double_positive_effects,
+    random_starting_stats: !!houseRules.random_starting_stats,
+    hardcore_mode: !!houseRules.hardcore_mode,
+    draw_curse_per_round: !!houseRules.draw_curse_per_round,
+  });
+  if (event.xp_config) {
+    useCustomXp.value = true;
+    xpBase.value = event.xp_config.base_xp ?? 50;
+    xpWinBonus.value = event.xp_config.win_bonus ?? 100;
+    xpOnlineMultiplier.value = event.xp_config.online_multiplier ?? 1.5;
+  } else {
+    useCustomXp.value = false;
+    xpBase.value = 50;
+    xpWinBonus.value = 100;
+    xpOnlineMultiplier.value = 1.5;
+  }
+  Object.assign(showPool, { cards: false, items: false, events: false, characters: false, curses: false });
+  Object.assign(poolSearch, { cards: "", items: "", events: "", characters: "", curses: "" });
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  saving.value = true;
+  const modifiers: EventModifiers = {};
+  if (overrideStartingStats.value) {
+    modifiers.starting_stats = overrideStartingStats.value;
+  }
+  if (overrideXpMultiplier.value) {
+    modifiers.xp_multiplier = overrideXpMultiplier.value;
+  }
+  if (form.game_mode === "single" && form.game_type === "duel") {
+    modifiers.bot_difficulty = overrideBotDifficulty.value;
+  }
+  const hasHouseRules = Object.values(overrideHouseRules).some(Boolean);
+  if (hasHouseRules) {
+    modifiers.house_rules = { ...overrideHouseRules };
+  }
+
+  const payload = {
+    ...form,
+    modifiers: Object.keys(modifiers).length > 0 ? modifiers : undefined,
+    xp_config: useCustomXp.value
+      ? {
+          base_xp: xpBase.value,
+          win_bonus: xpWinBonus.value,
+          online_multiplier: xpOnlineMultiplier.value,
+        }
+      : undefined,
+    theme_color: form.theme_color || undefined,
+  };
+
+  try {
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/rotating-events/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/rotating-events", payload);
+    }
+    showModal.value = false;
+    await fetch();
+  } catch (error) {
+    toast.error(isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Failed to save")
+      : "Failed to save");
+  }
+  saving.value = false;
+}
+
+async function remove(event: RotatingEvent): Promise<void> {
+  if (!confirm(`Delete "${event.name}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/rotating-events/${event.id}`);
+    await fetch();
+  } catch {
+    // ignore
+  }
+}
+
+function filterStatEffects(effects: CardEffects | undefined): Record<string, number | undefined> {
+  if (!effects) {
+    return {};
+  }
+  const result: Record<string, number | undefined> = {};
+  const specialKeys = new Set(["grant_item_id", "draw_item", "recover_die", "lose_die", "discard_item", "remove_curse"]);
+  for (const [key, value] of Object.entries(effects)) {
+    if (!specialKeys.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function shortStat(stat: string): string {
+  const map: Record<string, string> = { wealth: "WLT", influence: "INF", security: "SEC", religion: "REL", food: "FOD", happiness: "HAP" };
+  return map[stat] || stat.slice(0, 3).toUpperCase();
+}
+
+function itemEffectLabel(item: ItemPoolEntry): string {
+  if (!item.effect) {
+    return "?";
+  }
+  const effect = item.effect;
+  const bonusValue = effect.bonus_value ?? 0;
+  const labels: Record<string, string> = {
+    roll_bonus: `Roll ${bonusValue > 0 ? "+" : ""}${effect.bonus_value}`,
+    difficulty_reduction: `Diff -${effect.bonus_value}`,
+    stat_boost: `${effect.stat ? shortStat(effect.stat) : "Stat"} +${effect.bonus_value}`,
+    heal_die: `Heal ${effect.bonus_value} Die`,
+    score_bonus: `Score +${effect.bonus_value}`,
+    shield_negative: `Shield ${effect.bonus_value}x`,
+    debuff_roll: `Roll ${effect.bonus_value}`,
+    increase_difficulty: `Diff +${effect.bonus_value}`,
+    peek_cards: `Peek ${effect.bonus_value}`,
+    steal_stat: `Steal ${effect.bonus_value}`,
+  };
+  return (effect.bonus_type ? labels[effect.bonus_type] : undefined) || effect.bonus_type || "?";
+}
+
+function eventMechanicLabel(mechanic: string | undefined): string {
+  if (!mechanic) {
+    return "";
+  }
+  const labels: Record<string, string> = {
+    stat_modifier: "Stat Modifier",
+    grant_items: "Grant Items",
+    reduce_dice: "Reduce Dice",
+    altered_deal: "Altered Deal",
+    score_event: "Score Event",
+  };
+  return labels[mechanic] || mechanic;
+}
+
+function eventMechanicClass(mechanic: string | undefined): string {
+  if (mechanic && ["reduce_dice", "stat_modifier"].includes(mechanic)) {
+    return "chip-neg";
+  }
+  if (mechanic && ["grant_items", "score_event"].includes(mechanic)) {
+    return "chip-pos";
+  }
+  return "chip-special";
+}
+
+function isActive(event: RotatingEvent): boolean {
+  if (!event.is_active) {
+    return false;
+  }
+  const now = new Date();
+  return event.starts_at !== undefined
+    && event.ends_at !== undefined
+    && new Date(event.starts_at) <= now
+    && new Date(event.ends_at) >= now;
+}
+
+function formatDateRange(start: string | undefined, end: string | undefined): string {
+  if (!start || !end) {
+    return "";
+  }
+  const startDate = new Date(start).toLocaleDateString();
+  const endDate = new Date(end).toLocaleDateString();
+  return `${startDate} - ${endDate}`;
+}
+
+function curseNegLabel(curse: CursePoolEntry): string {
+  const effect = curse.negative_effect;
+  if (!effect) {
+    return "?";
+  }
+  const type = effect.type;
+  if (type === "lose_die") {
+    return `Lose ${effect.value || 1} die`;
+  }
+  if (type === "stat_per_round") {
+    return `${effect.value} ${effect.stat}/round`;
+  }
+  if (type === "difficulty_modifier") {
+    return `+${effect.value} diff`;
+  }
+  if (type === "double_negative") {
+    return "Double neg";
+  }
+  return type;
+}
+
+function cursePosLabel(curse: CursePoolEntry): string {
+  const effect = curse.positive_effect;
+  if (!effect) {
+    return "?";
+  }
+  const type = effect.type;
+  if (type === "xp_multiplier") {
+    return `${effect.value}x XP`;
+  }
+  if (type === "stat_per_round") {
+    return `+${effect.value} ${effect.stat}/round`;
+  }
+  if (type === "auto_max_stat") {
+    return `Max ${effect.count || 1} stat`;
+  }
+  if (type === "score_bonus") {
+    return `+${effect.value} score`;
+  }
+  if (type === "opponent_difficulty") {
+    return `+${effect.value} opp diff`;
+  }
+  if (type === "opponent_lose_die") {
+    return "Opp lose die";
+  }
+  return type;
+}
+
+function truncate(value: string | undefined, length: number): string {
+  if (!value) {
+    return "";
+  }
+  return value.length > length ? `${value.slice(0, length)}...` : value;
+}
+
+onMounted(async () => {
+  await Promise.all([fetch(), fetchPoolData()]);
+});
 </script>
 
 <style scoped>

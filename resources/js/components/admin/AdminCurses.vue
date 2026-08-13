@@ -5,14 +5,14 @@
       <div class="header-buttons">
         <button class="btn-csv" @click="exportCsv">Export CSV</button>
         <button class="btn-csv" @click="triggerImport">Import CSV</button>
-        <input type="file" ref="csvInput" accept=".csv" style="display:none" @change="handleImportFile" />
+        <input ref="csvInput" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
         <button class="btn-primary" @click="openCreate">+ New Curse</button>
       </div>
     </div>
 
-    <div v-if="importResult" class="import-result" :class="importResult.errors.length ? 'import-warn' : 'import-ok'">
+    <div v-if="importResult" class="import-result" :class="importResult.errors.length > 0 ? 'import-warn' : 'import-ok'">
       CSV Import: {{ importResult.created }} created, {{ importResult.updated }} updated.
-      <span v-if="importResult.errors.length"> {{ importResult.errors.length }} error(s).</span>
+      <span v-if="importResult.errors.length > 0"> {{ importResult.errors.length }} error(s).</span>
       <div v-for="(err, i) in importResult.errors" :key="i" class="import-error-line">{{ err }}</div>
       <button class="import-dismiss" @click="importResult = null">Dismiss</button>
     </div>
@@ -121,7 +121,7 @@
           <!-- Duel Override -->
           <div class="duel-override-section">
             <label class="duel-toggle-label">
-              <input type="checkbox" v-model="form.useDuelOverride" />
+              <input v-model="form.useDuelOverride" type="checkbox" />
               <span>Use different effects for Duel mode</span>
             </label>
             <template v-if="form.useDuelOverride">
@@ -183,7 +183,7 @@
 
           <div class="form-group">
             <label>
-              <input type="checkbox" v-model="form.is_available" />
+              <input v-model="form.is_available" type="checkbox" />
               Available
             </label>
           </div>
@@ -202,202 +202,339 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminCurses',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      curses: [],
-      loading: true,
-      searchQuery: '',
-      showModal: false,
-      editing: null,
-      saving: false,
-      formError: '',
-      importResult: null,
-      statOptions: ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'],
-      form: this.defaultForm(),
-    };
-  },
-  computed: {
-    filteredCurses() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.curses;
-      return this.curses.filter(c =>
-        (c.name || '').toLowerCase().includes(q) ||
-        (c.description || '').toLowerCase().includes(q)
-      );
-    },
-  },
-  async mounted() {
-    await this.fetch();
-  },
-  methods: {
-    defaultForm() {
-      return {
-        name: '', description: '',
-        neg_type: 'lose_die', neg_stat: 'wealth', neg_value: 1,
-        pos_type: 'xp_multiplier', pos_stat: 'wealth', pos_value: 1.5,
-        useDuelOverride: false,
-        neg_type_duel: 'lose_die', neg_stat_duel: 'wealth', neg_value_duel: 1,
-        pos_type_duel: 'xp_multiplier', pos_stat_duel: 'wealth', pos_value_duel: 1.5,
-        is_available: true,
-      };
-    },
-    async fetch() {
-      this.loading = true;
-      const res = await axios.get('/api/admin/curses');
-      this.curses = res.data;
-      this.loading = false;
-    },
-    buildEffect(type, stat, value) {
-      const eff = { type };
-      if (type === 'stat_per_round') {
-        eff.stat = stat;
-        eff.value = value;
-      } else if (type === 'lose_die' || type === 'difficulty_modifier') {
-        eff.value = value;
-      } else if (type === 'xp_multiplier') {
-        eff.value = value;
-      } else if (type === 'auto_max_stat') {
-        eff.count = value;
-      } else if (type === 'score_bonus' || type === 'opponent_difficulty') {
-        eff.value = value;
-      } else if (type === 'opponent_lose_die') {
-        eff.rounds = value;
-      }
-      return eff;
-    },
-    parseEffect(effect, prefix) {
-      if (!effect) return {};
-      return {
-        [`${prefix}_type`]: effect.type || 'lose_die',
-        [`${prefix}_stat`]: effect.stat || 'wealth',
-        [`${prefix}_value`]: effect.value ?? effect.count ?? effect.rounds ?? 1,
-      };
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = this.defaultForm();
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(curse) {
-      this.editing = curse;
-      this.form = {
-        name: curse.name,
-        description: curse.description,
-        ...this.parseEffect(curse.negative_effect, 'neg'),
-        ...this.parseEffect(curse.positive_effect, 'pos'),
-        useDuelOverride: curse.negative_effect_duel != null || curse.positive_effect_duel != null,
-        neg_type_duel: curse.negative_effect_duel?.type || curse.negative_effect?.type || 'lose_die',
-        neg_stat_duel: curse.negative_effect_duel?.stat || curse.negative_effect?.stat || 'wealth',
-        neg_value_duel: curse.negative_effect_duel?.value ?? curse.negative_effect_duel?.count ?? curse.negative_effect_duel?.rounds ?? curse.negative_effect?.value ?? 1,
-        pos_type_duel: curse.positive_effect_duel?.type || curse.positive_effect?.type || 'xp_multiplier',
-        pos_stat_duel: curse.positive_effect_duel?.stat || curse.positive_effect?.stat || 'wealth',
-        pos_value_duel: curse.positive_effect_duel?.value ?? curse.positive_effect_duel?.count ?? curse.positive_effect_duel?.rounds ?? curse.positive_effect?.value ?? 1.5,
-        is_available: curse.is_available ?? true,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      const payload = {
-        name: this.form.name,
-        description: this.form.description,
-        negative_effect: this.buildEffect(this.form.neg_type, this.form.neg_stat, this.form.neg_value),
-        positive_effect: this.buildEffect(this.form.pos_type, this.form.pos_stat, this.form.pos_value),
-        negative_effect_duel: this.form.useDuelOverride
-          ? this.buildEffect(this.form.neg_type_duel, this.form.neg_stat_duel, this.form.neg_value_duel)
-          : null,
-        positive_effect_duel: this.form.useDuelOverride
-          ? this.buildEffect(this.form.pos_type_duel, this.form.pos_stat_duel, this.form.pos_value_duel)
-          : null,
-        is_available: this.form.is_available,
-      };
+interface CurseEffect {
+  type: string;
+  stat?: string;
+  value?: number;
+  count?: number;
+  rounds?: number;
+}
 
-      this.saving = true;
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/curses/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/curses', payload);
-        }
-        this.showModal = false;
-        await this.fetch();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Save failed';
-      }
-      this.saving = false;
-    },
-    async handleImageUpload(event) {
-      if (!this.editing) return;
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('image', file);
-      try {
-        await axios.post(`/api/admin/curses/${this.editing.id}/image`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        await this.fetch();
-        this.toast.success('Image uploaded');
-      } catch (e) {
-        this.toast.error('Upload failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
-    async confirmDelete(curse) {
-      if (!confirm(`Delete curse "${curse.name}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/curses/${curse.id}`);
-        await this.fetch();
-      } catch (e) {
-        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
-    formatEffect(effect) {
-      if (!effect) return '—';
-      const t = effect.type;
-      if (t === 'lose_die') return `Lose ${effect.value || 1} die`;
-      if (t === 'stat_per_round') return `${effect.value > 0 ? '+' : ''}${effect.value} ${effect.stat}/round`;
-      if (t === 'difficulty_modifier') return `+${effect.value || 1} difficulty`;
-      if (t === 'double_negative') return 'Double negative effects';
-      if (t === 'xp_multiplier') return `${effect.value}x XP`;
-      if (t === 'auto_max_stat') return `Auto-max ${effect.count || 1} stat(s)`;
-      if (t === 'score_bonus') return `+${effect.value} score`;
-      if (t === 'opponent_difficulty') return `+${effect.value} opponent difficulty`;
-      if (t === 'opponent_lose_die') return `Opponent loses die for ${effect.rounds || 1} round(s)`;
-      return JSON.stringify(effect);
-    },
-    exportCsv() {
-      window.location.href = '/api/admin/curses/export-csv';
-    },
-    triggerImport() {
-      this.$refs.csvInput.click();
-    },
-    async handleImportFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const res = await axios.post('/api/admin/curses/import-csv', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        this.importResult = res.data;
-        await this.fetch();
-      } catch (e) {
-        this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
-      }
-      event.target.value = '';
-    },
-  },
-};
+interface Curse {
+  id: number;
+  name: string;
+  description: string;
+  negative_effect: CurseEffect | undefined;
+  positive_effect: CurseEffect | undefined;
+  negative_effect_duel: CurseEffect | undefined;
+  positive_effect_duel: CurseEffect | undefined;
+  is_available: boolean;
+  image_path: string | undefined;
+}
+
+interface CurseForm {
+  name: string;
+  description: string;
+  neg_type: string;
+  neg_stat: string;
+  neg_value: number;
+  pos_type: string;
+  pos_stat: string;
+  pos_value: number;
+  useDuelOverride: boolean;
+  neg_type_duel: string;
+  neg_stat_duel: string;
+  neg_value_duel: number;
+  pos_type_duel: string;
+  pos_stat_duel: string;
+  pos_value_duel: number;
+  is_available: boolean;
+}
+
+interface ImportResult {
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
+interface EffectFields {
+  type: string;
+  stat: string;
+  value: number;
+}
+
+function defaultForm(): CurseForm {
+  return {
+    name: "", description: "",
+    neg_type: "lose_die", neg_stat: "wealth", neg_value: 1,
+    pos_type: "xp_multiplier", pos_stat: "wealth", pos_value: 1.5,
+    useDuelOverride: false,
+    neg_type_duel: "lose_die", neg_stat_duel: "wealth", neg_value_duel: 1,
+    pos_type_duel: "xp_multiplier", pos_stat_duel: "wealth", pos_value_duel: 1.5,
+    is_available: true,
+  };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string }>(error)) {
+    return error.response?.data?.message ?? error.message;
+  }
+  return fallback;
+}
+
+const toast = useToast();
+
+const curses = ref<Curse[]>([]);
+const loading = ref(true);
+const searchQuery = ref("");
+const showModal = ref(false);
+const editing = ref<Curse | undefined>(undefined);
+const saving = ref(false);
+const formError = ref("");
+const importResult = ref<ImportResult | undefined>(undefined);
+const statOptions = ["wealth", "influence", "security", "religion", "food", "happiness"];
+const form = reactive<CurseForm>(defaultForm());
+const csvInput = useTemplateRef<HTMLInputElement>("csvInput");
+
+const filteredCurses = computed<Curse[]>(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) {
+    return curses.value;
+  }
+  return curses.value.filter((curse) =>
+    (curse.name || "").toLowerCase().includes(query)
+    || (curse.description || "").toLowerCase().includes(query),
+  );
+});
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  const response = await axios.get<Curse[]>("/api/admin/curses");
+  curses.value = response.data;
+  loading.value = false;
+}
+
+function buildEffect(type: string, stat: string, value: number): CurseEffect {
+  const effect: CurseEffect = { type };
+  switch (type) {
+  case "stat_per_round": {
+    effect.stat = stat;
+    effect.value = value;
+  
+  break;
+  }
+  case "lose_die": 
+  case "difficulty_modifier": {
+    effect.value = value;
+  
+  break;
+  }
+  case "xp_multiplier": {
+    effect.value = value;
+  
+  break;
+  }
+  case "auto_max_stat": {
+    effect.count = value;
+  
+  break;
+  }
+  case "score_bonus": 
+  case "opponent_difficulty": {
+    effect.value = value;
+  
+  break;
+  }
+  case "opponent_lose_die": {
+    effect.rounds = value;
+  
+  break;
+  }
+  // No default
+  }
+  return effect;
+}
+
+function parseEffect(effect: CurseEffect | undefined): EffectFields {
+  if (!effect) {
+    return { type: "lose_die", stat: "wealth", value: 1 };
+  }
+  return {
+    type: effect.type || "lose_die",
+    stat: effect.stat || "wealth",
+    value: effect.value ?? effect.count ?? effect.rounds ?? 1,
+  };
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, defaultForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(curse: Curse): void {
+  editing.value = curse;
+  const negative = parseEffect(curse.negative_effect);
+  const positive = parseEffect(curse.positive_effect);
+  Object.assign(form, {
+    name: curse.name,
+    description: curse.description,
+    neg_type: negative.type,
+    neg_stat: negative.stat,
+    neg_value: negative.value,
+    pos_type: positive.type,
+    pos_stat: positive.stat,
+    pos_value: positive.value,
+    useDuelOverride: curse.negative_effect_duel != undefined || curse.positive_effect_duel != undefined,
+    neg_type_duel: curse.negative_effect_duel?.type || curse.negative_effect?.type || "lose_die",
+    neg_stat_duel: curse.negative_effect_duel?.stat || curse.negative_effect?.stat || "wealth",
+    neg_value_duel: curse.negative_effect_duel?.value ?? curse.negative_effect_duel?.count ?? curse.negative_effect_duel?.rounds ?? curse.negative_effect?.value ?? 1,
+    pos_type_duel: curse.positive_effect_duel?.type || curse.positive_effect?.type || "xp_multiplier",
+    pos_stat_duel: curse.positive_effect_duel?.stat || curse.positive_effect?.stat || "wealth",
+    pos_value_duel: curse.positive_effect_duel?.value ?? curse.positive_effect_duel?.count ?? curse.positive_effect_duel?.rounds ?? curse.positive_effect?.value ?? 1.5,
+    is_available: curse.is_available ?? true,
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  const payload = {
+    name: form.name,
+    description: form.description,
+    negative_effect: buildEffect(form.neg_type, form.neg_stat, form.neg_value),
+    positive_effect: buildEffect(form.pos_type, form.pos_stat, form.pos_value),
+    negative_effect_duel: form.useDuelOverride
+      ? buildEffect(form.neg_type_duel, form.neg_stat_duel, form.neg_value_duel)
+      : undefined,
+    positive_effect_duel: form.useDuelOverride
+      ? buildEffect(form.pos_type_duel, form.pos_stat_duel, form.pos_value_duel)
+      : undefined,
+    is_available: form.is_available,
+  };
+
+  saving.value = true;
+  try {
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/curses/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/curses", payload);
+    }
+    showModal.value = false;
+    await fetch();
+  } catch (error) {
+    formError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Save failed")
+      : "Save failed";
+  }
+  saving.value = false;
+}
+
+async function handleImageUpload(event: Event): Promise<void> {
+  const current = editing.value;
+  if (!current) {
+    return;
+  }
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("image", file);
+  try {
+    await axios.post(`/api/admin/curses/${current.id}/image`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    await fetch();
+    toast.success("Image uploaded");
+  } catch (error) {
+    toast.error(`Upload failed: ${errorMessage(error, "Upload failed")}`);
+  }
+}
+
+async function confirmDelete(curse: Curse): Promise<void> {
+  if (!confirm(`Delete curse "${curse.name}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/curses/${curse.id}`);
+    await fetch();
+  } catch (error) {
+    toast.error(`Delete failed: ${errorMessage(error, "Delete failed")}`);
+  }
+}
+
+function formatEffect(effect: CurseEffect | undefined): string {
+  if (!effect) {
+    return "—";
+  }
+  const type = effect.type;
+  if (type === "lose_die") {
+    return `Lose ${effect.value || 1} die`;
+  }
+  if (type === "stat_per_round") {
+    return `${(effect.value ?? 0) > 0 ? "+" : ""}${effect.value} ${effect.stat}/round`;
+  }
+  if (type === "difficulty_modifier") {
+    return `+${effect.value || 1} difficulty`;
+  }
+  if (type === "double_negative") {
+    return "Double negative effects";
+  }
+  if (type === "xp_multiplier") {
+    return `${effect.value}x XP`;
+  }
+  if (type === "auto_max_stat") {
+    return `Auto-max ${effect.count || 1} stat(s)`;
+  }
+  if (type === "score_bonus") {
+    return `+${effect.value} score`;
+  }
+  if (type === "opponent_difficulty") {
+    return `+${effect.value} opponent difficulty`;
+  }
+  if (type === "opponent_lose_die") {
+    return `Opponent loses die for ${effect.rounds || 1} round(s)`;
+  }
+  return JSON.stringify(effect);
+}
+
+function exportCsv(): void {
+  window.location.assign("/api/admin/curses/export-csv");
+}
+
+function triggerImport(): void {
+  csvInput.value?.click();
+}
+
+async function handleImportFile(event: Event): Promise<void> {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await axios.post<ImportResult>("/api/admin/curses/import-csv", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    importResult.value = response.data;
+    await fetch();
+  } catch (error) {
+    importResult.value = { created: 0, updated: 0, errors: [errorMessage(error, "Import failed")] };
+  }
+  target.value = "";
+}
+
+onMounted(async () => {
+  await fetch();
+});
 </script>
 
 <style scoped>

@@ -22,7 +22,7 @@
           <span v-if="sound.url" class="sound-status uploaded">Uploaded</span>
           <span v-else class="sound-status default">Default</span>
 
-          <button v-if="sound.url" class="btn-sm" @click="preview(sound)" title="Play">
+          <button v-if="sound.url" class="btn-sm" title="Play" @click="preview(sound)">
             &#9654;
           </button>
 
@@ -44,64 +44,79 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import axios from "axios";
+import { onMounted, ref } from "vue";
 
-export default {
-  name: 'AdminSounds',
-  data() {
-    return {
-      sounds: [],
-      loading: true,
-      uploading: null,
-      uploadError: null,
-      previewAudio: null,
-    };
-  },
-  async mounted() {
-    await this.fetch();
-  },
-  methods: {
-    async fetch() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/admin/sound-assets');
-        this.sounds = res.data;
-      } catch {
-        this.sounds = [];
-      }
-      this.loading = false;
-    },
-    preview(sound) {
-      if (this.previewAudio) {
-        this.previewAudio.pause();
-      }
-      this.previewAudio = new Audio(sound.url);
-      this.previewAudio.play().catch(() => {});
-    },
-    async uploadFile(sound, event) {
-      const file = event.target.files[0];
-      if (!file) return;
+interface SoundAsset {
+  id: number;
+  key: string;
+  label: string;
+  category: string;
+  url?: string;
+}
 
-      this.uploading = sound.key;
-      this.uploadError = null;
+const sounds = ref<SoundAsset[]>([]);
+const loading = ref(true);
+const uploading = ref<string | undefined>(undefined);
+const uploadError = ref<string | undefined>(undefined);
+const previewAudio = ref<HTMLAudioElement | undefined>(undefined);
 
-      const formData = new FormData();
-      formData.append('file', file);
+async function fetch(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<SoundAsset[]>("/api/admin/sound-assets");
+    sounds.value = response.data;
+  } catch {
+    sounds.value = [];
+  }
+  loading.value = false;
+}
 
-      try {
-        await axios.post(`/api/admin/sound-assets/${sound.key}/upload`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        await this.fetch();
-      } catch {
-        this.uploadError = sound.key;
-      }
-      this.uploading = null;
-      event.target.value = '';
-    },
-  },
-};
+async function preview(sound: SoundAsset): Promise<void> {
+  if (previewAudio.value) {
+    previewAudio.value.pause();
+  }
+  const audio = new Audio(sound.url);
+  previewAudio.value = audio;
+  try {
+    await audio.play();
+  } catch {
+    // ignore playback errors (e.g. autoplay restrictions)
+  }
+}
+
+async function uploadFile(sound: SoundAsset, event: Event): Promise<void> {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = input.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  uploading.value = sound.key;
+  uploadError.value = undefined;
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    await axios.post(`/api/admin/sound-assets/${sound.key}/upload`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    await fetch();
+  } catch {
+    uploadError.value = sound.key;
+  }
+  uploading.value = undefined;
+  input.value = "";
+}
+
+onMounted(async () => {
+  await fetch();
+});
 </script>
 
 <style scoped>

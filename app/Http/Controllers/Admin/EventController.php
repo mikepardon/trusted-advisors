@@ -60,7 +60,17 @@ class EventController extends Controller
         ]);
 
         $old = $event->only(array_keys($validated));
-        $event->update($validated);
+        // Omitted nullable fields mean "cleared" on an admin edit; null them explicitly.
+        $event->update([
+            ...$validated,
+            'stat_modifiers' => $validated['stat_modifiers'] ?? null,
+            'addon_id' => $validated['addon_id'] ?? null,
+            'mechanic' => $validated['mechanic'] ?? null,
+            'mechanic_data' => $validated['mechanic_data'] ?? null,
+            'stat_modifiers_duel' => $validated['stat_modifiers_duel'] ?? null,
+            'mechanic_duel' => $validated['mechanic_duel'] ?? null,
+            'mechanic_data_duel' => $validated['mechanic_data_duel'] ?? null,
+        ]);
         $this->auditModelChange('update', $event, $old);
 
         return response()->json($event);

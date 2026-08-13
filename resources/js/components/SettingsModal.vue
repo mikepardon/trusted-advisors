@@ -178,111 +178,123 @@
   </transition>
 </template>
 
-<script>
-import axios from 'axios';
-import { getSoundSettings, saveSoundSettings, playSound } from '../sounds';
-import { getHintsSetting, setHintsSetting } from '../hints';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import { onMounted, reactive, ref, watch } from "vue";
+import axios from "axios";
+import { getSoundSettings, saveSoundSettings, playSound } from "../sounds";
+import { areHintsEnabled, setHintsEnabled } from "../hints";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'SettingsModal',
-  props: {
-    visible: { type: Boolean, default: false },
-  },
-  emits: ['close'],
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      settings: getSoundSettings(),
-      hintsEnabled: getHintsSetting(),
-      dddiceEnabled: localStorage.getItem('dddice_enabled') !== 'false',
-      gameBgEnabled: localStorage.getItem('game_bg_enabled') !== 'false',
-      notifPrefs: {
-        push_game: true,
-        push_social: true,
-        push_achievement: true,
-        push_season: true,
-        push_admin: true,
-        push_challenge: true,
-      },
-    };
-  },
-  watch: {
-    visible(val) {
-      if (val) {
-        this.settings = getSoundSettings();
-        this.hintsEnabled = getHintsSetting();
-        this.dddiceEnabled = localStorage.getItem('dddice_enabled') !== 'false';
-        this.gameBgEnabled = localStorage.getItem('game_bg_enabled') !== 'false';
-        const prefs = this.auth.state.user?.notification_preferences;
-        if (prefs) {
-          Object.keys(this.notifPrefs).forEach(key => {
-            if (key in prefs) {
-              this.notifPrefs[key] = prefs[key];
-            }
-          });
-        }
-      }
-    },
-  },
-  mounted() {
-    const prefs = this.auth.state.user?.notification_preferences;
-    if (prefs) {
-      Object.keys(this.notifPrefs).forEach(key => {
-        if (key in prefs) {
-          this.notifPrefs[key] = prefs[key];
-        }
-      });
+interface SoundSettings {
+  music: boolean;
+  ui: boolean;
+  actions: boolean;
+}
+
+interface NotifPrefs {
+  push_game: boolean;
+  push_social: boolean;
+  push_achievement: boolean;
+  push_season: boolean;
+  push_admin: boolean;
+  push_challenge: boolean;
+}
+
+const { visible = false } = defineProps<{
+  visible?: boolean;
+}>();
+
+defineEmits<{ close: [] }>();
+
+const auth = useAuth();
+
+const settings = reactive<SoundSettings>(getSoundSettings());
+const hintsEnabled = ref<boolean>(getHintsSetting());
+const gameBgEnabled = ref(localStorage.getItem("game_bg_enabled") !== "false");
+const notifPrefs = reactive<NotifPrefs>({
+  push_game: true,
+  push_social: true,
+  push_achievement: true,
+  push_season: true,
+  push_admin: true,
+  push_challenge: true,
+});
+
+function applyNotifPrefs(): void {
+  const prefs = auth.state.user?.notification_preferences;
+  if (!prefs) {
+    return;
+  }
+  for (const key of Object.keys(notifPrefs) as (keyof NotifPrefs)[]) {
+    if (!Object.hasOwn(prefs, key)) {
+      continue;
     }
+
+    const value = prefs[key];
+    notifPrefs[key] = Boolean(value);
+  }
+}
+
+watch(
+  () => visible,
+  (value) => {
+    if (!value) {
+      return;
+    }
+
+    Object.assign(settings, getSoundSettings());
+    hintsEnabled.value = areHintsEnabled();
+    gameBgEnabled.value = localStorage.getItem("game_bg_enabled") !== "false";
+    applyNotifPrefs();
   },
-  methods: {
-    toggle(key) {
-      this.settings[key] = !this.settings[key];
-      saveSoundSettings(this.settings);
-      if (this.settings[key]) {
-        playSound('clickToggle');
-      }
-    },
-    toggleHints() {
-      this.hintsEnabled = !this.hintsEnabled;
-      setHintsSetting(this.hintsEnabled);
-      if (this.hintsEnabled) {
-        playSound('clickToggle');
-      }
-    },
-    toggleDddice() {
-      this.dddiceEnabled = !this.dddiceEnabled;
-      localStorage.setItem('dddice_enabled', this.dddiceEnabled ? 'true' : 'false');
-      if (this.dddiceEnabled) {
-        playSound('clickToggle');
-      }
-    },
-    toggleGameBg() {
-      this.gameBgEnabled = !this.gameBgEnabled;
-      localStorage.setItem('game_bg_enabled', this.gameBgEnabled ? 'true' : 'false');
-      if (this.gameBgEnabled) {
-        playSound('clickToggle');
-      }
-    },
-    async toggleNotif(key) {
-      this.notifPrefs[key] = !this.notifPrefs[key];
-      if (this.notifPrefs[key]) {
-        playSound('clickToggle');
-      }
-      try {
-        await axios.put('/api/notifications/preferences', { preferences: { ...this.notifPrefs } });
-        if (this.auth.state.user) {
-          this.auth.state.user.notification_preferences = { ...this.notifPrefs };
-        }
-      } catch {
-        this.notifPrefs[key] = !this.notifPrefs[key];
-      }
-    },
-  },
-};
+);
+
+onMounted(() => {
+  applyNotifPrefs();
+});
+
+function toggle(key: keyof SoundSettings): void {
+  const wasEnabled: boolean = settings[key];
+  const isEnabled = !wasEnabled;
+  settings[key] = isEnabled;
+  saveSoundSettings(settings);
+  if (isEnabled) {
+    playSound("clickToggle");
+  }
+}
+
+function toggleHints(): void {
+  hintsEnabled.value = !hintsEnabled.value;
+  setHintsEnabled(hintsEnabled.value);
+  if (hintsEnabled.value) {
+    playSound("clickToggle");
+  }
+}
+
+function toggleGameBg(): void {
+  gameBgEnabled.value = !gameBgEnabled.value;
+  localStorage.setItem("game_bg_enabled", gameBgEnabled.value ? "true" : "false");
+  if (gameBgEnabled.value) {
+    playSound("clickToggle");
+  }
+}
+
+async function toggleNotif(key: keyof NotifPrefs): Promise<void> {
+  const wasEnabled: boolean = notifPrefs[key];
+  const isEnabled = !wasEnabled;
+  notifPrefs[key] = isEnabled;
+  if (isEnabled) {
+    playSound("clickToggle");
+  }
+  try {
+    await axios.put("/api/notifications/preferences", { preferences: { ...notifPrefs } });
+    if (auth.state.user) {
+      auth.state.user.notification_preferences = { ...notifPrefs };
+    }
+  } catch {
+    notifPrefs[key] = !isEnabled;
+  }
+}
 </script>
 
 <style scoped>

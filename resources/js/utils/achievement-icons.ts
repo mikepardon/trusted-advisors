@@ -1,4 +1,4 @@
-export const ACHIEVEMENT_ICON_MAP = {
+export const ACHIEVEMENT_ICON_MAP: Record<string, string> = {
   trophy: '\u{1F3C6}',
   shield: '\u{1F6E1}',
   crown: '\u{1F451}',
@@ -21,7 +21,12 @@ export const ACHIEVEMENT_ICON_MAP = {
   sparkles: '\u{2728}',
 };
 
-export function resolveAchievementIcon(iconField) {
+export interface ResolvedAchievementIcon {
+  type: 'emoji' | 'image';
+  value: string;
+}
+
+export function resolveAchievementIcon(iconField: string | undefined): ResolvedAchievementIcon {
   if (!iconField) return { type: 'emoji', value: '\u{1F3C6}' };
   if (iconField.startsWith('image:')) {
     return { type: 'image', value: iconField.slice(6) };

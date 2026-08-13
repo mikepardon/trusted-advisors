@@ -1,15 +1,11 @@
 <template>
-  <GameReplay :shareToken="token" />
+  <GameReplay :share-token="token" />
 </template>
 
-<script>
-import GameReplay from './GameReplay.vue';
+<script setup lang="ts">
+import GameReplay from "./GameReplay.vue";
 
-export default {
-  name: 'PublicReplay',
-  components: { GameReplay },
-  props: {
-    token: { type: String, required: true },
-  },
-};
+defineProps<{
+  token: string;
+}>();
 </script>

@@ -74,7 +74,7 @@
                 <option value="wins_with_characters">Wins With Characters</option>
               </select>
             </div>
-            <div class="form-group" v-if="form.criteria_type === 'play_game' || form.criteria_type === 'win_game'">
+            <div v-if="form.criteria_type === 'play_game' || form.criteria_type === 'win_game'" class="form-group">
               <label>Mode</label>
               <select v-model="form.criteria_mode">
                 <option value="any">Any</option>
@@ -83,7 +83,7 @@
                 <option value="online">Online</option>
               </select>
             </div>
-            <div class="form-group" v-if="form.criteria_type === 'stat_threshold'">
+            <div v-if="form.criteria_type === 'stat_threshold'" class="form-group">
               <label>Stat</label>
               <select v-model="form.criteria_stat">
                 <option value="wealth">Wealth</option>
@@ -94,15 +94,15 @@
                 <option value="happiness">Happiness</option>
               </select>
             </div>
-            <div class="form-group" v-if="['stat_threshold', 'no_stat_below', 'no_stat_above', 'all_stats_below', 'all_stats_above', 'total_score_above', 'total_score_below'].includes(form.criteria_type)">
+            <div v-if="['stat_threshold', 'no_stat_below', 'no_stat_above', 'all_stats_below', 'all_stats_above', 'total_score_above', 'total_score_below'].includes(form.criteria_type)" class="form-group">
               <label>Value</label>
               <input v-model.number="form.criteria_value" type="number" min="1" :max="['total_score_above', 'total_score_below'].includes(form.criteria_type) ? 120 : 20" />
             </div>
-            <div class="form-group" v-if="['login_streak', 'online_plays', 'total_friends', 'duel_plays', 'wins_with_characters'].includes(form.criteria_type)">
+            <div v-if="['login_streak', 'online_plays', 'total_friends', 'duel_plays', 'wins_with_characters'].includes(form.criteria_type)" class="form-group">
               <label>Count</label>
               <input v-model.number="form.criteria_count" type="number" min="1" />
             </div>
-            <div class="form-group" v-if="form.criteria_type === 'use_character'">
+            <div v-if="form.criteria_type === 'use_character'" class="form-group">
               <label>Character ID</label>
               <input v-model.number="form.criteria_character_id" type="number" min="1" />
             </div>
@@ -214,7 +214,7 @@
                 <option value="stat_threshold_count">Stat Threshold Count</option>
               </select>
             </div>
-            <div class="form-group" v-if="weeklyForm.criteria_type === 'play_games' || weeklyForm.criteria_type === 'win_games'">
+            <div v-if="weeklyForm.criteria_type === 'play_games' || weeklyForm.criteria_type === 'win_games'" class="form-group">
               <label>Mode</label>
               <select v-model="weeklyForm.criteria_mode">
                 <option value="any">Any</option>
@@ -227,7 +227,7 @@
               <label>Target Count</label>
               <input v-model.number="weeklyForm.criteria_count" type="number" min="1" />
             </div>
-            <div class="form-group" v-if="weeklyForm.criteria_type === 'stat_threshold_count'">
+            <div v-if="weeklyForm.criteria_type === 'stat_threshold_count'" class="form-group">
               <label>Stat Value</label>
               <input v-model.number="weeklyForm.criteria_value" type="number" min="1" max="20" />
             </div>
@@ -278,241 +278,338 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'AdminChallenges',
-  data() {
-    return {
-      activeTab: 'daily',
-      challenges: [],
-      addons: [],
-      showModal: false,
-      editing: null,
-      formError: '',
-      form: {
-        date: '', title: '', description: '',
-        criteria_type: 'play_game', criteria_mode: 'any',
-        criteria_stat: 'wealth', criteria_value: 15,
-        criteria_character_id: 1, criteria_count: 5,
-        reward_xp: 100, addon_id: null,
-      },
-      // Generate range
-      showGenerateModal: false,
-      generating: false,
-      genForm: { start_date: '', end_date: '' },
-      genResult: '',
-      genError: '',
-      // Weekly
-      weeklyChallenges: [],
-      showWeeklyModal: false,
-      editingWeekly: null,
-      weeklyFormError: '',
-      weeklyForm: {
-        week_start: '', week_end: '', title: '', description: '',
-        criteria_type: 'play_games', criteria_mode: 'any',
-        criteria_count: 3, criteria_value: 18,
-        reward_xp: 400, reward_coins: 75,
-      },
-      showWeeklyGenerateModal: false,
-      weeklyGenerating: false,
-      weeklyGenForm: { start_date: '', end_date: '' },
-      weeklyGenResult: '',
-      weeklyGenError: '',
-    };
-  },
-  async mounted() { await Promise.all([this.load(), this.fetchAddons()]); },
-  methods: {
-    async load() {
-      const res = await axios.get('/api/admin/daily-challenges');
-      this.challenges = res.data;
-    },
-    async fetchAddons() {
-      try {
-        const res = await axios.get('/api/admin/addons');
-        this.addons = res.data;
-      } catch { /* ignore */ }
-    },
-    buildCriteria() {
-      const t = this.form.criteria_type;
-      if (t === 'play_game') return { type: t, mode: this.form.criteria_mode };
-      if (t === 'win_game') return { type: t, mode: this.form.criteria_mode };
-      if (t === 'stat_threshold') return { type: t, stat: this.form.criteria_stat, value: this.form.criteria_value };
-      if (t === 'use_character') return { type: t, character_id: this.form.criteria_character_id };
-      if (['no_stat_below', 'no_stat_above', 'all_stats_below', 'all_stats_above', 'total_score_above', 'total_score_below'].includes(t)) {
-        return { type: t, value: this.form.criteria_value };
-      }
-      if (['login_streak', 'online_plays', 'total_friends', 'duel_plays', 'wins_with_characters'].includes(t)) {
-        return { type: t, count: this.form.criteria_count };
-      }
-      return { type: t };
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = {
-        date: '', title: '', description: '',
-        criteria_type: 'play_game', criteria_mode: 'any',
-        criteria_stat: 'wealth', criteria_value: 15,
-        criteria_character_id: 1, criteria_count: 5,
-        reward_xp: 100, addon_id: null,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(c) {
-      this.editing = c.id;
-      const cr = c.criteria || {};
-      this.form = {
-        date: c.date,
-        title: c.title,
-        description: c.description,
-        criteria_type: cr.type || 'play_game',
-        criteria_mode: cr.mode || 'any',
-        criteria_stat: cr.stat || 'wealth',
-        criteria_value: cr.value || 15,
-        criteria_character_id: cr.character_id || 1,
-        criteria_count: cr.count || 5,
-        reward_xp: c.reward_xp,
-        addon_id: c.addon_id || null,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      const data = {
-        date: this.form.date,
-        title: this.form.title,
-        description: this.form.description,
-        criteria: this.buildCriteria(),
-        reward_xp: this.form.reward_xp,
-        addon_id: this.form.addon_id || null,
-      };
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/daily-challenges/${this.editing}`, data);
-        } else {
-          await axios.post('/api/admin/daily-challenges', data);
-        }
-        this.showModal = false;
-        this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.error || e.response?.data?.message || 'Error';
-      }
-    },
-    async deleteChallenge(c) {
-      if (!confirm(`Delete "${c.title}"?`)) return;
-      await axios.delete(`/api/admin/daily-challenges/${c.id}`);
-      this.load();
-    },
-    async generateRange() {
-      this.generating = true;
-      this.genResult = '';
-      this.genError = '';
-      try {
-        const res = await axios.post('/api/admin/daily-challenges/generate', this.genForm);
-        this.genResult = res.data.message;
-        this.load();
-      } catch (e) {
-        this.genError = e.response?.data?.message || 'Error generating challenges';
-      }
-      this.generating = false;
-    },
-    // Weekly challenge methods
-    async loadWeekly() {
-      if (this.weeklyChallenges.length) return; // already loaded
-      try {
-        const res = await axios.get('/api/admin/weekly-challenges');
-        this.weeklyChallenges = res.data;
-      } catch {}
-    },
-    buildWeeklyCriteria() {
-      const t = this.weeklyForm.criteria_type;
-      const base = { type: t, count: this.weeklyForm.criteria_count };
-      if (t === 'play_games' || t === 'win_games') {
-        base.mode = this.weeklyForm.criteria_mode;
-      }
-      if (t === 'stat_threshold_count') {
-        base.stat = 'any';
-        base.value = this.weeklyForm.criteria_value;
-      }
-      return base;
-    },
-    openWeeklyCreate() {
-      this.editingWeekly = null;
-      this.weeklyForm = {
-        week_start: '', week_end: '', title: '', description: '',
-        criteria_type: 'play_games', criteria_mode: 'any',
-        criteria_count: 3, criteria_value: 18,
-        reward_xp: 400, reward_coins: 75,
-      };
-      this.weeklyFormError = '';
-      this.showWeeklyModal = true;
-    },
-    openWeeklyEdit(w) {
-      this.editingWeekly = w.id;
-      const cr = w.criteria || {};
-      this.weeklyForm = {
-        week_start: w.week_start,
-        week_end: w.week_end,
-        title: w.title,
-        description: w.description,
-        criteria_type: cr.type || 'play_games',
-        criteria_mode: cr.mode || 'any',
-        criteria_count: cr.count || 3,
-        criteria_value: cr.value || 18,
-        reward_xp: w.reward_xp,
-        reward_coins: w.reward_coins,
-      };
-      this.weeklyFormError = '';
-      this.showWeeklyModal = true;
-    },
-    async saveWeekly() {
-      this.weeklyFormError = '';
-      const data = {
-        week_start: this.weeklyForm.week_start,
-        week_end: this.weeklyForm.week_end,
-        title: this.weeklyForm.title,
-        description: this.weeklyForm.description,
-        criteria: this.buildWeeklyCriteria(),
-        reward_xp: this.weeklyForm.reward_xp,
-        reward_coins: this.weeklyForm.reward_coins,
-      };
-      try {
-        if (this.editingWeekly) {
-          await axios.put(`/api/admin/weekly-challenges/${this.editingWeekly}`, data);
-        } else {
-          await axios.post('/api/admin/weekly-challenges', data);
-        }
-        this.showWeeklyModal = false;
-        const res = await axios.get('/api/admin/weekly-challenges');
-        this.weeklyChallenges = res.data;
-      } catch (e) {
-        this.weeklyFormError = e.response?.data?.error || e.response?.data?.message || 'Error';
-      }
-    },
-    async deleteWeekly(w) {
-      if (!confirm(`Delete "${w.title}"?`)) return;
-      await axios.delete(`/api/admin/weekly-challenges/${w.id}`);
-      this.weeklyChallenges = this.weeklyChallenges.filter(c => c.id !== w.id);
-    },
-    async generateWeeklyRange() {
-      this.weeklyGenerating = true;
-      this.weeklyGenResult = '';
-      this.weeklyGenError = '';
-      try {
-        const res = await axios.post('/api/admin/weekly-challenges/generate', this.weeklyGenForm);
-        this.weeklyGenResult = res.data.message;
-        const reloadRes = await axios.get('/api/admin/weekly-challenges');
-        this.weeklyChallenges = reloadRes.data;
-      } catch (e) {
-        this.weeklyGenError = e.response?.data?.message || 'Error generating weekly challenges';
-      }
-      this.weeklyGenerating = false;
-    },
-  },
-};
+interface Criteria {
+  type?: string;
+  mode?: string;
+  stat?: string;
+  value?: number;
+  character_id?: number;
+  count?: number;
+}
+
+interface Challenge {
+  id: number;
+  date: string;
+  title: string;
+  description: string;
+  criteria: Criteria | undefined;
+  reward_xp: number;
+  addon_id: number | undefined;
+  is_manual: boolean;
+}
+
+interface WeeklyChallenge {
+  id: number;
+  week_start: string;
+  week_end: string;
+  title: string;
+  description: string;
+  criteria: Criteria | undefined;
+  reward_xp: number;
+  reward_coins: number;
+  is_manual: boolean;
+}
+
+interface Addon {
+  id: number;
+  name: string;
+}
+
+interface ChallengeForm {
+  date: string;
+  title: string;
+  description: string;
+  criteria_type: string;
+  criteria_mode: string;
+  criteria_stat: string;
+  criteria_value: number;
+  criteria_character_id: number;
+  criteria_count: number;
+  reward_xp: number;
+  addon_id: number | undefined;
+}
+
+interface WeeklyForm {
+  week_start: string;
+  week_end: string;
+  title: string;
+  description: string;
+  criteria_type: string;
+  criteria_mode: string;
+  criteria_count: number;
+  criteria_value: number;
+  reward_xp: number;
+  reward_coins: number;
+}
+
+interface GenerateForm {
+  start_date: string;
+  end_date: string;
+}
+
+function emptyForm(): ChallengeForm {
+  return {
+    date: "", title: "", description: "",
+    criteria_type: "play_game", criteria_mode: "any",
+    criteria_stat: "wealth", criteria_value: 15,
+    criteria_character_id: 1, criteria_count: 5,
+    reward_xp: 100, addon_id: undefined,
+  };
+}
+
+function emptyWeeklyForm(): WeeklyForm {
+  return {
+    week_start: "", week_end: "", title: "", description: "",
+    criteria_type: "play_games", criteria_mode: "any",
+    criteria_count: 3, criteria_value: 18,
+    reward_xp: 400, reward_coins: 75,
+  };
+}
+
+const activeTab = ref("daily");
+const challenges = ref<Challenge[]>([]);
+const addons = ref<Addon[]>([]);
+const showModal = ref(false);
+const editing = ref<number | undefined>(undefined);
+const formError = ref("");
+const form = reactive<ChallengeForm>(emptyForm());
+// Generate range
+const showGenerateModal = ref(false);
+const generating = ref(false);
+const genForm = reactive<GenerateForm>({ start_date: "", end_date: "" });
+const genResult = ref("");
+const genError = ref("");
+// Weekly
+const weeklyChallenges = ref<WeeklyChallenge[]>([]);
+const showWeeklyModal = ref(false);
+const editingWeekly = ref<number | undefined>(undefined);
+const weeklyFormError = ref("");
+const weeklyForm = reactive<WeeklyForm>(emptyWeeklyForm());
+const showWeeklyGenerateModal = ref(false);
+const weeklyGenerating = ref(false);
+const weeklyGenForm = reactive<GenerateForm>({ start_date: "", end_date: "" });
+const weeklyGenResult = ref("");
+const weeklyGenError = ref("");
+
+async function load(): Promise<void> {
+  const response = await axios.get<Challenge[]>("/api/admin/daily-challenges");
+  challenges.value = response.data;
+}
+
+async function fetchAddons(): Promise<void> {
+  try {
+    const response = await axios.get<Addon[]>("/api/admin/addons");
+    addons.value = response.data;
+  } catch { /* ignore */ }
+}
+
+function buildCriteria(): Criteria {
+  const type = form.criteria_type;
+  if (type === "play_game") {
+    return { type, mode: form.criteria_mode };
+  }
+  if (type === "win_game") {
+    return { type, mode: form.criteria_mode };
+  }
+  if (type === "stat_threshold") {
+    return { type, stat: form.criteria_stat, value: form.criteria_value };
+  }
+  if (type === "use_character") {
+    return { type, character_id: form.criteria_character_id };
+  }
+  if (["no_stat_below", "no_stat_above", "all_stats_below", "all_stats_above", "total_score_above", "total_score_below"].includes(type)) {
+    return { type, value: form.criteria_value };
+  }
+  if (["login_streak", "online_plays", "total_friends", "duel_plays", "wins_with_characters"].includes(type)) {
+    return { type, count: form.criteria_count };
+  }
+  return { type };
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, emptyForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(challenge: Challenge): void {
+  editing.value = challenge.id;
+  const criteria = challenge.criteria ?? {};
+  Object.assign(form, {
+    date: challenge.date,
+    title: challenge.title,
+    description: challenge.description,
+    criteria_type: criteria.type || "play_game",
+    criteria_mode: criteria.mode || "any",
+    criteria_stat: criteria.stat || "wealth",
+    criteria_value: criteria.value || 15,
+    criteria_character_id: criteria.character_id || 1,
+    criteria_count: criteria.count || 5,
+    reward_xp: challenge.reward_xp,
+    addon_id: challenge.addon_id ?? undefined,
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  const data = {
+    date: form.date,
+    title: form.title,
+    description: form.description,
+    criteria: buildCriteria(),
+    reward_xp: form.reward_xp,
+    addon_id: form.addon_id ?? undefined,
+  };
+  try {
+    if (editing.value) {
+      await axios.put(`/api/admin/daily-challenges/${editing.value}`, data);
+    } else {
+      await axios.post("/api/admin/daily-challenges", data);
+    }
+    showModal.value = false;
+    load();
+  } catch (error) {
+    formError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.error ?? error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function deleteChallenge(challenge: Challenge): Promise<void> {
+  if (!confirm(`Delete "${challenge.title}"?`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/daily-challenges/${challenge.id}`);
+  load();
+}
+
+async function generateRange(): Promise<void> {
+  generating.value = true;
+  genResult.value = "";
+  genError.value = "";
+  try {
+    const response = await axios.post<{ message: string }>("/api/admin/daily-challenges/generate", genForm);
+    genResult.value = response.data.message;
+    load();
+  } catch (error) {
+    genError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Error generating challenges")
+      : "Error generating challenges";
+  }
+  generating.value = false;
+}
+
+// Weekly challenge methods
+async function loadWeekly(): Promise<void> {
+  if (weeklyChallenges.value.length > 0) {
+    return; // already loaded
+  }
+  try {
+    const response = await axios.get<WeeklyChallenge[]>("/api/admin/weekly-challenges");
+    weeklyChallenges.value = response.data;
+  } catch { /* ignore */ }
+}
+
+function buildWeeklyCriteria(): Criteria {
+  const type = weeklyForm.criteria_type;
+  const base: Criteria = { type, count: weeklyForm.criteria_count };
+  if (type === "play_games" || type === "win_games") {
+    base.mode = weeklyForm.criteria_mode;
+  } else if (type === "stat_threshold_count") {
+    base.stat = "any";
+    base.value = weeklyForm.criteria_value;
+  }
+  return base;
+}
+
+function openWeeklyCreate(): void {
+  editingWeekly.value = undefined;
+  Object.assign(weeklyForm, emptyWeeklyForm());
+  weeklyFormError.value = "";
+  showWeeklyModal.value = true;
+}
+
+function openWeeklyEdit(weekly: WeeklyChallenge): void {
+  editingWeekly.value = weekly.id;
+  const criteria = weekly.criteria ?? {};
+  Object.assign(weeklyForm, {
+    week_start: weekly.week_start,
+    week_end: weekly.week_end,
+    title: weekly.title,
+    description: weekly.description,
+    criteria_type: criteria.type || "play_games",
+    criteria_mode: criteria.mode || "any",
+    criteria_count: criteria.count || 3,
+    criteria_value: criteria.value || 18,
+    reward_xp: weekly.reward_xp,
+    reward_coins: weekly.reward_coins,
+  });
+  weeklyFormError.value = "";
+  showWeeklyModal.value = true;
+}
+
+async function saveWeekly(): Promise<void> {
+  weeklyFormError.value = "";
+  const data = {
+    week_start: weeklyForm.week_start,
+    week_end: weeklyForm.week_end,
+    title: weeklyForm.title,
+    description: weeklyForm.description,
+    criteria: buildWeeklyCriteria(),
+    reward_xp: weeklyForm.reward_xp,
+    reward_coins: weeklyForm.reward_coins,
+  };
+  try {
+    if (editingWeekly.value) {
+      await axios.put(`/api/admin/weekly-challenges/${editingWeekly.value}`, data);
+    } else {
+      await axios.post("/api/admin/weekly-challenges", data);
+    }
+    showWeeklyModal.value = false;
+    const response = await axios.get<WeeklyChallenge[]>("/api/admin/weekly-challenges");
+    weeklyChallenges.value = response.data;
+  } catch (error) {
+    weeklyFormError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.error ?? error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function deleteWeekly(weekly: WeeklyChallenge): Promise<void> {
+  if (!confirm(`Delete "${weekly.title}"?`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/weekly-challenges/${weekly.id}`);
+  weeklyChallenges.value = weeklyChallenges.value.filter((entry) => entry.id !== weekly.id);
+}
+
+async function generateWeeklyRange(): Promise<void> {
+  weeklyGenerating.value = true;
+  weeklyGenResult.value = "";
+  weeklyGenError.value = "";
+  try {
+    const response = await axios.post<{ message: string }>("/api/admin/weekly-challenges/generate", weeklyGenForm);
+    weeklyGenResult.value = response.data.message;
+    const reloadResponse = await axios.get<WeeklyChallenge[]>("/api/admin/weekly-challenges");
+    weeklyChallenges.value = reloadResponse.data;
+  } catch (error) {
+    weeklyGenError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Error generating weekly challenges")
+      : "Error generating weekly challenges";
+  }
+  weeklyGenerating.value = false;
+}
+
+onMounted(async () => {
+  await Promise.all([load(), fetchAddons()]);
+});
 </script>
 
 <style scoped>

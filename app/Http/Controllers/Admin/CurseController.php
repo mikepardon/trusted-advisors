@@ -55,7 +55,12 @@ class CurseController extends Controller
         ]);
 
         $old = $curse->only(array_keys($validated));
-        $curse->update($validated);
+        // Omitted nullable fields mean "cleared" on an admin edit; null them explicitly.
+        $curse->update([
+            ...$validated,
+            'negative_effect_duel' => $validated['negative_effect_duel'] ?? null,
+            'positive_effect_duel' => $validated['positive_effect_duel'] ?? null,
+        ]);
 
         $this->auditModelChange('update', $curse, $old);
 

@@ -64,70 +64,94 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import axios, { isAxiosError } from "axios";
+import { onMounted, reactive, ref } from "vue";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminAddons',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      addons: [],
-      loading: true,
-      showModal: false,
-      editing: null,
-      formError: '',
-      form: { name: '', description: '', is_active: true },
-    };
-  },
-  async mounted() { this.load(); },
-  methods: {
-    async load() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/admin/addons');
-        this.addons = res.data;
-      } catch { /* ignore */ }
-      this.loading = false;
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = { name: '', description: '', is_active: true };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(a) {
-      this.editing = a.id;
-      this.form = { name: a.name, description: a.description || '', is_active: a.is_active };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/addons/${this.editing}`, this.form);
-        } else {
-          await axios.post('/api/admin/addons', this.form);
-        }
-        this.showModal = false;
-        this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Error';
-      }
-    },
-    async deleteItem(a) {
-      if (!confirm(`Delete addon "${a.name}"? Content using it will become base game.`)) return;
-      try {
-        await axios.delete(`/api/admin/addons/${a.id}`);
-        this.load();
-      } catch (e) {
-        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
-  },
-};
+interface Addon {
+  id: number;
+  name: string;
+  description: string | undefined;
+  is_active: boolean;
+  characters_count?: number;
+  events_count?: number;
+  items_count?: number;
+  daily_challenges_count?: number;
+}
+
+interface AddonForm {
+  name: string;
+  description: string;
+  is_active: boolean;
+}
+
+const toast = useToast();
+
+const addons = ref<Addon[]>([]);
+const loading = ref(true);
+const showModal = ref(false);
+const editing = ref<number | undefined>(undefined);
+const formError = ref("");
+const form = reactive<AddonForm>({ name: "", description: "", is_active: true });
+
+async function load(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<Addon[]>("/api/admin/addons");
+    addons.value = response.data;
+  } catch { /* ignore */ }
+  loading.value = false;
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, { name: "", description: "", is_active: true });
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(addon: Addon): void {
+  editing.value = addon.id;
+  Object.assign(form, { name: addon.name, description: addon.description ?? "", is_active: addon.is_active });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  try {
+    if (editing.value) {
+      await axios.put(`/api/admin/addons/${editing.value}`, form);
+    } else {
+      await axios.post("/api/admin/addons", form);
+    }
+    showModal.value = false;
+    load();
+  } catch (error) {
+    const message = isAxiosError<{ message?: string }>(error)
+      ? error.response?.data?.message
+      : undefined;
+    formError.value = message ?? "Error";
+  }
+}
+
+async function deleteItem(addon: Addon): Promise<void> {
+  if (!confirm(`Delete addon "${addon.name}"? Content using it will become base game.`)) return;
+  try {
+    await axios.delete(`/api/admin/addons/${addon.id}`);
+    load();
+  } catch (error) {
+    const message = isAxiosError<{ message?: string }>(error)
+      ? error.response?.data?.message ?? error.message
+      : "Unknown error";
+    toast.error(`Delete failed: ${message}`);
+  }
+}
+
+onMounted(() => {
+  load();
+});
 </script>
 
 <style scoped>

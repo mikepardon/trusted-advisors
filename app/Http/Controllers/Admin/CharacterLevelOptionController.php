@@ -66,7 +66,12 @@ class CharacterLevelOptionController extends Controller
         ]);
 
         $old = $characterLevelOption->only(array_keys($validated));
-        $characterLevelOption->update($validated);
+        // Omitted nullable fields mean "cleared" on an admin edit; null them explicitly.
+        $characterLevelOption->update([
+            ...$validated,
+            'config' => $validated['config'] ?? null,
+            'character_id' => $validated['character_id'] ?? null,
+        ]);
         $this->auditModelChange('update', $characterLevelOption, $old);
 
         return response()->json($characterLevelOption);

@@ -60,7 +60,13 @@ class ItemController extends Controller
         ]);
 
         $old = $item->only(array_keys($validated));
-        $item->update($validated);
+        // Omitted nullable fields mean "cleared" on an admin edit; null them explicitly.
+        $item->update([
+            ...$validated,
+            'target' => $validated['target'] ?? null,
+            'addon_id' => $validated['addon_id'] ?? null,
+            'effect_duel' => $validated['effect_duel'] ?? null,
+        ]);
         $this->auditModelChange('update', $item, $old);
 
         return response()->json($item);

@@ -3,36 +3,40 @@
   <img v-else-if="resolved.type === 'image'" :src="resolved.value" alt="" class="app-icon app-icon--image" :class="sizeClass" />
 </template>
 
-<script>
-import { useIcons } from '../stores/icons';
+<script setup lang="ts">
+import { computed } from "vue";
+import { useIcons } from "../stores/icons";
 
-export default {
-  name: 'AppIcon',
-  props: {
-    iconKey: { type: String, default: null },
-    type: { type: String, default: null },
-    value: { type: String, default: null },
-    size: { type: String, default: 'md' },
-  },
-  setup(props) {
-    const { getIcon } = useIcons();
-    return { getIcon };
-  },
-  computed: {
-    resolved() {
-      if (this.type && this.value) {
-        return { type: this.type, value: this.value };
-      }
-      if (this.iconKey) {
-        return this.getIcon(this.iconKey);
-      }
-      return { type: 'emoji', value: '?' };
-    },
-    sizeClass() {
-      return `app-icon--${this.size}`;
-    },
-  },
-};
+interface ResolvedIcon {
+  type: string;
+  value: string;
+}
+
+const {
+  iconKey = undefined,
+  type = undefined,
+  value = undefined,
+  size = "md",
+} = defineProps<{
+  iconKey?: string;
+  type?: string;
+  value?: string;
+  size?: string;
+}>();
+
+const { getIcon } = useIcons();
+
+const resolved = computed<ResolvedIcon>(() => {
+  if (type && value) {
+    return { type, value };
+  }
+  if (iconKey) {
+    return getIcon(iconKey);
+  }
+  return { type: "emoji", value: "?" };
+});
+
+const sizeClass = computed(() => `app-icon--${size}`);
 </script>
 
 <style scoped>

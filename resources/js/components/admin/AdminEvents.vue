@@ -5,15 +5,15 @@
       <div class="header-buttons">
         <button class="btn-csv" @click="exportCsv">Export CSV</button>
         <button class="btn-csv" @click="triggerImport">Import CSV</button>
-        <input type="file" ref="csvInput" accept=".csv" style="display:none" @change="handleImportFile" />
+        <input ref="csvInput" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
         <button class="btn-primary" @click="openCreate">+ New Event</button>
         <button class="btn-ai" @click="showAiModal = true">Generate with AI</button>
       </div>
     </div>
 
-    <div v-if="importResult" class="import-result" :class="importResult.errors.length ? 'import-warn' : 'import-ok'">
+    <div v-if="importResult" class="import-result" :class="importResult.errors.length > 0 ? 'import-warn' : 'import-ok'">
       CSV Import: {{ importResult.created }} created, {{ importResult.updated }} updated.
-      <span v-if="importResult.errors.length"> {{ importResult.errors.length }} error(s).</span>
+      <span v-if="importResult.errors.length > 0"> {{ importResult.errors.length }} error(s).</span>
       <div v-for="(err, i) in importResult.errors" :key="i" class="import-error-line">{{ err }}</div>
       <button class="import-dismiss" @click="importResult = null">Dismiss</button>
     </div>
@@ -92,17 +92,17 @@
           </div>
         </div>
         <p class="item-desc">{{ ev.effect }}</p>
-        <div class="item-meta" v-if="ev.stat_modifiers">
+        <div v-if="ev.stat_modifiers" class="item-meta">
           <strong>Stat Modifiers:</strong>
           <span v-for="(val, stat) in ev.stat_modifiers" :key="stat" class="mod-badge" :class="val > 0 ? 'mod-pos' : 'mod-neg'">
             {{ statIcon(stat) }} {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
           </span>
         </div>
-        <div class="item-meta" v-if="ev.mechanic">
+        <div v-if="ev.mechanic" class="item-meta">
           <strong>Mechanic:</strong>
           <span class="mechanic-badge">{{ mechanicLabel(ev.mechanic) }}</span>
         </div>
-        <div class="item-meta" v-if="ev.stat_modifiers_duel || ev.mechanic_duel">
+        <div v-if="ev.stat_modifiers_duel || ev.mechanic_duel" class="item-meta">
           <span class="duel-badge">Duel Override</span>
           <span v-for="(val, stat) in ev.stat_modifiers_duel" :key="'d-' + stat" class="mod-badge" :class="val > 0 ? 'mod-pos' : 'mod-neg'">
             {{ statIcon(stat) }} {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
@@ -134,9 +134,9 @@
                 <input
                   type="number"
                   :value="form.modifiers[stat.key] || ''"
-                  @input="setModifier(stat.key, $event.target.value)"
                   class="stat-input"
                   :placeholder="0"
+                  @input="setModifier(stat.key, $event.target.value)"
                 />
               </div>
             </div>
@@ -156,32 +156,32 @@
 
           <div v-if="form.mechanic === 'reduce_dice'" class="form-group">
             <label>Dice to Remove</label>
-            <input type="number" v-model.number="form.mechanic_data.amount" min="1" max="5" placeholder="1" />
+            <input v-model.number="form.mechanic_data.amount" type="number" min="1" max="5" placeholder="1" />
           </div>
 
           <div v-if="form.mechanic === 'grant_items'" class="form-group mechanic-checkbox">
             <label>
-              <input type="checkbox" v-model="form.mechanic_data.random" />
+              <input v-model="form.mechanic_data.random" type="checkbox" />
               Grant random item to each advisor
             </label>
           </div>
 
           <div v-if="form.mechanic === 'altered_deal'" class="form-group">
             <label>Positive Cards</label>
-            <input type="number" v-model.number="form.mechanic_data.positive_cards" min="0" max="10" placeholder="2" />
+            <input v-model.number="form.mechanic_data.positive_cards" type="number" min="0" max="10" placeholder="2" />
             <label class="mt-label">Negative Cards</label>
-            <input type="number" v-model.number="form.mechanic_data.negative_cards" min="0" max="10" placeholder="2" />
+            <input v-model.number="form.mechanic_data.negative_cards" type="number" min="0" max="10" placeholder="2" />
           </div>
 
           <div v-if="form.mechanic === 'score_event'" class="form-group">
             <label>Score Per Round</label>
-            <input type="number" v-model.number="form.mechanic_data.score_per_round" placeholder="5" />
+            <input v-model.number="form.mechanic_data.score_per_round" type="number" placeholder="5" />
           </div>
 
           <!-- Duel Override -->
           <div class="form-group duel-override-toggle">
             <label>
-              <input type="checkbox" v-model="form.useDuelOverride" />
+              <input v-model="form.useDuelOverride" type="checkbox" />
               Use different settings for Duel mode
             </label>
           </div>
@@ -195,9 +195,9 @@
                   <input
                     type="number"
                     :value="form.modifiers_duel[stat.key] || ''"
-                    @input="setDuelModifier(stat.key, $event.target.value)"
                     class="stat-input"
                     :placeholder="0"
+                    @input="setDuelModifier(stat.key, $event.target.value)"
                   />
                 </div>
               </div>
@@ -217,34 +217,34 @@
 
             <div v-if="form.mechanic_duel === 'reduce_dice'" class="form-group">
               <label>Dice to Remove (Duel)</label>
-              <input type="number" v-model.number="form.mechanic_data_duel.amount" min="1" max="5" placeholder="1" />
+              <input v-model.number="form.mechanic_data_duel.amount" type="number" min="1" max="5" placeholder="1" />
             </div>
 
             <div v-if="form.mechanic_duel === 'grant_items'" class="form-group mechanic-checkbox">
               <label>
-                <input type="checkbox" v-model="form.mechanic_data_duel.random" />
+                <input v-model="form.mechanic_data_duel.random" type="checkbox" />
                 Grant random item to each player (Duel)
               </label>
             </div>
 
             <div v-if="form.mechanic_duel === 'altered_deal'" class="form-group">
               <label>Positive Cards (Duel)</label>
-              <input type="number" v-model.number="form.mechanic_data_duel.positive_cards" min="0" max="10" placeholder="2" />
+              <input v-model.number="form.mechanic_data_duel.positive_cards" type="number" min="0" max="10" placeholder="2" />
               <label class="mt-label">Negative Cards (Duel)</label>
-              <input type="number" v-model.number="form.mechanic_data_duel.negative_cards" min="0" max="10" placeholder="2" />
+              <input v-model.number="form.mechanic_data_duel.negative_cards" type="number" min="0" max="10" placeholder="2" />
             </div>
 
             <div v-if="form.mechanic_duel === 'score_event'" class="form-group">
               <label>Score Per Round (Duel)</label>
-              <input type="number" v-model.number="form.mechanic_data_duel.score_per_round" placeholder="5" />
+              <input v-model.number="form.mechanic_data_duel.score_per_round" type="number" placeholder="5" />
             </div>
           </div>
 
           <div class="form-group">
             <label style="color: var(--accent-gold); font-weight: 600;">Availability</label>
             <div style="display: flex; gap: 16px; margin-top: 4px;">
-              <label><input type="checkbox" v-model="form.available_cooperative" /> Co-op</label>
-              <label><input type="checkbox" v-model="form.available_duel" /> Duel</label>
+              <label><input v-model="form.available_cooperative" type="checkbox" /> Co-op</label>
+              <label><input v-model="form.available_duel" type="checkbox" /> Duel</label>
             </div>
           </div>
 
@@ -287,297 +287,405 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
-import AdminSearchInput from './AdminSearchInput.vue';
-import { useIcons } from '../../stores/icons';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
+import AdminSearchInput from "./AdminSearchInput.vue";
+import { useIcons } from "../../stores/icons";
 
-export default {
-  name: 'AdminEvents',
-  components: { AdminSearchInput },
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      events: [],
-      addons: [],
-      loading: true,
-      searchQuery: '',
-      showModal: false,
-      editing: null,
-      saving: false,
-      formError: '',
-      showAiModal: false,
-      aiPrompt: '',
-      aiGenerating: false,
-      aiError: '',
-      importResult: null,
-      showBalanceStats: false,
-      stats: useIcons().getStatIcons(),
-      form: {
-        title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {},
-        useDuelOverride: false, modifiers_duel: {}, mechanic_duel: null, mechanic_data_duel: {},
-        available_cooperative: true, available_duel: true,
-      },
-    };
-  },
-  computed: {
-    filteredEvents() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.events;
-      return this.events.filter(ev =>
-        (ev.title || '').toLowerCase().includes(q) ||
-        (ev.effect || '').toLowerCase().includes(q)
-      );
-    },
-    eventBalanceStats() {
-      if (!this.events.length) return null;
-      const statKeys = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+interface StatIcon {
+  key: string;
+  label: string;
+  short: string;
+  type: string;
+  value: string;
+  icon: string;
+}
 
-      // Per-stat modifier totals and averages
-      const perStat = {};
-      statKeys.forEach(key => {
-        let total = 0;
-        let count = 0;
-        this.events.forEach(ev => {
-          if (ev.stat_modifiers && ev.stat_modifiers[key] !== undefined) {
-            total += ev.stat_modifiers[key];
-            count++;
-          }
-        });
-        perStat[key] = { total, count, avg: count > 0 ? total / count : 0 };
-      });
+type StatModifiers = Record<string, number>;
+type MechanicData = Record<string, number | boolean>;
 
-      // Mechanic distribution
-      const mechanicDist = {};
-      this.events.forEach(ev => {
-        const m = ev.mechanic || 'none';
-        mechanicDist[m] = (mechanicDist[m] || 0) + 1;
-      });
+interface GameEvent {
+  id: number;
+  title: string;
+  effect: string;
+  stat_modifiers: StatModifiers | undefined;
+  addon_id: number | undefined;
+  mechanic: string | undefined;
+  mechanic_data: MechanicData | undefined;
+  stat_modifiers_duel: StatModifiers | undefined;
+  mechanic_duel: string | undefined;
+  mechanic_data_duel: MechanicData | undefined;
+  available_cooperative: boolean | undefined;
+  available_duel: boolean | undefined;
+}
 
-      // Positive vs negative events
-      let positiveCount = 0, negativeCount = 0, mixedCount = 0, neutralCount = 0;
-      this.events.forEach(ev => {
-        if (!ev.stat_modifiers || Object.keys(ev.stat_modifiers).length === 0) {
-          neutralCount++;
-          return;
-        }
-        const values = Object.values(ev.stat_modifiers);
-        const hasPos = values.some(v => v > 0);
-        const hasNeg = values.some(v => v < 0);
-        if (hasPos && hasNeg) mixedCount++;
-        else if (hasPos) positiveCount++;
-        else if (hasNeg) negativeCount++;
-        else neutralCount++;
-      });
+interface Addon {
+  id: number;
+  name: string;
+}
 
-      return {
-        count: this.events.length,
-        perStat,
-        mechanicDist,
-        positiveCount,
-        negativeCount,
-        mixedCount,
-        neutralCount,
-      };
-    },
-  },
-  async mounted() {
-    await Promise.all([this.fetch(), this.fetchAddons()]);
-  },
-  methods: {
-    async fetch() {
-      this.loading = true;
-      const res = await axios.get('/api/admin/events');
-      this.events = res.data;
-      this.loading = false;
-    },
-    async fetchAddons() {
-      try {
-        const res = await axios.get('/api/admin/addons');
-        this.addons = res.data;
-      } catch { /* ignore */ }
-    },
-    mechanicLabel(mechanic) {
-      const labels = {
-        stat_modifier: 'Stat Modifier Only',
-        reduce_dice: 'Reduce Dice',
-        grant_items: 'Grant Items',
-        altered_deal: 'Altered Deal',
-        score_event: 'Score Event',
-      };
-      return labels[mechanic] || mechanic;
-    },
-    statIcon(stat) {
-      const s = this.stats.find(s => s.key === stat);
-      return s ? (s.icon || s.value) : '';
-    },
-    setModifier(key, value) {
-      const num = value === '' ? null : parseInt(value);
-      if (num === null || num === 0 || isNaN(num)) {
-        delete this.form.modifiers[key];
-      } else {
-        this.form.modifiers[key] = num;
-      }
-    },
-    setDuelModifier(key, value) {
-      const num = value === '' ? null : parseInt(value);
-      if (num === null || num === 0 || isNaN(num)) {
-        delete this.form.modifiers_duel[key];
-      } else {
-        this.form.modifiers_duel[key] = num;
-      }
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = {
-        title: '', effect: '', modifiers: {}, addon_id: null, mechanic: null, mechanic_data: {},
-        useDuelOverride: false, modifiers_duel: {}, mechanic_duel: null, mechanic_data_duel: {},
-        available_cooperative: true, available_duel: true,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(ev) {
-      this.editing = ev;
-      const hasDuelOverride = ev.stat_modifiers_duel != null || ev.mechanic_duel != null;
-      this.form = {
-        title: ev.title,
-        effect: ev.effect,
-        modifiers: { ...(ev.stat_modifiers || {}) },
-        addon_id: ev.addon_id || null,
-        mechanic: ev.mechanic || null,
-        mechanic_data: { ...(ev.mechanic_data || {}) },
-        useDuelOverride: hasDuelOverride,
-        modifiers_duel: { ...(ev.stat_modifiers_duel || {}) },
-        mechanic_duel: ev.mechanic_duel || null,
-        mechanic_data_duel: { ...(ev.mechanic_data_duel || {}) },
-        available_cooperative: ev.available_cooperative ?? true,
-        available_duel: ev.available_duel ?? true,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
+interface ImportResult {
+  created: number;
+  updated: number;
+  errors: string[];
+}
 
-      const stat_modifiers = Object.keys(this.form.modifiers).length > 0
-        ? { ...this.form.modifiers }
-        : null;
+interface EventForm {
+  title: string;
+  effect: string;
+  modifiers: StatModifiers;
+  addon_id: number | undefined;
+  mechanic: string | undefined;
+  mechanic_data: MechanicData;
+  useDuelOverride: boolean;
+  modifiers_duel: StatModifiers;
+  mechanic_duel: string | undefined;
+  mechanic_data_duel: MechanicData;
+  available_cooperative: boolean;
+  available_duel: boolean;
+}
 
-      const mechanic = this.form.mechanic || null;
-      const mechanic_data = mechanic && Object.keys(this.form.mechanic_data).length > 0
-        ? { ...this.form.mechanic_data }
-        : null;
+interface AiEventResponse {
+  title?: string;
+  effect?: string;
+  stat_modifiers?: StatModifiers;
+}
 
-      // Duel overrides
-      let stat_modifiers_duel = null;
-      let mechanic_duel = null;
-      let mechanic_data_duel = null;
-      if (this.form.useDuelOverride) {
-        stat_modifiers_duel = Object.keys(this.form.modifiers_duel).length > 0
-          ? { ...this.form.modifiers_duel }
-          : null;
-        mechanic_duel = this.form.mechanic_duel || null;
-        mechanic_data_duel = mechanic_duel && Object.keys(this.form.mechanic_data_duel).length > 0
-          ? { ...this.form.mechanic_data_duel }
-          : null;
-      }
+interface PerStatBalance {
+  total: number;
+  count: number;
+  avg: number;
+}
 
-      const payload = {
-        title: this.form.title,
-        effect: this.form.effect,
-        stat_modifiers,
-        addon_id: this.form.addon_id || null,
-        mechanic,
-        mechanic_data,
-        stat_modifiers_duel,
-        mechanic_duel,
-        mechanic_data_duel,
-        available_cooperative: this.form.available_cooperative,
-        available_duel: this.form.available_duel,
-      };
+interface EventBalanceStats {
+  count: number;
+  perStat: Record<string, PerStatBalance>;
+  mechanicDist: Record<string, number>;
+  positiveCount: number;
+  negativeCount: number;
+  mixedCount: number;
+  neutralCount: number;
+}
 
-      this.saving = true;
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/events/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/events', payload);
-        }
-        this.showModal = false;
-        await this.fetch();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Save failed';
-      }
-      this.saving = false;
-    },
-    async generateWithAi() {
-      this.aiError = '';
-      this.aiGenerating = true;
-      try {
-        const res = await axios.post('/api/admin/ai/generate-event', {
-          prompt: this.aiPrompt || undefined,
-        });
-        const data = res.data;
-        this.showAiModal = false;
-        this.aiPrompt = '';
-        // Open create modal pre-filled with AI data
-        this.editing = null;
-        this.form = {
-          title: data.title || '',
-          effect: data.effect || '',
-          modifiers: { ...(data.stat_modifiers || {}) },
-          addon_id: null,
-          mechanic: null,
-          mechanic_data: {},
-          useDuelOverride: false,
-          modifiers_duel: {},
-          mechanic_duel: null,
-          mechanic_data_duel: {},
-          available_cooperative: true,
-          available_duel: true,
-        };
-        this.formError = '';
-        this.showModal = true;
-      } catch (e) {
-        this.aiError = e.response?.data?.message || e.response?.data?.error || 'AI generation failed';
-      }
-      this.aiGenerating = false;
-    },
-    exportCsv() {
-      window.location.href = '/api/admin/events/export-csv';
-    },
-    triggerImport() {
-      this.$refs.csvInput.click();
-    },
-    async handleImportFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const res = await axios.post('/api/admin/events/import-csv', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        this.importResult = res.data;
-        await this.fetch();
-      } catch (e) {
-        this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
-      }
-      event.target.value = '';
-    },
-    async confirmDelete(ev) {
-      if (!confirm(`Delete event "${ev.title}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/events/${ev.id}`);
-        await this.fetch();
-      } catch (e) {
-        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
-  },
-};
+function emptyForm(): EventForm {
+  return {
+    title: "", effect: "", modifiers: {}, addon_id: undefined, mechanic: undefined, mechanic_data: {},
+    useDuelOverride: false, modifiers_duel: {}, mechanic_duel: undefined, mechanic_data_duel: {},
+    available_cooperative: true, available_duel: true,
+  };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string; error?: string }>(error)) {
+    return error.response?.data?.message ?? error.response?.data?.error ?? error.message;
+  }
+  return fallback;
+}
+
+const toast = useToast();
+
+const events = ref<GameEvent[]>([]);
+const addons = ref<Addon[]>([]);
+const loading = ref(true);
+const searchQuery = ref("");
+const showModal = ref(false);
+const editing = ref<GameEvent | undefined>(undefined);
+const saving = ref(false);
+const formError = ref("");
+const showAiModal = ref(false);
+const aiPrompt = ref("");
+const aiGenerating = ref(false);
+const aiError = ref("");
+const importResult = ref<ImportResult | undefined>(undefined);
+const showBalanceStats = ref(false);
+const stats: StatIcon[] = useIcons().getStatIcons();
+const form = reactive<EventForm>(emptyForm());
+const csvInput = useTemplateRef<HTMLInputElement>("csvInput");
+
+const filteredEvents = computed<GameEvent[]>(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) {
+    return events.value;
+  }
+  return events.value.filter((event) =>
+    (event.title || "").toLowerCase().includes(query)
+    || (event.effect || "").toLowerCase().includes(query),
+  );
+});
+
+function perStatBalance(key: string): PerStatBalance {
+  let total = 0;
+  let count = 0;
+  for (const event of events.value) {
+    if (!event.stat_modifiers || event.stat_modifiers[key] === undefined) {
+      continue;
+    }
+    total += event.stat_modifiers[key];
+    count++;
+  }
+  return { total, count, avg: count > 0 ? total / count : 0 };
+}
+
+const eventBalanceStats = computed<EventBalanceStats | undefined>(() => {
+  if (events.value.length === 0) {
+    return undefined;
+  }
+  const statKeys = ["wealth", "influence", "security", "religion", "food", "happiness"];
+
+  // Per-stat modifier totals and averages
+  const perStat: Record<string, PerStatBalance> = {};
+  for (const key of statKeys) {
+    perStat[key] = perStatBalance(key);
+  }
+
+  // Mechanic distribution
+  const mechanicDistribution: Record<string, number> = {};
+  for (const event of events.value) {
+    const mechanic = event.mechanic || "none";
+    mechanicDistribution[mechanic] = (mechanicDistribution[mechanic] || 0) + 1;
+  }
+
+  // Positive vs negative events
+  let positiveCount = 0;
+  let negativeCount = 0;
+  let mixedCount = 0;
+  let neutralCount = 0;
+  for (const event of events.value) {
+    if (!event.stat_modifiers || Object.keys(event.stat_modifiers).length === 0) {
+      neutralCount++;
+      continue;
+    }
+    const values = Object.values(event.stat_modifiers);
+    const hasPositive = values.some((value) => value > 0);
+    const hasNegative = values.some((value) => value < 0);
+    if (hasPositive && hasNegative) {
+      mixedCount++;
+    } else if (hasPositive) {
+      positiveCount++;
+    } else if (hasNegative) {
+      negativeCount++;
+    } else {
+      neutralCount++;
+    }
+  }
+
+  return {
+    count: events.value.length,
+    perStat,
+    mechanicDist: mechanicDistribution,
+    positiveCount,
+    negativeCount,
+    mixedCount,
+    neutralCount,
+  };
+});
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  const response = await axios.get<GameEvent[]>("/api/admin/events");
+  events.value = response.data;
+  loading.value = false;
+}
+
+async function fetchAddons(): Promise<void> {
+  try {
+    const response = await axios.get<Addon[]>("/api/admin/addons");
+    addons.value = response.data;
+  } catch { /* ignore */ }
+}
+
+function mechanicLabel(mechanic: string): string {
+  const labels: Record<string, string> = {
+    stat_modifier: "Stat Modifier Only",
+    reduce_dice: "Reduce Dice",
+    grant_items: "Grant Items",
+    altered_deal: "Altered Deal",
+    score_event: "Score Event",
+  };
+  return labels[mechanic] || mechanic;
+}
+
+function statIcon(stat: string): string {
+  const match = stats.find((entry) => entry.key === stat);
+  return match ? (match.icon || match.value) : "";
+}
+
+function setModifier(key: string, value: string): void {
+  const parsed = value === "" ? NaN : Math.trunc(Number(value));
+  if (parsed === 0 || Number.isNaN(parsed)) {
+    Reflect.deleteProperty(form.modifiers, key);
+  } else {
+    form.modifiers[key] = parsed;
+  }
+}
+
+function setDuelModifier(key: string, value: string): void {
+  const parsed = value === "" ? NaN : Math.trunc(Number(value));
+  if (parsed === 0 || Number.isNaN(parsed)) {
+    Reflect.deleteProperty(form.modifiers_duel, key);
+  } else {
+    form.modifiers_duel[key] = parsed;
+  }
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, emptyForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(event: GameEvent): void {
+  editing.value = event;
+  const hasDuelOverride = event.stat_modifiers_duel != undefined || event.mechanic_duel != undefined;
+  Object.assign(form, {
+    title: event.title,
+    effect: event.effect,
+    modifiers: { ...event.stat_modifiers },
+    addon_id: event.addon_id ?? undefined,
+    mechanic: event.mechanic ?? undefined,
+    mechanic_data: { ...event.mechanic_data },
+    useDuelOverride: hasDuelOverride,
+    modifiers_duel: { ...event.stat_modifiers_duel },
+    mechanic_duel: event.mechanic_duel ?? undefined,
+    mechanic_data_duel: { ...event.mechanic_data_duel },
+    available_cooperative: event.available_cooperative ?? true,
+    available_duel: event.available_duel ?? true,
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+
+  const statModifiers = Object.keys(form.modifiers).length > 0
+    ? { ...form.modifiers }
+    : undefined;
+
+  const mechanic = form.mechanic || undefined;
+  const mechanicData = mechanic && Object.keys(form.mechanic_data).length > 0
+    ? { ...form.mechanic_data }
+    : undefined;
+
+  // Duel overrides
+  let statModifiersDuel: StatModifiers | undefined;
+  let mechanicDuel: string | undefined;
+  let mechanicDataDuel: MechanicData | undefined;
+  if (form.useDuelOverride) {
+    statModifiersDuel = Object.keys(form.modifiers_duel).length > 0
+      ? { ...form.modifiers_duel }
+      : undefined;
+    mechanicDuel = form.mechanic_duel || undefined;
+    mechanicDataDuel = mechanicDuel && Object.keys(form.mechanic_data_duel).length > 0
+      ? { ...form.mechanic_data_duel }
+      : undefined;
+  }
+
+  const payload = {
+    title: form.title,
+    effect: form.effect,
+    stat_modifiers: statModifiers,
+    addon_id: form.addon_id || undefined,
+    mechanic,
+    mechanic_data: mechanicData,
+    stat_modifiers_duel: statModifiersDuel,
+    mechanic_duel: mechanicDuel,
+    mechanic_data_duel: mechanicDataDuel,
+    available_cooperative: form.available_cooperative,
+    available_duel: form.available_duel,
+  };
+
+  saving.value = true;
+  try {
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/events/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/events", payload);
+    }
+    showModal.value = false;
+    await fetch();
+  } catch (error) {
+    formError.value = errorMessage(error, "Save failed");
+  }
+  saving.value = false;
+}
+
+async function generateWithAi(): Promise<void> {
+  aiError.value = "";
+  aiGenerating.value = true;
+  try {
+    const response = await axios.post<AiEventResponse>("/api/admin/ai/generate-event", {
+      prompt: aiPrompt.value || undefined,
+    });
+    const data = response.data;
+    showAiModal.value = false;
+    aiPrompt.value = "";
+    // Open create modal pre-filled with AI data
+    editing.value = undefined;
+    Object.assign(form, {
+      ...emptyForm(),
+      title: data.title || "",
+      effect: data.effect || "",
+      modifiers: { ...data.stat_modifiers },
+    });
+    formError.value = "";
+    showModal.value = true;
+  } catch (error) {
+    aiError.value = errorMessage(error, "AI generation failed");
+  }
+  aiGenerating.value = false;
+}
+
+function exportCsv(): void {
+  window.location.assign("/api/admin/events/export-csv");
+}
+
+function triggerImport(): void {
+  csvInput.value?.click();
+}
+
+async function handleImportFile(event: Event): Promise<void> {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await axios.post<ImportResult>("/api/admin/events/import-csv", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    importResult.value = response.data;
+    await fetch();
+  } catch (error) {
+    importResult.value = { created: 0, updated: 0, errors: [errorMessage(error, "Import failed")] };
+  }
+  target.value = "";
+}
+
+async function confirmDelete(event: GameEvent): Promise<void> {
+  if (!confirm(`Delete event "${event.title}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/events/${event.id}`);
+    await fetch();
+  } catch (error) {
+    toast.error(`Delete failed: ${errorMessage(error, "Delete failed")}`);
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([fetch(), fetchAddons()]);
+});
 </script>
 
 <style scoped>

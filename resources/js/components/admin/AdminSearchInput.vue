@@ -5,26 +5,27 @@
       type="text"
       class="search-input"
       :value="modelValue"
-      @input="$emit('update:modelValue', $event.target.value)"
       placeholder="Search..."
+      @input="$emit('update:modelValue', $event.target.value)"
     />
     <button
       v-if="modelValue"
       class="search-clear"
-      @click="$emit('update:modelValue', '')"
       type="button"
+      @click="$emit('update:modelValue', '')"
     >&times;</button>
   </div>
 </template>
 
-<script>
-export default {
-  name: 'AdminSearchInput',
-  props: {
-    modelValue: { type: String, default: '' },
-  },
-  emits: ['update:modelValue'],
-};
+<script setup lang="ts">
+withDefaults(
+  defineProps<{
+    modelValue?: string;
+  }>(),
+  { modelValue: "" },
+);
+
+defineEmits<{ "update:modelValue": [value: string] }>();
 </script>
 
 <style scoped>

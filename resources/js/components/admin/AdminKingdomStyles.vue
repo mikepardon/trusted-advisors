@@ -6,7 +6,7 @@
 
     <div v-if="loading" class="loading">Loading...</div>
 
-    <div v-else-if="!styles.length" class="empty-state">
+    <div v-else-if="styles.length === 0" class="empty-state">
       <p>No kingdom styles found. Run the KingdomStyleSeeder to create presets.</p>
     </div>
 
@@ -15,7 +15,7 @@
         <div class="style-info">
           <div class="style-name">{{ style.name }}</div>
           <div class="style-slug">{{ style.slug }}</div>
-          <div class="style-desc" v-if="style.description">{{ style.description }}</div>
+          <div v-if="style.description" class="style-desc">{{ style.description }}</div>
           <div class="style-badges">
             <span v-if="style.is_active" class="badge badge-active">Active</span>
             <span v-else class="badge badge-inactive">Inactive</span>
@@ -33,7 +33,7 @@
     </div>
 
     <!-- Edit Modal -->
-    <div v-if="editingStyle" class="modal-overlay" @click.self="editingStyle = null">
+    <div v-if="editingStyle" class="modal-overlay" @click.self="editingStyle = undefined">
       <div class="modal-content modal-wide">
         <h3>Edit Kingdom Style: {{ editingStyle.name }}</h3>
 
@@ -51,13 +51,13 @@
         <div class="form-row">
           <div class="form-group">
             <label class="toggle-label">
-              <input type="checkbox" v-model="editForm.is_active" />
+              <input v-model="editForm.is_active" type="checkbox" />
               <span>Active</span>
             </label>
           </div>
           <div class="form-group">
             <label class="toggle-label">
-              <input type="checkbox" v-model="editForm.is_default_unlocked" />
+              <input v-model="editForm.is_default_unlocked" type="checkbox" />
               <span>Default Unlocked</span>
             </label>
           </div>
@@ -66,11 +66,11 @@
         <!-- Color Pickers -->
         <h4 class="section-label">Colors</h4>
         <div class="color-grid">
-          <div v-for="cv in colorVars" :key="cv.key" class="color-item">
+          <div v-for="cv in colorVariables" :key="cv.key" class="color-item">
             <label>{{ cv.label }}</label>
             <div class="color-input-row">
-              <input type="color" :value="editForm.css_vars[cv.key] || cv.fallback" @input="editForm.css_vars[cv.key] = $event.target.value" />
-              <input type="text" class="form-input color-hex" :value="editForm.css_vars[cv.key] || cv.fallback" @input="editForm.css_vars[cv.key] = $event.target.value" />
+              <input type="color" :value="editForm.css_vars[cv.key] || cv.fallback" @input="onColorInput(cv.key, $event)" />
+              <input type="text" class="form-input color-hex" :value="editForm.css_vars[cv.key] || cv.fallback" @input="onColorInput(cv.key, $event)" />
             </div>
           </div>
         </div>
@@ -100,7 +100,7 @@
           <div v-else class="bg-image-placeholder">No background image</div>
           <div class="bg-image-actions">
             <input ref="bgImageInput" type="file" accept="image/*" style="display:none" @change="uploadBgImage" />
-            <button class="btn-upload" :disabled="uploadingImage" @click="$refs.bgImageInput.click()">
+            <button class="btn-upload" :disabled="uploadingImage" @click="triggerBgImageUpload">
               {{ uploadingImage ? 'Uploading...' : 'Upload Image' }}
             </button>
             <button v-if="editingStyle.background_image_url" class="btn-remove-img" :disabled="removingImage" @click="removeBgImage">
@@ -127,203 +127,272 @@
           <button class="btn-primary" :disabled="editSaving" @click="saveEdit">
             {{ editSaving ? 'Saving...' : 'Save' }}
           </button>
-          <button type="button" @click="editingStyle = null">Cancel</button>
+          <button type="button" @click="editingStyle = undefined">Cancel</button>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import '../../styles/kingdom-styles.css';
+<script setup lang="ts">
+import { computed, onMounted, ref, useTemplateRef } from "vue";
+import type { CSSProperties } from "vue";
+import axios, { isAxiosError } from "axios";
+import "../../styles/kingdom-styles.css";
 
-export default {
-  name: 'AdminKingdomStyles',
-  data() {
-    return {
-      styles: [],
-      loading: true,
-      editingStyle: null,
-      editForm: {
-        name: '',
-        description: '',
-        is_active: true,
-        is_default_unlocked: false,
-        css_vars: {},
-      },
-      editSaving: false,
-      editError: '',
-      uploadingImage: false,
-      removingImage: false,
-      uploadError: '',
-      colorVars: [
-        { key: 'border_color', label: 'Border Color', fallback: '#c9a227' },
-        { key: 'bg_tint', label: 'Background Tint', fallback: '#1a1a0a' },
-        { key: 'bg_color', label: 'Background Color', fallback: '#1a1a0a' },
-        { key: 'name_accent', label: 'Name Accent', fallback: '#e8c468' },
-        { key: 'total_accent', label: 'Total Accent', fallback: '#e8c468' },
-        { key: 'bar_safe', label: 'Bar Safe', fallback: '#27ae60' },
-        { key: 'bar_caution', label: 'Bar Caution', fallback: '#d4a843' },
-        { key: 'stat_color', label: 'Stat Value', fallback: '#e8e0d0' },
-        { key: 'text_color', label: 'Text / Labels', fallback: '#a09080' },
-      ],
+type CssVariables = Record<string, string>;
+
+interface KingdomStyle {
+  id: number;
+  name: string | undefined;
+  slug: string | undefined;
+  description: string | undefined;
+  is_active: boolean | undefined;
+  is_default_unlocked: boolean | undefined;
+  is_default: boolean | undefined;
+  background_image_url: string | undefined;
+  css_vars: CssVariables | undefined;
+}
+
+interface EditForm {
+  name: string;
+  description: string;
+  is_active: boolean;
+  is_default_unlocked: boolean;
+  css_vars: CssVariables;
+}
+
+interface ColorVariable {
+  key: string;
+  label: string;
+  fallback: string;
+}
+
+const styles = ref<KingdomStyle[]>([]);
+const loading = ref(true);
+const editingStyle = ref<KingdomStyle | undefined>(undefined);
+const editForm = ref<EditForm>({
+  name: "",
+  description: "",
+  is_active: true,
+  is_default_unlocked: false,
+  css_vars: {},
+});
+const editSaving = ref(false);
+const editError = ref("");
+const uploadingImage = ref(false);
+const removingImage = ref(false);
+const uploadError = ref("");
+const bgImageInput = useTemplateRef<HTMLInputElement>("bgImageInput");
+
+const colorVariables: ColorVariable[] = [
+  { key: "border_color", label: "Border Color", fallback: "#c9a227" },
+  { key: "bg_tint", label: "Background Tint", fallback: "#1a1a0a" },
+  { key: "bg_color", label: "Background Color", fallback: "#1a1a0a" },
+  { key: "name_accent", label: "Name Accent", fallback: "#e8c468" },
+  { key: "total_accent", label: "Total Accent", fallback: "#e8c468" },
+  { key: "bar_safe", label: "Bar Safe", fallback: "#27ae60" },
+  { key: "bar_caution", label: "Bar Caution", fallback: "#d4a843" },
+  { key: "stat_color", label: "Stat Value", fallback: "#e8e0d0" },
+  { key: "text_color", label: "Text / Labels", fallback: "#a09080" },
+];
+
+const previewStyle = computed<CSSProperties>(() => {
+  const cssVariables = editForm.value.css_vars;
+  const borderColor = cssVariables.border_color || "transparent";
+  const bgTint = cssVariables.bg_tint || "transparent";
+  const bgColor = cssVariables.bg_color || "transparent";
+  const animation = cssVariables.border_anim || "none";
+  // Only use static glow if no animation is active
+  const glow = animation === "none" && borderColor !== "transparent"
+    ? `0 0 12px ${borderColor}66`
+    : "none";
+  // Compute RGB for animation CSS vars
+  let borderRgb = "0, 0, 0";
+  if (borderColor !== "transparent" && borderColor.startsWith("#")) {
+    const red = Number.parseInt(borderColor.slice(1, 3), 16);
+    const green = Number.parseInt(borderColor.slice(3, 5), 16);
+    const blue = Number.parseInt(borderColor.slice(5, 7), 16);
+    borderRgb = `${red}, ${green}, ${blue}`;
+  }
+  const backgroundImageUrl = editingStyle.value?.background_image_url;
+  return {
+    border: `2px solid ${borderColor}`,
+    boxShadow: glow,
+    backgroundColor: bgColor === "transparent" ? bgTint : bgColor,
+    backgroundImage: backgroundImageUrl
+      ? `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url(${backgroundImageUrl})`
+      : "none",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    "--ks-border-color-rgb": borderRgb,
+  };
+});
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<KingdomStyle[]>("/api/admin/kingdom-styles");
+    styles.value = response.data;
+  } catch {
+    // ignore
+  }
+  loading.value = false;
+}
+
+function swatchStyle(style: KingdomStyle): CSSProperties {
+  const cssVariables = style.css_vars ?? {};
+  const borderColor = cssVariables.border_color || "transparent";
+  const glow = borderColor === "transparent"
+    ? "none"
+    : `0 0 8px ${borderColor}66`;
+  return {
+    border: `2px solid ${borderColor}`,
+    boxShadow: glow,
+    backgroundColor: cssVariables.bg_tint || "transparent",
+  };
+}
+
+function openEdit(style: KingdomStyle): void {
+  editingStyle.value = { ...style };
+  const cssVariables: CssVariables = { ...style.css_vars };
+  if (!cssVariables.border_anim) {
+    cssVariables.border_anim = "none";
+  }
+  editForm.value = {
+    name: style.name || "",
+    description: style.description || "",
+    is_active: style.is_active ?? true,
+    is_default_unlocked: style.is_default_unlocked ?? false,
+    css_vars: cssVariables,
+  };
+  editError.value = "";
+  uploadError.value = "";
+}
+
+function mergeStyle(updated: Partial<KingdomStyle>): void {
+  const editing = editingStyle.value;
+  if (!editing) {
+    return;
+  }
+  editingStyle.value = { ...editing, ...updated };
+  const index = styles.value.findIndex((style) => style.id === editing.id);
+  if (index !== -1) {
+    styles.value[index] = { ...styles.value[index], ...updated };
+  }
+}
+
+async function saveEdit(): Promise<void> {
+  const editing = editingStyle.value;
+  if (!editing) {
+    return;
+  }
+  editSaving.value = true;
+  editError.value = "";
+  try {
+    // Build the css_vars with generated glow string
+    const cssVariables: CssVariables = { ...editForm.value.css_vars };
+    if (cssVariables.border_color && cssVariables.border_color !== "transparent") {
+      // Auto-generate border_glow from border_color
+      const hex = cssVariables.border_color;
+      const red = Number.parseInt(hex.slice(1, 3), 16);
+      const green = Number.parseInt(hex.slice(3, 5), 16);
+      const blue = Number.parseInt(hex.slice(5, 7), 16);
+      cssVariables.border_glow = `0 0 12px rgba(${red}, ${green}, ${blue}, 0.4)`;
+      cssVariables.border_color_rgb = `${red}, ${green}, ${blue}`;
+    } else {
+      cssVariables.border_glow = "none";
+      cssVariables.border_color_rgb = "0, 0, 0";
+    }
+
+    const payload = {
+      name: editForm.value.name,
+      description: editForm.value.description,
+      is_active: editForm.value.is_active,
+      is_default_unlocked: editForm.value.is_default_unlocked,
+      css_vars: cssVariables,
     };
-  },
-  computed: {
-    previewStyle() {
-      const cv = this.editForm.css_vars;
-      const borderColor = cv.border_color || 'transparent';
-      const bgTint = cv.bg_tint || 'transparent';
-      const bgColor = cv.bg_color || 'transparent';
-      const anim = cv.border_anim || 'none';
-      // Only use static glow if no animation is active
-      const glow = (anim === 'none' && borderColor !== 'transparent')
-        ? `0 0 12px ${borderColor}66`
-        : 'none';
-      // Compute RGB for animation CSS vars
-      let borderRgb = '0, 0, 0';
-      if (borderColor !== 'transparent' && borderColor.startsWith('#')) {
-        const r = parseInt(borderColor.slice(1, 3), 16);
-        const g = parseInt(borderColor.slice(3, 5), 16);
-        const b = parseInt(borderColor.slice(5, 7), 16);
-        borderRgb = `${r}, ${g}, ${b}`;
-      }
-      return {
-        border: `2px solid ${borderColor}`,
-        boxShadow: glow,
-        backgroundColor: bgColor !== 'transparent' ? bgColor : bgTint,
-        backgroundImage: this.editingStyle?.background_image_url
-          ? `linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0.6)), url(${this.editingStyle.background_image_url})`
-          : 'none',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        '--ks-border-color-rgb': borderRgb,
-      };
-    },
-  },
-  async mounted() {
-    await this.fetch();
-  },
-  methods: {
-    async fetch() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/admin/kingdom-styles');
-        this.styles = res.data;
-      } catch {
-        // ignore
-      }
-      this.loading = false;
-    },
-    swatchStyle(style) {
-      const cv = style.css_vars || {};
-      const borderColor = cv.border_color || 'transparent';
-      const glow = borderColor !== 'transparent'
-        ? `0 0 8px ${borderColor}66`
-        : 'none';
-      return {
-        border: `2px solid ${borderColor}`,
-        boxShadow: glow,
-        backgroundColor: cv.bg_tint || 'transparent',
-      };
-    },
-    openEdit(style) {
-      this.editingStyle = { ...style };
-      const cssVars = { ...(style.css_vars || {}) };
-      if (!cssVars.border_anim) cssVars.border_anim = 'none';
-      this.editForm = {
-        name: style.name || '',
-        description: style.description || '',
-        is_active: style.is_active ?? true,
-        is_default_unlocked: style.is_default_unlocked ?? false,
-        css_vars: cssVars,
-      };
-      this.editError = '';
-      this.uploadError = '';
-    },
-    async saveEdit() {
-      this.editSaving = true;
-      this.editError = '';
-      try {
-        // Build the css_vars with generated glow string
-        const cv = { ...this.editForm.css_vars };
-        if (cv.border_color && cv.border_color !== 'transparent') {
-          // Auto-generate border_glow from border_color
-          const hex = cv.border_color;
-          const r = parseInt(hex.slice(1, 3), 16);
-          const g = parseInt(hex.slice(3, 5), 16);
-          const b = parseInt(hex.slice(5, 7), 16);
-          cv.border_glow = `0 0 12px rgba(${r}, ${g}, ${b}, 0.4)`;
-          cv.border_color_rgb = `${r}, ${g}, ${b}`;
-        } else {
-          cv.border_glow = 'none';
-          cv.border_color_rgb = '0, 0, 0';
-        }
 
-        const payload = {
-          name: this.editForm.name,
-          description: this.editForm.description,
-          is_active: this.editForm.is_active,
-          is_default_unlocked: this.editForm.is_default_unlocked,
-          css_vars: cv,
-        };
+    const response = await axios.put<Partial<KingdomStyle>>(`/api/admin/kingdom-styles/${editing.id}`, payload);
+    const index = styles.value.findIndex((style) => style.id === editing.id);
+    if (index !== -1) {
+      styles.value[index] = { ...styles.value[index], ...response.data };
+    }
+    editingStyle.value = undefined;
+  } catch (error) {
+    editError.value = isAxiosError<{ message?: string }>(error)
+      ? (error.response?.data?.message ?? "Save failed")
+      : "Save failed";
+  }
+  editSaving.value = false;
+}
 
-        const res = await axios.put(`/api/admin/kingdom-styles/${this.editingStyle.id}`, payload);
-        const idx = this.styles.findIndex(s => s.id === this.editingStyle.id);
-        if (idx !== -1) {
-          this.styles[idx] = { ...this.styles[idx], ...res.data };
-        }
-        this.editingStyle = null;
-      } catch (e) {
-        this.editError = e.response?.data?.message || 'Save failed';
-      }
-      this.editSaving = false;
-    },
-    async removeBgImage() {
-      this.removingImage = true;
-      this.uploadError = '';
-      try {
-        const res = await axios.delete(`/api/admin/kingdom-styles/${this.editingStyle.id}/image`);
-        this.editingStyle = { ...this.editingStyle, ...res.data };
-        const idx = this.styles.findIndex(s => s.id === this.editingStyle.id);
-        if (idx !== -1) {
-          this.styles[idx] = { ...this.styles[idx], ...res.data };
-        }
-      } catch (e) {
-        this.uploadError = e.response?.data?.error || 'Remove failed';
-      }
-      this.removingImage = false;
-    },
-    async uploadBgImage(event) {
-      const file = event.target.files?.[0];
-      if (!file) return;
-      this.uploadingImage = true;
-      this.uploadError = '';
-      try {
-        const formData = new FormData();
-        formData.append('image', file);
-        const res = await axios.post(`/api/admin/kingdom-styles/${this.editingStyle.id}/image`, formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        // Update the editing style with new image URL
-        this.editingStyle = { ...this.editingStyle, ...res.data };
-        // Also update in the list
-        const idx = this.styles.findIndex(s => s.id === this.editingStyle.id);
-        if (idx !== -1) {
-          this.styles[idx] = { ...this.styles[idx], ...res.data };
-        }
-      } catch (e) {
-        this.uploadError = e.response?.data?.error || 'Upload failed';
-      }
-      this.uploadingImage = false;
-      // Reset the file input
-      if (this.$refs.bgImageInput) {
-        this.$refs.bgImageInput.value = '';
-      }
-    },
-  },
-};
+async function removeBgImage(): Promise<void> {
+  const editing = editingStyle.value;
+  if (!editing) {
+    return;
+  }
+  removingImage.value = true;
+  uploadError.value = "";
+  try {
+    const response = await axios.delete<Partial<KingdomStyle>>(`/api/admin/kingdom-styles/${editing.id}/image`);
+    mergeStyle(response.data);
+  } catch (error) {
+    uploadError.value = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? "Remove failed")
+      : "Remove failed";
+  }
+  removingImage.value = false;
+}
+
+async function uploadBgImage(event: Event): Promise<void> {
+  const editing = editingStyle.value;
+  if (!editing) {
+    return;
+  }
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = input.files?.[0];
+  if (!file) {
+    return;
+  }
+  uploadingImage.value = true;
+  uploadError.value = "";
+  try {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await axios.post<Partial<KingdomStyle>>(`/api/admin/kingdom-styles/${editing.id}/image`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    // Update the editing style with new image URL and also update in the list
+    mergeStyle(response.data);
+  } catch (error) {
+    uploadError.value = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? "Upload failed")
+      : "Upload failed";
+  }
+  uploadingImage.value = false;
+  // Reset the file input
+  input.value = "";
+}
+
+function triggerBgImageUpload(): void {
+  bgImageInput.value?.click();
+}
+
+function onColorInput(key: string, event: Event): void {
+  const input = event.target;
+  if (!(input instanceof HTMLInputElement)) {
+    return;
+  }
+  editForm.value.css_vars[key] = input.value;
+}
+
+onMounted(async () => {
+  await fetch();
+});
 </script>
 
 <style scoped>

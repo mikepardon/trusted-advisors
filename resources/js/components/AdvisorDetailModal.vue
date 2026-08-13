@@ -16,10 +16,10 @@
         <div class="adv-xp-bar-wrap">
           <div class="adv-xp-bar" :style="{ width: xpPercent + '%' }"></div>
         </div>
-        <span class="adv-xp-label" v-if="advisor.level < (advisor.max_level || 8)">
+        <span v-if="advisor.level < (advisor.max_level || 8)" class="adv-xp-label">
           Level {{ advisor.level }} &mdash; {{ advisor.xp - advisor.xp_for_current_level }} / {{ advisor.xp_for_next_level - advisor.xp_for_current_level }} XP
         </span>
-        <span class="adv-xp-label adv-xp-max" v-else>Level {{ advisor.max_level || 8 }} &mdash; MAX</span>
+        <span v-else class="adv-xp-label adv-xp-max">Level {{ advisor.max_level || 8 }} &mdash; MAX</span>
       </div>
 
       <!-- Modified Dice -->
@@ -70,7 +70,7 @@
         <button
           v-if="advisor.pending_upgrades > 0"
           class="btn-adv-levelup"
-          @click="$emit('level-up', advisor)"
+          @click="$emit('levelUp', advisor)"
         >Level Up!</button>
         <button
           v-if="advisor.can_immortalise && !showImmortaliseConfirm"
@@ -100,88 +100,151 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../stores/toast';
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'AdvisorDetailModal',
-  props: {
-    advisor: { type: Object, required: true },
-  },
-  emits: ['close', 'level-up', 'updated'],
-  setup() {
-    return { toast: useToast() };
-  },
-  data() {
-    return { immortalising: false, showImmortaliseConfirm: false };
-  },
-  computed: {
-    xpPercent() {
-      if (this.advisor.level >= (this.advisor.max_level || 8)) return 100;
-      if (!this.advisor.xp_for_next_level) return 0;
-      const range = this.advisor.xp_for_next_level - this.advisor.xp_for_current_level;
-      if (range <= 0) return 100;
-      return Math.min(100, ((this.advisor.xp - this.advisor.xp_for_current_level) / range) * 100);
-    },
-    hasBonuses() {
-      return this.advisor.extra_item_slots > 0
-        || this.advisor.card_redraws > 0
-        || Object.keys(this.advisor.passive_bonuses || {}).length > 0;
-    },
-  },
-  methods: {
-    capitalize(s) {
-      return s.charAt(0).toUpperCase() + s.slice(1);
-    },
-    upgradeAtLevel(lvl) {
-      return (this.advisor.upgrades || []).find(u => u.chosen_at_level === lvl);
-    },
-    isNextPending(lvl) {
-      const chosen = (this.advisor.upgrades || []).length;
-      return lvl === chosen + 2;
-    },
-    treeNodeClass(lvl) {
-      const upgrade = this.upgradeAtLevel(lvl);
-      if (upgrade) return 'chosen';
-      if (this.advisor.level >= lvl && this.isNextPending(lvl)) return 'available';
-      if (this.advisor.level >= lvl) return 'past';
-      return 'locked';
-    },
-    upgradeChoiceLabel(upgrade) {
-      const c = upgrade.user_choice;
-      if (!c) return '';
-      const t = upgrade.option_type;
-      if (t === 'bump_dice_face' || t === 'add_wild') {
-        return `Die ${(c.die_index ?? 0) + 1}, Face ${(c.face_index ?? 0) + 1}`;
-      }
-      if (t === 'bump_two_dice_faces' && c.faces) {
-        return c.faces.map(f => `Die ${(f.die_index ?? 0) + 1} Face ${(f.face_index ?? 0) + 1}`).join(', ');
-      }
-      return '';
-    },
-    isUpgraded(dieIdx, faceIdx) {
-      const baseDice = this.advisor.character.dice;
-      const modDice = this.advisor.modified_dice;
-      if (!baseDice || !modDice) return false;
-      const baseVal = baseDice[dieIdx]?.[faceIdx];
-      const modVal = modDice[dieIdx]?.[faceIdx];
-      return baseVal !== modVal;
-    },
-    async doImmortalise() {
-      this.immortalising = true;
-      try {
-        const res = await axios.post(`/api/my-advisors/${this.advisor.id}/immortalise`);
-        this.toast.success(res.data.message);
-        this.$emit('updated');
-        this.$emit('close');
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to immortalise');
-      }
-      this.immortalising = false;
-    },
-  },
-};
+interface UpgradeChoice {
+  die_index?: number;
+  face_index?: number;
+  faces?: { die_index?: number; face_index?: number }[];
+}
+
+interface AdvisorUpgrade {
+  chosen_at_level: number;
+  option_name: string;
+  option_description: string;
+  option_type: string;
+  user_choice?: UpgradeChoice;
+}
+
+interface AdvisorCharacter {
+  image_url?: string;
+  dice?: string[][];
+}
+
+interface AdvisorDetail {
+  id: number;
+  display_name: string;
+  character: AdvisorCharacter;
+  level: number;
+  max_level?: number;
+  incarnation: number;
+  xp: number;
+  xp_for_current_level: number;
+  xp_for_next_level: number;
+  modified_dice: string[][];
+  extra_item_slots: number;
+  card_redraws: number;
+  passive_bonuses?: Record<string, number>;
+  upgrades?: AdvisorUpgrade[];
+  pending_upgrades: number;
+  can_immortalise: boolean;
+}
+
+const { advisor } = defineProps<{
+  advisor: AdvisorDetail;
+}>();
+
+const emit = defineEmits<{
+  close: [];
+  "levelUp": [advisor: AdvisorDetail];
+  updated: [];
+}>();
+
+const toast = useToast();
+
+const immortalising = ref(false);
+const showImmortaliseConfirm = ref(false);
+
+const xpPercent = computed<number>(() => {
+  if (advisor.level >= (advisor.max_level || 8)) {
+    return 100;
+  }
+  if (!advisor.xp_for_next_level) {
+    return 0;
+  }
+  const range = advisor.xp_for_next_level - advisor.xp_for_current_level;
+  if (range <= 0) {
+    return 100;
+  }
+  return Math.min(100, ((advisor.xp - advisor.xp_for_current_level) / range) * 100);
+});
+
+const hasBonuses = computed<boolean>(() => advisor.extra_item_slots > 0
+  || advisor.card_redraws > 0
+  || Object.keys(advisor.passive_bonuses || {}).length > 0);
+
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function upgradeAtLevel(level: number): AdvisorUpgrade | undefined {
+  return (advisor.upgrades || []).find((upgrade) => upgrade.chosen_at_level === level);
+}
+
+function isNextPending(level: number): boolean {
+  const chosen = (advisor.upgrades || []).length;
+  return level === chosen + 2;
+}
+
+function treeNodeClass(level: number): string {
+  const upgrade = upgradeAtLevel(level);
+  if (upgrade) {
+    return "chosen";
+  }
+  if (advisor.level >= level && isNextPending(level)) {
+    return "available";
+  }
+  if (advisor.level >= level) {
+    return "past";
+  }
+  return "locked";
+}
+
+function upgradeChoiceLabel(upgrade: AdvisorUpgrade): string {
+  const choice = upgrade.user_choice;
+  if (!choice) {
+    return "";
+  }
+  const type = upgrade.option_type;
+  if (type === "bump_dice_face" || type === "add_wild") {
+    return `Die ${(choice.die_index ?? 0) + 1}, Face ${(choice.face_index ?? 0) + 1}`;
+  }
+  if (type === "bump_two_dice_faces" && choice.faces) {
+    return choice.faces.map((face) => `Die ${(face.die_index ?? 0) + 1} Face ${(face.face_index ?? 0) + 1}`).join(", ");
+  }
+  return "";
+}
+
+function isUpgraded(dieIndex: number, faceIndex: number): boolean {
+  const baseDice = advisor.character.dice;
+  const moduleDice = advisor.modified_dice;
+  if (!baseDice || !moduleDice) {
+    return false;
+  }
+  const baseValue = baseDice[dieIndex]?.[faceIndex];
+  const moduleValue = moduleDice[dieIndex]?.[faceIndex];
+  return baseValue !== moduleValue;
+}
+
+async function doImmortalise(): Promise<void> {
+  immortalising.value = true;
+  try {
+    const response = await axios.post(`/api/my-advisors/${advisor.id}/immortalise`);
+    toast.success(response.data.message);
+    emit("updated");
+    emit("close");
+  } catch (error) {
+    if (isAxiosError<{ error?: string }>(error)) {
+      toast.error(error.response?.data?.error ?? "Failed to immortalise");
+    } else {
+      toast.error("Failed to immortalise");
+    }
+  }
+  immortalising.value = false;
+}
 </script>
 
 <style scoped>

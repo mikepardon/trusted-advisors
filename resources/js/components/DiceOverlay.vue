@@ -2,39 +2,42 @@
   <canvas ref="canvas" class="dice-overlay"></canvas>
 </template>
 
-<script>
-import dddiceService from '../dddiceService';
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import dddiceService from "../dddice-service";
 
-export default {
-  name: 'DiceOverlay',
-  data() {
-    return {
-      ready: false,
-    };
-  },
-  async mounted() {
-    if (dddiceService.isAvailable()) {
-      const ok = await dddiceService.init(this.$refs.canvas);
-      this.ready = ok;
-    }
-  },
-  beforeUnmount() {
-    dddiceService.destroy();
-    this.ready = false;
-  },
-  methods: {
-    isReady() {
-      return this.ready && dddiceService.isReady();
-    },
-    async rollDice(diceSpecs) {
-      if (!this.isReady()) return;
-      await dddiceService.roll(diceSpecs);
-    },
-    clear() {
-      dddiceService.clear();
-    },
-  },
-};
+const ready = ref(false);
+const canvas = useTemplateRef<HTMLCanvasElement>("canvas");
+
+onMounted(async () => {
+  if (!dddiceService.isAvailable()) {
+    return;
+  }
+  const ok = await dddiceService.init(canvas.value);
+  ready.value = ok;
+});
+
+onBeforeUnmount(() => {
+  dddiceService.destroy();
+  ready.value = false;
+});
+
+function isReady(): boolean {
+  return ready.value && dddiceService.isReady();
+}
+
+async function rollDice(diceSpecs: unknown): Promise<void> {
+  if (!isReady()) {
+    return;
+  }
+  await dddiceService.roll(diceSpecs);
+}
+
+function clear(): void {
+  dddiceService.clear();
+}
+
+defineExpose({ isReady, rollDice, clear });
 </script>
 
 <style scoped>

@@ -10,12 +10,12 @@
       <div class="swiper-hand">
         <Swiper
           :modules="swiperModules"
-          :effect="'cards'"
+          effect="cards"
           :grab-cursor="true"
           :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
           :style="{ overflow: 'visible' }"
           @swiper="onSwiper"
-          @slideChange="onSlideChange"
+          @slide-change="onSlideChange"
         >
           <SwiperSlide v-for="item in cards" :key="item.hand_id">
             <div
@@ -120,123 +120,157 @@
   </div>
 </template>
 
-<script>
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
-import { playSound } from '../sounds';
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { EffectCards } from "swiper/modules";
+import type { Swiper as SwiperInstance } from "swiper";
+import "swiper/css";
+import "swiper/css/effect-cards";
+import { playSound } from "../sounds";
 
-export default {
-  name: 'DuelChoosePhase',
-  components: { Swiper, SwiperSlide },
-  props: {
-    cards: { type: Array, default: () => [] },
-  },
-  emits: ['select', 'preview'],
-  data() {
-    return {
-      selectedId: null,
-      isMobile: false,
-      swiperInstance: null,
-      mediaQuery: null,
-      hoveredId: null,
-    };
-  },
-  computed: {
-    swiperModules() {
-      return [EffectCards];
-    },
-  },
-  mounted() {
-    this.mediaQuery = window.matchMedia('(max-width: 768px)');
-    this.isMobile = this.mediaQuery.matches;
-    this.mediaQuery.addEventListener('change', this.onMediaChange);
-    // Emit initial preview for the first card on mobile
-    if (this.isMobile && this.cards.length) {
-      this.$nextTick(() => this.emitPreview(this.cards[0]));
+interface DuelChooseCard {
+  title: string;
+  description: string;
+  difficulty: number;
+  positive_effects: Record<string, unknown> | undefined;
+  negative_effects: Record<string, unknown> | undefined;
+  positive_effects_duel: Record<string, unknown> | undefined;
+  negative_effects_duel: Record<string, unknown> | undefined;
+}
+
+interface DuelChooseItem {
+  hand_id: number;
+  card: DuelChooseCard;
+}
+
+interface PreviewPayload {
+  positive: Record<string, unknown>;
+  negative: Record<string, unknown>;
+}
+
+const { cards = [] } = defineProps<{
+  cards?: DuelChooseItem[];
+}>();
+
+const emit = defineEmits<{
+  select: [handId: number];
+  preview: [payload: PreviewPayload | undefined];
+}>();
+
+const swiperModules = [EffectCards];
+
+const selectedId = ref<number | undefined>(undefined);
+const isMobile = ref(false);
+const swiperInstance = ref<SwiperInstance | undefined>(undefined);
+const mediaQuery = ref<MediaQueryList | undefined>(undefined);
+const hoveredId = ref<number | undefined>(undefined);
+
+function onMediaChange(event: MediaQueryListEvent): void {
+  isMobile.value = event.matches;
+}
+
+function onSwiper(swiper: SwiperInstance): void {
+  swiperInstance.value = swiper;
+}
+
+function getDuelPositive(card: DuelChooseCard): Record<string, unknown> | undefined {
+  return card.positive_effects_duel ?? card.positive_effects;
+}
+
+function getDuelNegative(card: DuelChooseCard): Record<string, unknown> | undefined {
+  return card.negative_effects_duel ?? card.negative_effects;
+}
+
+function filterStatEffects(effects: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!effects) {
+    return {};
+  }
+  const result: Record<string, unknown> = {};
+  const specialKeys = new Set(["grant_item_id", "draw_item", "recover_die", "lose_die", "discard_item", "remove_curse"]);
+  for (const [key, value] of Object.entries(effects)) {
+    if (!specialKeys.has(key)) {
+      result[key] = value;
     }
-  },
-  beforeUnmount() {
-    if (this.mediaQuery) {
-      this.mediaQuery.removeEventListener('change', this.onMediaChange);
-    }
-  },
-  methods: {
-    onMediaChange(e) {
-      this.isMobile = e.matches;
-    },
-    onSwiper(swiper) {
-      this.swiperInstance = swiper;
-    },
-    onSlideChange() {
-      if (!this.swiperInstance || this.selectedId !== null) return;
-      const idx = this.swiperInstance.activeIndex;
-      const item = this.cards[idx];
-      if (item) {
-        this.emitPreview(item);
-      }
-    },
-    selectAndConfirm(handId) {
-      if (this.selectedId !== null) return;
-      playSound('clickCard');
-      this.selectedId = handId;
-      this.$emit('preview', null);
-      this.$emit('select', handId);
-    },
-    emitPreview(item) {
-      if (!item) {
-        this.$emit('preview', null);
-        return;
-      }
-      // Duel: only show positive effects (what you gain on success)
-      this.$emit('preview', {
-        positive: this.filterStatEffects(this.getDuelPositive(item.card)),
-        negative: {},
+  }
+  return result;
+}
+
+function emitPreview(item: DuelChooseItem | undefined): void {
+  if (!item) {
+    emit("preview", undefined);
+    return;
+  }
+  // Duel: only show positive effects (what you gain on success)
+  emit("preview", {
+    positive: filterStatEffects(getDuelPositive(item.card)),
+    negative: {},
+  });
+}
+
+function onSlideChange(): void {
+  if (!swiperInstance.value || selectedId.value !== undefined) {
+    return;
+  }
+  const index = swiperInstance.value.activeIndex;
+  const item = cards[index];
+  if (item) {
+    emitPreview(item);
+  }
+}
+
+function selectAndConfirm(handId: number): void {
+  if (selectedId.value !== undefined) {
+    return;
+  }
+  playSound("clickCard");
+  selectedId.value = handId;
+  emit("preview", undefined);
+  emit("select", handId);
+}
+
+function onCardHover(item: DuelChooseItem): void {
+  if (selectedId.value !== undefined) {
+    return;
+  }
+  hoveredId.value = item.hand_id;
+  emitPreview(item);
+}
+
+function onCardLeave(): void {
+  hoveredId.value = undefined;
+  emit("preview", undefined);
+}
+
+watch(
+  () => cards,
+  (newCards) => {
+    selectedId.value = undefined;
+    if (swiperInstance.value) {
+      nextTick(() => {
+        swiperInstance.value?.slideTo(0, 0);
       });
-    },
-    onCardHover(item) {
-      if (this.selectedId !== null) return;
-      this.hoveredId = item.hand_id;
-      this.emitPreview(item);
-    },
-    onCardLeave() {
-      this.hoveredId = null;
-      this.$emit('preview', null);
-    },
-    getDuelPositive(card) {
-      return card.positive_effects_duel ?? card.positive_effects;
-    },
-    getDuelNegative(card) {
-      return card.negative_effects_duel ?? card.negative_effects;
-    },
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      const specialKeys = ['grant_item_id', 'draw_item', 'recover_die', 'lose_die', 'discard_item', 'remove_curse'];
-      for (const [key, val] of Object.entries(effects)) {
-        if (!specialKeys.includes(key)) {
-          result[key] = val;
-        }
-      }
-      return result;
-    },
+    }
+    // Auto-emit preview for first card on mobile
+    if (isMobile.value && newCards?.length) {
+      nextTick(() => emitPreview(newCards[0]));
+    }
   },
-  watch: {
-    cards(newCards) {
-      this.selectedId = null;
-      if (this.swiperInstance) {
-        this.$nextTick(() => {
-          this.swiperInstance.slideTo(0, 0);
-        });
-      }
-      // Auto-emit preview for first card on mobile
-      if (this.isMobile && newCards?.length) {
-        this.$nextTick(() => this.emitPreview(newCards[0]));
-      }
-    },
-  },
-};
+);
+
+onMounted(() => {
+  mediaQuery.value = window.matchMedia("(max-width: 768px)");
+  isMobile.value = mediaQuery.value.matches;
+  mediaQuery.value.addEventListener("change", onMediaChange);
+  // Emit initial preview for the first card on mobile
+  if (isMobile.value && cards.length > 0) {
+    nextTick(() => emitPreview(cards[0]));
+  }
+});
+
+onBeforeUnmount(() => {
+  mediaQuery.value?.removeEventListener("change", onMediaChange);
+});
 </script>
 
 <style scoped>

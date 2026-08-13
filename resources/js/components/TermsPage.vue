@@ -45,12 +45,6 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'TermsPage',
-};
-</script>
-
 <style scoped>
 .legal-page {
   max-width: 600px;

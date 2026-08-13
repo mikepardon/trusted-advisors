@@ -48,102 +48,106 @@
   </div>
 </template>
 
-<script>
-import { useAuth } from '../stores/auth';
-import axios from 'axios';
+<script setup lang="ts">
+import { ref, computed } from "vue";
+import { useRouter } from "vue-router";
+import axios, { isAxiosError } from "axios";
+import { useAuth, type User } from "../stores/auth";
 
-export default {
-  name: 'ChooseUsername',
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      username: '',
-      referralCode: '',
-      available: null,
-      checking: false,
-      submitting: false,
-      validationError: '',
-      debounceTimer: null,
+const auth = useAuth();
+const router = useRouter();
+
+const username = ref("");
+const referralCode = ref("");
+const available = ref<boolean | undefined>(undefined);
+const checking = ref(false);
+const submitting = ref(false);
+const validationError = ref("");
+const debounceTimer = ref<ReturnType<typeof setTimeout>>();
+
+const canSubmit = computed(
+  () =>
+    username.value.length >= 3 &&
+    username.value.length <= 20 &&
+    !validationError.value &&
+    available.value === true &&
+    !checking.value,
+);
+
+function onInput(): void {
+  available.value = undefined;
+  validationError.value = "";
+
+  if (debounceTimer.value) {
+    clearTimeout(debounceTimer.value);
+  }
+
+  const value = username.value.trim();
+
+  if (!value) {
+    return;
+  }
+
+  if (value.length < 3) {
+    validationError.value = "At least 3 characters";
+    return;
+  }
+
+  if (!/^[a-zA-Z0-9]+$/.test(value)) {
+    validationError.value = "Letters and numbers only";
+    return;
+  }
+
+  checking.value = true;
+  debounceTimer.value = setTimeout(() => checkAvailability(value), 500);
+}
+
+async function checkAvailability(name: string): Promise<void> {
+  try {
+    const response = await axios.get<{ available: boolean }>(
+      `/api/auth/check-username/${encodeURIComponent(name)}`,
+    );
+    // Only apply if input hasn't changed
+    if (username.value.trim().toLowerCase() === name.toLowerCase()) {
+      available.value = response.data.available;
+    }
+  } catch {
+    validationError.value = "Could not check availability";
+  } finally {
+    checking.value = false;
+  }
+}
+
+async function submit(): Promise<void> {
+  if (!canSubmit.value) {
+    return;
+  }
+  submitting.value = true;
+
+  try {
+    const payload: { username: string; referral_code?: string } = {
+      username: username.value.trim(),
     };
-  },
-  computed: {
-    canSubmit() {
-      return (
-        this.username.length >= 3 &&
-        this.username.length <= 20 &&
-        !this.validationError &&
-        this.available === true &&
-        !this.checking
-      );
-    },
-  },
-  methods: {
-    onInput() {
-      this.available = null;
-      this.validationError = '';
+    if (referralCode.value.trim()) {
+      payload.referral_code = referralCode.value.trim();
+    }
+    const response = await axios.post<User>("/api/auth/set-username", payload);
+    auth.state.user = response.data;
+    router.push("/");
+  } catch (error) {
+    validationError.value = submitErrorMessage(error);
+  } finally {
+    submitting.value = false;
+  }
+}
 
-      if (this.debounceTimer) {
-        clearTimeout(this.debounceTimer);
-      }
-
-      const val = this.username.trim();
-
-      if (!val) return;
-
-      if (val.length < 3) {
-        this.validationError = 'At least 3 characters';
-        return;
-      }
-
-      if (!/^[a-zA-Z0-9]+$/.test(val)) {
-        this.validationError = 'Letters and numbers only';
-        return;
-      }
-
-      this.checking = true;
-      this.debounceTimer = setTimeout(() => this.checkAvailability(val), 500);
-    },
-
-    async checkAvailability(name) {
-      try {
-        const res = await axios.get(`/api/auth/check-username/${encodeURIComponent(name)}`);
-        // Only apply if input hasn't changed
-        if (this.username.trim().toLowerCase() === name.toLowerCase()) {
-          this.available = res.data.available;
-        }
-      } catch {
-        this.validationError = 'Could not check availability';
-      } finally {
-        this.checking = false;
-      }
-    },
-
-    async submit() {
-      if (!this.canSubmit) return;
-      this.submitting = true;
-
-      try {
-        const payload = { username: this.username.trim() };
-        if (this.referralCode.trim()) {
-          payload.referral_code = this.referralCode.trim();
-        }
-        const res = await axios.post('/api/auth/set-username', payload);
-        this.auth.state.user = res.data;
-        this.$router.push('/');
-      } catch (e) {
-        const msg = e.response?.data?.errors?.username?.[0]
-          || e.response?.data?.message
-          || 'Something went wrong';
-        this.validationError = msg;
-      } finally {
-        this.submitting = false;
-      }
-    },
-  },
-};
+function submitErrorMessage(error: unknown): string {
+  if (isAxiosError(error)) {
+    const data = error.response?.data;
+    return data?.errors?.username?.[0] ?? data?.message ?? "Something went wrong";
+  }
+  return "Something went wrong";
+}
 </script>
 
 <style scoped>

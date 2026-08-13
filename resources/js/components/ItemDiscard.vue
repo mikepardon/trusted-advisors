@@ -12,11 +12,11 @@
           <div class="swiper-discard">
             <Swiper
               :modules="swiperModules"
-              :effect="'cards'"
+              effect="cards"
               :grab-cursor="true"
               :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
               :style="{ overflow: 'visible' }"
-              @slideChange="onSlideChange"
+              @slide-change="onSlideChange"
             >
               <SwiperSlide v-for="item in playerData.items" :key="item.id">
                 <div
@@ -108,97 +108,136 @@
   </transition>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../stores/toast';
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../stores/toast";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { EffectCards } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/effect-cards";
 
-export default {
-  name: 'ItemDiscard',
-  setup() {
-    return { toast: useToast() };
-  },
-  components: { Swiper, SwiperSlide },
-  props: {
-    gameId: { type: [String, Number], required: true },
-    playerData: { type: Object, required: true },
-  },
-  emits: ['discarded'],
-  data() {
-    return {
-      visible: false,
-      selectedId: null,
-      discarding: false,
-      isMobile: false,
-      mediaQuery: null,
-    };
-  },
-  computed: {
-    swiperModules() {
-      return [EffectCards];
-    },
-  },
-  mounted() {
-    this.visible = true;
-    this.mediaQuery = window.matchMedia('(max-width: 768px)');
-    this.isMobile = this.mediaQuery.matches;
-    this.mediaQuery.addEventListener('change', this.onMediaChange);
-  },
-  beforeUnmount() {
-    if (this.mediaQuery) {
-      this.mediaQuery.removeEventListener('change', this.onMediaChange);
+interface ItemEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+}
+
+interface DiscardItem {
+  id: number;
+  item_name: string;
+  description: string | undefined;
+  effect: ItemEffect | undefined;
+  is_cursed: boolean;
+}
+
+interface OverLimitPlayer {
+  player_number: number;
+  character_name: string;
+  items: DiscardItem[];
+}
+
+const properties = defineProps<{
+  gameId: string | number;
+  playerData: OverLimitPlayer;
+}>();
+
+const emit = defineEmits<{ discarded: [itemsOverLimit: OverLimitPlayer[]] }>();
+
+const toast = useToast();
+
+const visible = ref(false);
+const selectedId = ref<number | undefined>(undefined);
+const discarding = ref(false);
+const isMobile = ref(false);
+const mediaQuery = ref<MediaQueryList | undefined>(undefined);
+
+const swiperModules = computed(() => [EffectCards]);
+
+function onMediaChange(event: MediaQueryListEvent): void {
+  isMobile.value = event.matches;
+}
+
+onMounted(() => {
+  visible.value = true;
+  const query = window.matchMedia("(max-width: 768px)");
+  mediaQuery.value = query;
+  isMobile.value = query.matches;
+  query.addEventListener("change", onMediaChange);
+});
+
+onBeforeUnmount(() => {
+  if (mediaQuery.value) {
+    mediaQuery.value.removeEventListener("change", onMediaChange);
+  }
+});
+
+function onSlideChange(): void {
+  // Clear selection when swiping
+}
+
+function effectSummary(item: DiscardItem): string {
+  if (!item.effect) {
+    return "";
+  }
+  const type = item.effect.bonus_type || "";
+  const value = item.effect.bonus_value ?? 0;
+  switch (type) {
+    case "roll_bonus": { return `+${value} to rolls`;
     }
-  },
-  methods: {
-    onMediaChange(e) {
-      this.isMobile = e.matches;
-    },
-    onSlideChange() {
-      // Clear selection when swiping
-    },
-    effectSummary(item) {
-      if (!item?.effect) return '';
-      const type = item.effect.bonus_type || '';
-      const value = item.effect.bonus_value ?? 0;
-      switch (type) {
-        case 'roll_bonus': return `+${value} to rolls`;
-        case 'roll_penalty': return `${value} to rolls`;
-        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
-        case 'difficulty_increase': return `+${Math.abs(value)} difficulty`;
-        case 'score_bonus': return `${value > 0 ? '+' : ''}${value} renown`;
-        case 'score_per_round': return `+${value} renown/round`;
-        case 'score_multiplier': return `${value}x score multiplier`;
-        default: return '';
-      }
-    },
-    effectChipClass(item) {
-      if (item.is_cursed) return 'chip-negative';
-      const type = item?.effect?.bonus_type || '';
-      if (type === 'roll_bonus' || type === 'difficulty_reduction') return 'chip-positive';
-      if (type === 'roll_penalty' || type === 'difficulty_increase') return 'chip-negative';
-      return 'chip-neutral';
-    },
-    selectItem(id) {
-      this.selectedId = this.selectedId === id ? null : id;
-    },
-    async confirmDiscard() {
-      if (!this.selectedId) return;
-      this.discarding = true;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/discard-item`, {
-          game_player_item_id: this.selectedId,
-        });
-        this.$emit('discarded', res.data.items_over_limit);
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to discard item');
-      }
-      this.discarding = false;
-    },
-  },
-};
+    case "roll_penalty": { return `${value} to rolls`;
+    }
+    case "difficulty_reduction": { return `-${Math.abs(value)} difficulty`;
+    }
+    case "difficulty_increase": { return `+${Math.abs(value)} difficulty`;
+    }
+    case "score_bonus": { return `${value > 0 ? "+" : ""}${value} renown`;
+    }
+    case "score_per_round": { return `+${value} renown/round`;
+    }
+    case "score_multiplier": { return `${value}x score multiplier`;
+    }
+    default: { return "";
+    }
+  }
+}
+
+function effectChipClass(item: DiscardItem): string {
+  if (item.is_cursed) {
+    return "chip-negative";
+  }
+  const type = item.effect?.bonus_type || "";
+  if (type === "roll_bonus" || type === "difficulty_reduction") {
+    return "chip-positive";
+  }
+  if (type === "roll_penalty" || type === "difficulty_increase") {
+    return "chip-negative";
+  }
+  return "chip-neutral";
+}
+
+function selectItem(id: number): void {
+  selectedId.value = selectedId.value === id ? undefined : id;
+}
+
+async function confirmDiscard(): Promise<void> {
+  if (!selectedId.value) {
+    return;
+  }
+  discarding.value = true;
+  try {
+    const response = await axios.post<{ items_over_limit: OverLimitPlayer[] }>(
+      `/api/games/${properties.gameId}/discard-item`,
+      { game_player_item_id: selectedId.value },
+    );
+    emit("discarded", response.data.items_over_limit);
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? "Failed to discard item")
+      : "Failed to discard item";
+    toast.error(message);
+  }
+  discarding.value = false;
+}
 </script>
 
 <style scoped>

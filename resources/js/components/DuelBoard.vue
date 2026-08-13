@@ -8,17 +8,17 @@
     <!-- Kingdom Stats -->
     <DuelKingdomStats
       ref="kingdomStats"
-      :playerKingdoms="playerKingdoms"
-      :myPlayerNumber="activePlayerNumber"
-      :isSinglePlayerDuel="isSinglePlayerDuel"
-      :playerDifficulties="playerDifficulties"
-      :playerRollResults="playerRollResults"
-      :playerDiceThemes="playerDiceThemesComputed"
-      :diceAnimationTrigger="diceAnimationTrigger"
-      :playerKingdomStyles="playerKingdomStylesComputed"
-      :playerKingdomStyleData="playerKingdomStyleDataComputed"
-      :playerTitles="playerTitlesComputed"
-      :previewEffects="cardPreviewEffects"
+      :player-kingdoms="playerKingdoms"
+      :my-player-number="activePlayerNumber"
+      :is-single-player-duel="isSinglePlayerDuel"
+      :player-difficulties="playerDifficulties"
+      :player-roll-results="playerRollResults"
+      :player-dice-themes="playerDiceThemesComputed"
+      :dice-animation-trigger="diceAnimationTrigger"
+      :player-kingdom-styles="playerKingdomStylesComputed"
+      :player-kingdom-style-data="playerKingdomStyleDataComputed"
+      :player-titles="playerTitlesComputed"
+      :preview-effects="cardPreviewEffects"
       @show-character="openCharacterModal"
       @dice-animation-complete="onDiceAnimationComplete"
     />
@@ -30,21 +30,21 @@
     <CharacterInfoModal
       v-if="showCharacterModal && selectedCharacterData"
       :character="selectedCharacterData.character"
-      :activeDice="selectedCharacterData.activeDice"
-      :abilityUses="selectedCharacterData.abilityUses"
+      :active-dice="selectedCharacterData.activeDice"
+      :ability-uses="selectedCharacterData.abilityUses"
       :items="selectedCharacterData.items"
       @close="showCharacterModal = false"
     />
 
     <!-- Player Items (overlay only, no floating button) -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" :currentRound="currentRound" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :show-button="false" :current-round="currentRound" />
 
     <!-- Curse Selection Overlay -->
     <CurseSelectionOverlay
       v-if="showCurseSelection && currentDuelPendingCurse()"
       :curses="currentDuelPendingCurse().curse_details"
-      :playerName="players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
-      :isDuel="true"
+      :player-name="players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
+      :is-duel="true"
       @selected="onCurseSelected"
     />
 
@@ -58,8 +58,8 @@
     <!-- TURN HANDOFF OVERLAY (pass and play) -->
     <TurnHandoffOverlay
       v-if="showHandoff"
-      :playerNumber="handoffPlayerNumber"
-      :characterName="handoffCharacterName"
+      :player-number="handoffPlayerNumber"
+      :character-name="handoffCharacterName"
       @ready="onHandoffReady"
     />
 
@@ -99,7 +99,7 @@
       <button
         v-if="!myRollData && itemDecided && !duelRolling"
         class="btn-roll action-btn-top"
-        @click="$refs.myRollPhase?.startRolling()"
+        @click="myRollPhase?.startRolling()"
       >
         Roll!
       </button>
@@ -124,26 +124,26 @@
 
       <!-- Your Roll (v-show to preserve dice animation state) -->
       <DuelRollPhase
-        ref="myRollPhase"
         v-show="rollTab === 'mine'"
+        ref="myRollPhase"
         :cards="myCards"
-        :playerName="isOfferer ? offererName : chooserName"
-        :canRoll="!myRollData"
-        :rollData="myRollData"
-        :diceCount="diceCount"
+        :player-name="isOfferer ? offererName : chooserName"
+        :can-roll="!myRollData"
+        :roll-data="myRollData"
+        :dice-count="diceCount"
         :ability="myAbility"
-        :abilityUses="myAbilityUses"
-        :abilityActivated="abilityActivated"
-        :activatingAbility="activatingAbility"
-        :peekedCards="peekedCards"
+        :ability-uses="myAbilityUses"
+        :ability-activated="abilityActivated"
+        :activating-ability="activatingAbility"
+        :peeked-cards="peekedCards"
         :rerolling="rerolling"
-        :needsContinue="pendingRerollDecision"
-        :use3dDice="dddiceAvailable"
-        :playerItems="currentPlayerItems"
-        :itemDecided="itemDecided"
-        :hideRollButton="true"
-        :hideRerollSection="true"
-        :currentRound="currentRound"
+        :needs-continue="pendingRerollDecision"
+        :use3d-dice="dddiceAvailable"
+        :player-items="currentPlayerItems"
+        :item-decided="itemDecided"
+        :hide-roll-button="true"
+        :hide-reroll-section="true"
+        :current-round="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -156,11 +156,11 @@
       <template v-if="rollTab === 'opponent'">
         <DuelRollPhase
           v-if="opponentRollData"
-          :rollData="opponentRollData"
-          :playerName="opponentCharacterName"
-          :canRoll="false"
-          :diceCount="diceCount"
-          :use3dDice="dddiceAvailable"
+          :roll-data="opponentRollData"
+          :player-name="opponentCharacterName"
+          :can-roll="false"
+          :dice-count="diceCount"
+          :use3d-dice="dddiceAvailable"
         />
         <div v-else class="waiting-inline">
           <p>Waiting for {{ opponentCharacterName }} to roll...</p>
@@ -178,7 +178,7 @@
       <button
         v-if="isOfferer && !offererRollData && itemDecided && !duelRolling"
         class="btn-roll action-btn-top"
-        @click="$refs.offererRollPhase?.startRolling()"
+        @click="offererRollPhase?.startRolling()"
       >
         Roll!
       </button>
@@ -197,23 +197,23 @@
       <DuelRollPhase
         ref="offererRollPhase"
         :cards="myCards"
-        :playerName="offererName"
-        :canRoll="isOfferer"
-        :rollData="offererRollData"
-        :diceCount="diceCount"
-        :ability="isOfferer ? myAbility : null"
-        :abilityUses="isOfferer ? myAbilityUses : 0"
-        :abilityActivated="abilityActivated"
-        :activatingAbility="activatingAbility"
-        :peekedCards="peekedCards"
+        :player-name="offererName"
+        :can-roll="isOfferer"
+        :roll-data="offererRollData"
+        :dice-count="diceCount"
+        :ability="isOfferer ? myAbility : undefined"
+        :ability-uses="isOfferer ? myAbilityUses : 0"
+        :ability-activated="abilityActivated"
+        :activating-ability="activatingAbility"
+        :peeked-cards="peekedCards"
         :rerolling="rerolling"
-        :needsContinue="pendingRerollDecision"
-        :use3dDice="dddiceAvailable"
-        :playerItems="currentPlayerItems"
-        :itemDecided="itemDecided"
-        :hideRollButton="true"
-        :hideRerollSection="true"
-        :currentRound="currentRound"
+        :needs-continue="pendingRerollDecision"
+        :use3d-dice="dddiceAvailable"
+        :player-items="currentPlayerItems"
+        :item-decided="itemDecided"
+        :hide-roll-button="true"
+        :hide-reroll-section="true"
+        :current-round="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -228,7 +228,7 @@
       <button
         v-if="isChooser && !chooserRollData && itemDecided && !duelRolling"
         class="btn-roll action-btn-top"
-        @click="$refs.chooserRollPhase?.startRolling()"
+        @click="chooserRollPhase?.startRolling()"
       >
         Roll!
       </button>
@@ -247,33 +247,33 @@
       <!-- Show offerer's completed roll -->
       <DuelRollPhase
         v-if="offererRollData"
-        :rollData="offererRollData"
-        :playerName="offererName"
-        :canRoll="false"
-        :diceCount="diceCount"
-        :use3dDice="dddiceAvailable"
+        :roll-data="offererRollData"
+        :player-name="offererName"
+        :can-roll="false"
+        :dice-count="diceCount"
+        :use3d-dice="dddiceAvailable"
       />
       <!-- Chooser's roll -->
       <DuelRollPhase
         ref="chooserRollPhase"
         :cards="myCards"
-        :playerName="chooserName"
-        :canRoll="isChooser"
-        :rollData="chooserRollData"
-        :diceCount="diceCount"
-        :ability="isChooser ? myAbility : null"
-        :abilityUses="isChooser ? myAbilityUses : 0"
-        :abilityActivated="abilityActivated"
-        :activatingAbility="activatingAbility"
-        :peekedCards="peekedCards"
+        :player-name="chooserName"
+        :can-roll="isChooser"
+        :roll-data="chooserRollData"
+        :dice-count="diceCount"
+        :ability="isChooser ? myAbility : undefined"
+        :ability-uses="isChooser ? myAbilityUses : 0"
+        :ability-activated="abilityActivated"
+        :activating-ability="activatingAbility"
+        :peeked-cards="peekedCards"
         :rerolling="rerolling"
-        :needsContinue="pendingRerollDecision"
-        :use3dDice="dddiceAvailable"
-        :playerItems="currentPlayerItems"
-        :itemDecided="itemDecided"
-        :hideRollButton="true"
-        :hideRerollSection="true"
-        :currentRound="currentRound"
+        :needs-continue="pendingRerollDecision"
+        :use3d-dice="dddiceAvailable"
+        :player-items="currentPlayerItems"
+        :item-decided="itemDecided"
+        :hide-roll-button="true"
+        :hide-reroll-section="true"
+        :current-round="currentRound"
         @roll="submitRoll"
         @use-ability="activateAbility"
         @reroll="handleReroll"
@@ -287,1309 +287,1593 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import DuelKingdomStats from './DuelKingdomStats.vue';
-import DuelChoosePhase from './DuelChoosePhase.vue';
-import DuelRollPhase from './DuelRollPhase.vue';
-import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
-import PlayerItems from './PlayerItems.vue';
-import EventReveal from './EventReveal.vue';
-import EventBanner from './EventBanner.vue';
-import CharacterInfoModal from './CharacterInfoModal.vue';
-import CurseSelectionOverlay from './CurseSelectionOverlay.vue';
-import { isDddiceAvailable } from '../dddiceService';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
 
-export default {
-  name: 'DuelBoard',
-  components: { DuelKingdomStats, DuelChoosePhase, DuelRollPhase, TurnHandoffOverlay, PlayerItems, EventReveal, EventBanner, CharacterInfoModal, CurseSelectionOverlay },
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast };
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef, watch } from "vue";
+import axios, { isAxiosError } from "axios";
+import DuelKingdomStats from "./DuelKingdomStats.vue";
+import DuelChoosePhase from "./DuelChoosePhase.vue";
+import DuelRollPhase from "./DuelRollPhase.vue";
+import TurnHandoffOverlay from "./TurnHandoffOverlay.vue";
+import PlayerItems from "./PlayerItems.vue";
+import EventReveal from "./EventReveal.vue";
+import EventBanner from "./EventBanner.vue";
+import CharacterInfoModal from "./CharacterInfoModal.vue";
+import CurseSelectionOverlay from "./CurseSelectionOverlay.vue";
+import { useRouter } from "vue-router";
+import { isDddiceAvailable } from "../dddice-service";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
+
+interface Character {
+  name?: string;
+  wild_ability: string;
+  wild_ability_description: string;
+}
+
+interface KingdomStyleData {
+  slug: string;
+  background_image_url?: string;
+  css_vars?: Record<string, string>;
+}
+
+interface KingdomStyle {
+  slug?: string;
+  background_image_url?: string;
+  css_vars?: Record<string, string>;
+}
+
+interface GamePlayerUser {
+  id: number;
+  name?: string;
+  active_kingdom_style_slug?: string;
+  active_kingdom_style?: KingdomStyle;
+  active_title?: string;
+  active_dice_theme_slug?: string;
+}
+
+interface GamePlayer {
+  id: number;
+  player_number: number;
+  user_id?: number;
+  is_bot?: boolean;
+  user?: GamePlayerUser;
+  character?: Character;
+  ability_uses?: number;
+  lost_dice?: number;
+  items?: PlayerItemData[];
+}
+
+interface PlayerItemData {
+  is_used?: boolean;
+  used_round?: number;
+  item?: Record<string, unknown>;
+}
+
+interface RollCard {
+  card?: { difficulty?: number };
+  difficulty?: number;
+  success?: boolean;
+}
+
+interface RollResult {
+  player_number?: number;
+  total_roll?: number;
+  cards?: RollCard[];
+  success?: boolean;
+  duel_result?: unknown;
+  rerolled?: boolean;
+  remaining_uses?: number;
+  player_items?: PlayerItemData[];
+  pending_curses?: PendingCurse[];
+  player_curses?: unknown;
+}
+
+interface PendingCurse {
+  player_id: number;
+  curse_details?: unknown;
+}
+
+interface DuelCard {
+  difficulty?: number;
+}
+
+interface DuelHandItem {
+  card?: DuelCard;
+  difficulty?: number;
+}
+
+interface PreviewEffects {
+  positive?: Record<string, number>;
+  negative?: Record<string, number>;
+}
+
+interface DiceAnimationTrigger {
+  playerNumber: number;
+  rollResult: RollResult;
+  themes?: string[];
+  timestamp: number;
+}
+
+interface DiceAnimationResolve {
+  resolve: () => void;
+  timestamp: number;
+}
+
+interface GameData {
+  current_round?: number;
+  game_mode?: string;
+  duel_phase?: string;
+  offerer_player_number?: number;
+  player_kingdoms?: unknown[];
+  current_event?: unknown;
+  pending_curses?: PendingCurse[];
+  player_curses?: Record<number, unknown>;
+  turn_time_limit?: number;
+  turn_time_remaining?: number;
+  round_results?: { offerer?: RollResult; chooser?: RollResult };
+  game?: {
+    user_id?: number;
+    current_round?: number;
+    duel_phase?: string;
+    offerer_player_number?: number;
+    players?: GamePlayer[];
+    status?: string;
+    turn_time_remaining?: number;
+    round_results?: { offerer?: RollResult; chooser?: RollResult };
+  };
+}
+
+interface CharacterModalData {
+  character: Character;
+  activeDice: number;
+  abilityUses: number;
+  items: PlayerItemData[];
+}
+
+interface DuelChoiceMadeData {
+  duel_phase: string;
+  player1_cards?: RollCard[];
+  player2_cards?: RollCard[];
+}
+
+interface DuelRollCompleteData {
+  roll_data: RollResult;
+  duel_phase?: string;
+}
+
+const { gameData, gameId, showEventBanner = true } = defineProps<{
+  gameData: GameData;
+  gameId: string | number;
+  showEventBanner?: boolean;
+}>();
+
+const emit = defineEmits<{
+  refresh: [];
+  "gameOver": [];
+  "gameDataUpdated": [data: GameData];
+  "phaseUpdated": [phase: string];
+  "itemsUpdated": [count: number];
+  "diceUpdated": [count: number];
+}>();
+
+const router = useRouter();
+const auth = useAuth();
+const toast = useToast();
+
+const kingdomStats = useTemplateRef("kingdomStats");
+const playerItems = useTemplateRef("playerItems");
+const myRollPhase = useTemplateRef("myRollPhase");
+const offererRollPhase = useTemplateRef("offererRollPhase");
+const chooserRollPhase = useTemplateRef("chooserRollPhase");
+
+const duelPhase = ref<string | undefined>(undefined);
+const offererPlayerNumber = ref<number | undefined>(undefined);
+const playerKingdoms = ref<unknown[]>([]);
+const currentCards = ref<DuelHandItem[]>([]);
+const myCards = ref<DuelHandItem[]>([]);
+const offererRollData = ref<RollResult | undefined>(undefined);
+const chooserRollData = ref<RollResult | undefined>(undefined);
+const isGameOver = ref(false);
+const waitingForOpponentSelection = ref(false);
+// Pass-and-play handoff
+const showHandoff = ref(false);
+const handoffPlayerNumber = ref<number | undefined>(undefined);
+// Active player tracking (for pass-and-play)
+const activePlayerNumber = ref(1);
+// Items & Dice
+const currentPlayerItems = ref<PlayerItemData[]>([]);
+const diceCount = ref(4);
+// Event reveal
+const showEventReveal = ref(false);
+// Online waiting
+const showWaiting = ref(false);
+const waitingMessage = ref("");
+// Ability
+const abilityActivated = ref(false);
+const activatingAbility = ref(false);
+const peekedCards = ref<unknown>(undefined);
+// Reroll
+const rerolling = ref(false);
+const pendingRerollDecision = ref(false);
+// Roll tab nav
+const rollTab = ref<"mine" | "opponent">("mine");
+// Per-player dice in kingdom stats
+const playerDifficulties = ref<Record<number, number | undefined>>({});
+const playerRollResults = ref<Record<number, RollResult | undefined>>({});
+const diceAnimationTrigger = ref<DiceAnimationTrigger | undefined>(undefined);
+const diceAnimationResolveReference = ref<DiceAnimationResolve | undefined>(undefined);
+// Item decision tracking
+const itemDecided = ref(false);
+const duelRolling = ref(false);
+// Character info modal
+const showCharacterModal = ref(false);
+const selectedCharacterData = ref<CharacterModalData | undefined>(undefined);
+// Turn timer
+const turnTimeLimit = ref<number | undefined>(undefined);
+const turnTimeRemaining = ref<number | undefined>(undefined);
+const turnTimerInterval = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+// Timeout overlay
+const showTimeoutOverlay = ref(false);
+const timeoutMessage = ref("");
+const reportingTimeout = ref(false);
+const timeoutSafetyTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+// Curses
+const pendingCurses = ref<PendingCurse[] | undefined>(undefined);
+const showCurseSelection = ref(false);
+const playerCurses = ref<Record<number, unknown>>({});
+// Card effect preview
+const cardPreviewEffects = ref<PreviewEffects | undefined>(undefined);
+// Non-reactive orchestration flags
+const opponentTurnPending = ref(false);
+const advancing = ref(false);
+
+function computeDiff(cards: RollCard[] | undefined): number {
+  return cards?.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0) || 0;
+}
+
+function errorMessage(error: unknown): string {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error || error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+const players = computed<GamePlayer[] | undefined>(() => gameData?.game?.players);
+
+const currentRound = computed<number>(() => gameData?.current_round || gameData?.game?.current_round || 0);
+const isOnline = computed<boolean>(() => gameData?.game_mode === "online");
+const isPassAndPlay = computed<boolean>(() => gameData?.game_mode === "pass_and_play");
+const offererNumber = computed<number>(() => offererPlayerNumber.value || gameData?.offerer_player_number || 1);
+const chooserNumber = computed<number>(() => (offererNumber.value === 1 ? 2 : 1));
+const isOfferer = computed<boolean>(() => activePlayerNumber.value === offererNumber.value);
+const isChooser = computed<boolean>(() => activePlayerNumber.value === chooserNumber.value);
+
+const isSinglePlayerDuel = computed<boolean>(
+  () => gameData?.game_mode === "single" && !isOnline.value && !isPassAndPlay.value,
+);
+
+const offererName = computed<string>(() => {
+  const player = gameData?.game?.players?.find((p) => p.player_number === offererNumber.value);
+  const isBot = player?.is_bot && !player?.user;
+  const name = isBot ? (player?.character?.name || "Bot") : (player?.user?.name || `Player ${offererNumber.value}`);
+  if (isSinglePlayerDuel.value && offererNumber.value === activePlayerNumber.value) {
+    return `${name} (YOU)`;
+  }
+  return name;
+});
+
+const chooserName = computed<string>(() => {
+  const player = gameData?.game?.players?.find((p) => p.player_number === chooserNumber.value);
+  const isBot = player?.is_bot && !player?.user;
+  const name = isBot ? (player?.character?.name || "Bot") : (player?.user?.name || `Player ${chooserNumber.value}`);
+  if (isSinglePlayerDuel.value && chooserNumber.value === activePlayerNumber.value) {
+    return `${name} (YOU)`;
+  }
+  return name;
+});
+
+const handoffCharacterName = computed<string>(() => {
+  if (!handoffPlayerNumber.value || !gameData?.game?.players) {
+    return "";
+  }
+  const player = gameData.game.players.find((p) => p.player_number === handoffPlayerNumber.value);
+  return player?.character?.name || `Player ${handoffPlayerNumber.value}`;
+});
+
+const myAbility = computed<{ name: string; description: string } | undefined>(() => {
+  const player = gameData?.game?.players?.find((p) => p.player_number === activePlayerNumber.value);
+  if (!player?.character) {
+    return undefined;
+  }
+  return {
+    name: player.character.wild_ability,
+    description: player.character.wild_ability_description,
+  };
+});
+
+const myAbilityUses = computed<number>(() => {
+  const player = gameData?.game?.players?.find((p) => p.player_number === activePlayerNumber.value);
+  return player?.ability_uses ?? 0;
+});
+
+const currentEvent = computed<unknown>(() => gameData?.current_event || undefined);
+
+const botPlayer = computed<GamePlayer | undefined>(() => gameData?.game?.players?.find((p) => p.is_bot));
+const hasBotPlayer = computed<boolean>(() => !!botPlayer.value);
+
+const myRollData = computed<RollResult | undefined>(() => {
+  if (isOfferer.value) {
+    return offererRollData.value;
+  }
+  return chooserRollData.value;
+});
+
+const opponentRollData = computed<RollResult | undefined>(() => {
+  if (isOfferer.value) {
+    return chooserRollData.value;
+  }
+  return offererRollData.value;
+});
+
+const opponentCharacterName = computed<string>(() => {
+  const opponentNumber = activePlayerNumber.value === 1 ? 2 : 1;
+  const player = gameData?.game?.players?.find((p) => p.player_number === opponentNumber);
+  const isBot = player?.is_bot && !player?.user;
+  return isBot ? (player?.character?.name || "Bot") : (player?.user?.name || `Player ${opponentNumber}`);
+});
+
+const myTabClass = computed<Record<string, boolean>>(() => {
+  const cls: Record<string, boolean> = { active: rollTab.value === "mine" };
+  if (myRollData.value?.cards?.length) {
+    cls["tab-success"] = myRollData.value.cards[0].success === true;
+    cls["tab-failure"] = myRollData.value.cards[0].success === false;
+  }
+  return cls;
+});
+
+const opponentTabClass = computed<Record<string, boolean>>(() => {
+  const cls: Record<string, boolean> = { active: rollTab.value === "opponent" };
+  if (opponentRollData.value?.cards?.length) {
+    cls["tab-success"] = opponentRollData.value.cards[0].success === true;
+    cls["tab-failure"] = opponentRollData.value.cards[0].success === false;
+  } else {
+    cls["tab-waiting"] = true;
+  }
+  return cls;
+});
+
+const dddiceAvailable = computed<boolean>(() => isDddiceAvailable());
+
+const showRerollAboveStats = computed<boolean>(() => {
+  if (!pendingRerollDecision.value) {
+    return false;
+  }
+  if (!myRollData.value) {
+    return false;
+  }
+  if (duelPhase.value === "rolling" && (!offererRollData.value || !chooserRollData.value)) {
+    return false;
+  }
+  const ability = myAbility.value?.name;
+  const isRerollAbility = ["rally", "gamble"].includes(ability ?? "");
+  return isRerollAbility && myAbilityUses.value > 0 && !abilityActivated.value && !myRollData.value?.rerolled;
+});
+
+const rerollLabelTop = computed<string>(() => {
+  if (!myAbility.value) {
+    return "";
+  }
+  if (myAbility.value.name === "rally") {
+    return "Reroll lowest die?";
+  }
+  if (myAbility.value.name === "gamble") {
+    return "Reroll all dice?";
+  }
+  return myAbility.value.description;
+});
+
+const showContinueAboveStats = computed<boolean>(() => {
+  if (!pendingRerollDecision.value) {
+    return false;
+  }
+  if (!myRollData.value) {
+    return false;
+  }
+  if (duelPhase.value === "rolling" && (!offererRollData.value || !chooserRollData.value)) {
+    return false;
+  }
+  return !showRerollAboveStats.value;
+});
+
+const playerDiceThemesComputed = computed<Record<number, string[]>>(() => ({
+  1: getThemesForPlayer(1),
+  2: getThemesForPlayer(2),
+}));
+
+const playerKingdomStylesComputed = computed<Record<number, string>>(() => ({
+  1: getKingdomStyleForPlayer(1),
+  2: getKingdomStyleForPlayer(2),
+}));
+
+const playerKingdomStyleDataComputed = computed<Record<number, KingdomStyleData | undefined>>(() => ({
+  1: getKingdomStyleDataForPlayer(1),
+  2: getKingdomStyleDataForPlayer(2),
+}));
+
+const playerTitlesComputed = computed<Record<number, string | undefined>>(() => ({
+  1: getTitleForPlayer(1),
+  2: getTitleForPlayer(2),
+}));
+
+const isCurrentTurnBot = computed<boolean>(() => {
+  if (isOnline.value || !hasBotPlayer.value) {
+    return false;
+  }
+  const botNumber = botPlayer.value?.player_number;
+  const phase = duelPhase.value;
+  if (phase === "choosing") {
+    return true; // Bot always needs to select in choosing phase
+  }
+  if (phase === "rolling") {
+    return true; // Bot needs to roll in simultaneous mode
+  }
+  if (phase === "rolling_offerer" && offererNumber.value === botNumber) {
+    return true;
+  }
+  if (phase === "rolling_chooser" && chooserNumber.value === botNumber) {
+    return true;
+  }
+  return false;
+});
+
+const formattedTimeRemaining = computed<string | undefined>(() => {
+  if (turnTimeRemaining.value == undefined) {
+    return undefined;
+  }
+  const total = turnTimeRemaining.value;
+  if (total <= 0) {
+    return "0:00";
+  }
+  const hours = Math.floor(total / 3600);
+  const mins = Math.floor((total % 3600) / 60);
+  const secs = total % 60;
+  if (hours > 0) {
+    return `${hours}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  }
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+});
+
+const timerUrgent = computed<boolean>(() => turnTimeRemaining.value != undefined && turnTimeRemaining.value <= 30);
+
+watch(
+  () => gameData,
+  (newData) => {
+    if (newData) {
+      syncFromGameData(newData);
+    }
   },
-  props: {
-    gameData: { type: Object, required: true },
-    gameId: { type: [String, Number], required: true },
-    showEventBanner: { type: Boolean, default: true },
+  { immediate: true },
+);
+
+watch(duelPhase, (newPhase) => {
+  if (newPhase !== "choosing") {
+    cardPreviewEffects.value = undefined;
+  }
+});
+
+watch(
+  currentPlayerItems,
+  (items) => {
+    const round = currentRound.value;
+    emit(
+      "itemsUpdated",
+      (items || []).filter((pi) => !pi.is_used && !(pi.used_round && pi.used_round === round)).length,
+    );
   },
-  emits: ['refresh', 'game-over', 'game-data-updated', 'phase-updated', 'items-updated', 'dice-updated'],
-  data() {
-    return {
-      duelPhase: null,
-      offererPlayerNumber: null,
-      playerKingdoms: [],
-      currentCards: [],
-      myCards: [],
-      offererRollData: null,
-      chooserRollData: null,
-      isGameOver: false,
-      waitingForOpponentSelection: false,
-      // Pass-and-play handoff
-      showHandoff: false,
-      handoffPlayerNumber: null,
-      // Active player tracking (for pass-and-play)
-      activePlayerNumber: 1,
-      // Items & Dice
-      currentPlayerItems: [],
-      diceCount: 4,
-      // Event reveal
-      showEventReveal: false,
-      // Online waiting
-      showWaiting: false,
-      waitingMessage: '',
-      // Ability
-      abilityActivated: false,
-      activatingAbility: false,
-      peekedCards: null,
-      // Reroll
-      rerolling: false,
-      pendingRerollDecision: false,
-      // Roll tab nav
-      rollTab: 'mine',
-      // Per-player dice in kingdom stats
-      playerDifficulties: {},
-      playerRollResults: {},
-      diceAnimationTrigger: null,
-      _diceAnimationResolve: null,
-      // Item decision tracking
-      itemDecided: false,
-      duelRolling: false,
-      // Character info modal
-      showCharacterModal: false,
-      selectedCharacterData: null,
-      // Turn timer
-      turnTimeLimit: null,
-      turnTimeRemaining: null,
-      turnTimerInterval: null,
-      // Timeout overlay
-      showTimeoutOverlay: false,
-      timeoutMessage: '',
-      reportingTimeout: false,
-      // Curses
-      pendingCurses: null,
-      showCurseSelection: false,
-      playerCurses: {},
-      // Card effect preview
-      cardPreviewEffects: null,
+  { deep: true, immediate: true },
+);
+
+watch(diceCount, (value) => {
+  emit("diceUpdated", value);
+});
+
+watch(isCurrentTurnBot, (isBotTurn) => {
+  // For simultaneous rolling, bot rolls when human rolls — don't pre-trigger
+  if (isBotTurn && duelPhase.value !== "rolling") {
+    triggerBotTurn();
+  }
+});
+
+function openCharacterModal(playerNumber: number): void {
+  const player = gameData?.game?.players?.find((p) => p.player_number === playerNumber);
+  if (!player?.character) {
+    return;
+  }
+  selectedCharacterData.value = {
+    character: player.character,
+    activeDice: Math.max(1, 4 - (player.lost_dice || 0)),
+    abilityUses: player.ability_uses ?? 0,
+    items: player.items || [],
+  };
+  showCharacterModal.value = true;
+}
+
+function startTurnTimer(): void {
+  if (turnTimerInterval.value) {
+    clearInterval(turnTimerInterval.value);
+  }
+  // If already expired, trigger immediately
+  if (turnTimeRemaining.value != undefined && turnTimeRemaining.value <= 0) {
+    turnTimeRemaining.value = 0;
+    handleTimerExpired();
+    return;
+  }
+  turnTimerInterval.value = setInterval(() => {
+    if (turnTimeRemaining.value != undefined && turnTimeRemaining.value > 0) {
+      turnTimeRemaining.value--;
+      if (turnTimeRemaining.value <= 0) {
+        clearInterval(turnTimerInterval.value);
+        turnTimerInterval.value = undefined;
+        handleTimerExpired();
+      }
+    } else {
+      clearInterval(turnTimerInterval.value);
+      turnTimerInterval.value = undefined;
+      handleTimerExpired();
+    }
+  }, 1000);
+}
+
+async function handleTimerExpired(): Promise<void> {
+  if (reportingTimeout.value || showTimeoutOverlay.value) {
+    return;
+  }
+  reportingTimeout.value = true;
+
+  // Show overlay immediately
+  timeoutMessage.value = "Waiting for server...";
+  showTimeoutOverlay.value = true;
+
+  // Nudge the server to forfeit if expired
+  try {
+    await axios.post(`/api/games/${gameId}/check-timeout`);
+  } catch (error) {
+    console.error("Timeout check failed:", error);
+  }
+
+  // The server will broadcast DuelGameOver, which GameBoard.vue handles
+  // and redirects to the game-over screen. Safety poll after 5s in case
+  // the broadcast doesn't arrive (e.g. WebSocket disconnect).
+  timeoutSafetyTimer.value = setTimeout(async () => {
+    try {
+      const response = await axios.get<GameData>(`/api/games/${gameId}`);
+      if (response.data.game?.status === "completed" || response.data.game?.status === "cancelled") {
+        router.replace(`/game/${gameId}/over`);
+      } else {
+        // Game still active (opponent acted just in time) — re-sync
+        showTimeoutOverlay.value = false;
+        reportingTimeout.value = false;
+        const remaining = response.data.turn_time_remaining ?? response.data.game?.turn_time_remaining;
+        if (remaining != undefined && remaining > 0) {
+          turnTimeRemaining.value = remaining;
+          startTurnTimer();
+        }
+        emit("refresh");
+      }
+    } catch {
+      router.replace(`/game/${gameId}/over`);
+    }
+  }, 5000);
+}
+
+function checkEventReveal(): void {
+  const round = gameData?.current_round || gameData?.game?.current_round || 0;
+  const event = currentEvent.value as { id?: number } | undefined;
+  if (event && (round - 1) % 3 === 0) {
+    const key = `game_${gameId}_event_${event.id}`;
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      showEventReveal.value = true;
+    }
+  }
+}
+
+function syncFromGameData(data: GameData): void {
+  duelPhase.value = data.duel_phase || data.game?.duel_phase;
+  offererPlayerNumber.value = data.offerer_player_number || data.game?.offerer_player_number;
+  playerKingdoms.value = data.player_kingdoms || [];
+
+  // Sync curses
+  if (data.pending_curses) {
+    pendingCurses.value = data.pending_curses;
+  }
+  if (data.player_curses) {
+    playerCurses.value = data.player_curses;
+  }
+
+  // Sync turn timer (don't restart if game-over timeout overlay is showing)
+  if (data.turn_time_limit && !showTimeoutOverlay.value) {
+    turnTimeLimit.value = data.turn_time_limit;
+    if (data.turn_time_remaining != undefined) {
+      turnTimeRemaining.value = data.turn_time_remaining;
+      reportingTimeout.value = false; // Release guard — fresh timer from server
+      startTurnTimer();
+    }
+  }
+
+  // Determine my player number
+  if (isOnline.value || isSinglePlayerDuel.value) {
+    const userId = auth.state.user?.id;
+    const myPlayer = data.game?.players?.find((p) => p.user_id === userId);
+    if (myPlayer) {
+      activePlayerNumber.value = myPlayer.player_number;
+    } else if (isSinglePlayerDuel.value) {
+      activePlayerNumber.value = 1;
+    }
+    if (isOnline.value && !hasBotPlayer.value) {
+      updateOnlineWaiting();
+    }
+  }
+
+  // If entering choosing phase, load cards
+  if (duelPhase.value === "choosing" && !showHandoff.value) {
+      loadDuelHand();
+    }
+
+  // If entering rolling phase, load my cards
+  if (["rolling", "rolling_offerer", "rolling_chooser"].includes(duelPhase.value ?? "")) {
+    loadMyRollCards();
+    // For sequential rolling, trigger bot with delay; for simultaneous, bot rolls when human rolls
+    if (duelPhase.value !== "rolling" && hasBotPlayer.value && isCurrentTurnBot.value && !opponentTurnPending.value) {
+      triggerBotTurn();
+    }
+  }
+
+  checkEventReveal();
+}
+
+function updateOnlineWaiting(): void {
+  if (!isOnline.value || hasBotPlayer.value) {
+    showWaiting.value = false;
+    return;
+  }
+
+  const phase = duelPhase.value;
+  const myNumber = activePlayerNumber.value;
+  const offNumber = offererNumber.value;
+  const choNumber = chooserNumber.value;
+
+  const isOpponentRolling =
+    (phase === "rolling_offerer" && myNumber !== offNumber) ||
+    (phase === "rolling_chooser" && myNumber !== choNumber);
+
+  if (phase === "rolling") {
+    // Simultaneous rolling — no full-screen waiting overlay
+    showWaiting.value = false;
+  } else if (isOpponentRolling) {
+    showWaiting.value = true;
+    waitingMessage.value = "Opponent is Rolling";
+  } else {
+    showWaiting.value = false;
+  }
+}
+
+async function loadDuelHand(): Promise<void> {
+  try {
+    const response = await axios.get<{ cards?: DuelHandItem[]; items?: PlayerItemData[]; dice_count?: number }>(
+      `/api/games/${gameId}/duel-hand/${activePlayerNumber.value}`,
+    );
+    currentCards.value = response.data.cards || [];
+    currentPlayerItems.value = response.data.items || [];
+    diceCount.value = response.data.dice_count ?? 4;
+    // Auto-decide if player has no usable items (exclude items on cooldown this round)
+    const round = currentRound.value;
+    const usable = currentPlayerItems.value.filter((pi) => !pi.is_used && !(pi.used_round && pi.used_round === round));
+    itemDecided.value = usable.length === 0 ? true : false;
+  } catch {
+    currentCards.value = [];
+    currentPlayerItems.value = [];
+    itemDecided.value = true;
+  }
+}
+
+function initiatePassAndPlayHandoff(playerNumber: number): void {
+  handoffPlayerNumber.value = playerNumber;
+  showHandoff.value = true;
+}
+
+async function onHandoffReady(): Promise<void> {
+  showHandoff.value = false;
+  if (handoffPlayerNumber.value !== undefined) {
+    activePlayerNumber.value = handoffPlayerNumber.value;
+  }
+  await loadDuelHand();
+}
+
+function onCardPreview(effects: PreviewEffects | undefined): void {
+  cardPreviewEffects.value = effects;
+}
+
+async function submitSelection(keptHandId: number): Promise<void> {
+  try {
+    const response = await axios.post<{
+      waiting?: boolean;
+      duel_phase?: string;
+      player1_cards?: RollCard[];
+      player2_cards?: RollCard[];
+    }>(`/api/games/${gameId}/duel-select`, {
+      kept_hand_id: keptHandId,
+    });
+
+    if (response.data.waiting) {
+      // Waiting for opponent to select
+      waitingForOpponentSelection.value = true;
+
+      if (isPassAndPlay.value) {
+        // Pass-and-play: hand off to other player for their selection
+        waitingForOpponentSelection.value = false;
+        const otherPlayer = activePlayerNumber.value === 1 ? 2 : 1;
+        initiatePassAndPlayHandoff(otherPlayer);
+      } else if (hasBotPlayer.value) {
+        // Bot needs to select — trigger bot turn
+        triggerBotTurn();
+      }
+      return;
+    }
+
+    // Both selected — transition to rolling
+    const phase = response.data.duel_phase || "rolling_offerer";
+    duelPhase.value = phase;
+    waitingForOpponentSelection.value = false;
+    emit("phaseUpdated", phase);
+
+    // Compute difficulties for both players from swapped cards
+    const d1 = computeDiff(response.data.player1_cards);
+    const d2 = computeDiff(response.data.player2_cards);
+    if (d1 > 0) {
+      playerDifficulties.value = { ...playerDifficulties.value, 1: d1 };
+    }
+    if (d2 > 0) {
+      playerDifficulties.value = { ...playerDifficulties.value, 2: d2 };
+    }
+
+    if (isPassAndPlay.value) {
+      await loadMyRollCards();
+      initiatePassAndPlayHandoff(offererNumber.value);
+    } else if (hasBotPlayer.value) {
+      opponentTurnPending.value = false;
+      await loadMyRollCards();
+      // For simultaneous rolling, bot rolls when human rolls (triggerBotRollImmediate)
+      // For sequential, trigger bot turn with delay
+      if (phase !== "rolling" && isCurrentTurnBot.value) {
+        triggerBotTurn();
+      }
+    } else {
+      await loadMyRollCards();
+      updateOnlineWaiting();
+    }
+  } catch (error) {
+    toast.error("Failed to select: " + errorMessage(error));
+  }
+}
+
+async function loadMyRollCards(): Promise<void> {
+  try {
+    const response = await axios.get<{ cards?: DuelHandItem[]; items?: PlayerItemData[] }>(
+      `/api/games/${gameId}/duel-hand/${activePlayerNumber.value}`,
+    );
+    const cards = response.data.cards || [];
+    myCards.value = cards;
+    // Compute difficulty for this player's cards
+    const totalDifficulty = cards.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0);
+    if (totalDifficulty > 0) {
+      playerDifficulties.value = { ...playerDifficulties.value, [activePlayerNumber.value]: totalDifficulty };
+    }
+    // Update items so the roll button / item prompt shows correctly
+    currentPlayerItems.value = response.data.items || [];
+    const round = currentRound.value;
+    const usable = currentPlayerItems.value.filter((pi) => !pi.is_used && !(pi.used_round && pi.used_round === round));
+    itemDecided.value = usable.length === 0 ? true : false;
+  } catch {
+    myCards.value = [];
+    currentPlayerItems.value = [];
+    itemDecided.value = true;
+  }
+}
+
+async function activateAbility(): Promise<void> {
+  if (activatingAbility.value || abilityActivated.value) {
+    return;
+  }
+  activatingAbility.value = true;
+  try {
+    const response = await axios.post<{ peeked_cards?: unknown; remaining_uses?: number }>(
+      `/api/games/${gameId}/use-ability`,
+      {
+        player_number: activePlayerNumber.value,
+      },
+    );
+    abilityActivated.value = true;
+    if (response.data.peeked_cards) {
+      peekedCards.value = response.data.peeked_cards;
+    }
+    const player = gameData?.game?.players?.find((p) => p.player_number === activePlayerNumber.value);
+    if (player) {
+      player.ability_uses = response.data.remaining_uses;
+    }
+  } catch (error) {
+    toast.error("Failed to use ability: " + errorMessage(error));
+  }
+  activatingAbility.value = false;
+}
+
+function getKingdomStyleForPlayer(playerNumber: number): string {
+  const player = gameData?.game?.players?.find((p) => p.player_number === playerNumber);
+  return player?.user?.active_kingdom_style_slug || "classic";
+}
+
+function getKingdomStyleDataForPlayer(playerNumber: number): KingdomStyleData | undefined {
+  const player = gameData?.game?.players?.find((p) => p.player_number === playerNumber);
+  const style = player?.user?.active_kingdom_style;
+  if (!style || style.slug === undefined) {
+    return undefined;
+  }
+  return {
+    slug: style.slug,
+    background_image_url: style.background_image_url,
+    css_vars: style.css_vars,
+  };
+}
+
+function getTitleForPlayer(playerNumber: number): string | undefined {
+  const player = gameData?.game?.players?.find((p) => p.player_number === playerNumber);
+  return player?.user?.active_title || undefined;
+}
+
+function getThemesForPlayer(playerNumber: number): string[] {
+  const player = gameData?.game?.players?.find((p) => p.player_number === playerNumber);
+  const slug = player?.user?.active_dice_theme_slug || "dddice-standard";
+  return [slug, slug, slug, slug];
+}
+
+async function triggerDiceAnimation(rollResult: RollResult, playerNumber: number): Promise<void> {
+  if (!dddiceAvailable.value) {
+    return;
+  }
+  const themes = getThemesForPlayer(playerNumber);
+  const timestamp = Date.now();
+
+  return new Promise((resolve) => {
+    let isResolved = false;
+    const doResolve = (): void => {
+      if (isResolved) {
+        return;
+      }
+      isResolved = true;
+      if (diceAnimationResolveReference.value?.timestamp === timestamp) {
+        diceAnimationResolveReference.value = undefined;
+      }
+      resolve();
     };
-  },
-  computed: {
-    currentRound() {
-      return this.gameData?.current_round || this.gameData?.game?.current_round || 0;
-    },
-    isOnline() {
-      return this.gameData?.game_mode === 'online';
-    },
-    isPassAndPlay() {
-      return this.gameData?.game_mode === 'pass_and_play';
-    },
-    isHost() {
-      return this.gameData?.game?.user_id === this.auth.state.user?.id;
-    },
-    canAdvance() {
-      if (!this.isOnline) return true;
-      return this.isHost;
-    },
-    offererNumber() {
-      return this.offererPlayerNumber || this.gameData?.offerer_player_number || 1;
-    },
-    chooserNumber() {
-      return this.offererNumber === 1 ? 2 : 1;
-    },
-    isOfferer() {
-      return this.activePlayerNumber === this.offererNumber;
-    },
-    isChooser() {
-      return this.activePlayerNumber === this.chooserNumber;
-    },
-    offererName() {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.offererNumber);
-      const isBot = player?.is_bot && !player?.user;
-      const name = isBot ? (player?.character?.name || 'Bot') : (player?.user?.name || `Player ${this.offererNumber}`);
-      if (this.isSinglePlayerDuel && this.offererNumber === this.activePlayerNumber) return `${name} (YOU)`;
-      return name;
-    },
-    chooserName() {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.chooserNumber);
-      const isBot = player?.is_bot && !player?.user;
-      const name = isBot ? (player?.character?.name || 'Bot') : (player?.user?.name || `Player ${this.chooserNumber}`);
-      if (this.isSinglePlayerDuel && this.chooserNumber === this.activePlayerNumber) return `${name} (YOU)`;
-      return name;
-    },
-    handoffCharacterName() {
-      if (!this.handoffPlayerNumber || !this.gameData?.game?.players) return '';
-      const player = this.gameData.game.players.find(p => p.player_number === this.handoffPlayerNumber);
-      return player?.character?.name || `Player ${this.handoffPlayerNumber}`;
-    },
-    myAbility() {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
-      if (!player?.character) return null;
-      return {
-        name: player.character.wild_ability,
-        description: player.character.wild_ability_description,
-      };
-    },
-    myAbilityUses() {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
-      return player?.ability_uses ?? 0;
-    },
-    hasRerollAbility() {
-      const ability = this.myAbility?.name;
-      return ['rally', 'gamble'].includes(ability) && this.myAbilityUses > 0;
-    },
-    currentEvent() {
-      return this.gameData?.current_event || null;
-    },
-    isSinglePlayerDuel() {
-      return this.gameData?.game_mode === 'single' && !this.isOnline && !this.isPassAndPlay;
-    },
-    botPlayer() {
-      return this.gameData?.game?.players?.find(p => p.is_bot);
-    },
-    hasBotPlayer() {
-      return !!this.botPlayer;
-    },
-    myRollData() {
-      if (this.isOfferer) return this.offererRollData;
-      return this.chooserRollData;
-    },
-    opponentRollData() {
-      if (this.isOfferer) return this.chooserRollData;
-      return this.offererRollData;
-    },
-    opponentCharacterName() {
-      const opponentNum = this.activePlayerNumber === 1 ? 2 : 1;
-      const player = this.gameData?.game?.players?.find(p => p.player_number === opponentNum);
-      const isBot = player?.is_bot && !player?.user;
-      return isBot ? (player?.character?.name || 'Bot') : (player?.user?.name || `Player ${opponentNum}`);
-    },
-    myTabClass() {
-      const cls = { active: this.rollTab === 'mine' };
-      if (this.myRollData?.cards?.length) {
-        cls['tab-success'] = this.myRollData.cards[0].success === true;
-        cls['tab-failure'] = this.myRollData.cards[0].success === false;
-      }
-      return cls;
-    },
-    opponentTabClass() {
-      const cls = { active: this.rollTab === 'opponent' };
-      if (this.opponentRollData?.cards?.length) {
-        cls['tab-success'] = this.opponentRollData.cards[0].success === true;
-        cls['tab-failure'] = this.opponentRollData.cards[0].success === false;
-      } else {
-        cls['tab-waiting'] = true;
-      }
-      return cls;
-    },
-    dddiceAvailable() {
-      return isDddiceAvailable();
-    },
-    showRerollAboveStats() {
-      if (!this.pendingRerollDecision) return false;
-      if (!this.myRollData) return false;
-      if (this.duelPhase === 'rolling' && (!this.offererRollData || !this.chooserRollData)) return false;
-      const ability = this.myAbility?.name;
-      const isRerollAbility = ['rally', 'gamble'].includes(ability);
-      return isRerollAbility && this.myAbilityUses > 0 && !this.abilityActivated && !this.myRollData?.rerolled;
-    },
-    rerollLabelTop() {
-      if (!this.myAbility) return '';
-      if (this.myAbility.name === 'rally') return 'Reroll lowest die?';
-      if (this.myAbility.name === 'gamble') return 'Reroll all dice?';
-      return this.myAbility.description;
-    },
-    showContinueAboveStats() {
-      if (!this.pendingRerollDecision) return false;
-      if (!this.myRollData) return false;
-      if (this.duelPhase === 'rolling' && (!this.offererRollData || !this.chooserRollData)) return false;
-      return !this.showRerollAboveStats;
-    },
-    playerDiceThemesComputed() {
-      return {
-        1: this.getThemesForPlayer(1),
-        2: this.getThemesForPlayer(2),
-      };
-    },
-    playerKingdomStylesComputed() {
-      return {
-        1: this.getKingdomStyleForPlayer(1),
-        2: this.getKingdomStyleForPlayer(2),
-      };
-    },
-    playerKingdomStyleDataComputed() {
-      return {
-        1: this.getKingdomStyleDataForPlayer(1),
-        2: this.getKingdomStyleDataForPlayer(2),
-      };
-    },
-    playerTitlesComputed() {
-      return {
-        1: this.getTitleForPlayer(1),
-        2: this.getTitleForPlayer(2),
-      };
-    },
-    isCurrentTurnBot() {
-      if (this.isOnline || !this.hasBotPlayer) return false;
-      const botNum = this.botPlayer.player_number;
-      const phase = this.duelPhase;
-      if (phase === 'choosing') return true; // Bot always needs to select in choosing phase
-      if (phase === 'rolling') return true; // Bot needs to roll in simultaneous mode
-      if (phase === 'rolling_offerer' && this.offererNumber === botNum) return true;
-      if (phase === 'rolling_chooser' && this.chooserNumber === botNum) return true;
-      return false;
-    },
-    formattedTimeRemaining() {
-      if (this.turnTimeRemaining == null) return null;
-      const total = this.turnTimeRemaining;
-      if (total <= 0) return '0:00';
-      const hours = Math.floor(total / 3600);
-      const mins = Math.floor((total % 3600) / 60);
-      const secs = total % 60;
-      if (hours > 0) {
-        return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-      }
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    },
-    timerUrgent() {
-      return this.turnTimeRemaining != null && this.turnTimeRemaining <= 30;
-    },
-  },
-  watch: {
-    gameData: {
-      handler(newData) {
-        if (newData) {
-          this.syncFromGameData(newData);
-        }
+
+    diceAnimationResolveReference.value = { resolve: doResolve, timestamp };
+
+    // Safety timeout — always fires even if animation hangs or events are lost
+    setTimeout(doResolve, 8000);
+
+    diceAnimationTrigger.value = {
+      playerNumber,
+      rollResult,
+      themes,
+      timestamp,
+    };
+  });
+}
+
+function onDiceAnimationComplete({ timestamp }: { playerNumber: number; timestamp: number }): void {
+  if (diceAnimationResolveReference.value?.timestamp === timestamp) {
+    diceAnimationResolveReference.value.resolve();
+  }
+}
+
+function applyRollResult(rollResult: RollResult): void {
+  // Clear 3D dice immediately so they don't linger after outcome is shown
+  const pn = rollResult.player_number || activePlayerNumber.value;
+  kingdomStats.value?.clearDice(pn);
+
+  if (duelPhase.value === "rolling") {
+    if (rollResult.player_number === offererNumber.value) {
+      offererRollData.value = rollResult;
+    } else {
+      chooserRollData.value = rollResult;
+    }
+    refreshKingdoms();
+    if (rollResult.duel_result) {
+      isGameOver.value = true;
+    }
+
+    if (hasBotPlayer.value && !opponentRollData.value) {
+      triggerBotRollImmediate();
+    }
+  } else {
+    if (duelPhase.value === "rolling_offerer" || gameData?.game?.duel_phase === "rolling_offerer") {
+      offererRollData.value = rollResult;
+    } else {
+      chooserRollData.value = rollResult;
+    }
+    refreshKingdoms();
+  }
+
+  // Update per-player roll results for kingdom stats display
+  playerRollResults.value = { ...playerRollResults.value, [pn]: rollResult };
+
+  // Extract difficulty for opponent from roll data if we don't have it yet
+  if (rollResult.cards?.length && playerDifficulties.value[pn] === undefined) {
+    const diff = rollResult.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
+    if (diff > 0) {
+      playerDifficulties.value = { ...playerDifficulties.value, [pn]: diff };
+    }
+  }
+
+  pendingRerollDecision.value = true;
+
+  // Update player items if included in roll result
+  if (rollResult.player_items && pn === activePlayerNumber.value) {
+    currentPlayerItems.value = rollResult.player_items;
+  }
+
+  // Process pending curses from roll result
+  if (rollResult.pending_curses) {
+    pendingCurses.value = rollResult.pending_curses;
+  }
+  if (rollResult.player_curses) {
+    playerCurses.value = { ...playerCurses.value, [pn]: rollResult.player_curses };
+  }
+}
+
+function currentDuelPendingCurse(): PendingCurse | undefined {
+  if (!pendingCurses.value || pendingCurses.value.length === 0) {
+    return undefined;
+  }
+  const player = gameData?.game?.players?.find((p) => p.player_number === activePlayerNumber.value);
+  if (!player) {
+    return undefined;
+  }
+  return pendingCurses.value.find((pc) => pc.player_id === player.id);
+}
+
+async function onCurseSelected(curseId: number): Promise<void> {
+  try {
+    const response = await axios.post<{ pending_curses?: PendingCurse[]; player_curses?: unknown }>(
+      `/api/games/${gameId}/choose-curse`,
+      {
+        curse_id: curseId,
+        player_number: activePlayerNumber.value,
       },
-      immediate: true,
-    },
-    duelPhase(newPhase) {
-      if (newPhase !== 'choosing') {
-        this.cardPreviewEffects = null;
-      }
-    },
-    currentPlayerItems: {
-      handler(items) {
-        const round = this.currentRound;
-        this.$emit('items-updated', (items || []).filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round)).length);
-      },
-      deep: true,
-      immediate: true,
-    },
-    diceCount(val) {
-      this.$emit('dice-updated', val);
-    },
-    isCurrentTurnBot(isBotTurn) {
-      // For simultaneous rolling, bot rolls when human rolls — don't pre-trigger
-      if (isBotTurn && this.duelPhase !== 'rolling') {
-        this.triggerBotTurn();
-      }
-    },
-  },
-  methods: {
-    openCharacterModal(playerNumber) {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === playerNumber);
-      if (!player?.character) return;
-      this.selectedCharacterData = {
-        character: player.character,
-        activeDice: Math.max(1, 4 - (player.lost_dice || 0)),
-        abilityUses: player.ability_uses ?? 0,
-        items: player.items || [],
+    );
+    pendingCurses.value = response.data.pending_curses || undefined;
+    if (response.data.player_curses) {
+      playerCurses.value = {
+        ...playerCurses.value,
+        [activePlayerNumber.value]: response.data.player_curses,
       };
-      this.showCharacterModal = true;
-    },
+    }
+    // When all curses resolved, continue the flow
+    if (!pendingCurses.value || pendingCurses.value.length === 0) {
+      showCurseSelection.value = false;
+      continueAfterCurses();
+    }
+  } catch (error) {
+    toast.error("Failed to choose curse: " + errorMessage(error));
+  }
+}
 
-    startTurnTimer() {
-      if (this.turnTimerInterval) clearInterval(this.turnTimerInterval);
-      // If already expired, trigger immediately
-      if (this.turnTimeRemaining != null && this.turnTimeRemaining <= 0) {
-        this.turnTimeRemaining = 0;
-        this.handleTimerExpired();
-        return;
+async function recoverRollState(): Promise<void> {
+  // Fetch current game state to recover roll data that the backend already has
+  try {
+    const response = await axios.get<GameData>(`/api/games/${gameId}`);
+    const data = response.data;
+    syncFromGameData(data);
+    emit("gameDataUpdated", data);
+
+    // If the backend has moved to resolving, set that
+    const phase = data.duel_phase || data.game?.duel_phase;
+    if (phase) {
+      duelPhase.value = phase;
+    }
+
+    // Recover roll results from round_results if available
+    const roundResults = data.round_results || data.game?.round_results;
+    if (roundResults) {
+      if (roundResults.offerer && !offererRollData.value) {
+        offererRollData.value = roundResults.offerer;
       }
-      this.turnTimerInterval = setInterval(() => {
-        if (this.turnTimeRemaining != null && this.turnTimeRemaining > 0) {
-          this.turnTimeRemaining--;
-          if (this.turnTimeRemaining <= 0) {
-            clearInterval(this.turnTimerInterval);
-            this.turnTimerInterval = null;
-            this.handleTimerExpired();
-          }
-        } else {
-          clearInterval(this.turnTimerInterval);
-          this.turnTimerInterval = null;
-          this.handleTimerExpired();
-        }
-      }, 1000);
-    },
-
-    async handleTimerExpired() {
-      if (this.reportingTimeout || this.showTimeoutOverlay) return;
-      this.reportingTimeout = true;
-
-      // Show overlay immediately
-      this.timeoutMessage = 'Waiting for server...';
-      this.showTimeoutOverlay = true;
-
-      // Nudge the server to forfeit if expired
-      try {
-        await axios.post(`/api/games/${this.gameId}/check-timeout`);
-      } catch (e) {
-        console.error('Timeout check failed:', e);
+      if (roundResults.chooser && !chooserRollData.value) {
+        chooserRollData.value = roundResults.chooser;
       }
+    }
+  } catch (error) {
+    console.error("Failed to recover roll state:", error);
+    emit("refresh");
+  }
+}
 
-      // The server will broadcast DuelGameOver, which GameBoard.vue handles
-      // and redirects to the game-over screen. Safety poll after 5s in case
-      // the broadcast doesn't arrive (e.g. WebSocket disconnect).
-      this._timeoutSafetyTimer = setTimeout(async () => {
-        try {
-          const res = await axios.get(`/api/games/${this.gameId}`);
-          if (res.data.game?.status === 'completed' || res.data.game?.status === 'cancelled') {
-            this.$router.replace(`/game/${this.gameId}/over`);
-          } else {
-            // Game still active (opponent acted just in time) — re-sync
-            this.showTimeoutOverlay = false;
-            this.reportingTimeout = false;
-            const remaining = res.data.turn_time_remaining ?? res.data.game?.turn_time_remaining;
-            if (remaining != null && remaining > 0) {
-              this.turnTimeRemaining = remaining;
-              this.startTurnTimer();
-            }
-            this.$emit('refresh');
-          }
-        } catch {
-          this.$router.replace(`/game/${this.gameId}/over`);
-        }
-      }, 5000);
-    },
+async function handleUseItem(gamePlayerItemId: number): Promise<void> {
+  try {
+    const response = await axios.post<{ player_items?: PlayerItemData[] }>(`/api/games/${gameId}/use-item`, {
+      game_player_item_id: gamePlayerItemId,
+      player_number: activePlayerNumber.value,
+    });
+    itemDecided.value = true;
+    if (response.data.player_items) {
+      currentPlayerItems.value = response.data.player_items;
+    }
+  } catch (error) {
+    toast.error("Failed to use item: " + errorMessage(error));
+  }
+}
 
-    checkEventReveal() {
-      const round = this.gameData?.current_round || this.gameData?.game?.current_round || 0;
-      const event = this.currentEvent;
-      const gameId = this.gameId;
-      if (event && (round - 1) % 3 === 0) {
-        const key = `game_${gameId}_event_${event.id}`;
-        if (!sessionStorage.getItem(key)) {
-          sessionStorage.setItem(key, '1');
-          this.showEventReveal = true;
-        }
+async function handleSkipItem(): Promise<void> {
+  try {
+    await axios.post(`/api/games/${gameId}/skip-item`, {
+      player_number: activePlayerNumber.value,
+    });
+    itemDecided.value = true;
+  } catch (error) {
+    toast.error("Failed to skip item: " + errorMessage(error));
+  }
+}
+
+async function submitRoll(): Promise<void> {
+  duelRolling.value = true;
+  let rollResult: RollResult;
+  try {
+    const response = await axios.post<RollResult>(`/api/games/${gameId}/duel-roll`);
+    rollResult = response.data;
+  } catch (error) {
+    if (
+      isAxiosError<{ error?: string }>(error) &&
+      error.response?.status === 422 &&
+      error.response?.data?.error?.includes("already rolled")
+    ) {
+      // Player already rolled (e.g. page reload) — fetch existing state
+      await recoverRollState();
+      duelRolling.value = false;
+      return;
+    }
+    toast.error("Failed to roll: " + errorMessage(error));
+    duelRolling.value = false;
+    return;
+  }
+
+  // Trigger 3D dice animation FIRST — results shown after dice stop
+  try {
+    await triggerDiceAnimation(rollResult, rollResult.player_number || activePlayerNumber.value);
+  } catch (error) {
+    console.warn("[dddice] Animation failed, continuing:", error);
+  }
+
+  // Now show results, play sound, and adjust stats
+  applyRollResult(rollResult);
+  duelRolling.value = false;
+}
+
+function advanceAfterOffererRoll(): void {
+  duelPhase.value = "rolling_chooser";
+  itemDecided.value = false; // Reset for chooser's item decision
+  emit("phaseUpdated", "rolling_chooser");
+  if (isPassAndPlay.value) {
+    myCards.value = [];
+    initiatePassAndPlayHandoff(chooserNumber.value);
+  } else if (hasBotPlayer.value) {
+    myCards.value = [];
+  } else {
+    updateOnlineWaiting();
+  }
+}
+
+async function handleReroll(): Promise<void> {
+  rerolling.value = true;
+  let rollResult: RollResult;
+  try {
+    const response = await axios.post<RollResult>(`/api/games/${gameId}/duel-reroll`, {
+      player_number: activePlayerNumber.value,
+    });
+    rollResult = response.data;
+  } catch (error) {
+    toast.error("Reroll failed: " + errorMessage(error));
+    rerolling.value = false;
+    return;
+  }
+
+  // Trigger 3D dice animation FIRST — results shown after dice stop
+  try {
+    await triggerDiceAnimation(rollResult, activePlayerNumber.value);
+  } catch (error) {
+    console.warn("[dddice] Reroll animation failed, continuing:", error);
+  }
+
+  // Now update roll data with rerolled results
+  if (duelPhase.value === "rolling") {
+    if (rollResult.player_number === offererNumber.value) {
+      offererRollData.value = rollResult;
+    } else {
+      chooserRollData.value = rollResult;
+    }
+  } else if (duelPhase.value === "rolling_offerer" || gameData?.game?.duel_phase === "rolling_offerer") {
+    offererRollData.value = rollResult;
+  } else {
+    chooserRollData.value = rollResult;
+  }
+
+  playerRollResults.value = { ...playerRollResults.value, [activePlayerNumber.value]: rollResult };
+
+  const player = gameData?.game?.players?.find((p) => p.player_number === activePlayerNumber.value);
+  if (player && rollResult.remaining_uses !== undefined) {
+    player.ability_uses = rollResult.remaining_uses;
+  }
+  abilityActivated.value = true;
+
+  await refreshKingdoms();
+  if (rollResult.duel_result) {
+    isGameOver.value = true;
+  }
+
+  rerolling.value = false;
+}
+
+function handleContinueAfterRoll(): void {
+  pendingRerollDecision.value = false;
+
+  // Show curse selection if there are pending curses before continuing
+  if (pendingCurses.value && pendingCurses.value.length > 0) {
+    showCurseSelection.value = true;
+    return;
+  }
+
+  continueAfterCurses();
+}
+
+function continueAfterCurses(): void {
+  if (duelPhase.value === "rolling") {
+    if (offererRollData.value && chooserRollData.value) {
+      // Both rolled — skip resolving, advance directly to next round
+      if (offererRollData.value.duel_result || chooserRollData.value.duel_result) {
+        isGameOver.value = true;
       }
-    },
+      advanceRound();
+    } else if (hasBotPlayer.value && !opponentRollData.value) {
+      // Bot hasn't rolled yet — trigger immediately
+      opponentTurnPending.value = false;
+      triggerBotRollImmediate();
+    }
+    // If opponent hasn't rolled yet, stay in rolling phase
+  } else if (duelPhase.value === "rolling_offerer" || gameData?.game?.duel_phase === "rolling_offerer") {
+    // Reset ability state for chooser's turn
+    abilityActivated.value = false;
+    peekedCards.value = undefined;
+    advanceAfterOffererRoll();
+  } else if (duelPhase.value === "rolling_chooser" || duelPhase.value === "resolving") {
+    // Chooser done — advance to next round
+    if (chooserRollData.value?.duel_result || offererRollData.value?.duel_result) {
+      isGameOver.value = true;
+    }
+    advanceRound();
+  }
+  // Ignore if already in 'choosing' or other non-rolling phase (stale callback)
+}
 
-    syncFromGameData(data) {
-      this.duelPhase = data.duel_phase || data.game?.duel_phase;
-      this.offererPlayerNumber = data.offerer_player_number || data.game?.offerer_player_number;
-      this.playerKingdoms = data.player_kingdoms || [];
+async function refreshKingdoms(): Promise<void> {
+  try {
+    const response = await axios.get<{ player_kingdoms?: unknown[] }>(`/api/games/${gameId}`);
+    playerKingdoms.value = response.data.player_kingdoms || [];
+  } catch {
+    // silent
+  }
+}
 
-      // Sync curses
-      if (data.pending_curses) this.pendingCurses = data.pending_curses;
-      if (data.player_curses) this.playerCurses = data.player_curses;
+async function advanceRound(): Promise<void> {
+  // Prevent concurrent advance calls
+  if (advancing.value) {
+    return;
+  }
+  advancing.value = true;
+  try {
+    const response = await axios.post<GameData & { game_over?: boolean; completion?: unknown }>(
+      `/api/games/${gameId}/next-round`,
+    );
 
-      // Sync turn timer (don't restart if game-over timeout overlay is showing)
-      if (data.turn_time_limit && !this.showTimeoutOverlay) {
-        this.turnTimeLimit = data.turn_time_limit;
-        if (data.turn_time_remaining != null) {
-          this.turnTimeRemaining = data.turn_time_remaining;
-          this.reportingTimeout = false; // Release guard — fresh timer from server
-          this.startTurnTimer();
-        }
+    if (response.data.game_over) {
+      if (response.data.completion) {
+        sessionStorage.setItem(`game_completion_${gameId}`, JSON.stringify(response.data.completion));
       }
+      emit("gameOver");
+      return;
+    }
 
-      // Determine my player number
-      if (this.isOnline || this.isSinglePlayerDuel) {
-        const userId = this.auth.state.user?.id;
-        const myPlayer = data.game?.players?.find(p => p.user_id === userId);
-        if (myPlayer) {
-          this.activePlayerNumber = myPlayer.player_number;
-        } else if (this.isSinglePlayerDuel) {
-          this.activePlayerNumber = 1;
-        }
-        if (this.isOnline && !this.hasBotPlayer) {
-          this.updateOnlineWaiting();
-        }
-      }
+    // Clear any lingering 3D dice
+    kingdomStats.value?.clearDice();
 
-      // If entering choosing phase, load cards
-      if (this.duelPhase === 'choosing') {
-        if (!this.showHandoff) {
-          this.loadDuelHand();
-        }
-      }
+    // Reset state for next round
+    offererRollData.value = undefined;
+    chooserRollData.value = undefined;
+    myCards.value = [];
+    currentCards.value = [];
+    isGameOver.value = false;
+    abilityActivated.value = false;
+    peekedCards.value = undefined;
+    pendingRerollDecision.value = false;
+    rerolling.value = false;
+    waitingForOpponentSelection.value = false;
+    rollTab.value = "mine";
+    playerDifficulties.value = {};
+    playerRollResults.value = {};
+    diceAnimationTrigger.value = undefined;
+    opponentTurnPending.value = false;
 
-      // If entering rolling phase, load my cards
-      if (this.duelPhase === 'rolling' || this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
-        this.loadMyRollCards();
-        // For sequential rolling, trigger bot with delay; for simultaneous, bot rolls when human rolls
-        if (this.duelPhase !== 'rolling' && this.hasBotPlayer && this.isCurrentTurnBot && !this._opponentTurnPending) {
-          this.triggerBotTurn();
-        }
-      }
+    // Update from response
+    syncFromGameData(response.data);
+    emit("gameDataUpdated", response.data);
 
-      this.checkEventReveal();
-    },
+    if (isPassAndPlay.value) {
+      // In pass-and-play, player 1 always picks first
+      initiatePassAndPlayHandoff(1);
+    } else if (hasBotPlayer.value) {
+      await loadDuelHand();
+    }
+  } catch (error) {
+    // In online duel, both players may try to advance simultaneously —
+    // silently refresh state instead of showing error
+    if (isOnline.value && isAxiosError(error) && error.response?.status === 422) {
+      emit("refresh");
+    } else {
+      toast.error("Failed to advance: " + errorMessage(error));
+      emit("refresh");
+    }
+  } finally {
+    advancing.value = false;
+  }
+}
 
-    updateOnlineWaiting() {
-      if (!this.isOnline || this.hasBotPlayer) {
-        this.showWaiting = false;
-        return;
-      }
+// Called from GameBoard when duel broadcasts are received
+function handleDuelChoiceMade(data: DuelChoiceMadeData): void {
+  duelPhase.value = data.duel_phase;
+  waitingForOpponentSelection.value = false;
+  loadMyRollCards();
+  showWaiting.value = false;
+  updateOnlineWaiting();
 
-      const phase = this.duelPhase;
-      const myNum = this.activePlayerNumber;
-      const offNum = this.offererNumber;
-      const choNum = this.chooserNumber;
+  // Compute difficulties for both players from swapped cards
+  const d1 = computeDiff(data.player1_cards);
+  const d2 = computeDiff(data.player2_cards);
+  if (d1 > 0) {
+    playerDifficulties.value = { ...playerDifficulties.value, 1: d1 };
+  }
+  if (d2 > 0) {
+    playerDifficulties.value = { ...playerDifficulties.value, 2: d2 };
+  }
 
-      if (phase === 'rolling' ) {
-        // Simultaneous rolling — no full-screen waiting overlay
-        this.showWaiting = false;
-      } else if (phase === 'rolling_offerer' && myNum !== offNum) {
-        this.showWaiting = true;
-        this.waitingMessage = 'Opponent is Rolling';
-      } else if (phase === 'rolling_chooser' && myNum !== choNum) {
-        this.showWaiting = true;
-        this.waitingMessage = 'Opponent is Rolling';
-      } else {
-        this.showWaiting = false;
-      }
-    },
+  // Phase changed — re-sync timer from server
+  if (isOnline.value && turnTimeLimit.value) {
+    emit("refresh");
+  }
+}
 
-    async loadDuelHand() {
-      try {
-        const res = await axios.get(`/api/games/${this.gameId}/duel-hand/${this.activePlayerNumber}`);
-        this.currentCards = res.data.cards || [];
-        this.currentPlayerItems = res.data.items || [];
-        this.diceCount = res.data.dice_count ?? 4;
-        // Auto-decide if player has no usable items (exclude items on cooldown this round)
-        const round = this.currentRound;
-        const usable = this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
-        if (usable.length === 0) {
-          this.itemDecided = true;
-        } else {
-          this.itemDecided = false;
-        }
-      } catch {
-        this.currentCards = [];
-        this.currentPlayerItems = [];
-        this.itemDecided = true;
-      }
-    },
+async function handleDuelRollComplete(data: DuelRollCompleteData): Promise<void> {
+  // Ignore stale broadcasts from previous rounds (we're already in card selection)
+  if (duelPhase.value === "choosing" || duelPhase.value === "offering") {
+    return;
+  }
 
-    initiatePassAndPlayHandoff(playerNumber) {
-      this.handoffPlayerNumber = playerNumber;
-      this.showHandoff = true;
-    },
+  const rollData = data.roll_data;
+  const pn = rollData.player_number;
 
-    async onHandoffReady() {
-      this.showHandoff = false;
-      this.activePlayerNumber = this.handoffPlayerNumber;
-      await this.loadDuelHand();
-    },
+  // Skip if this is our own roll — already handled by submitRoll/applyRollResult
+  if (pn === activePlayerNumber.value) {
+    // Still update phase from broadcast
+    const newPhase = data.duel_phase;
+    if (newPhase && newPhase !== duelPhase.value) {
+      duelPhase.value = newPhase;
+    }
+    showWaiting.value = false;
+    updateOnlineWaiting();
+    return;
+  }
 
-    onCardPreview(effects) {
-      this.cardPreviewEffects = effects;
-    },
+  // Set difficulty BEFORE animation so "Required: X" shows during roll
+  if (pn !== undefined && rollData.cards?.length && playerDifficulties.value[pn] === undefined) {
+    const diff = rollData.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
+    if (diff > 0) {
+      playerDifficulties.value = { ...playerDifficulties.value, [pn]: diff };
+    }
+  }
 
-    async submitSelection(keptHandId) {
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/duel-select`, {
-          kept_hand_id: keptHandId,
-        });
+  // Trigger 3D dice animation FIRST — results shown after dice stop
+  try {
+    await triggerDiceAnimation(rollData, pn ?? activePlayerNumber.value);
+  } catch (error) {
+    console.warn("[dddice] Online opponent dice animation failed, continuing:", error);
+  }
+  kingdomStats.value?.clearDice(pn);
 
-        if (res.data.waiting) {
-          // Waiting for opponent to select
-          this.waitingForOpponentSelection = true;
+  // Now show results and adjust stats
+  if (pn === offererNumber.value) {
+    offererRollData.value = rollData;
+  } else {
+    chooserRollData.value = rollData;
+  }
+  if (pn !== undefined) {
+    playerRollResults.value = { ...playerRollResults.value, [pn]: rollData };
+  }
 
-          if (this.isPassAndPlay) {
-            // Pass-and-play: hand off to other player for their selection
-            this.waitingForOpponentSelection = false;
-            const otherPlayer = this.activePlayerNumber === 1 ? 2 : 1;
-            this.initiatePassAndPlayHandoff(otherPlayer);
-          } else if (this.hasBotPlayer) {
-            // Bot needs to select — trigger bot turn
-            this.triggerBotTurn();
-          }
-          return;
-        }
+  if (rollData.duel_result) {
+    isGameOver.value = true;
+  }
 
-        // Both selected — transition to rolling
-        const phase = res.data.duel_phase || 'rolling_offerer';
-        this.duelPhase = phase;
-        this.waitingForOpponentSelection = false;
-        this.$emit('phase-updated', phase);
+  refreshKingdoms();
 
-        // Compute difficulties for both players from swapped cards
-        const computeDiff = (cards) => cards?.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0) || 0;
-        const d1 = computeDiff(res.data.player1_cards);
-        const d2 = computeDiff(res.data.player2_cards);
-        if (d1 > 0) this.playerDifficulties = { ...this.playerDifficulties, 1: d1 };
-        if (d2 > 0) this.playerDifficulties = { ...this.playerDifficulties, 2: d2 };
+  if (duelPhase.value === "rolling" && offererRollData.value && chooserRollData.value && !pendingRerollDecision.value) {
+    // Skip resolving — advance directly to next round
+    advanceRound();
+  } else if (duelPhase.value !== "rolling" || !pendingRerollDecision.value) {
+    const newPhase = data.duel_phase;
+    if (newPhase === "resolving") {
+      advanceRound();
+    } else {
+      duelPhase.value = newPhase;
+    }
+  }
 
-        if (this.isPassAndPlay) {
-          await this.loadMyRollCards();
-          this.initiatePassAndPlayHandoff(this.offererNumber);
-        } else if (this.hasBotPlayer) {
-          this._opponentTurnPending = false;
-          await this.loadMyRollCards();
-          // For simultaneous rolling, bot rolls when human rolls (triggerBotRollImmediate)
-          // For sequential, trigger bot turn with delay
-          if (phase !== 'rolling' && this.isCurrentTurnBot) {
-            this.triggerBotTurn();
-          }
-        } else {
-          await this.loadMyRollCards();
-          this.updateOnlineWaiting();
-        }
-      } catch (e) {
-        this.toast.error('Failed to select: ' + (e.response?.data?.error || e.message));
-      }
-    },
+  showWaiting.value = false;
 
-    async loadMyRollCards() {
-      try {
-        const res = await axios.get(`/api/games/${this.gameId}/duel-hand/${this.activePlayerNumber}`);
-        const cards = res.data.cards || [];
-        this.myCards = cards;
-        // Compute difficulty for this player's cards
-        const totalDifficulty = cards.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0);
-        if (totalDifficulty > 0) {
-          this.playerDifficulties = { ...this.playerDifficulties, [this.activePlayerNumber]: totalDifficulty };
-        }
-        // Update items so the roll button / item prompt shows correctly
-        this.currentPlayerItems = res.data.items || [];
-        const round = this.currentRound;
-        const usable = this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
-        if (usable.length === 0) {
-          this.itemDecided = true;
-        } else {
-          this.itemDecided = false;
-        }
-      } catch {
-        this.myCards = [];
-        this.currentPlayerItems = [];
-        this.itemDecided = true;
-      }
-    },
+  // Sequential: if it's now my turn to roll
+  if (duelPhase.value === "rolling_chooser" && activePlayerNumber.value === chooserNumber.value) {
+    loadMyRollCards();
+  }
 
-    async activateAbility() {
-      if (this.activatingAbility || this.abilityActivated) return;
-      this.activatingAbility = true;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/use-ability`, {
-          player_number: this.activePlayerNumber,
-        });
-        this.abilityActivated = true;
-        if (res.data.peeked_cards) {
-          this.peekedCards = res.data.peeked_cards;
-        }
-        const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
-        if (player) {
-          player.ability_uses = res.data.remaining_uses;
-        }
-      } catch (e) {
-        this.toast.error('Failed to use ability: ' + (e.response?.data?.error || e.message));
-      }
-      this.activatingAbility = false;
-    },
+  updateOnlineWaiting();
+}
 
-    getKingdomStyleForPlayer(playerNumber) {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === playerNumber);
-      return player?.user?.active_kingdom_style_slug || 'classic';
-    },
-    getKingdomStyleDataForPlayer(playerNumber) {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === playerNumber);
-      const style = player?.user?.active_kingdom_style;
-      if (!style) return null;
-      return {
-        slug: style.slug,
-        background_image_url: style.background_image_url,
-        css_vars: style.css_vars,
-      };
-    },
-    getTitleForPlayer(playerNumber) {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === playerNumber);
-      return player?.user?.active_title || null;
-    },
-    getThemesForPlayer(playerNumber) {
-      const player = this.gameData?.game?.players?.find(p => p.player_number === playerNumber);
-      const slug = player?.user?.active_dice_theme_slug || 'dddice-standard';
-      return [slug, slug, slug, slug];
-    },
+async function triggerBotRollImmediate(): Promise<void> {
+  if (isOnline.value || !hasBotPlayer.value || opponentTurnPending.value) {
+    return;
+  }
+  opponentTurnPending.value = true;
+  try {
+    const { data } = await axios.post<RollResult>(`/api/games/${gameId}/opponent-turn`);
 
-    async triggerDiceAnimation(rollResult, playerNumber) {
-      if (!this.dddiceAvailable) return;
-      const themes = this.getThemesForPlayer(playerNumber);
-      const timestamp = Date.now();
+    // Guard: if the round advanced while we were waiting, discard stale result
+    if (duelPhase.value === "choosing" || duelPhase.value === "offering") {
+      opponentTurnPending.value = false;
+      return;
+    }
 
-      return new Promise((resolve) => {
-        let resolved = false;
-        const doResolve = () => {
-          if (resolved) return;
-          resolved = true;
-          if (this._diceAnimationResolve?.timestamp === timestamp) {
-            this._diceAnimationResolve = null;
-          }
-          resolve();
-        };
-
-        this._diceAnimationResolve = { resolve: doResolve, timestamp };
-
-        // Safety timeout — always fires even if animation hangs or events are lost
-        setTimeout(doResolve, 8000);
-
-        this.diceAnimationTrigger = {
-          playerNumber,
-          rollResult,
-          themes,
-          timestamp,
-        };
-      });
-    },
-
-    onDiceAnimationComplete({ playerNumber, timestamp }) {
-      if (this._diceAnimationResolve?.timestamp === timestamp) {
-        this._diceAnimationResolve.resolve();
-      }
-    },
-
-    applyRollResult(rollResult) {
-      // Clear 3D dice immediately so they don't linger after outcome is shown
-      const pn = rollResult.player_number || this.activePlayerNumber;
-      this.$refs.kingdomStats?.clearDice(pn);
-
-      if (this.duelPhase === 'rolling') {
-        if (rollResult.player_number === this.offererNumber) {
-          this.offererRollData = rollResult;
-        } else {
-          this.chooserRollData = rollResult;
-        }
-        this.refreshKingdoms();
-        if (rollResult.duel_result) this.isGameOver = true;
-
-        if (this.hasBotPlayer && !this.opponentRollData) {
-          this.triggerBotRollImmediate();
-        }
-      } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
-        this.offererRollData = rollResult;
-        this.refreshKingdoms();
-      } else {
-        this.chooserRollData = rollResult;
-        this.refreshKingdoms();
-      }
-
-      // Update per-player roll results for kingdom stats display
-      this.playerRollResults = { ...this.playerRollResults, [pn]: rollResult };
-
-      // Extract difficulty for opponent from roll data if we don't have it yet
-      if (rollResult.cards?.length && !this.playerDifficulties[pn]) {
-        const diff = rollResult.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
+    if (data.player_number !== undefined) {
+      // Set difficulty BEFORE animation so "Required: X" is visible during roll
+      if (data.cards?.length) {
+        const diff = data.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
         if (diff > 0) {
-          this.playerDifficulties = { ...this.playerDifficulties, [pn]: diff };
-        }
-      }
-
-      this.pendingRerollDecision = true;
-
-      // Update player items if included in roll result
-      if (rollResult.player_items && pn === this.activePlayerNumber) {
-        this.currentPlayerItems = rollResult.player_items;
-      }
-
-      // Process pending curses from roll result
-      if (rollResult.pending_curses) {
-        this.pendingCurses = rollResult.pending_curses;
-      }
-      if (rollResult.player_curses) {
-        this.playerCurses = { ...this.playerCurses, [pn]: rollResult.player_curses };
-      }
-    },
-
-    currentDuelPendingCurse() {
-      if (!this.pendingCurses || !this.pendingCurses.length) return null;
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
-      if (!player) return null;
-      return this.pendingCurses.find(pc => pc.player_id === player.id);
-    },
-    async onCurseSelected(curseId) {
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/choose-curse`, {
-          curse_id: curseId,
-          player_number: this.activePlayerNumber,
-        });
-        this.pendingCurses = res.data.pending_curses || null;
-        if (res.data.player_curses) {
-          this.playerCurses = {
-            ...this.playerCurses,
-            [this.activePlayerNumber]: res.data.player_curses,
-          };
-        }
-        // When all curses resolved, continue the flow
-        if (!this.pendingCurses || this.pendingCurses.length === 0) {
-          this.showCurseSelection = false;
-          this._continueAfterCurses();
-        }
-      } catch (e) {
-        this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
-      }
-    },
-
-    async recoverRollState() {
-      // Fetch current game state to recover roll data that the backend already has
-      try {
-        const res = await axios.get(`/api/games/${this.gameId}`);
-        const data = res.data;
-        this.syncFromGameData(data);
-        this.$emit('game-data-updated', data);
-
-        // If the backend has moved to resolving, set that
-        const phase = data.duel_phase || data.game?.duel_phase;
-        if (phase) this.duelPhase = phase;
-
-        // Recover roll results from round_results if available
-        const roundResults = data.round_results || data.game?.round_results;
-        if (roundResults) {
-          if (roundResults.offerer && !this.offererRollData) {
-            this.offererRollData = roundResults.offerer;
-          }
-          if (roundResults.chooser && !this.chooserRollData) {
-            this.chooserRollData = roundResults.chooser;
-          }
-        }
-      } catch (err) {
-        console.error('Failed to recover roll state:', err);
-        this.$emit('refresh');
-      }
-    },
-
-    async handleUseItem(gamePlayerItemId) {
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/use-item`, {
-          game_player_item_id: gamePlayerItemId,
-          player_number: this.activePlayerNumber,
-        });
-        this.itemDecided = true;
-        if (res.data.player_items) {
-          this.currentPlayerItems = res.data.player_items;
-        }
-      } catch (e) {
-        this.toast.error('Failed to use item: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    async handleSkipItem() {
-      try {
-        await axios.post(`/api/games/${this.gameId}/skip-item`, {
-          player_number: this.activePlayerNumber,
-        });
-        this.itemDecided = true;
-      } catch (e) {
-        this.toast.error('Failed to skip item: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    async submitRoll() {
-      this.duelRolling = true;
-      let rollResult;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/duel-roll`);
-        rollResult = res.data;
-      } catch (e) {
-        if (e.response?.status === 422 && e.response?.data?.error?.includes('already rolled')) {
-          // Player already rolled (e.g. page reload) — fetch existing state
-          await this.recoverRollState();
-          this.duelRolling = false;
-          return;
-        }
-        this.toast.error('Failed to roll: ' + (e.response?.data?.error || e.message));
-        this.duelRolling = false;
-        return;
-      }
-
-      // Trigger 3D dice animation FIRST — results shown after dice stop
-      try {
-        await this.triggerDiceAnimation(rollResult, rollResult.player_number || this.activePlayerNumber);
-      } catch (err) {
-        console.warn('[dddice] Animation failed, continuing:', err);
-      }
-
-      // Now show results, play sound, and adjust stats
-      this.applyRollResult(rollResult);
-      this.duelRolling = false;
-    },
-
-    advanceAfterOffererRoll() {
-      this.duelPhase = 'rolling_chooser';
-      this.itemDecided = false; // Reset for chooser's item decision
-      this.$emit('phase-updated', 'rolling_chooser');
-      if (this.isPassAndPlay) {
-        this.myCards = [];
-        this.initiatePassAndPlayHandoff(this.chooserNumber);
-      } else if (this.hasBotPlayer) {
-        this.myCards = [];
-      } else {
-        this.updateOnlineWaiting();
-      }
-    },
-
-    advanceAfterChooserRoll(rollResult) {
-      this.duelPhase = 'resolving';
-      this.$emit('phase-updated', 'resolving');
-      if (rollResult?.duel_result) this.isGameOver = true;
-      if (this.isPassAndPlay && this.offererRollData?.duel_result) this.isGameOver = true;
-    },
-
-    async handleReroll() {
-      this.rerolling = true;
-      let rollResult;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/duel-reroll`, {
-          player_number: this.activePlayerNumber,
-        });
-        rollResult = res.data;
-      } catch (e) {
-        this.toast.error('Reroll failed: ' + (e.response?.data?.error || e.message));
-        this.rerolling = false;
-        return;
-      }
-
-      // Trigger 3D dice animation FIRST — results shown after dice stop
-      try {
-        await this.triggerDiceAnimation(rollResult, this.activePlayerNumber);
-      } catch (err) {
-        console.warn('[dddice] Reroll animation failed, continuing:', err);
-      }
-
-      // Now update roll data with rerolled results
-      if (this.duelPhase === 'rolling') {
-        if (rollResult.player_number === this.offererNumber) {
-          this.offererRollData = rollResult;
-        } else {
-          this.chooserRollData = rollResult;
-        }
-      } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
-        this.offererRollData = rollResult;
-      } else {
-        this.chooserRollData = rollResult;
-      }
-
-      this.playerRollResults = { ...this.playerRollResults, [this.activePlayerNumber]: rollResult };
-
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
-      if (player && rollResult.remaining_uses !== undefined) {
-        player.ability_uses = rollResult.remaining_uses;
-      }
-      this.abilityActivated = true;
-
-      await this.refreshKingdoms();
-      if (rollResult.duel_result) this.isGameOver = true;
-
-      this.rerolling = false;
-    },
-
-    handleContinueAfterRoll() {
-      this.pendingRerollDecision = false;
-
-      // Show curse selection if there are pending curses before continuing
-      if (this.pendingCurses && this.pendingCurses.length > 0) {
-        this.showCurseSelection = true;
-        return;
-      }
-
-      this._continueAfterCurses();
-    },
-
-    _continueAfterCurses() {
-      if (this.duelPhase === 'rolling') {
-        if (this.offererRollData && this.chooserRollData) {
-          // Both rolled — skip resolving, advance directly to next round
-          if (this.offererRollData.duel_result || this.chooserRollData.duel_result) this.isGameOver = true;
-          this.advanceRound();
-        } else if (this.hasBotPlayer && !this.opponentRollData) {
-          // Bot hasn't rolled yet — trigger immediately
-          this._opponentTurnPending = false;
-          this.triggerBotRollImmediate();
-        }
-        // If opponent hasn't rolled yet, stay in rolling phase
-      } else if (this.duelPhase === 'rolling_offerer' || this.gameData?.game?.duel_phase === 'rolling_offerer') {
-        // Reset ability state for chooser's turn
-        this.abilityActivated = false;
-        this.peekedCards = null;
-        this.advanceAfterOffererRoll();
-      } else if (this.duelPhase === 'rolling_chooser' || this.duelPhase === 'resolving') {
-        // Chooser done — advance to next round
-        if (this.chooserRollData?.duel_result || this.offererRollData?.duel_result) this.isGameOver = true;
-        this.advanceRound();
-      }
-      // Ignore if already in 'choosing' or other non-rolling phase (stale callback)
-    },
-
-    async refreshKingdoms() {
-      try {
-        const res = await axios.get(`/api/games/${this.gameId}`);
-        this.playerKingdoms = res.data.player_kingdoms || [];
-      } catch {
-        // silent
-      }
-    },
-
-    async advanceRound() {
-      // Prevent concurrent advance calls
-      if (this._advancing) return;
-      this._advancing = true;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/next-round`);
-
-        if (res.data.game_over) {
-          if (res.data.completion) {
-            sessionStorage.setItem(`game_completion_${this.gameId}`, JSON.stringify(res.data.completion));
-          }
-          this.$emit('game-over');
-          return;
-        }
-
-        // Clear any lingering 3D dice
-        this.$refs.kingdomStats?.clearDice();
-
-        // Reset state for next round
-        this.offererRollData = null;
-        this.chooserRollData = null;
-        this.myCards = [];
-        this.currentCards = [];
-        this.isGameOver = false;
-        this.abilityActivated = false;
-        this.peekedCards = null;
-        this.pendingRerollDecision = false;
-        this.rerolling = false;
-        this.waitingForOpponentSelection = false;
-        this.rollTab = 'mine';
-        this.playerDifficulties = {};
-        this.playerRollResults = {};
-        this.diceAnimationTrigger = null;
-        this._opponentTurnPending = false;
-
-        // Update from response
-        this.syncFromGameData(res.data);
-        this.$emit('game-data-updated', res.data);
-
-        if (this.isPassAndPlay) {
-          // In pass-and-play, player 1 always picks first
-          this.initiatePassAndPlayHandoff(1);
-        } else if (this.hasBotPlayer) {
-          await this.loadDuelHand();
-        }
-      } catch (e) {
-        // In online duel, both players may try to advance simultaneously —
-        // silently refresh state instead of showing error
-        if (this.isOnline && e.response?.status === 422) {
-          this.$emit('refresh');
-        } else {
-          this.toast.error('Failed to advance: ' + (e.response?.data?.error || e.message));
-          this.$emit('refresh');
-        }
-      } finally {
-        this._advancing = false;
-      }
-    },
-
-    // Called from GameBoard when duel broadcasts are received
-    handleDuelChoiceMade(data) {
-      this.duelPhase = data.duel_phase;
-      this.waitingForOpponentSelection = false;
-      this.loadMyRollCards();
-      this.showWaiting = false;
-      this.updateOnlineWaiting();
-
-      // Compute difficulties for both players from swapped cards
-      const computeDiff = (cards) => cards?.reduce((sum, c) => sum + ((c.card || c).difficulty || 0), 0) || 0;
-      const d1 = computeDiff(data.player1_cards);
-      const d2 = computeDiff(data.player2_cards);
-      if (d1 > 0) this.playerDifficulties = { ...this.playerDifficulties, 1: d1 };
-      if (d2 > 0) this.playerDifficulties = { ...this.playerDifficulties, 2: d2 };
-
-      // Phase changed — re-sync timer from server
-      if (this.isOnline && this.turnTimeLimit) {
-        this.$emit('refresh');
-      }
-    },
-
-    async handleDuelRollComplete(data) {
-      const rollData = data.roll_data;
-      const pn = rollData.player_number;
-
-      // Ignore stale broadcasts from previous rounds (we're already in card selection)
-      if (this.duelPhase === 'choosing' || this.duelPhase === 'offering') return;
-
-      // Skip if this is our own roll — already handled by submitRoll/applyRollResult
-      if (pn === this.activePlayerNumber) {
-        // Still update phase from broadcast
-        const newPhase = data.duel_phase;
-        if (newPhase && newPhase !== this.duelPhase) {
-          this.duelPhase = newPhase;
-        }
-        this.showWaiting = false;
-        this.updateOnlineWaiting();
-        return;
-      }
-
-      // Set difficulty BEFORE animation so "Required: X" shows during roll
-      if (rollData.cards?.length && !this.playerDifficulties[pn]) {
-        const diff = rollData.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
-        if (diff > 0) {
-          this.playerDifficulties = { ...this.playerDifficulties, [pn]: diff };
+          playerDifficulties.value = { ...playerDifficulties.value, [data.player_number]: diff };
         }
       }
 
       // Trigger 3D dice animation FIRST — results shown after dice stop
       try {
-        await this.triggerDiceAnimation(rollData, pn);
-      } catch (err) {
-        console.warn('[dddice] Online opponent dice animation failed, continuing:', err);
+        await triggerDiceAnimation(data, data.player_number);
+      } catch (error) {
+        console.warn("[dddice] Bot roll animation failed, continuing:", error);
       }
-      this.$refs.kingdomStats?.clearDice(pn);
+      kingdomStats.value?.clearDice(data.player_number);
 
       // Now show results and adjust stats
-      if (pn === this.offererNumber) {
-        this.offererRollData = rollData;
+      if (data.player_number === offererNumber.value) {
+        offererRollData.value = data;
       } else {
-        this.chooserRollData = rollData;
+        chooserRollData.value = data;
       }
-      this.playerRollResults = { ...this.playerRollResults, [pn]: rollData };
+      playerRollResults.value = { ...playerRollResults.value, [data.player_number]: data };
 
-      if (rollData.duel_result) {
-        this.isGameOver = true;
+      if (data.duel_result) {
+        isGameOver.value = true;
       }
+      await refreshKingdoms();
+    }
+  } catch (error) {
+    console.error("Bot roll failed:", error);
+  }
+  opponentTurnPending.value = false;
+}
 
-      this.refreshKingdoms();
+async function triggerBotTurn(): Promise<void> {
+  if (isOnline.value || !hasBotPlayer.value || opponentTurnPending.value) {
+    return;
+  }
+  opponentTurnPending.value = true;
 
-      if (this.duelPhase === 'rolling' && this.offererRollData && this.chooserRollData && !this.pendingRerollDecision) {
-        // Skip resolving — advance directly to next round
-        this.advanceRound();
-      } else if (this.duelPhase !== 'rolling' || !this.pendingRerollDecision) {
-        const newPhase = data.duel_phase;
-        if (newPhase === 'resolving') {
-          this.advanceRound();
-        } else {
-          this.duelPhase = newPhase;
-        }
-      }
+  const delay = isOnline.value ? 3000 + Math.random() * 4000 : 1000 + Math.random() * 1000;
+  await new Promise((r) => setTimeout(r, delay));
 
-      this.showWaiting = false;
+  try {
+    const response = await axios.post<RollResult & { waiting?: boolean; duel_phase?: string }>(
+      `/api/games/${gameId}/opponent-turn`,
+    );
+    const data = response.data;
 
-      // Sequential: if it's now my turn to roll
-      if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
-        this.loadMyRollCards();
-      }
+    if (duelPhase.value === "choosing") {
+      if (data.waiting === false) {
+        // Both selected — transition to rolling
+        const phase = data.duel_phase || "rolling_offerer";
+        duelPhase.value = phase;
+        waitingForOpponentSelection.value = false;
+        emit("phaseUpdated", phase);
+        await loadMyRollCards();
 
-      this.updateOnlineWaiting();
-    },
-
-    async triggerBotRollImmediate() {
-      if (this.isOnline || !this.hasBotPlayer || this._opponentTurnPending) return;
-      this._opponentTurnPending = true;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
-        const data = res.data;
-
-        // Guard: if the round advanced while we were waiting, discard stale result
-        if (this.duelPhase === 'choosing' || this.duelPhase === 'offering') {
-          this._opponentTurnPending = false;
+        // Bot may need to roll next (sequential only)
+        // In simultaneous mode, bot rolls when human rolls (via triggerBotRollImmediate)
+        if (phase !== "rolling" && isCurrentTurnBot.value) {
+          opponentTurnPending.value = false;
+          triggerBotTurn();
           return;
         }
-
-        if (data.player_number !== undefined) {
-          // Set difficulty BEFORE animation so "Required: X" is visible during roll
-          if (data.cards?.length) {
-            const diff = data.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
-            if (diff > 0) {
-              this.playerDifficulties = { ...this.playerDifficulties, [data.player_number]: diff };
-            }
-          }
-
-          // Trigger 3D dice animation FIRST — results shown after dice stop
-          try {
-            await this.triggerDiceAnimation(data, data.player_number);
-          } catch (err) {
-            console.warn('[dddice] Bot roll animation failed, continuing:', err);
-          }
-          this.$refs.kingdomStats?.clearDice(data.player_number);
-
-          // Now show results and adjust stats
-          if (data.player_number === this.offererNumber) {
-            this.offererRollData = data;
-          } else {
-            this.chooserRollData = data;
-          }
-          this.playerRollResults = { ...this.playerRollResults, [data.player_number]: data };
-
-          if (data.duel_result) this.isGameOver = true;
-          await this.refreshKingdoms();
-        }
-      } catch (e) {
-        console.error('Bot roll failed:', e);
       }
-      this._opponentTurnPending = false;
-    },
+    } else if (data.player_number !== undefined && duelPhase.value !== "choosing" && duelPhase.value !== "offering") {
+      // Set difficulty BEFORE animation so "Required: X" is visible during roll
+      if (data.cards?.length) {
+        const diff = data.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
+        if (diff > 0) {
+          playerDifficulties.value = { ...playerDifficulties.value, [data.player_number]: diff };
+        }
+      }
 
-    async triggerBotTurn() {
-      if (this.isOnline || !this.hasBotPlayer || this._opponentTurnPending) return;
-      this._opponentTurnPending = true;
-
-      const delay = this.isOnline
-        ? 3000 + Math.random() * 4000
-        : 1000 + Math.random() * 1000;
-      await new Promise(r => setTimeout(r, delay));
-
+      // Trigger 3D dice animation FIRST — results shown after dice stop
       try {
-        const res = await axios.post(`/api/games/${this.gameId}/opponent-turn`);
-        const data = res.data;
-
-        if (this.duelPhase === 'choosing') {
-          if (data.waiting === false) {
-            // Both selected — transition to rolling
-            const phase = data.duel_phase || 'rolling_offerer';
-            this.duelPhase = phase;
-            this.waitingForOpponentSelection = false;
-            this.$emit('phase-updated', phase);
-            await this.loadMyRollCards();
-
-            // Bot may need to roll next (sequential only)
-            // In simultaneous mode, bot rolls when human rolls (via triggerBotRollImmediate)
-            if (this.isCurrentTurnBot && phase !== 'rolling') {
-              this._opponentTurnPending = false;
-              this.triggerBotTurn();
-              return;
-            }
-          }
-        } else if (data.player_number !== undefined && this.duelPhase !== 'choosing' && this.duelPhase !== 'offering') {
-          // Set difficulty BEFORE animation so "Required: X" is visible during roll
-          if (data.cards?.length) {
-            const diff = data.cards.reduce((sum, cr) => sum + (cr.difficulty || 0), 0);
-            if (diff > 0) {
-              this.playerDifficulties = { ...this.playerDifficulties, [data.player_number]: diff };
-            }
-          }
-
-          // Trigger 3D dice animation FIRST — results shown after dice stop
-          try {
-            await this.triggerDiceAnimation(data, data.player_number);
-          } catch (err) {
-            console.warn('[dddice] Bot turn animation failed, continuing:', err);
-          }
-          this.$refs.kingdomStats?.clearDice(data.player_number);
-
-          // Now show results and adjust stats
-          if (data.player_number === this.offererNumber) {
-            this.offererRollData = data;
-          } else {
-            this.chooserRollData = data;
-          }
-          this.playerRollResults = { ...this.playerRollResults, [data.player_number]: data };
-
-          if (data.duel_result) {
-            this.isGameOver = true;
-          }
-          await this.refreshKingdoms();
-
-          const game = await axios.get(`/api/games/${this.gameId}`);
-          const newPhase = game.data.duel_phase || game.data.game?.duel_phase;
-          this.$emit('game-data-updated', game.data);
-
-          // Don't auto-advance if human still reviewing their roll
-          if (newPhase === 'resolving' && this.pendingRerollDecision) {
-            // Stay in rolling — will advance when human clicks Continue
-          } else if (newPhase === 'resolving') {
-            // Skip resolving — advance directly to next round
-            this.advanceRound();
-          } else {
-            this.duelPhase = newPhase;
-          }
-
-          if (this.duelPhase === 'rolling_chooser' && this.activePlayerNumber === this.chooserNumber) {
-            await this.loadMyRollCards();
-          } else if (this.duelPhase === 'rolling_offerer' && this.activePlayerNumber === this.offererNumber) {
-            await this.loadMyRollCards();
-          }
-        }
-      } catch (e) {
-        console.error('Bot turn failed:', e);
+        await triggerDiceAnimation(data, data.player_number);
+      } catch (error) {
+        console.warn("[dddice] Bot turn animation failed, continuing:", error);
       }
+      kingdomStats.value?.clearDice(data.player_number);
 
-      this._opponentTurnPending = false;
-    },
-
-    handleNextRoundStarted(data) {
-      this.offererRollData = null;
-      this.chooserRollData = null;
-      this.myCards = [];
-      this.currentCards = [];
-      this.isGameOver = false;
-      this.abilityActivated = false;
-      this.peekedCards = null;
-      this.pendingRerollDecision = false;
-      this.rerolling = false;
-      this.waitingForOpponentSelection = false;
-      this.rollTab = 'mine';
-      this.playerDifficulties = {};
-      this.playerRollResults = {};
-      this.diceAnimationTrigger = null;
-      this.itemDecided = false;
-      this.showCurseSelection = false;
-      this._opponentTurnPending = false;
-      this.syncFromGameData(data);
-      this.$emit('game-data-updated', data);
-    },
-  },
-
-  async mounted() {
-    // Ensure kingdoms are loaded
-    if (!this.playerKingdoms.length) {
-      await this.refreshKingdoms();
-    }
-
-    // Initial card load
-    if (this.duelPhase === 'choosing') {
-      if (this.isPassAndPlay) {
-        this.initiatePassAndPlayHandoff(1);
+      // Now show results and adjust stats
+      if (data.player_number === offererNumber.value) {
+        offererRollData.value = data;
       } else {
-        await this.loadDuelHand();
-        if (this.isCurrentTurnBot) {
-          this.triggerBotTurn();
-        }
+        chooserRollData.value = data;
       }
-    } else if (this.duelPhase === 'rolling') {
-      await this.loadMyRollCards();
-      this.updateOnlineWaiting();
-      // Bot rolls simultaneously when human rolls (triggerBotRollImmediate in submitRoll)
-    } else if (this.duelPhase === 'rolling_offerer' || this.duelPhase === 'rolling_chooser') {
-      if (this.isPassAndPlay) {
-        const activeNum = this.duelPhase === 'rolling_offerer' ? this.offererNumber : this.chooserNumber;
-        this.initiatePassAndPlayHandoff(activeNum);
+      playerRollResults.value = { ...playerRollResults.value, [data.player_number]: data };
+
+      if (data.duel_result) {
+        isGameOver.value = true;
+      }
+      await refreshKingdoms();
+
+      const game = await axios.get<GameData>(`/api/games/${gameId}`);
+      const newPhase = game.data.duel_phase || game.data.game?.duel_phase;
+      emit("gameDataUpdated", game.data);
+
+      // Don't auto-advance if human still reviewing their roll
+      if (newPhase === "resolving" && pendingRerollDecision.value) {
+        // Stay in rolling — will advance when human clicks Continue
+      } else if (newPhase === "resolving") {
+        // Skip resolving — advance directly to next round
+        advanceRound();
       } else {
-        await this.loadMyRollCards();
-        this.updateOnlineWaiting();
-        if (this.isCurrentTurnBot) {
-          this.triggerBotTurn();
-        }
+        duelPhase.value = newPhase;
       }
-    } else if (this.duelPhase === 'resolving') {
-      // Page refreshed into resolving — check for pending curses first
-      if (this.pendingCurses && this.pendingCurses.length > 0) {
-        this.showCurseSelection = true;
-      } else {
-        this.advanceRound();
+
+      const isMyChooserTurn = duelPhase.value === "rolling_chooser" && activePlayerNumber.value === chooserNumber.value;
+      const isMyOffererTurn = duelPhase.value === "rolling_offerer" && activePlayerNumber.value === offererNumber.value;
+      if (isMyChooserTurn || isMyOffererTurn) {
+        await loadMyRollCards();
       }
     }
-  },
-  beforeUnmount() {
-    if (this.turnTimerInterval) {
-      clearInterval(this.turnTimerInterval);
+  } catch (error) {
+    console.error("Bot turn failed:", error);
+  }
+
+  opponentTurnPending.value = false;
+}
+
+function handleNextRoundStarted(data: GameData): void {
+  offererRollData.value = undefined;
+  chooserRollData.value = undefined;
+  myCards.value = [];
+  currentCards.value = [];
+  isGameOver.value = false;
+  abilityActivated.value = false;
+  peekedCards.value = undefined;
+  pendingRerollDecision.value = false;
+  rerolling.value = false;
+  waitingForOpponentSelection.value = false;
+  rollTab.value = "mine";
+  playerDifficulties.value = {};
+  playerRollResults.value = {};
+  diceAnimationTrigger.value = undefined;
+  itemDecided.value = false;
+  showCurseSelection.value = false;
+  opponentTurnPending.value = false;
+  syncFromGameData(data);
+  emit("gameDataUpdated", data);
+}
+
+onMounted(async () => {
+  // Ensure kingdoms are loaded
+  if (playerKingdoms.value.length === 0) {
+    await refreshKingdoms();
+  }
+
+  // Initial card load
+  switch (duelPhase.value) {
+  case "choosing": {
+    if (isPassAndPlay.value) {
+      initiatePassAndPlayHandoff(1);
+    } else {
+      await loadDuelHand();
+      if (isCurrentTurnBot.value) {
+        triggerBotTurn();
+      }
     }
-    if (this._timeoutSafetyTimer) {
-      clearTimeout(this._timeoutSafetyTimer);
+  
+  break;
+  }
+  case "rolling": {
+    await loadMyRollCards();
+    updateOnlineWaiting();
+    // Bot rolls simultaneously when human rolls (triggerBotRollImmediate in submitRoll)
+  
+  break;
+  }
+  case "rolling_offerer": 
+  case "rolling_chooser": {
+    if (isPassAndPlay.value) {
+      const activeNumber = duelPhase.value === "rolling_offerer" ? offererNumber.value : chooserNumber.value;
+      initiatePassAndPlayHandoff(activeNumber);
+    } else {
+      await loadMyRollCards();
+      updateOnlineWaiting();
+      if (isCurrentTurnBot.value) {
+        triggerBotTurn();
+      }
     }
-  },
-};
+  
+  break;
+  }
+  case "resolving": {
+    // Page refreshed into resolving — check for pending curses first
+    if (pendingCurses.value && pendingCurses.value.length > 0) {
+      showCurseSelection.value = true;
+    } else {
+      advanceRound();
+    }
+  
+  break;
+  }
+  // No default
+  }
+});
+
+onBeforeUnmount(() => {
+  if (turnTimerInterval.value) {
+    clearInterval(turnTimerInterval.value);
+  }
+  if (timeoutSafetyTimer.value) {
+    clearTimeout(timeoutSafetyTimer.value);
+  }
+});
+
+defineExpose({
+  activePlayerNumber,
+  playerItems,
+  openCharacterModal,
+  handleDuelChoiceMade,
+  handleDuelRollComplete,
+  handleNextRoundStarted,
+});
 </script>
+
 
 <style scoped>
 .duel-board {

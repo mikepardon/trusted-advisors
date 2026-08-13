@@ -27,124 +27,160 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import axios from "axios";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'MatchmakingQueue',
-  props: {
-    totalRounds: { type: Number, required: true },
-    speedMode: { type: String, default: 'speed' },
-  },
-  emits: ['matched', 'cancelled'],
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      entry: null,
-      matched: false,
-      opponentName: '',
-      opponentElo: null,
-      elapsed: 0,
-      elapsedTimer: null,
-      pollTimer: null,
-    };
-  },
-  computed: {
-    userElo() {
-      return this.auth.state.user?.elo_rating || 1200;
-    },
-    formattedElapsed() {
-      const mins = Math.floor(this.elapsed / 60);
-      const secs = this.elapsed % 60;
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    },
-  },
-  async mounted() {
-    try {
-      const res = await axios.post('/api/matchmaking/join', {
-        total_rounds: this.totalRounds,
-        speed_mode: this.speedMode,
-      });
-      this.entry = res.data;
+interface MatchFoundEvent {
+  game_id: number;
+  opponent_name?: string;
+  opponent_elo?: number;
+}
 
-      if (this.entry.status === 'matched') {
-        this.onMatchFound(this.entry.matched_game_id, this.entry.opponent_name, this.entry.opponent_elo);
-        return;
-      }
+interface EchoChannel {
+  listen: (event: string, callback: (data: MatchFoundEvent) => void) => void;
+  stopListening: (event: string) => void;
+}
 
-      // Start elapsed timer
-      this.elapsedTimer = setInterval(() => {
-        this.elapsed++;
-      }, 1000);
+interface EchoInstance {
+  private: (channel: string) => EchoChannel;
+}
 
-      // Poll for status
-      this.pollTimer = setInterval(() => this.pollStatus(), 3000);
+interface MatchmakingEntry {
+  status?: string;
+  matched_game_id?: number;
+  opponent_name?: string;
+  opponent_elo?: number;
+}
 
-      // Listen for broadcast
-      this.subscribeEcho();
-    } catch (e) {
-      this.$emit('cancelled');
+const { totalRounds, speedMode = "speed" } = defineProps<{
+  totalRounds: number;
+  speedMode?: string;
+}>();
+
+const emit = defineEmits<{ matched: [gameId: number]; cancelled: [] }>();
+
+const auth = useAuth();
+
+const entry = ref<MatchmakingEntry | undefined>(undefined);
+const matched = ref(false);
+const opponentName = ref("");
+const opponentElo = ref<number | undefined>(undefined);
+const elapsed = ref(0);
+const elapsedTimer = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+const pollTimer = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+
+const userElo = computed(() => auth.state.user?.elo_rating || 1200);
+
+const formattedElapsed = computed(() => {
+  const mins = Math.floor(elapsed.value / 60);
+  const secs = elapsed.value % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+});
+
+function getEcho(): EchoInstance | undefined {
+  return (window as unknown as { Echo?: EchoInstance }).Echo;
+}
+
+async function pollStatus(): Promise<void> {
+  try {
+    const response = await axios.get<MatchmakingEntry>("/api/matchmaking/status");
+    if (response.data.status === "matched") {
+      onMatchFound(response.data.matched_game_id, response.data.opponent_name, response.data.opponent_elo);
     }
-  },
-  beforeUnmount() {
-    clearInterval(this.elapsedTimer);
-    clearInterval(this.pollTimer);
-    this.unsubscribeEcho();
+  } catch {
+    // ignore poll errors
+  }
+}
 
-    // Leave queue if still searching
-    if (this.entry && !this.matched) {
-      axios.post('/api/matchmaking/leave').catch(() => {});
+async function leaveQueue(): Promise<void> {
+  try {
+    await axios.post("/api/matchmaking/leave");
+  } catch {
+    // ignore leave errors
+  }
+}
+
+function subscribeEcho(): void {
+  const echo = getEcho();
+  if (!echo || !auth.state.user) {
+    return;
+  }
+  echo.private(`user.${auth.state.user.id}`).listen("MatchFound", (data) => {
+    onMatchFound(data.game_id, data.opponent_name, data.opponent_elo);
+  });
+}
+
+function unsubscribeEcho(): void {
+  // Don't fully leave the channel - just stop listening
+  // (other components may use the same channel)
+  const echo = getEcho();
+  if (echo && auth.state.user) {
+    const channel = echo.private(`user.${auth.state.user.id}`);
+    channel.stopListening("MatchFound");
+  }
+}
+
+function onMatchFound(gameId: number | undefined, name: string | undefined, elo: number | undefined): void {
+  clearInterval(elapsedTimer.value);
+  clearInterval(pollTimer.value);
+  matched.value = true;
+  opponentName.value = name || "Opponent";
+  opponentElo.value = elo || undefined;
+
+  setTimeout(() => {
+    if (gameId !== undefined) {
+      emit("matched", gameId);
     }
-  },
-  methods: {
-    async pollStatus() {
-      try {
-        const res = await axios.get('/api/matchmaking/status');
-        if (res.data.status === 'matched') {
-          this.onMatchFound(res.data.matched_game_id, res.data.opponent_name, res.data.opponent_elo);
-        }
-      } catch {
-        // ignore poll errors
-      }
-    },
-    subscribeEcho() {
-      if (!window.Echo || !this.auth.state.user) return;
-      window.Echo.private(`user.${this.auth.state.user.id}`)
-        .listen('MatchFound', (data) => {
-          this.onMatchFound(data.game_id, data.opponent_name, data.opponent_elo);
-        });
-    },
-    unsubscribeEcho() {
-      // Don't fully leave the channel - just stop listening
-      // (other components may use the same channel)
-      if (window.Echo && this.auth.state.user) {
-        const channel = window.Echo.private(`user.${this.auth.state.user.id}`);
-        channel.stopListening('MatchFound');
-      }
-    },
-    onMatchFound(gameId, opponentName, opponentElo) {
-      clearInterval(this.elapsedTimer);
-      clearInterval(this.pollTimer);
-      this.matched = true;
-      this.opponentName = opponentName || 'Opponent';
-      this.opponentElo = opponentElo || null;
+  }, 1500);
+}
 
-      setTimeout(() => {
-        this.$emit('matched', gameId);
-      }, 1500);
-    },
-    cancel() {
-      clearInterval(this.elapsedTimer);
-      clearInterval(this.pollTimer);
-      axios.post('/api/matchmaking/leave').catch(() => {});
-      this.$emit('cancelled');
-    },
-  },
-};
+function cancel(): void {
+  clearInterval(elapsedTimer.value);
+  clearInterval(pollTimer.value);
+  void leaveQueue();
+  emit("cancelled");
+}
+
+onMounted(async () => {
+  try {
+    const response = await axios.post<MatchmakingEntry>("/api/matchmaking/join", {
+      total_rounds: totalRounds,
+      speed_mode: speedMode,
+    });
+    entry.value = response.data;
+
+    if (entry.value.status === "matched") {
+      onMatchFound(entry.value.matched_game_id, entry.value.opponent_name, entry.value.opponent_elo);
+      return;
+    }
+
+    // Start elapsed timer
+    elapsedTimer.value = setInterval(() => {
+      elapsed.value++;
+    }, 1000);
+
+    // Poll for status
+    pollTimer.value = setInterval(() => void pollStatus(), 3000);
+
+    // Listen for broadcast
+    subscribeEcho();
+  } catch {
+    emit("cancelled");
+  }
+});
+
+onBeforeUnmount(() => {
+  clearInterval(elapsedTimer.value);
+  clearInterval(pollTimer.value);
+  unsubscribeEcho();
+
+  // Leave queue if still searching
+  if (entry.value && !matched.value) {
+    void leaveQueue();
+  }
+});
 </script>
 
 <style scoped>

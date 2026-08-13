@@ -8,32 +8,27 @@
   </transition>
 </template>
 
-<script>
-import { shouldShowHint, markHintSeen } from '../hints';
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import { shouldShowHint, markHintSeen } from "../hints";
 
-export default {
-  name: 'HintBubble',
-  props: {
-    hintId: { type: String, required: true },
-  },
-  data() {
-    return {
-      show: false,
-    };
-  },
-  mounted() {
-    if (shouldShowHint(this.hintId)) {
-      // Small delay so it appears after page renders
-      setTimeout(() => { this.show = true; }, 600);
+const { hintId } = defineProps<{ hintId: string }>();
+
+const show = ref(false);
+
+onMounted(() => {
+    if (shouldShowHint(hintId)) {
+        // Small delay so it appears after page renders
+        setTimeout(() => {
+            show.value = true;
+        }, 600);
     }
-  },
-  methods: {
-    dismiss() {
-      this.show = false;
-      markHintSeen(this.hintId);
-    },
-  },
-};
+});
+
+function dismiss(): void {
+    show.value = false;
+    markHintSeen(hintId);
+}
 </script>
 
 <style scoped>

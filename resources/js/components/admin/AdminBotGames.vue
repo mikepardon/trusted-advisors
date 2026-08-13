@@ -5,19 +5,19 @@
 
     <!-- Tab Switcher -->
     <div class="tab-switcher">
-      <button class="tab-btn" :class="{ active: mode === 'cooperative' }" @click="mode = 'cooperative'; results = null; duelResults = null">Cooperative</button>
-      <button class="tab-btn" :class="{ active: mode === 'duel' }" @click="mode = 'duel'; results = null; duelResults = null">Duel</button>
+      <button class="tab-btn" :class="{ active: mode === 'cooperative' }" @click="mode = 'cooperative'; results = undefined; duelResults = undefined">Cooperative</button>
+      <button class="tab-btn" :class="{ active: mode === 'duel' }" @click="mode = 'duel'; results = undefined; duelResults = undefined">Duel</button>
     </div>
 
     <!-- Cooperative Controls -->
     <div v-if="mode === 'cooperative'" class="controls">
       <div class="control-group">
         <label>Games to Run</label>
-        <input v-model.number="numGames" type="number" min="1" max="1000" />
+        <input v-model.number="numberGames" type="number" min="1" max="1000" />
       </div>
       <div class="control-group">
         <label>Players</label>
-        <select v-model.number="numPlayers">
+        <select v-model.number="numberPlayers">
           <option :value="1">1 (Solo)</option>
           <option :value="2">2</option>
           <option :value="3">3</option>
@@ -47,7 +47,7 @@
     <div v-if="mode === 'duel'" class="controls">
       <div class="control-group">
         <label>Games to Run</label>
-        <input v-model.number="duelNumGames" type="number" min="1" max="1000" />
+        <input v-model.number="duelNumberGames" type="number" min="1" max="1000" />
       </div>
       <div class="control-group">
         <label>Starting Stats</label>
@@ -301,98 +301,203 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminBotGames',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      mode: 'cooperative',
-      // Cooperative
-      numGames: 100,
-      numPlayers: 3,
-      totalRounds: 24,
-      startingStats: 10,
-      negativeMultiplier: 1.0,
-      running: false,
-      results: null,
-      // Duel
-      duelNumGames: 100,
-      duelStartingStats: 8,
-      duelBotDifficulty: 'medium',
-      duelResults: null,
-    };
-  },
-  computed: {
-    winRateClass() {
-      if (!this.results) return '';
-      const r = this.results.summary.win_rate;
-      if (r >= 60) return 'rate-high';
-      if (r >= 40) return 'rate-mid';
-      return 'rate-low';
-    },
-    maxScoreCount() {
-      if (!this.results) return 1;
-      return Math.max(1, ...Object.values(this.results.score_distribution));
-    },
-    duelMaxScoreCount() {
-      if (!this.duelResults) return 1;
-      return Math.max(1, ...Object.values(this.duelResults.score_distribution));
-    },
-  },
-  methods: {
-    async runSimulation() {
-      this.running = true;
-      this.results = null;
-      try {
-        const res = await axios.post('/api/admin/bot-simulate', {
-          num_games: this.numGames,
-          num_players: this.numPlayers,
-          total_rounds: this.totalRounds,
-          starting_stats: this.startingStats,
-          negative_multiplier: this.negativeMultiplier,
-        });
-        this.results = res.data;
-      } catch (e) {
-        this.toast.error('Simulation failed: ' + (e.response?.data?.error || e.message));
-      }
-      this.running = false;
-    },
-    async runDuelSimulation() {
-      this.running = true;
-      this.duelResults = null;
-      try {
-        const res = await axios.post('/api/admin/bot-simulate-duel', {
-          num_games: this.duelNumGames,
-          starting_stats: this.duelStartingStats,
-          bot_difficulty: this.duelBotDifficulty,
-        });
-        this.duelResults = res.data;
-      } catch (e) {
-        this.toast.error('Duel simulation failed: ' + (e.response?.data?.error || e.message));
-      }
-      this.running = false;
-    },
-    formatReason(reason) {
-      return reason.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    },
-    getBarClass(val) {
-      if (val <= 3) return 'bar-critical';
-      if (val <= 6) return 'bar-danger';
-      if (val <= 9) return 'bar-caution';
-      return 'bar-safe';
-    },
-    getCellClass(val) {
-      if (val <= 3) return 'cell-critical';
-      if (val <= 6) return 'cell-danger';
-      if (val <= 9) return 'cell-caution';
-      return '';
-    },
-  },
-};
+interface CooperativeSummary {
+  win_rate: number;
+  wins: number;
+  losses: number;
+  avg_score: number;
+  avg_rounds_survived: number;
+  avg_final_stats: Record<string, number>;
+}
+
+interface CooperativeRoundAverage {
+  round: number;
+  games_alive: number;
+  success_rate: number;
+  avg_wealth: number;
+  avg_influence: number;
+  avg_security: number;
+  avg_religion: number;
+  avg_food: number;
+  avg_happiness: number;
+}
+
+interface CooperativeResults {
+  summary: CooperativeSummary;
+  collapse_reasons: Record<string, number>;
+  round_averages: CooperativeRoundAverage[];
+  score_distribution: Record<string, number>;
+}
+
+interface DuelSummary {
+  p1_win_rate: number;
+  p2_win_rate: number;
+  avg_rounds_played: number;
+  avg_p1_score: number;
+  avg_p2_score: number;
+  total_games: number;
+}
+
+interface DuelEndReasons {
+  stat_collapse: number;
+  stat_domination: number;
+  end_score: number;
+}
+
+interface DuelRoundAverage {
+  round: number;
+  games_alive: number;
+  p1_success_rate: number;
+  p1_avg_wealth: number;
+  p1_avg_influence: number;
+  p1_avg_security: number;
+  p1_avg_religion: number;
+  p1_avg_food: number;
+  p1_avg_happiness: number;
+  p2_success_rate: number;
+  p2_avg_wealth: number;
+  p2_avg_influence: number;
+  p2_avg_security: number;
+  p2_avg_religion: number;
+  p2_avg_food: number;
+  p2_avg_happiness: number;
+}
+
+interface DuelResults {
+  summary: DuelSummary;
+  end_reasons: DuelEndReasons;
+  collapse_details: Record<string, number>;
+  domination_details: Record<string, number>;
+  round_averages: DuelRoundAverage[];
+  score_distribution: Record<string, number>;
+}
+
+const toast = useToast();
+
+const mode = ref<"cooperative" | "duel">("cooperative");
+// Cooperative
+const numberGames = ref(100);
+const numberPlayers = ref(3);
+const totalRounds = ref(24);
+const startingStats = ref(10);
+const negativeMultiplier = ref(1);
+const running = ref(false);
+const results = ref<CooperativeResults | undefined>(undefined);
+// Duel
+const duelNumberGames = ref(100);
+const duelStartingStats = ref(8);
+const duelBotDifficulty = ref("medium");
+const duelResults = ref<DuelResults | undefined>(undefined);
+
+const winRateClass = computed<string>(() => {
+  const current = results.value;
+  if (!current) {
+    return "";
+  }
+  const rate = current.summary.win_rate;
+  if (rate >= 60) {
+    return "rate-high";
+  }
+  if (rate >= 40) {
+    return "rate-mid";
+  }
+  return "rate-low";
+});
+
+const maxScoreCount = computed<number>(() => {
+  const current = results.value;
+  if (!current) {
+    return 1;
+  }
+  return Math.max(1, ...Object.values(current.score_distribution));
+});
+
+const duelMaxScoreCount = computed<number>(() => {
+  const current = duelResults.value;
+  if (!current) {
+    return 1;
+  }
+  return Math.max(1, ...Object.values(current.score_distribution));
+});
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error ?? error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return fallback;
+}
+
+async function runSimulation(): Promise<void> {
+  running.value = true;
+  results.value = undefined;
+  try {
+    const response = await axios.post<CooperativeResults>("/api/admin/bot-simulate", {
+      num_games: numberGames.value,
+      num_players: numberPlayers.value,
+      total_rounds: totalRounds.value,
+      starting_stats: startingStats.value,
+      negative_multiplier: negativeMultiplier.value,
+    });
+    results.value = response.data;
+  } catch (error) {
+    toast.error(`Simulation failed: ${errorMessage(error, "Simulation failed")}`);
+  }
+  running.value = false;
+}
+
+async function runDuelSimulation(): Promise<void> {
+  running.value = true;
+  duelResults.value = undefined;
+  try {
+    const response = await axios.post<DuelResults>("/api/admin/bot-simulate-duel", {
+      num_games: duelNumberGames.value,
+      starting_stats: duelStartingStats.value,
+      bot_difficulty: duelBotDifficulty.value,
+    });
+    duelResults.value = response.data;
+  } catch (error) {
+    toast.error(`Duel simulation failed: ${errorMessage(error, "Duel simulation failed")}`);
+  }
+  running.value = false;
+}
+
+function formatReason(reason: string): string {
+  return reason.replaceAll('_', " ").replaceAll(/\b\w/g, (character) => character.toUpperCase());
+}
+
+function getBarClass(value: number): string {
+  if (value <= 3) {
+    return "bar-critical";
+  }
+  if (value <= 6) {
+    return "bar-danger";
+  }
+  if (value <= 9) {
+    return "bar-caution";
+  }
+  return "bar-safe";
+}
+
+function getCellClass(value: number): string {
+  if (value <= 3) {
+    return "cell-critical";
+  }
+  if (value <= 6) {
+    return "cell-danger";
+  }
+  if (value <= 9) {
+    return "cell-caution";
+  }
+  return "";
+}
 </script>
 
 <style scoped>

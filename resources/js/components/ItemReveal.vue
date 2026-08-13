@@ -25,43 +25,45 @@
   </transition>
 </template>
 
-<script>
-export default {
-  name: 'ItemReveal',
-  props: {
-    item: { type: Object, required: true },
-  },
-  emits: ['dismiss'],
-  data() {
-    return {
-      visible: false,
-      cardVisible: false,
-    };
-  },
-  computed: {
-    isBlocked() {
-      return this.item.type === 'item_blocked';
-    },
-    introText() {
-      if (this.isBlocked) return 'Item Lost!';
-      return 'An item has been discovered!';
-    },
-  },
-  mounted() {
-    this.visible = true;
-    setTimeout(() => {
-      this.cardVisible = true;
-    }, 600);
-  },
-  methods: {
-    dismiss() {
-      this.visible = false;
-      setTimeout(() => {
-        this.$emit('dismiss');
-      }, 300);
-    },
-  },
-};
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+
+interface RevealItem {
+  type?: string;
+  player?: string;
+  item?: string;
+  description?: string;
+}
+
+const { item } = defineProps<{ item: RevealItem }>();
+
+const emit = defineEmits<{ dismiss: [] }>();
+
+const visible = ref(false);
+const cardVisible = ref(false);
+
+const isBlocked = computed(() => item.type === "item_blocked");
+
+const introText = computed(() => {
+  if (isBlocked.value) {
+    return "Item Lost!";
+  }
+  return "An item has been discovered!";
+});
+
+onMounted(() => {
+  visible.value = true;
+  setTimeout(() => {
+    cardVisible.value = true;
+  }, 600);
+});
+
+function dismiss(): void {
+  visible.value = false;
+  setTimeout(() => {
+    emit("dismiss");
+  }, 300);
+}
 </script>
 
 <style scoped>

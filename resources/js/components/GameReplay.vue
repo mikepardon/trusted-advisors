@@ -379,216 +379,414 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../stores/toast';
+<script setup lang="ts">
+import { ref, reactive, computed, onMounted } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'GameReplay',
-  setup() {
-    return { toast: useToast() };
-  },
-  props: {
-    id: { type: [String, Number], default: null },
-    shareToken: { type: String, default: null },
-  },
-  data() {
-    return {
-      loading: true,
-      error: null,
-      game: null,
-      rounds: {},
-      hands: {},
-      totalRoundsPlayed: 0,
-      currentRound: 1,
-      shareCopied: false,
-      detailOverlay: { show: false, type: null, data: null },
-    };
-  },
-  computed: {
-    currentRoundData() {
-      return this.rounds[this.currentRound] || [];
-    },
-    currentRoundHands() {
-      return this.hands[this.currentRound] || [];
-    },
-    isDuel() {
-      return this.game?.game_type === 'duel';
-    },
-    currentEventData() {
-      const results = this.currentRoundData;
-      if (!results || results.length === 0) return null;
-      return results[0]?.event_data || null;
-    },
-    isNewEvent() {
-      if (!this.currentEventData) return false;
-      if (this.currentRound === 1) return true;
-      const prevResults = this.rounds[this.currentRound - 1] || [];
-      const prevEvent = prevResults[0]?.event_data;
-      return !prevEvent || prevEvent.id !== this.currentEventData.id;
-    },
-    previousRoundSnapshot() {
-      if (this.currentRound <= 1) return null;
-      const prevResults = this.rounds[this.currentRound - 1] || [];
-      for (let i = prevResults.length - 1; i >= 0; i--) {
-        if (prevResults[i].kingdom_snapshot) return prevResults[i].kingdom_snapshot;
-      }
-      return null;
-    },
-    allPlayerItems() {
-      if (!this.game?.players) return [];
-      return this.game.players.flatMap(p =>
-        (p.items || []).map(i => ({ ...i, game_player_id: p.id }))
-      );
-    },
-    roundItemsReceived() {
-      return this.allPlayerItems.filter(i => i.acquired_round === this.currentRound);
-    },
-    roundItemsUsed() {
-      return this.allPlayerItems.filter(i => i.used_round === this.currentRound);
-    },
-    allPlayerCurses() {
-      if (!this.game?.players) return [];
-      return this.game.players.flatMap(p =>
-        (p.curses || []).map(c => ({ ...c, game_player_id: p.id }))
-      );
-    },
-    roundCurses() {
-      return this.allPlayerCurses.filter(c => c.acquired_round === this.currentRound);
-    },
-  },
-  async mounted() {
-    try {
-      const url = this.shareToken
-        ? `/api/replays/${this.shareToken}`
-        : `/api/games/${this.id}/replay`;
-      const res = await axios.get(url);
-      this.game = res.data.game;
-      this.rounds = res.data.rounds;
-      this.hands = res.data.hands || {};
-      this.totalRoundsPlayed = res.data.total_rounds_played;
-    } catch (e) {
-      this.error = e.response?.data?.error || 'Failed to load replay';
+type StatEffects = Record<string, number | undefined>;
+
+interface EventData {
+  id?: number;
+  name?: string;
+  description?: string;
+  stat_modifiers?: StatEffects;
+}
+
+interface ReplayCard {
+  title?: string;
+  name?: string;
+  category?: string;
+  description?: string;
+  difficulty?: number;
+  positive_effects?: Record<string, unknown>;
+  negative_effects?: Record<string, unknown>;
+  positive_flavor?: string;
+  negative_flavor?: string;
+}
+
+interface ItemEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+  stat?: string;
+}
+
+interface ReplayItem {
+  name?: string;
+  description?: string;
+  is_consumable?: boolean;
+  target?: string;
+  effect?: ItemEffect;
+  effect_type?: string;
+}
+
+interface CurseEffect {
+  type?: string;
+  value?: number;
+  stat?: string;
+}
+
+interface ReplayCurse {
+  name?: string;
+  description?: string;
+  negative_effect?: CurseEffect;
+  positive_effect?: CurseEffect;
+}
+
+interface DuelRoll {
+  value: number;
+}
+
+interface DuelPlayerRoll {
+  character_name?: string;
+  rolls: DuelRoll[];
+}
+
+interface SpecialEffect {
+  type?: string;
+  item?: string;
+  description?: string;
+}
+
+interface RoundResult {
+  id: number;
+  card?: ReplayCard;
+  player?: { character?: { name?: string } };
+  dice_results?: number[] | DuelPlayerRoll[];
+  success?: boolean;
+  stat_totals?: { total_difficulty?: number };
+  effects_applied?: string[] | StatEffects;
+  special_effects?: SpecialEffect[];
+  kingdom_snapshot?: Record<string, number>;
+  event_data?: EventData;
+}
+
+interface PlayerItem {
+  id: number;
+  item?: ReplayItem;
+  acquired_round?: number;
+  used_round?: number;
+  game_player_id: number;
+}
+
+interface PlayerCurse {
+  id: number;
+  curse?: ReplayCurse;
+  acquired_round?: number;
+  game_player_id: number;
+}
+
+interface ReplayPlayer {
+  id: number;
+  character?: { name?: string };
+  items?: PlayerItem[];
+  curses?: PlayerCurse[];
+}
+
+interface ReplayGame {
+  game_type?: string;
+  game_mode?: string;
+  players?: ReplayPlayer[];
+}
+
+type DetailType = "card" | "item" | "curse";
+
+interface DetailOverlay {
+  show: boolean;
+  type?: DetailType;
+  data?: ReplayCard | ReplayItem | ReplayCurse;
+}
+
+const { id = "", shareToken = "" } = defineProps<{
+  id?: string | number;
+  shareToken?: string;
+}>();
+
+const toast = useToast();
+
+const loading = ref(true);
+const error = ref<string>();
+const game = ref<ReplayGame>();
+const rounds = ref<Record<number, RoundResult[]>>({});
+const hands = ref<Record<number, { role?: string; card?: ReplayCard; player?: { character?: { name?: string } } }[]>>({});
+const totalRoundsPlayed = ref(0);
+const currentRound = ref(1);
+const shareCopied = ref(false);
+const detailOverlay = reactive<DetailOverlay>({ show: false, type: undefined, data: undefined });
+
+const currentRoundData = computed(() => rounds.value[currentRound.value] ?? []);
+const currentRoundHands = computed(() => hands.value[currentRound.value] ?? []);
+const isDuel = computed(() => game.value?.game_type === "duel");
+
+const currentEventData = computed<EventData | undefined>(() => {
+  const results = currentRoundData.value;
+  if (results.length === 0) {
+    return undefined;
+  }
+  return results[0]?.event_data ?? undefined;
+});
+
+const isNewEvent = computed(() => {
+  if (!currentEventData.value) {
+    return false;
+  }
+  if (currentRound.value === 1) {
+    return true;
+  }
+  const previousResults = rounds.value[currentRound.value - 1] ?? [];
+  const previousEvent = previousResults[0]?.event_data;
+  return !previousEvent || previousEvent.id !== currentEventData.value.id;
+});
+
+const previousRoundSnapshot = computed<Record<string, number> | undefined>(() => {
+  if (currentRound.value <= 1) {
+    return undefined;
+  }
+  const previousResults = rounds.value[currentRound.value - 1] ?? [];
+  for (let index = previousResults.length - 1; index >= 0; index--) {
+    if (previousResults[index].kingdom_snapshot) {
+      return previousResults[index].kingdom_snapshot;
     }
-    this.loading = false;
-  },
-  methods: {
-    isDuelResult(result) {
-      return Array.isArray(result.dice_results) && result.dice_results.length > 0 && result.dice_results[0]?.rolls;
-    },
-    resultCardName(result) {
-      if (result.card?.title) return result.card.title;
-      if (result.card?.name) return result.card.name;
-      if (this.isDuel && result.player?.character?.name) {
-        return result.player.character.name + "'s Turn";
-      }
-      return 'Card';
-    },
-    hasEffects(result) {
-      if (!result.effects_applied) return false;
-      if (Array.isArray(result.effects_applied)) return result.effects_applied.length > 0;
-      return Object.keys(result.effects_applied).length > 0;
-    },
-    formatStatName(stat) {
-      return stat.charAt(0).toUpperCase() + stat.slice(1).replace(/_/g, ' ');
-    },
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const special = ['draw_item', 'draw_curse', 'recover_die', 'lose_die', 'discard_item', 'remove_curse', 'bonus_score', 'end_game_modifier', 'grant_item_id'];
-      const filtered = {};
-      for (const [k, v] of Object.entries(effects)) {
-        if (!special.includes(k)) filtered[k] = v;
-      }
-      return filtered;
-    },
-    statDelta(stat, currentVal) {
-      const prev = this.previousRoundSnapshot;
-      if (!prev || prev[stat] === undefined) return 0;
-      return currentVal - prev[stat];
-    },
-    statChangeClass(stat, currentVal) {
-      const delta = this.statDelta(stat, currentVal);
-      if (delta > 0) return 'stat-up';
-      if (delta < 0) return 'stat-down';
-      return '';
-    },
-    getPlayerNameById(gamePlayerId) {
-      if (!this.game?.players) return '';
-      const player = this.game.players.find(p => p.id === gamePlayerId);
-      return player?.character?.name || '';
-    },
-    openCardDetail(card) {
-      if (!card) return;
-      this.detailOverlay = { show: true, type: 'card', data: card };
-    },
-    openItemDetail(item) {
-      if (!item) return;
-      this.detailOverlay = { show: true, type: 'item', data: item };
-    },
-    openItemByName(itemName) {
-      if (!itemName) return;
-      const found = this.allPlayerItems.find(pi => pi.item?.name === itemName);
-      if (found?.item) {
-        this.openItemDetail(found.item);
-      }
-    },
-    openCurseDetail(curse) {
-      if (!curse) return;
-      this.detailOverlay = { show: true, type: 'curse', data: curse };
-    },
-    itemEffectSummary(item) {
-      if (!item?.effect) return '';
-      const type = item.effect.bonus_type || '';
-      const value = item.effect.bonus_value ?? 0;
-      switch (type) {
-        case 'roll_bonus': return `+${value} to roll`;
-        case 'roll_penalty': return `${value} to roll`;
-        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
-        case 'difficulty_increase': return `+${Math.abs(value)} difficulty`;
-        case 'score_bonus': return `${value > 0 ? '+' : ''}${value} renown`;
-        case 'stat_boost': return `+${value} ${item.effect.stat || 'stat'}`;
-        case 'heal_die': return 'Recover a lost die';
-        case 'shield_negative': return 'Block negative effects';
-        case 'debuff_roll': return `${value} to opponent roll`;
-        case 'increase_difficulty': return `+${Math.abs(value)} opponent difficulty`;
-        case 'peek_cards': return 'Peek at opponent cards';
-        case 'steal_stat': return `Steal ${value} stat point`;
-        default: return item.description || 'Single-use effect';
-      }
-    },
-    itemChipClass(item) {
-      const type = item?.effect?.bonus_type || '';
-      if (['roll_bonus', 'difficulty_reduction', 'heal_die', 'shield_negative', 'stat_boost'].includes(type)) return 'chip-positive';
-      if (['debuff_roll', 'increase_difficulty', 'roll_penalty', 'difficulty_increase'].includes(type)) return 'chip-negative';
-      return 'chip-special';
-    },
-    describeCurseEffect(effect) {
-      if (!effect) return '';
-      const type = effect.type || '';
-      const value = effect.value ?? 0;
-      switch (type) {
-        case 'stat_penalty': return `${value} ${effect.stat || 'stat'} per round`;
-        case 'difficulty_modifier': return `+${value} difficulty`;
-        case 'double_negative': return 'Double negative effects';
-        case 'lose_die': return 'Lose a die';
-        case 'stat_bonus': return `+${value} ${effect.stat || 'stat'}`;
-        case 'recover_die': return 'Recover a die';
-        case 'remove_curse': return 'Remove this curse';
-        default: return type.replace(/_/g, ' ');
-      }
-    },
-    async shareReplay() {
-      try {
-        const res = await axios.post(`/api/games/${this.id}/share`);
-        await navigator.clipboard.writeText(res.data.share_url);
-        this.shareCopied = true;
-        setTimeout(() => { this.shareCopied = false; }, 2000);
-      } catch {
-        this.toast.error('Failed to generate share link');
-      }
-    },
-  },
-};
+  }
+  return undefined;
+});
+
+const allPlayerItems = computed<PlayerItem[]>(() => {
+  if (!game.value?.players) {
+    return [];
+  }
+  return game.value.players.flatMap(player =>
+    (player.items ?? []).map(item => ({ ...item, game_player_id: player.id }))
+  );
+});
+
+const roundItemsReceived = computed(() => allPlayerItems.value.filter(item => item.acquired_round === currentRound.value));
+const roundItemsUsed = computed(() => allPlayerItems.value.filter(item => item.used_round === currentRound.value));
+
+const allPlayerCurses = computed<PlayerCurse[]>(() => {
+  if (!game.value?.players) {
+    return [];
+  }
+  return game.value.players.flatMap(player =>
+    (player.curses ?? []).map(curse => ({ ...curse, game_player_id: player.id }))
+  );
+});
+
+const roundCurses = computed(() => allPlayerCurses.value.filter(curse => curse.acquired_round === currentRound.value));
+
+interface ReplayResponse {
+  game: ReplayGame;
+  rounds: Record<number, RoundResult[]>;
+  hands?: Record<number, { role?: string; card?: ReplayCard; player?: { character?: { name?: string } } }[]>;
+  total_rounds_played: number;
+}
+
+onMounted(async () => {
+  try {
+    const url = shareToken
+      ? `/api/replays/${shareToken}`
+      : `/api/games/${id}/replay`;
+    const response = await axios.get<ReplayResponse>(url);
+    game.value = response.data.game;
+    rounds.value = response.data.rounds;
+    hands.value = response.data.hands ?? {};
+    totalRoundsPlayed.value = response.data.total_rounds_played;
+  } catch (loadError) {
+    error.value = isAxiosError<{ error?: string }>(loadError)
+      ? loadError.response?.data?.error ?? "Failed to load replay"
+      : "Failed to load replay";
+  }
+  loading.value = false;
+});
+
+function isDuelResult(result: RoundResult): boolean {
+  return Array.isArray(result.dice_results)
+    && result.dice_results.length > 0
+    && "rolls" in result.dice_results[0];
+}
+
+function resultCardName(result: RoundResult): string {
+  if (result.card?.title) {
+    return result.card.title;
+  }
+  if (result.card?.name) {
+    return result.card.name;
+  }
+  if (isDuel.value && result.player?.character?.name) {
+    return `${result.player.character.name}'s Turn`;
+  }
+  return "Card";
+}
+
+function hasEffects(result: RoundResult): boolean {
+  if (!result.effects_applied) {
+    return false;
+  }
+  if (Array.isArray(result.effects_applied)) {
+    return result.effects_applied.length > 0;
+  }
+  return Object.keys(result.effects_applied).length > 0;
+}
+
+function formatStatName(stat: string): string {
+  return stat.charAt(0).toUpperCase() + stat.slice(1).replaceAll('_', " ");
+}
+
+function filterStatEffects(effects?: Record<string, unknown>): Record<string, number> {
+  if (!effects) {
+    return {};
+  }
+  const special = new Set(["draw_item", "draw_curse", "recover_die", "lose_die", "discard_item", "remove_curse", "bonus_score", "end_game_modifier", "grant_item_id"]);
+  const filtered: Record<string, number> = {};
+  for (const [key, value] of Object.entries(effects)) {
+    if (typeof value === "number" && !special.has(key)) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
+function statDelta(stat: string, currentValue: number): number {
+  const previous = previousRoundSnapshot.value;
+  if (!previous || previous[stat] === undefined) {
+    return 0;
+  }
+  return currentValue - previous[stat];
+}
+
+function statChangeClass(stat: string, currentValue: number): string {
+  const delta = statDelta(stat, currentValue);
+  if (delta > 0) {
+    return "stat-up";
+  }
+  if (delta < 0) {
+    return "stat-down";
+  }
+  return "";
+}
+
+function getPlayerNameById(gamePlayerId: number): string {
+  if (!game.value?.players) {
+    return "";
+  }
+  const player = game.value.players.find(playerRecord => playerRecord.id === gamePlayerId);
+  return player?.character?.name ?? "";
+}
+
+function openCardDetail(card?: ReplayCard): void {
+  if (!card) {
+    return;
+  }
+  Object.assign(detailOverlay, { show: true, type: "card", data: card });
+}
+
+function openItemDetail(item?: ReplayItem): void {
+  if (!item) {
+    return;
+  }
+  Object.assign(detailOverlay, { show: true, type: "item", data: item });
+}
+
+function openItemByName(itemName?: string): void {
+  if (!itemName) {
+    return;
+  }
+  const found = allPlayerItems.value.find(playerItem => playerItem.item?.name === itemName);
+  if (found?.item) {
+    openItemDetail(found.item);
+  }
+}
+
+function openCurseDetail(curse?: ReplayCurse): void {
+  if (!curse) {
+    return;
+  }
+  Object.assign(detailOverlay, { show: true, type: "curse", data: curse });
+}
+
+function itemEffectSummary(item?: ReplayItem): string {
+  if (!item?.effect) {
+    return "";
+  }
+  const type = item.effect.bonus_type ?? "";
+  const value = item.effect.bonus_value ?? 0;
+  switch (type) {
+    case "roll_bonus": { return `+${value} to roll`;
+    }
+    case "roll_penalty": { return `${value} to roll`;
+    }
+    case "difficulty_reduction": { return `-${Math.abs(value)} difficulty`;
+    }
+    case "difficulty_increase": { return `+${Math.abs(value)} difficulty`;
+    }
+    case "score_bonus": { return `${value > 0 ? "+" : ""}${value} renown`;
+    }
+    case "stat_boost": { return `+${value} ${item.effect.stat ?? "stat"}`;
+    }
+    case "heal_die": { return "Recover a lost die";
+    }
+    case "shield_negative": { return "Block negative effects";
+    }
+    case "debuff_roll": { return `${value} to opponent roll`;
+    }
+    case "increase_difficulty": { return `+${Math.abs(value)} opponent difficulty`;
+    }
+    case "peek_cards": { return "Peek at opponent cards";
+    }
+    case "steal_stat": { return `Steal ${value} stat point`;
+    }
+    default: { return item.description ?? "Single-use effect";
+    }
+  }
+}
+
+function itemChipClass(item?: ReplayItem): string {
+  const type = item?.effect?.bonus_type ?? "";
+  if (["roll_bonus", "difficulty_reduction", "heal_die", "shield_negative", "stat_boost"].includes(type)) {
+    return "chip-positive";
+  }
+  if (["debuff_roll", "increase_difficulty", "roll_penalty", "difficulty_increase"].includes(type)) {
+    return "chip-negative";
+  }
+  return "chip-special";
+}
+
+function describeCurseEffect(effect?: CurseEffect): string {
+  if (!effect) {
+    return "";
+  }
+  const type = effect.type ?? "";
+  const value = effect.value ?? 0;
+  switch (type) {
+    case "stat_penalty": { return `${value} ${effect.stat ?? "stat"} per round`;
+    }
+    case "difficulty_modifier": { return `+${value} difficulty`;
+    }
+    case "double_negative": { return "Double negative effects";
+    }
+    case "lose_die": { return "Lose a die";
+    }
+    case "stat_bonus": { return `+${value} ${effect.stat ?? "stat"}`;
+    }
+    case "recover_die": { return "Recover a die";
+    }
+    case "remove_curse": { return "Remove this curse";
+    }
+    default: { return type.replaceAll('_', " ");
+    }
+  }
+}
+
+async function shareReplay(): Promise<void> {
+  try {
+    const response = await axios.post<{ share_url: string }>(`/api/games/${id}/share`);
+    await navigator.clipboard.writeText(response.data.share_url);
+    shareCopied.value = true;
+    setTimeout(() => { shareCopied.value = false; }, 2000);
+  } catch {
+    toast.error("Failed to generate share link");
+  }
+}
 </script>
 
 <style scoped>

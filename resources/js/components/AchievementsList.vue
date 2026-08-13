@@ -50,7 +50,7 @@
       </div>
     </div>
 
-    <button v-if="unclaimedCount >= 2" class="claim-all-fab" @click="claimAll" :disabled="claimingAll">
+    <button v-if="unclaimedCount >= 2" class="claim-all-fab" :disabled="claimingAll" @click="claimAll">
       {{ claimingAll ? 'Claiming...' : `Claim All (${unclaimedCount})` }}
     </button>
 
@@ -77,96 +77,144 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import AchievementClaim from './AchievementClaim.vue';
-import AppIcon from './AppIcon.vue';
-import HintBubble from './HintBubble.vue';
-import { useAuth } from '../stores/auth';
-import { resolveAchievementIcon } from '../utils/achievementIcons';
+<script setup lang="ts">
+import { ref, computed, onMounted } from "vue";
+import axios from "axios";
+import AchievementClaim from "./AchievementClaim.vue";
+import AppIcon from "./AppIcon.vue";
+import HintBubble from "./HintBubble.vue";
+import { useAuth } from "../stores/auth";
+import { resolveAchievementIcon } from "../utils/achievement-icons";
 
-export default {
-  name: 'AchievementsList',
-  components: { AchievementClaim, AppIcon, HintBubble },
-  data() {
-    return {
-      achievements: [],
-      loading: true,
-      claiming: null,
-      claimingAll: false,
-      claimOverlay: null,
-      batchClaimOverlay: null,
-    };
-  },
-  computed: {
-    unclaimedCount() {
-      return this.achievements.filter(a => a.earned && !a.claimed).length;
-    },
-  },
-  async mounted() {
-    await this.fetchAchievements();
-  },
-  methods: {
-    resolveAchievementIcon,
-    claimLabel(ach) {
-      const parts = [];
-      if (ach.reward_xp) parts.push(`+${ach.reward_xp} XP`);
-      if (ach.reward_coins) parts.push(`+${ach.reward_coins} \u{1FA99}`);
-      return parts.length ? `Claim ${parts.join(' ')}` : 'Claim';
-    },
-    async fetchAchievements() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/achievements');
-        this.achievements = res.data;
-      } catch {}
-      this.loading = false;
-    },
-    progressPercent(progress) {
-      if (!progress || !progress.target) return 0;
-      return Math.min(100, Math.round((progress.current / progress.target) * 100));
-    },
-    async claim(ach) {
-      this.claiming = ach.id;
-      try {
-        const res = await axios.post(`/api/achievements/${ach.id}/claim`);
-        const result = res.data;
+interface AchievementProgress {
+  current: number;
+  target: number;
+}
 
-        // Update auth store
-        const { updateUserStats } = useAuth();
-        updateUserStats({ xp: result.new_xp, level: result.new_level, coins: result.new_coins });
+interface Achievement {
+  id: number;
+  name: string;
+  description: string;
+  icon: string;
+  earned: boolean;
+  claimed: boolean;
+  reward_xp?: number;
+  reward_coins?: number;
+  tier_group?: string;
+  tier: number;
+  progress?: AchievementProgress;
+}
 
-        // Show overlay
-        this.claimOverlay = { achievement: ach, result };
+interface ClaimResult {
+  new_xp: number;
+  new_level: number;
+  new_coins: number;
+}
 
-        // Mark as claimed locally
-        ach.claimed = true;
-      } catch {}
-      this.claiming = null;
-    },
-    onClaimDismiss() {
-      this.claimOverlay = null;
-    },
-    async claimAll() {
-      this.claimingAll = true;
-      try {
-        const res = await axios.post('/api/achievements/claim-all');
-        const result = res.data;
+interface ClaimOverlay {
+  achievement: Achievement;
+  result: ClaimResult;
+}
 
-        const { updateUserStats } = useAuth();
-        updateUserStats({ xp: result.new_xp, level: result.new_level, coins: result.new_coins });
+interface BatchClaimResult {
+  count: number;
+  new_xp: number;
+  new_level: number;
+  new_coins: number;
+  xp_awarded?: number;
+  coins_awarded?: number;
+  leveled_up?: boolean;
+}
 
-        // Mark all unclaimed as claimed locally
-        this.achievements.forEach(a => {
-          if (a.earned && !a.claimed) a.claimed = true;
-        });
+const { updateUserStats } = useAuth();
 
-        this.batchClaimOverlay = result;
-      } catch {}
-      this.claimingAll = false;
-    },
-  },
-};
+const achievements = ref<Achievement[]>([]);
+const loading = ref(true);
+const claiming = ref<number>();
+const claimingAll = ref(false);
+const claimOverlay = ref<ClaimOverlay>();
+const batchClaimOverlay = ref<BatchClaimResult>();
+
+const unclaimedCount = computed(() => achievements.value.filter((achievement) => achievement.earned && !achievement.claimed).length);
+
+onMounted(async () => {
+  await fetchAchievements();
+});
+
+function claimLabel(achievement: Achievement): string {
+  const parts: string[] = [];
+  if (achievement.reward_xp) {
+    parts.push(`+${achievement.reward_xp} XP`);
+  }
+  if (achievement.reward_coins) {
+    parts.push(`+${achievement.reward_coins} \u{1FA99}`);
+  }
+  return parts.length > 0 ? `Claim ${parts.join(" ")}` : "Claim";
+}
+
+async function fetchAchievements(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<Achievement[]>("/api/achievements");
+    achievements.value = response.data;
+  } catch {
+    // silently fail
+  }
+  loading.value = false;
+}
+
+function progressPercent(progress: AchievementProgress | undefined): number {
+  if (!progress || !progress.target) {
+    return 0;
+  }
+  return Math.min(100, Math.round((progress.current / progress.target) * 100));
+}
+
+async function claim(achievement: Achievement): Promise<void> {
+  claiming.value = achievement.id;
+  try {
+    const response = await axios.post<ClaimResult>(`/api/achievements/${achievement.id}/claim`);
+    const result = response.data;
+
+    // Update auth store
+    updateUserStats({ xp: result.new_xp, level: result.new_level, coins: result.new_coins });
+
+    // Show overlay
+    claimOverlay.value = { achievement, result };
+
+    // Mark as claimed locally
+    achievement.claimed = true;
+  } catch {
+    // silently fail
+  }
+  claiming.value = undefined;
+}
+
+function onClaimDismiss(): void {
+  claimOverlay.value = undefined;
+}
+
+async function claimAll(): Promise<void> {
+  claimingAll.value = true;
+  try {
+    const response = await axios.post<BatchClaimResult>("/api/achievements/claim-all");
+    const result = response.data;
+
+    updateUserStats({ xp: result.new_xp, level: result.new_level, coins: result.new_coins });
+
+    // Mark all unclaimed as claimed locally
+    for (const achievement of achievements.value) {
+      if (achievement.earned && !achievement.claimed) {
+        achievement.claimed = true;
+      }
+    }
+
+    batchClaimOverlay.value = result;
+  } catch {
+    // silently fail
+  }
+  claimingAll.value = false;
+}
 </script>
 
 <style scoped>

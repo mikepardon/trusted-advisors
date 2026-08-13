@@ -13,7 +13,7 @@
           </div>
         </div>
         <div class="role-control">
-          <select :value="admin.admin_role" @change="updateRole(admin, $event.target.value)" :disabled="saving === admin.id">
+          <select :value="admin.admin_role" :disabled="saving === admin.id" @change="updateRole(admin, $event.target.value)">
             <option value="super_admin">Super Admin</option>
             <option value="content_admin">Content Admin</option>
             <option value="moderator">Moderator</option>
@@ -30,51 +30,60 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { onMounted, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'AdminRoles',
-  data() {
-    return {
-      admins: [],
-      loading: true,
-      saving: null,
-      error: '',
-      success: '',
-    };
-  },
-  async mounted() {
-    await this.load();
-  },
-  methods: {
-    async load() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/admin/roles');
-        this.admins = res.data;
-      } catch (e) {
-        this.error = 'Failed to load admin users';
-      }
-      this.loading = false;
-    },
-    async updateRole(admin, newRole) {
-      this.saving = admin.id;
-      this.error = '';
-      this.success = '';
-      try {
-        await axios.put(`/api/admin/users/${admin.id}/role`, { admin_role: newRole });
-        admin.admin_role = newRole;
-        this.success = `Updated ${admin.name} to ${newRole.replace('_', ' ')}`;
-        setTimeout(() => { this.success = ''; }, 3000);
-      } catch (e) {
-        this.error = e.response?.data?.message || 'Failed to update role';
-        setTimeout(() => { this.error = ''; }, 5000);
-      }
-      this.saving = null;
-    },
-  },
-};
+interface Admin {
+  id: number;
+  name: string;
+  email: string;
+  admin_role: string;
+}
+
+const admins = ref<Admin[]>([]);
+const loading = ref(true);
+const saving = ref<number>();
+const error = ref("");
+const success = ref("");
+
+async function load(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<Admin[]>("/api/admin/roles");
+    admins.value = response.data;
+  } catch {
+    error.value = "Failed to load admin users";
+  }
+  loading.value = false;
+}
+
+async function updateRole(admin: Admin, newRole: string): Promise<void> {
+  saving.value = admin.id;
+  error.value = "";
+  success.value = "";
+  try {
+    await axios.put(`/api/admin/users/${admin.id}/role`, { admin_role: newRole });
+    admin.admin_role = newRole;
+    success.value = `Updated ${admin.name} to ${newRole.replace("_", " ")}`;
+    setTimeout(() => {
+      success.value = "";
+    }, 3000);
+  } catch (error_) {
+    const message = isAxiosError<{ message?: string }>(error_)
+      ? error_.response?.data?.message
+      : undefined;
+    error.value = message ?? "Failed to update role";
+    setTimeout(() => {
+      error.value = "";
+    }, 5000);
+  }
+  saving.value = undefined;
+}
+
+onMounted(async () => {
+  await load();
+});
 </script>
 
 <style scoped>

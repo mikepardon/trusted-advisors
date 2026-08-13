@@ -55,7 +55,7 @@
           <div class="price-amount">
             {{ formatPrice(price.amount_cents, price.currency) }}
           </div>
-          <div class="price-interval" v-if="price.interval">
+          <div v-if="price.interval" class="price-interval">
             per {{ price.interval_count > 1 ? price.interval_count + ' ' : '' }}{{ price.interval }}{{ price.interval_count > 1 ? 's' : '' }}
           </div>
           <p class="price-description">
@@ -85,100 +85,108 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
-import { stripeCheckout, getPaymentPlatform, completePurchaseIAP, isWebToNative } from '../services/paymentService';
+<script setup lang="ts">
+import { ref, computed, onMounted } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
+import { stripeCheckout, getPaymentPlatform, completePurchaseIAP } from "../services/payment-service";
 
-export default {
-  name: 'PremiumPage',
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast };
-  },
-  data() {
-    return {
-      price: null,
-      priceLoading: true,
-      subscribing: false,
-    };
-  },
-  computed: {
-    isPremium() {
-      return this.auth.state.user?.is_premium;
-    },
-  },
-  async mounted() {
-    await this.fetchPrice();
-  },
-  methods: {
-    async fetchPrice() {
-      this.priceLoading = true;
-      try {
-        const res = await axios.get('/api/premium/price');
-        this.price = res.data;
-      } catch {
-        // Price may not be configured
-      }
-      this.priceLoading = false;
-    },
-    formatPrice(cents, currency) {
-      const amount = (cents / 100).toFixed(2);
-      const symbols = { USD: '$', EUR: '\u20AC', GBP: '\u00A3' };
-      const symbol = symbols[currency] || currency + ' ';
-      return symbol + amount;
-    },
-    async subscribe() {
-      this.subscribing = true;
-      const platform = getPaymentPlatform();
-      console.log('[Premium] subscribe clicked', { platform, price: this.price });
-      try {
-        if (platform === 'stripe') {
-          await stripeCheckout('subscription');
-        } else {
-          const productId = platform === 'apple'
-            ? this.price?.apple_product_id
-            : this.price?.google_product_id;
-          console.log('[Premium] IAP productId:', productId);
-          if (!productId) {
-            this.toast.error('IAP product not configured.');
-            this.subscribing = false;
-            return;
-          }
-          const result = await completePurchaseIAP(productId, true);
-          console.log('[Premium] IAP result:', result);
-          this.auth.state.user.is_premium = true;
-          this.toast.success('Premium activated!');
-        }
-      } catch (e) {
-        console.error('[Premium] subscribe error:', e);
-        this.toast.error(e.response?.data?.error || e.message || 'Purchase failed.');
-      }
-      this.subscribing = false;
-    },
-    async manageSub() {
-      const platform = getPaymentPlatform();
-      if (platform === 'apple') {
-        window.location.href = 'https://apps.apple.com/account/subscriptions';
+interface PremiumPrice {
+  amount_cents: number;
+  currency: string;
+  interval?: string;
+  interval_count: number;
+  apple_product_id?: string;
+  google_product_id?: string;
+}
+
+const auth = useAuth();
+const toast = useToast();
+
+const price = ref<PremiumPrice>();
+const priceLoading = ref(true);
+const subscribing = ref(false);
+
+const isPremium = computed(() => auth.state.user?.is_premium);
+
+onMounted(async () => {
+  await fetchPrice();
+});
+
+async function fetchPrice(): Promise<void> {
+  priceLoading.value = true;
+  try {
+    const response = await axios.get<PremiumPrice>("/api/premium/price");
+    price.value = response.data;
+  } catch {
+    // Price may not be configured
+  }
+  priceLoading.value = false;
+}
+
+function formatPrice(cents: number, currency: string): string {
+  const amount = (cents / 100).toFixed(2);
+  const symbols: Record<string, string> = { USD: "$", EUR: "\u{20AC}", GBP: "\u{00A3}" };
+  const symbol = symbols[currency] ?? `${currency} `;
+  return `${symbol}${amount}`;
+}
+
+async function subscribe(): Promise<void> {
+  subscribing.value = true;
+  const platform = getPaymentPlatform();
+  console.log("[Premium] subscribe clicked", { platform, price: price.value });
+  try {
+    if (platform === "stripe") {
+      await stripeCheckout("subscription");
+    } else {
+      const productId = platform === "apple" ? price.value?.apple_product_id : price.value?.google_product_id;
+      console.log("[Premium] IAP productId:", productId);
+      if (!productId) {
+        toast.error("IAP product not configured.");
+        subscribing.value = false;
         return;
       }
-      if (platform === 'google') {
-        window.location.href = 'https://play.google.com/store/account/subscriptions';
-        return;
+      const result = await completePurchaseIAP(productId, true);
+      console.log("[Premium] IAP result:", result);
+      if (auth.state.user) {
+        auth.state.user.is_premium = true;
       }
-      try {
-        const res = await axios.get('/api/premium/manage');
-        if (res.data.url) {
-          window.location.href = res.data.url;
-        }
-      } catch {
-        this.toast.error('Could not open subscription management.');
-      }
-    },
-  },
-};
+      toast.success("Premium activated!");
+    }
+  } catch (error) {
+    console.error("[Premium] subscribe error:", error);
+    toast.error(subscribeErrorMessage(error));
+  }
+  subscribing.value = false;
+}
+
+function subscribeErrorMessage(error: unknown): string {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error ?? error.message ?? "Purchase failed.";
+  }
+  return "Purchase failed.";
+}
+
+async function manageSub(): Promise<void> {
+  const platform = getPaymentPlatform();
+  if (platform === "apple") {
+    window.location.assign("https://apps.apple.com/account/subscriptions");
+    return;
+  }
+  if (platform === "google") {
+    window.location.assign("https://play.google.com/store/account/subscriptions");
+    return;
+  }
+  try {
+    const response = await axios.get<{ url?: string }>("/api/premium/manage");
+    if (response.data.url) {
+      window.location.assign(response.data.url);
+    }
+  } catch {
+    toast.error("Could not open subscription management.");
+  }
+}
 </script>
 
 <style scoped>

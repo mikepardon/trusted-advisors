@@ -396,21 +396,22 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'HowToPlay',
-  emits: ['close'],
-  data() {
-    return {
-      activeTab: 'classic',
-      tabs: [
-        { key: 'classic', label: 'Classic' },
-        { key: 'duel', label: 'Duel' },
-        { key: 'scoring', label: 'Scoring & ELO' },
-      ],
-    };
-  },
-};
+<script setup lang="ts">
+import { ref } from "vue";
+
+interface HowToPlayTab {
+  key: string;
+  label: string;
+}
+
+defineEmits<{ close: [] }>();
+
+const activeTab = ref("classic");
+const tabs: HowToPlayTab[] = [
+  { key: "classic", label: "Classic" },
+  { key: "duel", label: "Duel" },
+  { key: "scoring", label: "Scoring & ELO" },
+];
 </script>
 
 <style scoped>

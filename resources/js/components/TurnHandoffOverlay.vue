@@ -14,15 +14,13 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'TurnHandoffOverlay',
-  props: {
-    playerNumber: { type: Number, required: true },
-    characterName: { type: String, required: true },
-  },
-  emits: ['ready'],
-};
+<script setup lang="ts">
+defineProps<{
+  playerNumber: number;
+  characterName: string;
+}>();
+
+defineEmits<{ ready: [] }>();
 </script>
 
 <style scoped>

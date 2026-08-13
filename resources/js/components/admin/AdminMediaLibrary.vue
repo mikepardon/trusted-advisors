@@ -5,13 +5,8 @@
   </div>
 </template>
 
-<script>
-import MediaLibraryModal from './MediaLibraryModal.vue';
-
-export default {
-  name: 'AdminMediaLibrary',
-  components: { MediaLibraryModal },
-};
+<script setup lang="ts">
+import MediaLibraryModal from "./MediaLibraryModal.vue";
 </script>
 
 <style scoped>

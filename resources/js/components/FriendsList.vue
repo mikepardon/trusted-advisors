@@ -11,7 +11,7 @@
         class="friend-input"
         @keyup.enter="sendRequest"
       />
-      <button class="btn-primary send-btn" @click="sendRequest" :disabled="sending || !username.trim()">
+      <button class="btn-primary send-btn" :disabled="sending || !username.trim()" @click="sendRequest">
         {{ sending ? '...' : 'Send' }}
       </button>
     </div>
@@ -19,7 +19,7 @@
     <p v-if="success" class="friend-success">{{ success }}</p>
 
     <!-- Pending Received -->
-    <div v-if="pendingReceived.length" class="friend-section">
+    <div v-if="pendingReceived.length > 0" class="friend-section">
       <h3 class="section-subtitle">Pending Requests</h3>
       <div v-for="req in pendingReceived" :key="req.id" class="friend-item">
         <span class="friend-name">{{ req.user.name }}</span>
@@ -31,7 +31,7 @@
     </div>
 
     <!-- Friends -->
-    <div v-if="friends.length" class="friend-section">
+    <div v-if="friends.length > 0" class="friend-section">
       <h3 class="section-subtitle">Your Allies</h3>
       <div
         v-for="f in friends"
@@ -70,7 +70,7 @@
     </div>
 
     <!-- Sent -->
-    <div v-if="pendingSent.length" class="friend-section">
+    <div v-if="pendingSent.length > 0" class="friend-section">
       <h3 class="section-subtitle">Sent Requests</h3>
       <div v-for="req in pendingSent" :key="req.id" class="friend-item">
         <span class="friend-name">{{ req.user.name }}</span>
@@ -78,102 +78,143 @@
       </div>
     </div>
 
-    <p v-if="!friends.length && !pendingReceived.length && !pendingSent.length" class="friends-empty">
+    <p v-if="friends.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0" class="friends-empty">
       No allies yet. Send a friend request above!
     </p>
 
     <PlayerProfile
       v-if="showProfileFriend"
-      :userId="showProfileFriend.user.id"
-      :friendshipId="showProfileFriend.id"
+      :user-id="showProfileFriend.user.id"
+      :friendship-id="showProfileFriend.id"
       @close="showProfileFriend = null"
       @removed="showProfileFriend = null; fetchFriends()"
     />
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import PlayerProfile from './PlayerProfile.vue';
+<script setup lang="ts">
+import { ref, onMounted } from "vue";
+import axios, { isAxiosError } from "axios";
+import PlayerProfile from "./PlayerProfile.vue";
 
-export default {
-  name: 'FriendsList',
-  components: { PlayerProfile },
-  data() {
-    return {
-      username: '',
-      showProfileFriend: null,
-      friends: [],
-      pendingSent: [],
-      pendingReceived: [],
-      error: '',
-      success: '',
-      sending: false,
-    };
-  },
-  async mounted() {
-    await this.fetchFriends();
-  },
-  methods: {
-    async fetchFriends() {
-      try {
-        const res = await axios.get('/api/friends');
-        this.friends = res.data.friends;
-        this.pendingSent = res.data.pending_sent;
-        this.pendingReceived = res.data.pending_received;
-      } catch {
-        // silently fail
-      }
-    },
-    async sendRequest() {
-      if (!this.username.trim()) return;
-      this.error = '';
-      this.success = '';
-      this.sending = true;
-      try {
-        await axios.post('/api/friends', { username: this.username.trim() });
-        this.success = `Request sent to ${this.username}`;
-        this.username = '';
-        await this.fetchFriends();
-      } catch (e) {
-        this.error = e.response?.data?.message || 'Failed to send request';
-      }
-      this.sending = false;
-    },
-    async acceptRequest(id) {
-      try {
-        await axios.post(`/api/friends/${id}/accept`);
-        await this.fetchFriends();
-      } catch (e) {
-        this.error = e.response?.data?.message || 'Failed to accept';
-      }
-    },
-    async removeFriendship(id) {
-      try {
-        await axios.delete(`/api/friends/${id}`);
-        await this.fetchFriends();
-      } catch (e) {
-        this.error = e.response?.data?.message || 'Failed to remove';
-      }
-    },
-    isOnline(f) {
-      if (!f.last_login_at) return false;
-      const last = new Date(f.last_login_at);
-      return (Date.now() - last.getTime()) < 15 * 60 * 1000; // 15 minutes
-    },
-    lastSeenText(f) {
-      if (!f.last_login_at) return '';
-      if (this.isOnline(f)) return 'Online';
-      const diff = Date.now() - new Date(f.last_login_at).getTime();
-      const mins = Math.floor(diff / 60000);
-      if (mins < 60) return `${mins}m ago`;
-      const hours = Math.floor(mins / 60);
-      if (hours < 24) return `${hours}h ago`;
-      const days = Math.floor(hours / 24);
-      return `${days}d ago`;
-    },
-  },
-};
+interface FriendUser {
+  id: number;
+  name?: string;
+  level?: number;
+}
+
+interface FriendStats {
+  wins?: number;
+  draws?: number;
+  losses?: number;
+  last_played?: string;
+}
+
+interface Friendship {
+  id: number;
+  user: FriendUser;
+  stats?: FriendStats;
+  last_login_at?: string;
+}
+
+const username = ref("");
+const showProfileFriend = ref<Friendship>();
+const friends = ref<Friendship[]>([]);
+const pendingSent = ref<Friendship[]>([]);
+const pendingReceived = ref<Friendship[]>([]);
+const error = ref("");
+const success = ref("");
+const sending = ref(false);
+
+onMounted(async () => {
+  await fetchFriends();
+});
+
+async function fetchFriends(): Promise<void> {
+  try {
+    const response = await axios.get<{
+      friends: Friendship[];
+      pending_sent: Friendship[];
+      pending_received: Friendship[];
+    }>("/api/friends");
+    friends.value = response.data.friends;
+    pendingSent.value = response.data.pending_sent;
+    pendingReceived.value = response.data.pending_received;
+  } catch {
+    // silently fail
+  }
+}
+
+async function sendRequest(): Promise<void> {
+  if (!username.value.trim()) {
+    return;
+  }
+  error.value = "";
+  success.value = "";
+  sending.value = true;
+  try {
+    await axios.post("/api/friends", { username: username.value.trim() });
+    success.value = `Request sent to ${username.value}`;
+    username.value = "";
+    await fetchFriends();
+  } catch (error_) {
+    error.value = requestErrorMessage(error_, "Failed to send request");
+  }
+  sending.value = false;
+}
+
+async function acceptRequest(id: number): Promise<void> {
+  try {
+    await axios.post(`/api/friends/${id}/accept`);
+    await fetchFriends();
+  } catch (error_) {
+    error.value = requestErrorMessage(error_, "Failed to accept");
+  }
+}
+
+async function removeFriendship(id: number): Promise<void> {
+  try {
+    await axios.delete(`/api/friends/${id}`);
+    await fetchFriends();
+  } catch (error_) {
+    error.value = requestErrorMessage(error_, "Failed to remove");
+  }
+}
+
+function requestErrorMessage(error_: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string }>(error_)) {
+    return error_.response?.data?.message ?? fallback;
+  }
+  return fallback;
+}
+
+function isOnline(friend: Friendship): boolean {
+  if (!friend.last_login_at) {
+    return false;
+  }
+  const last = new Date(friend.last_login_at);
+  return Date.now() - last.getTime() < 15 * 60 * 1000; // 15 minutes
+}
+
+function lastSeenText(friend: Friendship): string {
+  if (!friend.last_login_at) {
+    return "";
+  }
+  if (isOnline(friend)) {
+    return "Online";
+  }
+  const diff = Date.now() - new Date(friend.last_login_at).getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 60) {
+    return `${mins}m ago`;
+  }
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) {
+    return `${hours}h ago`;
+  }
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
 </script>
 
 <style scoped>

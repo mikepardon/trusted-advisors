@@ -86,14 +86,14 @@
         </div>
 
         <div class="home-grid-side">
-          <button v-if="auth.state.user?.payments_enabled && !auth.state.user?.is_premium" class="side-icon-btn side-premium-btn" @click="$router.push('/premium')" title="Go Premium">&#9733;</button>
-          <button class="side-icon-btn" @click="showMobileMenu = true" title="Menu">&#9776;</button>
-          <button class="side-icon-btn" @click="openNotifications()" title="Alerts">
+          <button v-if="auth.state.user?.payments_enabled && !auth.state.user?.is_premium" class="side-icon-btn side-premium-btn" title="Go Premium" @click="$router.push('/premium')">&#9733;</button>
+          <button class="side-icon-btn" title="Menu" @click="showMobileMenu = true">&#9776;</button>
+          <button class="side-icon-btn" title="Alerts" @click="openNotifications()">
             &#128276;
             <span v-if="notifCount > 0" class="side-badge">{{ notifCount > 9 ? '9+' : notifCount }}</span>
           </button>
-          <button class="side-icon-btn" @click="$router.push('/leaderboard')" title="Ranks">&#127942;</button>
-          <button class="side-icon-btn" @click="$router.push('/achievements')" title="Achievements">
+          <button class="side-icon-btn" title="Ranks" @click="$router.push('/leaderboard')">&#127942;</button>
+          <button class="side-icon-btn" title="Achievements" @click="$router.push('/achievements')">
             &#127941;
             <span v-if="homeStats.unclaimed > 0" class="side-badge">{{ homeStats.unclaimed }}</span>
           </button>
@@ -160,7 +160,7 @@
           </div>
           <div
             class="mode-card"
-            @click="playSound('clickCard'); gameType = 'duel'; numPlayers = 2; totalRounds = 24; step = 'settings'"
+            @click="playSound('clickCard'); gameType = 'duel'; numberPlayers = 2; totalRounds = 24; step = 'settings'"
           >
             <h3 class="mode-title">Duel</h3>
             <p class="mode-desc">{{ gameMode === 'single' ? 'Challenge a bot: draft cards, build rival kingdoms' : 'Compete head-to-head: draft cards, build rival kingdoms (2 players)' }}</p>
@@ -189,8 +189,8 @@
               <button
                 v-for="n in 5"
                 :key="n + 1"
-                :class="{ 'btn-primary': numPlayers === n + 1 }"
-                @click="playSound('clickToggle'); numPlayers = n + 1"
+                :class="{ 'btn-primary': numberPlayers === n + 1 }"
+                @click="playSound('clickToggle'); numberPlayers = n + 1"
               >
                 {{ n + 1 }}
               </button>
@@ -265,13 +265,13 @@
                 class="friend-input"
                 @keyup.enter="addFriendInline"
               />
-              <button class="btn-primary btn-sm" @click="addFriendInline" :disabled="!addFriendUsername.trim()">Add</button>
+              <button class="btn-primary btn-sm" :disabled="!addFriendUsername.trim()" @click="addFriendInline">Add</button>
             </div>
             <p v-if="addFriendError" class="friend-error">{{ addFriendError }}</p>
             <p v-if="addFriendSuccess" class="friend-success">{{ addFriendSuccess }}</p>
 
             <!-- Pending received friend requests -->
-            <div v-if="pendingReceivedFriends.length" class="received-requests">
+            <div v-if="pendingReceivedFriends.length > 0" class="received-requests">
               <label class="received-label">Pending Friend Requests</label>
               <div v-for="req in pendingReceivedFriends" :key="req.id" class="received-row">
                 <span class="received-name">{{ req.user.name }}</span>
@@ -312,7 +312,7 @@
         <!-- Custom Game (premium only, hidden for event games) -->
         <div v-if="auth.state.user?.is_premium && !rotatingEventId" class="custom-game-section">
           <label class="custom-toggle">
-            <input type="checkbox" v-model="isCustomGame" @change="onCustomToggle" />
+            <input v-model="isCustomGame" type="checkbox" @change="onCustomToggle" />
             <span class="custom-toggle-label">Custom Game</span>
           </label>
 
@@ -321,15 +321,15 @@
           <div v-if="isCustomGame" class="custom-options">
             <div class="custom-option">
               <label>Starting Stats: {{ customStartingStats }}</label>
-              <input type="range" v-model.number="customStartingStats" min="1" max="20" class="custom-slider" />
+              <input v-model.number="customStartingStats" type="range" min="1" max="20" class="custom-slider" />
             </div>
 
             <div class="custom-option">
               <label class="hr-label">House Rules</label>
-              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.no_negative_effects" /> No Negative Effects</label>
-              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.double_positive_effects" /> Double Positive Effects</label>
-              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.random_starting_stats" /> Random Starting Stats</label>
-              <label class="hr-toggle"><input type="checkbox" v-model="houseRules.hardcore_mode" /> Hardcore (lose at stat &le; 3)</label>
+              <label class="hr-toggle"><input v-model="houseRules.no_negative_effects" type="checkbox" /> No Negative Effects</label>
+              <label class="hr-toggle"><input v-model="houseRules.double_positive_effects" type="checkbox" /> Double Positive Effects</label>
+              <label class="hr-toggle"><input v-model="houseRules.random_starting_stats" type="checkbox" /> Random Starting Stats</label>
+              <label class="hr-toggle"><input v-model="houseRules.hardcore_mode" type="checkbox" /> Hardcore (lose at stat &le; 3)</label>
             </div>
           </div>
         </div>
@@ -337,7 +337,7 @@
         <!-- Private lobby (premium only, online) -->
         <div v-if="gameMode === 'online' && auth.state.user?.is_premium" class="private-section">
           <label class="custom-toggle">
-            <input type="checkbox" v-model="isPrivateGame" />
+            <input v-model="isPrivateGame" type="checkbox" />
             <span class="custom-toggle-label">Private Game</span>
           </label>
           <input v-if="isPrivateGame" v-model="lobbyPassword" type="text" class="lobby-password-input" placeholder="Set password..." />
@@ -348,8 +348,8 @@
           <button
             v-if="!(gameMode === 'single' && gameType === 'duel')"
             class="btn-primary start-btn"
-            @click="playSound('clickButton'); gatherAdvisors()"
             :disabled="loading || (gameMode === 'online' && gameType !== 'duel' && selectedFriendIds.length === 0) || (isPrivateGame && !lobbyPassword.trim())"
+            @click="playSound('clickButton'); gatherAdvisors()"
           >
             {{ loading ? 'Creating...' : (gameMode === 'online' && gameType === 'duel' ? 'Find Opponent' : 'Gather Advisors') }}
           </button>
@@ -360,8 +360,8 @@
     <!-- STEP: Matchmaking queue (online duel) -->
     <div v-else-if="step === 'matchmaking'" key="matchmaking">
       <MatchmakingQueue
-        :totalRounds="totalRounds"
-        :speedMode="speedMode"
+        :total-rounds="totalRounds"
+        :speed-mode="speedMode"
         @matched="onMatchFound"
         @cancelled="step = 'settings'"
       />
@@ -369,7 +369,7 @@
 
     <!-- STEP 2: Story intro -->
     <div v-else-if="step === 'story'" key="story" class="story-step">
-      <StoryIntro :numPlayers="numPlayers" @continue="step = 'characters'" />
+      <StoryIntro :number-players="numberPlayers" @continue="step = 'characters'" />
     </div>
 
     <!-- STEP 3: Character selection carousel -->
@@ -410,12 +410,12 @@
         <div class="carousel-wrapper">
           <Swiper
             :modules="swiperModules"
-            :effect="'cards'"
+            effect="cards"
             :grab-cursor="true"
             :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
             :style="{ overflow: 'visible' }"
             @swiper="onSwiper"
-            @slideChange="onSlideChange"
+            @slide-change="onSlideChange"
           >
             <SwiperSlide v-for="char in availableCharacters" :key="char.id">
               <div class="advisor-card" @click="selectCharacter(char.id)">
@@ -460,8 +460,11 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import axios, { isAxiosError } from 'axios';
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
+import type { LocationQueryValue } from 'vue-router';
 import { useAuth } from '../stores/auth';
 import { useToast } from '../stores/toast';
 import { playSound } from '../sounds';
@@ -474,549 +477,706 @@ import MatchmakingQueue from './MatchmakingQueue.vue';
 import StoryIntro from './StoryIntro.vue';
 import { Swiper, SwiperSlide } from 'swiper/vue';
 import { EffectCards } from 'swiper/modules';
+import type { Swiper as SwiperInstance } from 'swiper';
 import 'swiper/css';
 import 'swiper/css/effect-cards';
 
-export default {
-  name: 'GameSetup',
-  components: { AnnouncementsBanner, DailyChallengeBanner, WeeklyChallengeBanner, RotatingEventBanner, LoginRegister, MatchmakingQueue, StoryIntro, Swiper, SwiperSlide },
-  inject: {
-    openNotifications: { default: () => () => {} },
-    openRules: { default: () => () => {} },
-    openTutorial: { default: () => () => {} },
+interface StartingBonus {
+  extra_dice?: number;
+  random_item?: boolean;
+  stat_boosts?: Record<string, number>;
+}
+
+interface Character {
+  id: number;
+  name: string;
+  display_name?: string;
+  description?: string;
+  image_url?: string;
+  level: number;
+  dice: (string | number)[][];
+  base_dice?: (string | number)[][];
+  wild_value?: number;
+  wild_ability?: string;
+  wild_ability_description?: string;
+  starting_bonus?: StartingBonus;
+  extra_item_slots: number;
+  card_redraws: number;
+  passive_bonuses?: Record<string, number>;
+  is_locked_for_user?: boolean;
+}
+
+interface GameInvite {
+  id: number;
+  sender?: { name?: string };
+}
+
+interface FriendEntry {
+  id: number;
+  user: { id: number; name?: string };
+}
+
+interface HouseRules {
+  no_negative_effects: boolean;
+  double_positive_effects: boolean;
+  random_starting_stats: boolean;
+  hardcore_mode: boolean;
+}
+
+interface RotatingEventData {
+  game_type?: string;
+  game_mode?: string;
+  total_rounds?: number;
+  character_pool?: number[];
+}
+
+interface GamePayload {
+  game_mode: string;
+  game_type: string;
+  num_players: number;
+  total_rounds: number | undefined;
+  rotating_event_id?: number;
+  bot_difficulty?: string;
+  is_custom?: boolean;
+  starting_stats?: number;
+  house_rules?: HouseRules;
+  is_private?: boolean;
+  lobby_password?: string;
+}
+
+interface StartPayload {
+  characters: (number | undefined)[];
+  bot_difficulty?: string;
+}
+
+const auth = useAuth();
+const toast = useToast();
+const router = useRouter();
+const route = useRoute();
+
+function noop(): void {
+  // Fallback when the parent does not provide the handler.
+}
+
+const openNotifications = inject<() => void>('openNotifications', noop);
+const openRules = inject<() => void>('openRules', noop);
+const openTutorial = inject<() => void>('openTutorial', noop);
+
+const step = ref('mode');
+const gameMode = ref('single');
+const gameType = ref('cooperative');
+const numberPlayers = ref(2);
+const totalRounds = ref<number | undefined>(undefined);
+const gameId = ref<number | undefined>(undefined);
+const characters = ref<Character[]>([]);
+const loading = ref(false);
+const starting = ref(false);
+// Carousel state
+const currentPickingPlayer = ref(1);
+const playerSelections = ref<Record<number, number>>({});
+const swiperInstance = ref<SwiperInstance | undefined>(undefined);
+const activeSlideIndex = ref(0);
+const pendingInvites = ref<GameInvite[]>([]);
+// Online friends picker
+const availableFriends = ref<FriendEntry[]>([]);
+const pendingReceivedFriends = ref<FriendEntry[]>([]);
+const selectedFriendIds = ref<number[]>([]);
+const friendsLoading = ref(false);
+const addFriendUsername = ref('');
+const addFriendError = ref('');
+const addFriendSuccess = ref('');
+const botDifficulty = ref('medium');
+// Home screen stats
+const homeStats = reactive({ level: 1, elo: 1000, unclaimed: 0, activeGames: 0 });
+const notifCount = ref(0);
+const showMobileMenu = ref(false);
+const speedMode = ref('speed');
+// Custom game
+const isCustomGame = ref(false);
+const customStartingStats = ref(8);
+const houseRules = reactive<HouseRules>({
+  no_negative_effects: false,
+  double_positive_effects: false,
+  random_starting_stats: false,
+  hardcore_mode: false,
+});
+// Rotating event
+const rotatingEventId = ref<number | undefined>(undefined);
+const rotatingEventData = ref<RotatingEventData | undefined>(undefined);
+// Private lobby
+const isPrivateGame = ref(false);
+const lobbyPassword = ref('');
+// Lobby browser
+// (game length is now controlled by GameRule on the backend)
+
+const swiperModules = [EffectCards];
+
+const xpProgress = computed(() => {
+  const user = auth.state.user;
+  if (!user) return 0;
+  const level = user.level ?? 1;
+  const xp = user.xp ?? 0;
+  const currentLevelXp = 100 * (level - 1) * level / 2;
+  const nextLevelXp = 100 * level * (level + 1) / 2;
+  const range = nextLevelXp - currentLevelXp;
+  if (range <= 0) return 1;
+  return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
+});
+
+const xpRingCircumference = computed(() => 2 * Math.PI * 20);
+
+const xpRingOffset = computed(() => xpRingCircumference.value * (1 - xpProgress.value));
+
+const availableCharacters = computed(() => {
+  if (gameType.value === 'duel') {
+    // Duel: both players can pick the same character
+    return characters.value.filter(c => !c.is_locked_for_user);
+  }
+  const selectedIds = Object.values(playerSelections.value);
+  return characters.value.filter(c => !selectedIds.includes(c.id) && !c.is_locked_for_user);
+});
+
+const allPlayersPicked = computed(() => {
+  // Single-player duel: only 1 character needed (bot gets assigned automatically)
+  const needed = (gameMode.value === 'single' && gameType.value === 'duel') ? 1 : numberPlayers.value;
+  return Object.keys(playerSelections.value).length >= needed;
+});
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (route.path !== '/') {
+    	return;
+    }
+
+    const eventId = firstQueryValue(route.query.event_id);
+    if (eventId === undefined) {
+      resetToHome();
+    } else {
+      handleEventParameter(eventId);
+    }
   },
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast, playSound };
-  },
-  data() {
-    return {
-      step: 'mode',
-      gameMode: 'single',
-      gameType: 'cooperative',
-      numPlayers: 2,
-      totalRounds: null,
-      gameId: null,
-      characters: [],
-      loading: false,
-      starting: false,
-      // Carousel state
-      currentPickingPlayer: 1,
-      playerSelections: {},
-      swiperInstance: null,
-      activeSlideIndex: 0,
-      pendingInvites: [],
-      // Online friends picker
-      availableFriends: [],
-      pendingReceivedFriends: [],
-      selectedFriendIds: [],
-      friendsLoading: false,
-      addFriendUsername: '',
-      addFriendError: '',
-      addFriendSuccess: '',
-      botDifficulty: 'medium',
-      // Home screen stats
-      homeStats: { level: 1, elo: 1000, unclaimed: 0, activeGames: 0 },
-      notifCount: 0,
-      showMobileMenu: false,
-      speedMode: 'speed',
-      // Custom game
-      isCustomGame: false,
-      customStartingStats: 8,
-      houseRules: {
-        no_negative_effects: false,
-        double_positive_effects: false,
-        random_starting_stats: false,
-        hardcore_mode: false,
-      },
-      // Rotating event
-      rotatingEventId: null,
-      rotatingEventData: null,
-      // Private lobby
-      isPrivateGame: false,
-      lobbyPassword: '',
-      // Lobby browser
-      // (game length is now controlled by GameRule on the backend)
+);
+
+onMounted(async () => {
+  if (!auth.state.user) {
+  	return;
+  }
+
+  await fetchPendingInvites();
+  subscribeToInvites();
+  void fetchHomeStats();
+  // Check for rotating event query param
+  const eventId = firstQueryValue(route.query.event_id);
+  if (eventId !== undefined) {
+    handleEventParameter(eventId);
+  }
+  // Check for resume query param (game stuck in setup)
+  const resume = firstQueryValue(route.query.resume);
+  if (resume !== undefined) {
+    void resumeSetup(resume);
+  }
+});
+
+onBeforeUnmount(() => {
+  if (auth.state.user) {
+    getEcho()?.leave(`user.${auth.state.user.id}`);
+  }
+});
+
+function firstQueryValue(value: LocationQueryValue | LocationQueryValue[] | undefined): string | undefined {
+  const single = Array.isArray(value) ? value[0] : value;
+  return single ?? undefined;
+}
+
+interface EchoChannel {
+  listen: (event: string, callback: (data: { game_id: number }) => void) => EchoChannel;
+}
+
+interface EchoInstance {
+  private: (channel: string) => EchoChannel;
+  leave: (channel: string) => void;
+}
+
+function getEcho(): EchoInstance | undefined {
+  return (window as unknown as { Echo?: EchoInstance }).Echo;
+}
+
+function handleEventParameter(eventId: string): void {
+  // Reset state but preserve event context
+  step.value = 'mode';
+  gameId.value = undefined;
+  characters.value = [];
+  currentPickingPlayer.value = 1;
+  playerSelections.value = {};
+  activeSlideIndex.value = 0;
+  // Set event and fetch details
+  rotatingEventId.value = Number.parseInt(eventId);
+  rotatingEventData.value = undefined;
+  void fetchRotatingEvent(rotatingEventId.value);
+}
+
+async function fetchRotatingEvent(eventId: number): Promise<void> {
+  try {
+    const response = await axios.get<{ event: RotatingEventData }>(`/api/rotating-events/${eventId}`);
+    rotatingEventData.value = response.data.event;
+    // Auto-set game type and mode from event
+    if (rotatingEventData.value.game_type) gameType.value = rotatingEventData.value.game_type;
+    if (rotatingEventData.value.game_mode) gameMode.value = rotatingEventData.value.game_mode;
+    // Override total rounds if event specifies it
+    if (rotatingEventData.value.total_rounds) {
+      totalRounds.value = rotatingEventData.value.total_rounds;
+    }
+    // Auto-advance to settings step
+    step.value = 'settings';
+  } catch {
+    // ignore fetch errors
+  }
+}
+
+async function fetchHomeStats(): Promise<void> {
+  try {
+    const [statsResponse, achResponse, historyResponse, unreadResponse] = await Promise.allSettled([
+      axios.get<{ level?: number; elo_rating?: number }>('/api/auth/stats'),
+      axios.get<{ earned?: boolean; claimed?: boolean }[]>('/api/achievements'),
+      axios.get<{ active_games?: unknown[] }>('/api/games/history'),
+      axios.get<{ count?: number }>('/api/notifications/unread-count'),
+    ]);
+
+    if (statsResponse.status === 'fulfilled') {
+      const s = statsResponse.value.data;
+      homeStats.level = s.level || 1;
+      homeStats.elo = s.elo_rating || 1000;
+    }
+
+    if (achResponse.status === 'fulfilled') {
+      homeStats.unclaimed = achResponse.value.data.filter(a => a.earned && !a.claimed).length;
+    }
+
+    if (historyResponse.status === 'fulfilled') {
+      homeStats.activeGames = (historyResponse.value.data.active_games || []).length;
+    }
+
+    // Notification badge: pending invites + unread DB notifications
+    const databaseUnread = unreadResponse.status === 'fulfilled' ? (unreadResponse.value.data?.count || 0) : 0;
+    notifCount.value = pendingInvites.value.length + databaseUnread;
+  } catch {
+    // ignore stats errors
+  }
+}
+
+async function fetchPendingInvites(): Promise<void> {
+  try {
+    const response = await axios.get<GameInvite[]>('/api/game-invites/pending');
+    pendingInvites.value = response.data;
+  } catch {
+    // silently fail
+  }
+}
+
+function subscribeToInvites(): void {
+  const echo = getEcho();
+  if (!echo || !auth.state.user) return;
+  echo.private(`user.${auth.state.user.id}`)
+    .listen('GameInviteReceived', () => {
+      void fetchPendingInvites();
+      notifCount.value++;
+    })
+    .listen('FriendRequestReceived', () => {
+      notifCount.value++;
+    })
+    .listen('UserNotificationReceived', () => {
+      notifCount.value++;
+    })
+    .listen('MatchFound', (data) => {
+      if (step.value !== 'matchmaking') {
+        router.push(`/game/${data.game_id}`);
+      }
+    });
+}
+
+async function acceptInvite(invite: GameInvite): Promise<void> {
+  try {
+    const response = await axios.post<{ game_id: number }>(`/api/game-invites/${invite.id}/accept`);
+    router.push(`/game/${response.data.game_id}`);
+  } catch (error) {
+    toast.error(inviteErrorMessage(error) || 'Failed to accept invite');
+  }
+}
+
+async function declineInvite(invite: GameInvite): Promise<void> {
+  try {
+    await axios.post(`/api/game-invites/${invite.id}/decline`);
+    pendingInvites.value = pendingInvites.value.filter(index => index.id !== invite.id);
+  } catch (error) {
+    toast.error(inviteErrorMessage(error) || 'Failed to decline invite');
+  }
+}
+
+function inviteErrorMessage(error: unknown): string | undefined {
+  if (isAxiosError<{ error?: string }>(error)) {
+    return error.response?.data?.error;
+  }
+  return undefined;
+}
+
+function selectMode(): void {
+  if (gameMode.value === 'online') {
+    // Online goes straight to duel
+    numberPlayers.value = 2;
+    gameType.value = 'duel';
+    totalRounds.value = 24;
+    step.value = 'settings';
+    return;
+  }
+  numberPlayers.value = gameMode.value === 'single' ? 1 : 2;
+  gameType.value = 'cooperative';
+  step.value = 'gameType';
+}
+
+async function fetchFriendsForPicker(): Promise<void> {
+  friendsLoading.value = true;
+  try {
+    const response = await axios.get<{ friends: FriendEntry[]; pending_received?: FriendEntry[] }>('/api/friends');
+    availableFriends.value = response.data.friends;
+    pendingReceivedFriends.value = response.data.pending_received || [];
+  } catch {
+    availableFriends.value = [];
+    pendingReceivedFriends.value = [];
+  }
+  friendsLoading.value = false;
+}
+
+async function acceptFriendInline(friendshipId: number): Promise<void> {
+  try {
+    await axios.post(`/api/friends/${friendshipId}/accept`);
+    await fetchFriendsForPicker();
+  } catch (error) {
+    addFriendError.value = friendErrorMessage(error) || 'Failed to accept';
+  }
+}
+
+function toggleFriend(userId: number): void {
+  const index = selectedFriendIds.value.indexOf(userId);
+  if (index === -1) {
+    if (selectedFriendIds.value.length < 5) {
+      selectedFriendIds.value.push(userId);
+    }
+  } else {
+    selectedFriendIds.value.splice(index, 1);
+  }
+}
+
+async function addFriendInline(): Promise<void> {
+  if (!addFriendUsername.value.trim()) return;
+  addFriendError.value = '';
+  addFriendSuccess.value = '';
+  try {
+    await axios.post('/api/friends', { username: addFriendUsername.value.trim() });
+    addFriendSuccess.value = `Request sent to ${addFriendUsername.value}`;
+    addFriendUsername.value = '';
+    await fetchFriendsForPicker();
+  } catch (error) {
+    addFriendError.value = friendErrorMessage(error) || 'Failed to send request';
+  }
+}
+
+function friendErrorMessage(error: unknown): string | undefined {
+  if (isAxiosError<{ message?: string }>(error)) {
+    return error.response?.data?.message;
+  }
+  return undefined;
+}
+
+function onMatchFound(matchedGameId: number): void {
+  router.push(`/game/${matchedGameId}`);
+}
+
+function onCustomToggle(): void {
+  // Reset when toggling off
+  if (isCustomGame.value) {
+  	return;
+  }
+
+  customStartingStats.value = 8;
+  Object.assign(houseRules, { no_negative_effects: false, double_positive_effects: false, random_starting_stats: false, hardcore_mode: false });
+}
+
+async function gatherAdvisors(): Promise<void> {
+  loading.value = true;
+  try {
+    if (gameMode.value === 'online' && gameType.value === 'duel') {
+      // Online duel: use matchmaking
+      loading.value = false;
+      step.value = 'matchmaking';
+      return;
+    }
+    if (gameMode.value === 'online') {
+      // Online cooperative: numberPlayers = selected friends + yourself
+      numberPlayers.value = selectedFriendIds.value.length + 1;
+      const onlinePayload: GamePayload = {
+        game_mode: gameMode.value,
+        game_type: gameType.value,
+        num_players: numberPlayers.value,
+        total_rounds: totalRounds.value,
+      };
+      if (rotatingEventId.value) {
+        onlinePayload.rotating_event_id = rotatingEventId.value;
+      }
+      if (isCustomGame.value) {
+        onlinePayload.is_custom = true;
+        onlinePayload.starting_stats = customStartingStats.value;
+        onlinePayload.house_rules = { ...houseRules };
+      }
+      if (isPrivateGame.value) {
+        onlinePayload.is_private = true;
+        onlinePayload.lobby_password = lobbyPassword.value;
+      }
+      const gameResponse = await axios.post<{ id: number }>('/api/games', onlinePayload);
+      gameId.value = gameResponse.data.id;
+      // Auto-invite selected friends
+      for (const friendUserId of selectedFriendIds.value) {
+        try {
+          await axios.post(`/api/games/${gameId.value}/invite`, { user_id: friendUserId });
+        } catch {
+          // silently skip if invite fails
+        }
+      }
+      router.push(`/game/${gameId.value}`);
+      return;
+    }
+    const gamePayload: GamePayload = {
+      game_mode: gameMode.value,
+      game_type: gameType.value,
+      num_players: numberPlayers.value,
+      total_rounds: totalRounds.value,
     };
-  },
-  computed: {
-    swiperModules() {
-      return [EffectCards];
-    },
-    xpProgress() {
-      const user = this.auth.state.user;
-      if (!user) return 0;
-      const level = user.level ?? 1;
-      const xp = user.xp ?? 0;
-      const currentLevelXp = 100 * (level - 1) * level / 2;
-      const nextLevelXp = 100 * level * (level + 1) / 2;
-      const range = nextLevelXp - currentLevelXp;
-      if (range <= 0) return 1;
-      return Math.min(Math.max((xp - currentLevelXp) / range, 0), 1);
-    },
-    xpRingCircumference() {
-      return 2 * Math.PI * 20;
-    },
-    xpRingOffset() {
-      return this.xpRingCircumference * (1 - this.xpProgress);
-    },
-    availableCharacters() {
-      if (this.gameType === 'duel') {
-        // Duel: both players can pick the same character
-        return this.characters.filter(c => !c.is_locked_for_user);
-      }
-      const selectedIds = Object.values(this.playerSelections);
-      return this.characters.filter(c => !selectedIds.includes(c.id) && !c.is_locked_for_user);
-    },
-    allPlayersPicked() {
-      // Single-player duel: only 1 character needed (bot gets assigned automatically)
-      const needed = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
-      return Object.keys(this.playerSelections).length >= needed;
-    },
-  },
-  watch: {
-    '$route'(to) {
-      if (to.path === '/') {
-        if (to.query?.event_id) {
-          this.handleEventParam(to.query.event_id);
-        } else {
-          this.resetToHome();
-        }
-      }
-    },
-  },
-  async mounted() {
-    if (this.auth.state.user) {
-      await this.fetchPendingInvites();
-      this.subscribeToInvites();
-      this.fetchHomeStats();
-      // Check for rotating event query param
-      if (this.$route?.query?.event_id) {
-        this.handleEventParam(this.$route.query.event_id);
-      }
-      // Check for resume query param (game stuck in setup)
-      if (this.$route?.query?.resume) {
-        this.resumeSetup(this.$route.query.resume);
-      }
+    if (rotatingEventId.value) {
+      gamePayload.rotating_event_id = rotatingEventId.value;
     }
-  },
-  beforeUnmount() {
-    if (this.auth.state.user) {
-      window.Echo?.leave(`user.${this.auth.state.user.id}`);
+    if (gameMode.value === 'single' && gameType.value === 'duel') {
+      gamePayload.bot_difficulty = botDifficulty.value;
     }
-  },
-  methods: {
-    handleEventParam(eventId) {
-      // Reset state but preserve event context
-      this.step = 'mode';
-      this.gameId = null;
-      this.characters = [];
-      this.currentPickingPlayer = 1;
-      this.playerSelections = {};
-      this.activeSlideIndex = 0;
-      // Set event and fetch details
-      this.rotatingEventId = parseInt(eventId);
-      this.rotatingEventData = null;
-      this.fetchRotatingEvent(this.rotatingEventId);
-    },
-    async fetchRotatingEvent(eventId) {
-      try {
-        const res = await axios.get(`/api/rotating-events/${eventId}`);
-        this.rotatingEventData = res.data.event;
-        // Auto-set game type and mode from event
-        if (this.rotatingEventData.game_type) this.gameType = this.rotatingEventData.game_type;
-        if (this.rotatingEventData.game_mode) this.gameMode = this.rotatingEventData.game_mode;
-        // Override total rounds if event specifies it
-        if (this.rotatingEventData.total_rounds) {
-          this.totalRounds = this.rotatingEventData.total_rounds;
-        }
-        // Auto-advance to settings step
-        this.step = 'settings';
-      } catch {}
-    },
-    async fetchHomeStats() {
-      try {
-        const [statsRes, achRes, historyRes, unreadRes] = await Promise.allSettled([
-          axios.get('/api/auth/stats'),
-          axios.get('/api/achievements'),
-          axios.get('/api/games/history'),
-          axios.get('/api/notifications/unread-count'),
-        ]);
+    if (isCustomGame.value) {
+      gamePayload.is_custom = true;
+      gamePayload.starting_stats = customStartingStats.value;
+      gamePayload.house_rules = { ...houseRules };
+    }
+    const [gameResponse, charsResponse] = await Promise.all([
+      axios.post<{ id: number }>('/api/games', gamePayload),
+      axios.get<Character[]>('/api/characters', { params: { game_type: gameType.value } }),
+    ]);
+    gameId.value = gameResponse.data.id;
+    let allChars = charsResponse.data;
+    // Filter characters if rotating event has character_pool
+    if (rotatingEventData.value?.character_pool) {
+      const allowedIds = rotatingEventData.value.character_pool;
+      allChars = allChars.filter(c => allowedIds.includes(c.id));
+    }
+    characters.value = allChars;
+    step.value = gameMode.value === 'single' ? 'characters' : 'story';
+  } catch (error) {
+    toast.error('Failed to create game: ' + gameErrorMessage(error, 'message'));
+  }
+  loading.value = false;
+}
 
-        if (statsRes.status === 'fulfilled') {
-          const s = statsRes.value.data;
-          this.homeStats.level = s.level || 1;
-          this.homeStats.elo = s.elo_rating || 1000;
-        }
+function gameErrorMessage(error: unknown, key: 'message' | 'error'): string {
+  if (isAxiosError<{ message?: string; error?: string }>(error)) {
+    return error.response?.data?.[key] ?? error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return 'Something went wrong';
+}
 
-        if (achRes.status === 'fulfilled') {
-          this.homeStats.unclaimed = achRes.value.data.filter(a => a.earned && !a.claimed).length;
-        }
+function onSwiper(swiper: SwiperInstance): void {
+  swiperInstance.value = swiper;
+}
 
-        if (historyRes.status === 'fulfilled') {
-          this.homeStats.activeGames = (historyRes.value.data.active_games || []).length;
-        }
+function onSlideChange(swiper: SwiperInstance): void {
+  activeSlideIndex.value = swiper.activeIndex;
+}
 
-        // Notification badge: pending invites + unread DB notifications
-        const dbUnread = unreadRes.status === 'fulfilled' ? (unreadRes.value.data?.count || 0) : 0;
-        this.notifCount = this.pendingInvites.length + dbUnread;
-      } catch {}
-    },
-    async fetchPendingInvites() {
-      try {
-        const res = await axios.get('/api/game-invites/pending');
-        this.pendingInvites = res.data;
-      } catch {
-        // silently fail
+function selectCharacter(charId: number): void {
+  playSound('clickCard');
+  playerSelections.value[currentPickingPlayer.value] = charId;
+  const pickCount = (gameMode.value === 'single' && gameType.value === 'duel') ? 1 : numberPlayers.value;
+  if (currentPickingPlayer.value < pickCount) {
+    currentPickingPlayer.value++;
+    void nextTick(() => {
+      activeSlideIndex.value = 0;
+      if (swiperInstance.value) {
+        swiperInstance.value.slideTo(0, 0);
       }
-    },
-    subscribeToInvites() {
-      if (!window.Echo || !this.auth.state.user) return;
-      window.Echo.private(`user.${this.auth.state.user.id}`)
-        .listen('GameInviteReceived', () => {
-          this.fetchPendingInvites();
-          this.notifCount++;
-        })
-        .listen('FriendRequestReceived', () => {
-          this.notifCount++;
-        })
-        .listen('UserNotificationReceived', () => {
-          this.notifCount++;
-        })
-        .listen('MatchFound', (data) => {
-          if (this.step !== 'matchmaking') {
-            this.$router.push(`/game/${data.game_id}`);
-          }
-        });
-    },
-    async acceptInvite(invite) {
-      try {
-        const res = await axios.post(`/api/game-invites/${invite.id}/accept`);
-        this.$router.push(`/game/${res.data.game_id}`);
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to accept invite');
+    });
+  }
+}
+
+function removePlayerSelection(playerNumber: number): void {
+  playerSelections.value = Object.fromEntries(
+    Object.entries(playerSelections.value).filter(([key]) => Number(key) !== playerNumber),
+  );
+}
+
+function undoLastPick(): void {
+  const pickCount = (gameMode.value === 'single' && gameType.value === 'duel') ? 1 : numberPlayers.value;
+  // Remove the last pick and go back to picking
+  currentPickingPlayer.value = pickCount;
+  removePlayerSelection(currentPickingPlayer.value);
+  void nextTick(() => {
+    activeSlideIndex.value = 0;
+    if (swiperInstance.value) {
+      swiperInstance.value.slideTo(0, 0);
+    }
+  });
+}
+
+function hasUpgradeBonuses(char: Character): boolean {
+  return (char.extra_item_slots > 0)
+    || (char.card_redraws > 0)
+    || Object.keys(char.passive_bonuses || {}).length > 0;
+}
+
+function isDiceUpgraded(char: Character, dieIndex: number, faceIndex: number): boolean {
+  if (!char.base_dice) return false;
+  const baseValue = char.base_dice[dieIndex]?.[faceIndex];
+  const moduleValue = char.dice[dieIndex]?.[faceIndex];
+  return baseValue !== moduleValue;
+}
+
+function getCharacterBonusLabel(charId: number): string {
+  const char = characters.value.find(c => c.id === charId);
+  if (!char?.starting_bonus) return '';
+  const parts: string[] = [];
+  const b = char.starting_bonus;
+  if (b.extra_dice) parts.push(`+${b.extra_dice} Extra ${b.extra_dice === 1 ? 'Die' : 'Dice'}`);
+  if (b.random_item) parts.push('Random Item');
+  if (b.stat_boosts) {
+    for (const [stat, value] of Object.entries(b.stat_boosts)) {
+      const label = stat.charAt(0).toUpperCase() + stat.slice(1);
+      parts.push(`${value > 0 ? '+' : ''}${value} ${label}`);
+    }
+  }
+  return parts.join(', ');
+}
+
+function getCharacterName(charId: number): string {
+  const char = characters.value.find(c => c.id === charId);
+  return char ? char.name : 'Unknown';
+}
+
+function getCharacterImage(charId: number): string {
+  const char = characters.value.find(c => c.id === charId);
+  return char?.image_url || '/images/character.png';
+}
+
+function goBack(): void {
+  if (step.value === 'gameType') {
+    step.value = 'mode';
+    return;
+  }
+  if (step.value === 'settings') {
+    goBackFromSettings();
+    return;
+  }
+  if (step.value === 'matchmaking' || step.value === 'story') {
+    step.value = 'settings';
+    return;
+  }
+  if (step.value === 'characters') {
+    goBackFromCharacters();
+  }
+}
+
+function goBackFromSettings(): void {
+  if (rotatingEventId.value) {
+    // Event game: go back to home and clear event
+    rotatingEventId.value = undefined;
+    rotatingEventData.value = undefined;
+    router.replace('/');
+    step.value = 'mode';
+    return;
+  }
+  if (gameMode.value === 'online' || gameMode.value === 'single') {
+    // Online skips gameType (goes straight to duel), single also goes to mode
+    step.value = 'mode';
+    return;
+  }
+  step.value = 'gameType';
+}
+
+function goBackFromCharacters(): void {
+  if (currentPickingPlayer.value > 1) {
+    // Go back one player pick
+    currentPickingPlayer.value--;
+    removePlayerSelection(currentPickingPlayer.value);
+    void nextTick(() => {
+      activeSlideIndex.value = 0;
+      if (swiperInstance.value) {
+        swiperInstance.value.slideTo(0, 0);
       }
-    },
-    async declineInvite(invite) {
-      try {
-        await axios.post(`/api/game-invites/${invite.id}/decline`);
-        this.pendingInvites = this.pendingInvites.filter(i => i.id !== invite.id);
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to decline invite');
-      }
-    },
-    selectMode() {
-      if (this.gameMode === 'online') {
-        // Online goes straight to duel
-        this.numPlayers = 2;
-        this.gameType = 'duel';
-        this.totalRounds = 24;
-        this.step = 'settings';
-        return;
-      }
-      if (this.gameMode === 'single') {
-        this.numPlayers = 1;
-        this.gameType = 'cooperative';
-      } else {
-        this.numPlayers = 2;
-        this.gameType = 'cooperative';
-      }
-      this.step = 'gameType';
-    },
-    async fetchFriendsForPicker() {
-      this.friendsLoading = true;
-      try {
-        const res = await axios.get('/api/friends');
-        this.availableFriends = res.data.friends;
-        this.pendingReceivedFriends = res.data.pending_received || [];
-      } catch {
-        this.availableFriends = [];
-        this.pendingReceivedFriends = [];
-      }
-      this.friendsLoading = false;
-    },
-    async acceptFriendInline(friendshipId) {
-      try {
-        await axios.post(`/api/friends/${friendshipId}/accept`);
-        await this.fetchFriendsForPicker();
-      } catch (e) {
-        this.addFriendError = e.response?.data?.message || 'Failed to accept';
-      }
-    },
-    toggleFriend(userId) {
-      const idx = this.selectedFriendIds.indexOf(userId);
-      if (idx >= 0) {
-        this.selectedFriendIds.splice(idx, 1);
-      } else {
-        if (this.selectedFriendIds.length < 5) {
-          this.selectedFriendIds.push(userId);
-        }
-      }
-    },
-    async addFriendInline() {
-      if (!this.addFriendUsername.trim()) return;
-      this.addFriendError = '';
-      this.addFriendSuccess = '';
-      try {
-        await axios.post('/api/friends', { username: this.addFriendUsername.trim() });
-        this.addFriendSuccess = `Request sent to ${this.addFriendUsername}`;
-        this.addFriendUsername = '';
-        await this.fetchFriendsForPicker();
-      } catch (e) {
-        this.addFriendError = e.response?.data?.message || 'Failed to send request';
-      }
-    },
-    onMatchFound(gameId) {
-      this.$router.push(`/game/${gameId}`);
-    },
-    onCustomToggle() {
-      // Reset when toggling off
-      if (!this.isCustomGame) {
-        this.customStartingStats = 8;
-        this.houseRules = { no_negative_effects: false, double_positive_effects: false, random_starting_stats: false, hardcore_mode: false };
-      }
-    },
-    async gatherAdvisors() {
-      this.loading = true;
-      try {
-        if (this.gameMode === 'online' && this.gameType === 'duel') {
-          // Online duel: use matchmaking
-          this.loading = false;
-          this.step = 'matchmaking';
-          return;
-        }
-        if (this.gameMode === 'online') {
-          // Online cooperative: numPlayers = selected friends + yourself
-          this.numPlayers = this.selectedFriendIds.length + 1;
-          const onlinePayload = {
-            game_mode: this.gameMode,
-            game_type: this.gameType,
-            num_players: this.numPlayers,
-            total_rounds: this.totalRounds,
-          };
-          if (this.rotatingEventId) {
-            onlinePayload.rotating_event_id = this.rotatingEventId;
-          }
-          if (this.isCustomGame) {
-            onlinePayload.is_custom = true;
-            onlinePayload.starting_stats = this.customStartingStats;
-            onlinePayload.house_rules = { ...this.houseRules };
-          }
-          if (this.isPrivateGame) {
-            onlinePayload.is_private = true;
-            onlinePayload.lobby_password = this.lobbyPassword;
-          }
-          const gameRes = await axios.post('/api/games', onlinePayload);
-          this.gameId = gameRes.data.id;
-          // Auto-invite selected friends
-          for (const friendUserId of this.selectedFriendIds) {
-            try {
-              await axios.post(`/api/games/${this.gameId}/invite`, { user_id: friendUserId });
-            } catch {
-              // silently skip if invite fails
-            }
-          }
-          this.$router.push(`/game/${this.gameId}`);
-          return;
-        }
-        const gamePayload = {
-          game_mode: this.gameMode,
-          game_type: this.gameType,
-          num_players: this.numPlayers,
-          total_rounds: this.totalRounds,
-        };
-        if (this.rotatingEventId) {
-          gamePayload.rotating_event_id = this.rotatingEventId;
-        }
-        if (this.gameMode === 'single' && this.gameType === 'duel') {
-          gamePayload.bot_difficulty = this.botDifficulty;
-        }
-        if (this.isCustomGame) {
-          gamePayload.is_custom = true;
-          gamePayload.starting_stats = this.customStartingStats;
-          gamePayload.house_rules = { ...this.houseRules };
-        }
-        const [gameRes, charsRes] = await Promise.all([
-          axios.post('/api/games', gamePayload),
-          axios.get('/api/characters', { params: { game_type: this.gameType } }),
-        ]);
-        this.gameId = gameRes.data.id;
-        let allChars = charsRes.data;
-        // Filter characters if rotating event has character_pool
-        if (this.rotatingEventData?.character_pool) {
-          const allowedIds = this.rotatingEventData.character_pool;
-          allChars = allChars.filter(c => allowedIds.includes(c.id));
-        }
-        this.characters = allChars;
-        this.step = this.gameMode === 'single' ? 'characters' : 'story';
-      } catch (e) {
-        this.toast.error('Failed to create game: ' + (e.response?.data?.message || e.message));
-      }
-      this.loading = false;
-    },
-    onSwiper(swiper) {
-      this.swiperInstance = swiper;
-    },
-    onSlideChange(swiper) {
-      this.activeSlideIndex = swiper.activeIndex;
-    },
-    selectCharacterByIndex(index) {
-      if (index !== this.activeSlideIndex) return;
-      const char = this.availableCharacters[index];
-      if (!char) return;
-      this.selectCharacter(char.id);
-    },
-    selectCharacter(charId) {
-      playSound('clickCard');
-      this.playerSelections[this.currentPickingPlayer] = charId;
-      const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
-      if (this.currentPickingPlayer < pickCount) {
-        this.currentPickingPlayer++;
-        this.$nextTick(() => {
-          this.activeSlideIndex = 0;
-          if (this.swiperInstance) {
-            this.swiperInstance.slideTo(0, 0);
-          }
-        });
-      }
-    },
-    undoLastPick() {
-      const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
-      // Remove the last pick and go back to picking
-      this.currentPickingPlayer = pickCount;
-      delete this.playerSelections[this.currentPickingPlayer];
-      this.$nextTick(() => {
-        this.activeSlideIndex = 0;
-        if (this.swiperInstance) {
-          this.swiperInstance.slideTo(0, 0);
-        }
-      });
-    },
-    hasUpgradeBonuses(char) {
-      return (char.extra_item_slots > 0)
-        || (char.card_redraws > 0)
-        || Object.keys(char.passive_bonuses || {}).length > 0;
-    },
-    isDiceUpgraded(char, dieIdx, faceIdx) {
-      if (!char.base_dice) return false;
-      const baseVal = char.base_dice[dieIdx]?.[faceIdx];
-      const modVal = char.dice[dieIdx]?.[faceIdx];
-      return baseVal !== modVal;
-    },
-    getCharacterBonusLabel(charId) {
-      const char = this.characters.find(c => c.id === charId);
-      if (!char?.starting_bonus) return '';
-      const parts = [];
-      const b = char.starting_bonus;
-      if (b.extra_dice) parts.push(`+${b.extra_dice} Extra ${b.extra_dice === 1 ? 'Die' : 'Dice'}`);
-      if (b.random_item) parts.push('Random Item');
-      if (b.stat_boosts) {
-        for (const [stat, val] of Object.entries(b.stat_boosts)) {
-          const label = stat.charAt(0).toUpperCase() + stat.slice(1);
-          parts.push(`${val > 0 ? '+' : ''}${val} ${label}`);
-        }
-      }
-      return parts.join(', ');
-    },
-    getCharacterName(charId) {
-      const char = this.characters.find(c => c.id === charId);
-      return char ? char.name : 'Unknown';
-    },
-    getCharacterImage(charId) {
-      const char = this.characters.find(c => c.id === charId);
-      return char?.image_url || '/images/character.png';
-    },
-    goBack() {
-      if (this.step === 'gameType') {
-        this.step = 'mode';
-      } else if (this.step === 'settings') {
-        if (this.rotatingEventId) {
-          // Event game: go back to home and clear event
-          this.rotatingEventId = null;
-          this.rotatingEventData = null;
-          this.$router.replace('/');
-          this.step = 'mode';
-        } else if (this.gameMode === 'online' || this.gameMode === 'single') {
-          // Online skips gameType (goes straight to duel), single also goes to mode
-          this.step = 'mode';
-        } else {
-          this.step = 'gameType';
-        }
-      } else if (this.step === 'matchmaking') {
-        this.step = 'settings';
-      } else if (this.step === 'story') {
-        this.step = 'settings';
-      } else if (this.step === 'characters') {
-        if (this.currentPickingPlayer > 1) {
-          // Go back one player pick
-          this.currentPickingPlayer--;
-          delete this.playerSelections[this.currentPickingPlayer];
-          this.$nextTick(() => {
-            this.activeSlideIndex = 0;
-            if (this.swiperInstance) {
-              this.swiperInstance.slideTo(0, 0);
-            }
-          });
-        } else {
-          this.playerSelections = {};
-          this.step = this.gameMode === 'single' ? 'settings' : 'story';
-        }
-      }
-    },
-    resetToHome() {
-      this.step = 'mode';
-      this.gameId = null;
-      this.characters = [];
-      this.currentPickingPlayer = 1;
-      this.playerSelections = {};
-      this.rotatingEventId = null;
-      this.rotatingEventData = null;
-      this.activeSlideIndex = 0;
-      this.fetchHomeStats();
-    },
-    async resumeSetup(gameId) {
-      try {
-        const [gameRes, charsRes] = await Promise.all([
-          axios.get(`/api/games/${gameId}`),
-          axios.get('/api/characters'),
-        ]);
-        const game = gameRes.data.game;
-        if (game.status !== 'setup') return; // game already started
-        this.gameId = game.id;
-        this.gameMode = game.game_mode;
-        this.gameType = game.game_type || 'cooperative';
-        this.numPlayers = game.num_players;
-        this.totalRounds = game.total_rounds;
-        this.characters = charsRes.data;
-        this.currentPickingPlayer = 1;
-        this.playerSelections = {};
-        this.step = 'characters';
-      } catch {
-        // If resume fails, just stay on home
-      }
-    },
-    async startGame() {
-      this.starting = true;
-      try {
-        const selectedIds = [];
-        const pickCount = (this.gameMode === 'single' && this.gameType === 'duel') ? 1 : this.numPlayers;
-        for (let i = 1; i <= pickCount; i++) {
-          selectedIds.push(this.playerSelections[i]);
-        }
-        const startPayload = { characters: selectedIds };
-        if (this.gameMode === 'single' && this.gameType === 'duel') {
-          startPayload.bot_difficulty = this.botDifficulty;
-        }
-        await axios.post(`/api/games/${this.gameId}/start`, startPayload);
-        this.$router.push(`/game/${this.gameId}`);
-      } catch (e) {
-        this.toast.error('Failed to start: ' + (e.response?.data?.error || e.message));
-      }
-      this.starting = false;
-    },
-  },
-};
+    });
+    return;
+  }
+  playerSelections.value = {};
+  step.value = gameMode.value === 'single' ? 'settings' : 'story';
+}
+
+function resetToHome(): void {
+  step.value = 'mode';
+  gameId.value = undefined;
+  characters.value = [];
+  currentPickingPlayer.value = 1;
+  playerSelections.value = {};
+  rotatingEventId.value = undefined;
+  rotatingEventData.value = undefined;
+  activeSlideIndex.value = 0;
+  void fetchHomeStats();
+}
+
+async function resumeSetup(gameIdToResume: string): Promise<void> {
+  try {
+    const [gameResponse, charsResponse] = await Promise.all([
+      axios.get<{ game: { id: number; status: string; game_mode: string; game_type?: string; num_players: number; total_rounds?: number } }>(`/api/games/${gameIdToResume}`),
+      axios.get<Character[]>('/api/characters'),
+    ]);
+    const game = gameResponse.data.game;
+    if (game.status !== 'setup') return; // game already started
+    gameId.value = game.id;
+    gameMode.value = game.game_mode;
+    gameType.value = game.game_type || 'cooperative';
+    numberPlayers.value = game.num_players;
+    totalRounds.value = game.total_rounds;
+    characters.value = charsResponse.data;
+    currentPickingPlayer.value = 1;
+    playerSelections.value = {};
+    step.value = 'characters';
+  } catch {
+    // If resume fails, just stay on home
+  }
+}
+
+async function startGame(): Promise<void> {
+  starting.value = true;
+  try {
+    const selectedIds: (number | undefined)[] = [];
+    const pickCount = (gameMode.value === 'single' && gameType.value === 'duel') ? 1 : numberPlayers.value;
+    for (let index = 1; index <= pickCount; index++) {
+      selectedIds.push(playerSelections.value[index]);
+    }
+    const startPayload: StartPayload = { characters: selectedIds };
+    if (gameMode.value === 'single' && gameType.value === 'duel') {
+      startPayload.bot_difficulty = botDifficulty.value;
+    }
+    await axios.post(`/api/games/${gameId.value}/start`, startPayload);
+    router.push(`/game/${gameId.value}`);
+  } catch (error) {
+    toast.error('Failed to start: ' + gameErrorMessage(error, 'error'));
+  }
+  starting.value = false;
+}
 </script>
 
 <style scoped>

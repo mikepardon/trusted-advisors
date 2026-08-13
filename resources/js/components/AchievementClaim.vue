@@ -31,44 +31,54 @@
   </transition>
 </template>
 
-<script>
-import AppIcon from './AppIcon.vue';
-import { resolveAchievementIcon } from '../utils/achievementIcons';
+<script setup lang="ts">
+import { computed, onMounted, ref } from "vue";
+import AppIcon from "./AppIcon.vue";
+import { resolveAchievementIcon } from "../utils/achievement-icons";
 
-export default {
-  name: 'AchievementClaim',
-  components: { AppIcon },
-  props: {
-    achievement: { type: Object, required: true },
-    result: { type: Object, required: true },
-  },
-  emits: ['dismiss'],
-  data() {
-    return {
-      visible: false,
-      cardVisible: false,
-    };
-  },
-  computed: {
-    iconResolved() {
-      return resolveAchievementIcon(this.achievement.icon);
-    },
-  },
-  mounted() {
-    this.visible = true;
-    setTimeout(() => {
-      this.cardVisible = true;
-    }, 600);
-  },
-  methods: {
-    dismiss() {
-      this.visible = false;
-      setTimeout(() => {
-        this.$emit('dismiss');
-      }, 300);
-    },
-  },
-};
+interface Achievement {
+  name: string;
+  description: string;
+  icon?: string;
+}
+
+interface NextTier {
+  name: string;
+}
+
+interface ClaimResult {
+  xp_awarded: number;
+  coins_awarded?: number;
+  leveled_up?: boolean;
+  new_level?: number;
+  next_tier?: NextTier;
+}
+
+const { achievement, result } = defineProps<{
+  achievement: Achievement;
+  result: ClaimResult;
+}>();
+
+const emit = defineEmits<{ dismiss: [] }>();
+
+const visible = ref(false);
+const cardVisible = ref(false);
+
+const iconResolved = computed(() => resolveAchievementIcon(achievement.icon));
+
+onMounted(() => {
+  visible.value = true;
+  setTimeout(() => {
+    cardVisible.value = true;
+  }, 600);
+});
+
+function dismiss(): void {
+  visible.value = false;
+  setTimeout(() => {
+    emit("dismiss");
+  }, 300);
+}
 </script>
 
 <style scoped>

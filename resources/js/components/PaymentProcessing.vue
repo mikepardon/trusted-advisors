@@ -33,89 +33,104 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import axios from "axios";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'PaymentProcessing',
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      state: 'processing', // 'processing' | 'success' | 'timeout'
-      successTitle: 'Premium Activated!',
-      successDesc: 'You now have access to all premium features.',
-      pollInterval: null,
-      timeoutTimer: null,
-    };
-  },
-  mounted() {
-    this.subscribeToEvents();
-    this.startPolling();
-    this.timeoutTimer = setTimeout(() => {
-      if (this.state === 'processing') {
-        this.state = 'timeout';
-        this.cleanup();
-      }
-    }, 60000);
-  },
-  beforeUnmount() {
-    this.cleanup();
-  },
-  methods: {
-    subscribeToEvents() {
-      const userId = this.auth.state.user?.id;
-      if (!userId || !window.Echo) return;
+interface PremiumStatusEvent {
+  status?: string;
+  is_premium: boolean;
+}
 
-      this._channel = window.Echo.private(`user.${userId}`);
-      this._channel.listen('PremiumStatusChanged', (data) => {
-        if (data.status === 'activated') {
-          this.successTitle = 'Premium Activated!';
-          this.successDesc = 'You now have access to all premium features.';
-        } else if (data.status === 'purchase_completed') {
-          this.successTitle = 'Purchase Complete!';
-          this.successDesc = 'Your item has been unlocked.';
-        }
-        this.auth.updateUserStats({ is_premium: data.is_premium });
-        this.state = 'success';
-        this.cleanup();
-      });
-    },
-    startPolling() {
-      this.pollInterval = setInterval(async () => {
-        try {
-          const res = await axios.get('/api/premium/status');
-          if (res.data.is_premium && !this.auth.state.user?.is_premium) {
-            this.auth.updateUserStats({ is_premium: true });
-            this.successTitle = 'Premium Activated!';
-            this.successDesc = 'You now have access to all premium features.';
-            this.state = 'success';
-            this.cleanup();
-          }
-        } catch {
-          // ignore polling errors
-        }
-      }, 3000);
-    },
-    cleanup() {
-      if (this.pollInterval) {
-        clearInterval(this.pollInterval);
-        this.pollInterval = null;
+interface EchoChannel {
+  listen: (event: string, callback: (data: PremiumStatusEvent) => void) => void;
+  stopListening: (event: string) => void;
+}
+
+interface EchoInstance {
+  private: (channel: string) => EchoChannel;
+}
+
+const auth = useAuth();
+
+const state = ref<"processing" | "success" | "timeout">("processing");
+const successTitle = ref("Premium Activated!");
+const successDesc = ref("You now have access to all premium features.");
+const pollInterval = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+const timeoutTimer = ref<ReturnType<typeof setTimeout> | undefined>(undefined);
+const channel = ref<EchoChannel | undefined>(undefined);
+
+function subscribeToEvents(): void {
+  const userId = auth.state.user?.id;
+  const echo = (window as unknown as { Echo?: EchoInstance }).Echo;
+  if (!userId || !echo) {
+    return;
+  }
+
+  channel.value = echo.private(`user.${userId}`);
+  channel.value.listen("PremiumStatusChanged", (data) => {
+    if (data.status === "activated") {
+      successTitle.value = "Premium Activated!";
+      successDesc.value = "You now have access to all premium features.";
+    } else if (data.status === "purchase_completed") {
+      successTitle.value = "Purchase Complete!";
+      successDesc.value = "Your item has been unlocked.";
+    }
+    auth.updateUserStats({ is_premium: data.is_premium });
+    state.value = "success";
+    cleanup();
+  });
+}
+
+function startPolling(): void {
+  pollInterval.value = setInterval(async () => {
+    try {
+      const response = await axios.get<{ is_premium: boolean }>("/api/premium/status");
+      if (!response.data.is_premium || auth.state.user?.is_premium) {
+        return;
       }
-      if (this.timeoutTimer) {
-        clearTimeout(this.timeoutTimer);
-        this.timeoutTimer = null;
-      }
-      if (this._channel) {
-        this._channel.stopListening('PremiumStatusChanged');
-        this._channel = null;
-      }
-    },
-  },
-};
+      auth.updateUserStats({ is_premium: true });
+      successTitle.value = "Premium Activated!";
+      successDesc.value = "You now have access to all premium features.";
+      state.value = "success";
+      cleanup();
+    } catch {
+      // ignore polling errors
+    }
+  }, 3000);
+}
+
+function cleanup(): void {
+  if (pollInterval.value) {
+    clearInterval(pollInterval.value);
+    pollInterval.value = undefined;
+  }
+  if (timeoutTimer.value) {
+    clearTimeout(timeoutTimer.value);
+    timeoutTimer.value = undefined;
+  }
+  if (channel.value) {
+    channel.value.stopListening("PremiumStatusChanged");
+    channel.value = undefined;
+  }
+}
+
+onMounted(() => {
+  subscribeToEvents();
+  startPolling();
+  timeoutTimer.value = setTimeout(() => {
+    if (state.value !== "processing") {
+      return;
+    }
+    state.value = "timeout";
+    cleanup();
+  }, 60_000);
+});
+
+onBeforeUnmount(() => {
+  cleanup();
+});
 </script>
 
 <style scoped>

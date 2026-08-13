@@ -17,13 +17,16 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'WaitingOverlay',
-  props: {
-    playerStatus: { type: Array, required: true },
-  },
-};
+<script setup lang="ts">
+interface PlayerStatus {
+  player_number: number;
+  character_name: string;
+  has_assigned: boolean;
+}
+
+defineProps<{
+  playerStatus: PlayerStatus[];
+}>();
 </script>
 
 <style scoped>

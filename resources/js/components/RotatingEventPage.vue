@@ -22,11 +22,11 @@
         </div>
 
         <!-- Content pool info -->
-        <div class="pool-info" v-if="hasPoolRestrictions">
+        <div v-if="hasPoolRestrictions" class="pool-info">
           <span class="pool-tag">{{ event.card_count !== null ? event.card_count + ' Cards' : 'All Cards' }}</span>
           <span class="pool-tag">{{ event.item_count !== null ? event.item_count + ' Items' : 'All Items' }}</span>
           <span class="pool-tag">{{ event.event_count !== null ? event.event_count + ' Events' : 'All Events' }}</span>
-          <span class="pool-tag" v-if="event.curse_count !== null">{{ event.curse_count }} Curses</span>
+          <span v-if="event.curse_count !== null" class="pool-tag">{{ event.curse_count }} Curses</span>
         </div>
 
         <!-- Fixed event -->
@@ -35,7 +35,7 @@
         </div>
 
         <!-- Allowed characters -->
-        <div v-if="event.characters && event.characters.length" class="character-pool">
+        <div v-if="event.characters && event.characters.length > 0" class="character-pool">
           <div class="char-pool-label">Allowed Characters</div>
           <div class="char-pool-grid">
             <div v-for="char in event.characters" :key="char.id" class="char-pool-item">
@@ -52,8 +52,8 @@
 
         <button
           class="btn-primary play-btn"
-          @click="playEvent"
           :disabled="attemptsExhausted"
+          @click="playEvent"
         >
           {{ attemptsExhausted ? 'No Attempts Remaining' : 'Play Event' }}
         </button>
@@ -90,90 +90,169 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import axios from "axios";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'RotatingEventPage',
-  props: { id: [String, Number] },
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      event: null,
-      userEntries: [],
-      leaderboard: [],
-      loading: true,
-      timer: null,
-    };
-  },
-  computed: {
-    userId() {
-      return this.auth.state.user?.id;
-    },
-    timeLeft() {
-      if (!this.event) return '';
-      const end = new Date(this.event.ends_at);
-      const now = new Date();
-      const diff = end - now;
-      if (diff <= 0) return 'Ended';
-      const hours = Math.floor(diff / 3600000);
-      const days = Math.floor(hours / 24);
-      if (days > 0) return `${days}d ${hours % 24}h left`;
-      const mins = Math.floor((diff % 3600000) / 60000);
-      return `${hours}h ${mins}m left`;
-    },
-    headerStyle() {
-      if (!this.event?.theme_color) return {};
-      const hex = this.event.theme_color.replace('#', '');
-      const r = parseInt(hex.substring(0, 2), 16);
-      const g = parseInt(hex.substring(2, 4), 16);
-      const b = parseInt(hex.substring(4, 6), 16);
-      return {
-        borderColor: this.event.theme_color,
-        background: `linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.08), transparent)`,
-      };
-    },
-    hasPoolRestrictions() {
-      if (!this.event) return false;
-      return this.event.card_count !== null || this.event.item_count !== null || this.event.event_count !== null || this.event.curse_count !== null;
-    },
-    attemptsExhausted() {
-      if (!this.event?.max_attempts) return false;
-      return (this.event.user_attempts || 0) >= this.event.max_attempts;
-    },
-  },
-  async mounted() {
-    await this.fetchEvent();
-    this.timer = setInterval(() => this.$forceUpdate(), 60000);
-  },
-  beforeUnmount() {
-    if (this.timer) clearInterval(this.timer);
-  },
-  methods: {
-    async fetchEvent() {
-      this.loading = true;
-      try {
-        const res = await axios.get(`/api/rotating-events/${this.id}`);
-        this.event = res.data.event;
-        this.userEntries = res.data.user_entries;
-        this.leaderboard = res.data.leaderboard;
-      } catch {}
-      this.loading = false;
-    },
-    modeLabel(mode) {
-      const labels = { single: 'Solo', pass_and_play: 'Local', online: 'Online' };
-      return labels[mode] || mode;
-    },
-    playEvent() {
-      // Navigate to game setup — the event will be passed as a query parameter
-      this.$router.push({ path: '/', query: { event_id: this.event.id } });
-    },
-  },
-};
+interface EventCharacter {
+  id: number;
+  name: string;
+  image_url: string | undefined;
+}
+
+interface EventModifiers {
+  starting_stats: number | undefined;
+  xp_multiplier: number | undefined;
+}
+
+interface RotatingEvent {
+  id: number;
+  name: string;
+  description: string;
+  game_type: string;
+  game_mode: string;
+  ends_at: string;
+  theme_color: string | undefined;
+  reward_coins: number | undefined;
+  total_rounds: number | undefined;
+  has_custom_xp: boolean | undefined;
+  affects_elo: boolean | undefined;
+  max_attempts: number | undefined;
+  user_attempts: number | undefined;
+  modifiers: EventModifiers | undefined;
+  card_count: number | undefined;
+  item_count: number | undefined;
+  event_count: number | undefined;
+  curse_count: number | undefined;
+  fixed_event_name: string | undefined;
+  characters: EventCharacter[] | undefined;
+}
+
+interface UserEntry {
+  id: number;
+  game_id: number;
+  score: number;
+}
+
+interface EventLeaderboardEntry {
+  user_id: number;
+  rank: number;
+  username: string;
+  best_score: number;
+  games_played: number;
+}
+
+interface EventResponse {
+  event: RotatingEvent;
+  user_entries: UserEntry[];
+  leaderboard: EventLeaderboardEntry[];
+}
+
+const { id = undefined } = defineProps<{
+  id?: string | number;
+}>();
+
+const auth = useAuth();
+const router = useRouter();
+
+const event = ref<RotatingEvent | undefined>(undefined);
+const userEntries = ref<UserEntry[]>([]);
+const leaderboard = ref<EventLeaderboardEntry[]>([]);
+const loading = ref(true);
+const timer = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+const nowTick = ref(Date.now());
+
+const userId = computed(() => auth.state.user?.id);
+
+const timeLeft = computed(() => {
+  if (!event.value) {
+    return "";
+  }
+  const end = new Date(event.value.ends_at).getTime();
+  const now = nowTick.value;
+  const diff = end - now;
+  if (diff <= 0) {
+    return "Ended";
+  }
+  const hours = Math.floor(diff / 3_600_000);
+  const days = Math.floor(hours / 24);
+  if (days > 0) {
+    return `${days}d ${hours % 24}h left`;
+  }
+  const mins = Math.floor((diff % 3_600_000) / 60_000);
+  return `${hours}h ${mins}m left`;
+});
+
+const headerStyle = computed(() => {
+  if (!event.value?.theme_color) {
+    return {};
+  }
+  const hex = event.value.theme_color.replace("#", "");
+  const r = Number.parseInt(hex.slice(0, 2), 16);
+  const g = Number.parseInt(hex.slice(2, 4), 16);
+  const b = Number.parseInt(hex.slice(4, 6), 16);
+  return {
+    borderColor: event.value.theme_color,
+    background: `linear-gradient(135deg, rgba(${r}, ${g}, ${b}, 0.08), transparent)`,
+  };
+});
+
+const hasPoolRestrictions = computed(() => {
+  if (!event.value) {
+    return false;
+  }
+  return (
+    event.value.card_count != undefined ||
+    event.value.item_count != undefined ||
+    event.value.event_count != undefined ||
+    event.value.curse_count != undefined
+  );
+});
+
+const attemptsExhausted = computed(() => {
+  if (!event.value?.max_attempts) {
+    return false;
+  }
+  return (event.value.user_attempts || 0) >= event.value.max_attempts;
+});
+
+async function fetchEvent(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<EventResponse>(`/api/rotating-events/${id}`);
+    event.value = response.data.event;
+    userEntries.value = response.data.user_entries;
+    leaderboard.value = response.data.leaderboard;
+  } catch {
+    // Ignore load failures; the empty state is rendered instead.
+  }
+  loading.value = false;
+}
+
+function modeLabel(mode: string): string {
+  const labels: Record<string, string> = { single: "Solo", pass_and_play: "Local", online: "Online" };
+  return labels[mode] || mode;
+}
+
+function playEvent(): void {
+  // Navigate to game setup — the event will be passed as a query parameter
+  router.push({ path: "/", query: { event_id: event.value?.id } });
+}
+
+onMounted(async () => {
+  await fetchEvent();
+  timer.value = setInterval(() => {
+    nowTick.value = Date.now();
+  }, 60_000);
+});
+
+onBeforeUnmount(() => {
+  if (timer.value) {
+    clearInterval(timer.value);
+  }
+});
 </script>
 
 <style scoped>

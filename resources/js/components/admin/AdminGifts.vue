@@ -37,7 +37,7 @@
           </div>
         </div>
         <div v-if="g.status === 'scheduled'" class="list-actions">
-          <button class="btn-danger-sm" @click="cancelGift(g)" :disabled="cancelling === g.id">Cancel</button>
+          <button class="btn-danger-sm" :disabled="cancelling === g.id" @click="cancelGift(g)">Cancel</button>
         </div>
       </div>
       <div v-if="filteredGifts.length === 0" class="empty">No gifts found.</div>
@@ -102,8 +102,8 @@
           <!-- Specific Users -->
           <div v-if="form.target_type === 'specific_users'" class="form-group">
             <label>User Search</label>
-            <input v-model="userSearch" @input="searchUsers" placeholder="Search by name or email..." />
-            <div v-if="userSearchResults.length" class="user-results">
+            <input v-model="userSearch" placeholder="Search by name or email..." @input="searchUsers" />
+            <div v-if="userSearchResults.length > 0" class="user-results">
               <div v-for="u in userSearchResults" :key="u.id" class="user-result" @click="addUser(u)">
                 {{ u.name }} ({{ u.email }})
               </div>
@@ -160,7 +160,7 @@
             </div>
             <div class="form-group">
               <label>
-                <input type="checkbox" v-model="form.target_criteria.is_premium" :true-value="true" :false-value="undefined" />
+                <input v-model="form.target_criteria.is_premium" type="checkbox" :true-value="true" :false-value="undefined" />
                 Premium Only
               </label>
             </div>
@@ -168,7 +168,7 @@
 
           <!-- Preview Count -->
           <div v-if="form.target_type !== 'all'" class="form-group">
-            <button type="button" class="btn-secondary" @click="previewCount" :disabled="previewing">
+            <button type="button" class="btn-secondary" :disabled="previewing" @click="previewCount">
               {{ previewing ? 'Counting...' : 'Preview Recipient Count' }}
             </button>
             <span v-if="previewResult !== null" class="preview-count">{{ previewResult }} users</span>
@@ -203,165 +203,238 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
 
-export default {
-  name: 'AdminGifts',
-  data() {
-    return {
-      gifts: [],
-      characters: [],
-      diceThemes: [],
-      kingdomStyles: [],
-      showModal: false,
-      showConfirm: false,
-      sending: false,
-      cancelling: null,
-      formError: '',
-      statusTab: 'all',
-      userSearch: '',
-      userSearchResults: [],
-      selectedUserNames: {},
-      previewResult: null,
-      previewing: false,
-      searchTimer: null,
-      form: this.emptyForm(),
+interface EntityOption {
+  id: number;
+  name: string;
+}
+
+interface Gift {
+  id: number;
+  title: string;
+  note: string | undefined;
+  status: string | undefined;
+  created_at: string | undefined;
+  scheduled_at: string | undefined;
+  reward_xp: number | undefined;
+  reward_coins: number | undefined;
+  reward_character: EntityOption | undefined;
+  reward_dice_theme: EntityOption | undefined;
+  reward_kingdom_style: EntityOption | undefined;
+  target_type: string | undefined;
+  recipient_count: number | undefined;
+  creator: { name: string } | undefined;
+}
+
+interface UserResult {
+  id: number;
+  name: string;
+  email: string;
+}
+
+interface TargetCriteria {
+  level_min?: number;
+  level_max?: number;
+  elo_min?: number;
+  elo_max?: number;
+  joined_after?: string;
+  joined_before?: string;
+  min_games?: number;
+  inactive_days?: number;
+  is_premium?: boolean;
+}
+
+interface GiftForm {
+  title: string;
+  note: string;
+  reward_xp: number;
+  reward_coins: number;
+  reward_character_id: number | undefined;
+  reward_dice_theme_id: number | undefined;
+  reward_kingdom_style_id: number | undefined;
+  target_type: string;
+  target_user_ids: number[];
+  target_criteria: TargetCriteria;
+  scheduled_at: string;
+}
+
+function emptyForm(): GiftForm {
+  return {
+    title: "", note: "", reward_xp: 0, reward_coins: 0,
+    reward_character_id: undefined, reward_dice_theme_id: undefined, reward_kingdom_style_id: undefined,
+    target_type: "all", target_user_ids: [], target_criteria: {},
+    scheduled_at: "",
+  };
+}
+
+const gifts = ref<Gift[]>([]);
+const characters = ref<EntityOption[]>([]);
+const diceThemes = ref<EntityOption[]>([]);
+const kingdomStyles = ref<EntityOption[]>([]);
+const showModal = ref(false);
+const showConfirm = ref(false);
+const sending = ref(false);
+const cancelling = ref<number | undefined>(undefined);
+const formError = ref("");
+const statusTab = ref("all");
+const userSearch = ref("");
+const userSearchResults = ref<UserResult[]>([]);
+const selectedUserNames = reactive<Record<number, string>>({});
+const previewResult = ref<number | undefined>(undefined);
+const previewing = ref(false);
+const searchTimer = ref<ReturnType<typeof setTimeout>>();
+const form = reactive<GiftForm>(emptyForm());
+
+const filteredGifts = computed<Gift[]>(() => {
+  if (statusTab.value === "all") {
+    return gifts.value;
+  }
+  return gifts.value.filter((gift) => (gift.status || "sent") === statusTab.value);
+});
+
+async function load(): Promise<void> {
+  const response = await axios.get<Gift[]>("/api/admin/gifts");
+  gifts.value = response.data;
+}
+
+async function fetchCharacters(): Promise<void> {
+  try {
+    const response = await axios.get<EntityOption[]>("/api/characters");
+    characters.value = response.data;
+  } catch { /* ignore */ }
+}
+
+async function fetchDiceThemes(): Promise<void> {
+  try {
+    const response = await axios.get<EntityOption[]>("/api/admin/dice-themes");
+    diceThemes.value = response.data;
+  } catch { /* ignore */ }
+}
+
+async function fetchKingdomStyles(): Promise<void> {
+  try {
+    const response = await axios.get<EntityOption[]>("/api/admin/kingdom-styles");
+    kingdomStyles.value = response.data;
+  } catch { /* ignore */ }
+}
+
+function onTargetTypeChange(): void {
+  previewResult.value = undefined;
+  if (form.target_type === "segment") {
+    form.target_criteria = {};
+  }
+}
+
+function searchUsers(): void {
+  clearTimeout(searchTimer.value);
+  searchTimer.value = setTimeout(async () => {
+    if (!userSearch.value || userSearch.value.length < 2) {
+      userSearchResults.value = [];
+      return;
+    }
+    try {
+      const response = await axios.get<{ data?: UserResult[] }>("/api/admin/users", { params: { search: userSearch.value } });
+      userSearchResults.value = (response.data.data ?? []).slice(0, 10);
+    } catch { /* ignore */ }
+  }, 300);
+}
+
+function addUser(user: UserResult): void {
+  if (!form.target_user_ids.includes(user.id)) {
+    form.target_user_ids.push(user.id);
+    selectedUserNames[user.id] = user.name;
+  }
+  userSearch.value = "";
+  userSearchResults.value = [];
+}
+
+function removeUser(uid: number): void {
+  form.target_user_ids = form.target_user_ids.filter((id) => id !== uid);
+}
+
+async function previewCount(): Promise<void> {
+  previewing.value = true;
+  try {
+    const payload = {
+      target_type: form.target_type,
+      target_user_ids: form.target_user_ids,
+      target_criteria: cleanCriteria(),
     };
-  },
-  computed: {
-    filteredGifts() {
-      if (this.statusTab === 'all') return this.gifts;
-      return this.gifts.filter(g => (g.status || 'sent') === this.statusTab);
-    },
-  },
-  async mounted() {
-    await Promise.all([this.load(), this.fetchCharacters(), this.fetchDiceThemes(), this.fetchKingdomStyles()]);
-  },
-  methods: {
-    emptyForm() {
-      return {
-        title: '', note: '', reward_xp: 0, reward_coins: 0,
-        reward_character_id: null, reward_dice_theme_id: null, reward_kingdom_style_id: null,
-        target_type: 'all', target_user_ids: [], target_criteria: {},
-        scheduled_at: '',
-      };
-    },
-    async load() {
-      const res = await axios.get('/api/admin/gifts');
-      this.gifts = res.data;
-    },
-    async fetchCharacters() {
-      try { this.characters = (await axios.get('/api/characters')).data; } catch {}
-    },
-    async fetchDiceThemes() {
-      try { this.diceThemes = (await axios.get('/api/admin/dice-themes')).data; } catch {}
-    },
-    async fetchKingdomStyles() {
-      try { this.kingdomStyles = (await axios.get('/api/admin/kingdom-styles')).data; } catch {}
-    },
-    onTargetTypeChange() {
-      this.previewResult = null;
-      if (this.form.target_type === 'segment') {
-        this.form.target_criteria = {};
-      }
-    },
-    searchUsers() {
-      clearTimeout(this.searchTimer);
-      this.searchTimer = setTimeout(async () => {
-        if (!this.userSearch || this.userSearch.length < 2) {
-          this.userSearchResults = [];
-          return;
-        }
-        try {
-          const res = await axios.get('/api/admin/users', { params: { search: this.userSearch } });
-          this.userSearchResults = (res.data.data || []).slice(0, 10);
-        } catch {}
-      }, 300);
-    },
-    addUser(user) {
-      if (!this.form.target_user_ids.includes(user.id)) {
-        this.form.target_user_ids.push(user.id);
-        this.selectedUserNames[user.id] = user.name;
-      }
-      this.userSearch = '';
-      this.userSearchResults = [];
-    },
-    removeUser(uid) {
-      this.form.target_user_ids = this.form.target_user_ids.filter(id => id !== uid);
-    },
-    async previewCount() {
-      this.previewing = true;
-      try {
-        const payload = {
-          target_type: this.form.target_type,
-          target_user_ids: this.form.target_user_ids,
-          target_criteria: this.cleanCriteria(),
-        };
-        const res = await axios.post('/api/admin/gifts/preview-count', payload);
-        this.previewResult = res.data.count;
-      } catch (e) {
-        this.previewResult = null;
-      }
-      this.previewing = false;
-    },
-    cleanCriteria() {
-      const c = { ...this.form.target_criteria };
-      Object.keys(c).forEach(k => {
-        if (c[k] === undefined || c[k] === null || c[k] === '') delete c[k];
-      });
-      return c;
-    },
-    confirmSend() {
-      this.formError = '';
-      if (!this.form.title) {
-        this.formError = 'Title is required.';
-        return;
-      }
-      if (this.form.reward_xp === 0 && this.form.reward_coins === 0 && !this.form.reward_character_id && !this.form.reward_dice_theme_id && !this.form.reward_kingdom_style_id) {
-        this.formError = 'At least one reward must be specified.';
-        return;
-      }
-      if (this.form.target_type === 'specific_users' && this.form.target_user_ids.length === 0) {
-        this.formError = 'Select at least one user.';
-        return;
-      }
-      this.showConfirm = true;
-    },
-    async send() {
-      this.sending = true;
-      this.formError = '';
-      try {
-        const payload = {
-          ...this.form,
-          target_criteria: this.cleanCriteria(),
-          scheduled_at: this.form.scheduled_at || undefined,
-        };
-        await axios.post('/api/admin/gifts', payload);
-        this.showModal = false;
-        this.showConfirm = false;
-        this.form = this.emptyForm();
-        this.previewResult = null;
-        this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.error || 'Failed to send gift';
-      }
-      this.sending = false;
-    },
-    async cancelGift(gift) {
-      this.cancelling = gift.id;
-      try {
-        await axios.post(`/api/admin/gifts/${gift.id}/cancel`);
-        gift.status = 'cancelled';
-      } catch {}
-      this.cancelling = null;
-    },
-    formatDate(d) {
-      if (!d) return '';
-      return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    },
-  },
-};
+    const response = await axios.post<{ count: number }>("/api/admin/gifts/preview-count", payload);
+    previewResult.value = response.data.count;
+  } catch {
+    previewResult.value = undefined;
+  }
+  previewing.value = false;
+}
+
+function cleanCriteria(): TargetCriteria {
+  const entries = Object.entries(form.target_criteria).filter(([, value]) => value !== undefined && value !== "");
+  return Object.fromEntries(entries) as TargetCriteria;
+}
+
+function confirmSend(): void {
+  formError.value = "";
+  if (!form.title) {
+    formError.value = "Title is required.";
+    return;
+  }
+  if (form.reward_xp === 0 && form.reward_coins === 0 && !form.reward_character_id && !form.reward_dice_theme_id && !form.reward_kingdom_style_id) {
+    formError.value = "At least one reward must be specified.";
+    return;
+  }
+  if (form.target_type === "specific_users" && form.target_user_ids.length === 0) {
+    formError.value = "Select at least one user.";
+    return;
+  }
+  showConfirm.value = true;
+}
+
+async function send(): Promise<void> {
+  sending.value = true;
+  formError.value = "";
+  try {
+    const payload = {
+      ...form,
+      target_criteria: cleanCriteria(),
+      scheduled_at: form.scheduled_at || undefined,
+    };
+    await axios.post("/api/admin/gifts", payload);
+    showModal.value = false;
+    showConfirm.value = false;
+    Object.assign(form, emptyForm());
+    previewResult.value = undefined;
+    await load();
+  } catch (error) {
+    formError.value = isAxiosError<{ error?: string }>(error)
+      ? (error.response?.data?.error ?? "Failed to send gift")
+      : "Failed to send gift";
+  }
+  sending.value = false;
+}
+
+async function cancelGift(gift: Gift): Promise<void> {
+  cancelling.value = gift.id;
+  try {
+    await axios.post(`/api/admin/gifts/${gift.id}/cancel`);
+    gift.status = "cancelled";
+  } catch { /* ignore */ }
+  cancelling.value = undefined;
+}
+
+function formatDate(date: string | undefined): string {
+  if (!date) {
+    return "";
+  }
+  return new Date(date).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+onMounted(async () => {
+  await Promise.all([load(), fetchCharacters(), fetchDiceThemes(), fetchKingdomStyles()]);
+});
 </script>
 
 <style scoped>

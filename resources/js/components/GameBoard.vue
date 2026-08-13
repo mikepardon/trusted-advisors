@@ -10,10 +10,10 @@
     <template v-if="isOnline && gameData.game.status === 'setup'">
       <OnlineLobby
         ref="lobby"
-        :gameId="id"
-        :hostId="gameData.game.user_id"
-        :gameType="gameData.game.game_type || 'cooperative'"
-        :turnTimeLimit="gameData.game.turn_time_limit || 0"
+        :game-id="id"
+        :host-id="gameData.game.user_id"
+        :game-type="gameData.game.game_type || 'cooperative'"
+        :turn-time-limit="gameData.game.turn_time_limit || 0"
         @start-game="startOnlineGame"
         @lobby-updated="fetchGame"
       />
@@ -31,7 +31,7 @@
           <button
             class="bar-icon-btn"
             title="View Inventory"
-            @click="$refs.duelBoard?.$refs.playerItems?.openOverlay()"
+            @click="openDuelInventory()"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
               <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
@@ -59,12 +59,12 @@
     </div>
     <DuelBoard
       ref="duelBoard"
-      :gameData="gameData"
-      :gameId="id"
+      :game-data="gameData"
+      :game-id="id"
       @refresh="fetchGame"
       @game-data-updated="onGameDataUpdated"
       @phase-updated="onPhaseUpdated"
-      @game-over="$router.replace(`/game/${id}/over`)"
+      @game-over="onDuelGameOver"
       @items-updated="count => duelItemCount = count"
       @dice-updated="count => duelDiceCount = count"
     />
@@ -79,7 +79,7 @@
           <button
             class="bar-icon-btn"
             title="View Inventory"
-            @click="$refs.playerItems?.openOverlay()"
+            @click="openInventory()"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
               <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
@@ -114,10 +114,10 @@
     </div>
 
     <!-- Kingdom Stats -->
-    <KingdomStats :game="displayGame" :kingdomStyleSlug="myKingdomStyleSlug" :kingdomStyleData="myKingdomStyleData" :previewEffects="cardPreviewEffects" />
+    <KingdomStats :game="displayGame" :kingdom-style-slug="myKingdomStyleSlug" :kingdom-style-data="myKingdomStyleData" :preview-effects="cardPreviewEffects" />
 
     <!-- Player Items (overlay only, button in top bar) -->
-    <PlayerItems ref="playerItems" :items="currentPlayerItems" :showButton="false" :currentRound="gameData.current_round || 0" />
+    <PlayerItems ref="playerItems" :items="currentPlayerItems" :show-button="false" :current-round="gameData.current_round || 0" />
 
     <!-- Active Curses Overlay -->
     <teleport to="body">
@@ -182,7 +182,7 @@
 
     <!-- Item Reveal Overlay -->
     <ItemReveal
-      v-if="showItemReveal && itemRevealQueue.length"
+      v-if="showItemReveal && itemRevealQueue.length > 0"
       :item="itemRevealQueue[0]"
       @dismiss="onItemRevealDismiss"
     />
@@ -191,24 +191,24 @@
     <CurseSelectionOverlay
       v-if="showCurseSelection && currentPendingCurse()"
       :curses="currentPendingCurse().curse_details"
-      :playerName="gameData?.game?.players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
-      :isDuel="false"
+      :player-name="gameData?.game?.players?.find(p => p.player_number === activePlayerNumber)?.character?.name || 'Player'"
+      :is-duel="false"
       @selected="onCurseSelected"
     />
 
     <!-- Item Discard Overlay (when over 2-item limit) -->
     <ItemDiscard
       v-if="itemsOverLimit.length > 0"
-      :gameId="id"
-      :playerData="itemsOverLimit[0]"
+      :game-id="id"
+      :player-data="itemsOverLimit[0]"
       @discarded="onItemDiscarded"
     />
 
     <!-- TURN HANDOFF OVERLAY (pass and play) -->
     <TurnHandoffOverlay
       v-if="showTurnHandoff"
-      :playerNumber="turnHandoffPlayerNumber"
-      :characterName="turnHandoffCharacterName"
+      :player-number="turnHandoffPlayerNumber"
+      :character-name="turnHandoffCharacterName"
       @ready="onHandoffReady"
     />
 
@@ -217,19 +217,19 @@
       <!-- Online waiting overlay -->
       <WaitingOverlay
         v-if="isOnline && waitingForOthers"
-        :playerStatus="gameData.player_status || []"
+        :player-status="gameData.player_status || []"
       />
 
       <template v-else>
         <CardSelectionHand
           v-if="isSinglePlayer || !currentPlayerHasAssigned"
           :cards="currentHand"
-          :hasAssigned="currentPlayerHasAssigned"
+          :has-assigned="currentPlayerHasAssigned"
           :loading="handLoading"
           :redraws="cardRedraws"
-          :showPreviews="showPreviews"
-          :singlePlayer="isSinglePlayer"
-          :resolveData="singlePlayerResolveData"
+          :show-previews="showPreviews"
+          :single-player="isSinglePlayer"
+          :resolve-data="singlePlayerResolveData"
           @assign="assignRoles"
           @preview="onCardPreview"
           @redraw="onCardRedraw"
@@ -243,7 +243,7 @@
         <template v-if="showItemPrompt">
           <div class="item-prompt-card">
             <p class="item-prompt-title">{{ currentPlayerName }}'s Preparation</p>
-            <p class="item-prompt-text" v-if="!itemDeciding">Do you want to use an item before the roll?</p>
+            <p v-if="!itemDeciding" class="item-prompt-text">Do you want to use an item before the roll?</p>
             <div v-if="!itemDeciding" class="item-prompt-buttons">
               <button class="btn-primary" @click="itemDeciding = true">Use Item</button>
               <button class="btn-secondary" :disabled="usingItem" @click="skipItem">No, skip</button>
@@ -279,14 +279,14 @@
     <template v-if="gameData.round_phase === 'resolving'">
       <RoundResults
         :round="gameData.current_round"
-        :totalRounds="gameData.total_rounds"
-        :positivePhase="positivePhase"
-        :negativePhase="negativePhase"
-        :combinedEffects="combinedEffects"
-        :eventEffects="eventEffects"
-        :specialEffects="specialEffects"
-        :gameOver="isGameOver"
-        :canAdvance="!isOnline || isHost"
+        :total-rounds="gameData.total_rounds"
+        :positive-phase="positivePhase"
+        :negative-phase="negativePhase"
+        :combined-effects="combinedEffects"
+        :event-effects="eventEffects"
+        :special-effects="specialEffects"
+        :game-over="isGameOver"
+        :can-advance="!isOnline || isHost"
         :players="gameData.game?.players"
         :resumed="resolveResumed"
         @phase-complete="onPhaseComplete"
@@ -336,7 +336,8 @@
         <div v-for="(die, i) in characterDice" :key="i" class="dice-viewer-row">
           <span class="dice-viewer-label">Die {{ i + 1 }}</span>
           <div class="dice-viewer-faces">
-            <span v-for="(face, j) in die" :key="j" class="dice-viewer-face"
+            <span
+v-for="(face, j) in die" :key="j" class="dice-viewer-face"
                   :class="{ 'dice-viewer-face-wild': face === 'WILD' }">
               {{ face === 'WILD' ? 'W' : face }}
             </span>
@@ -351,1038 +352,1380 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import KingdomStats from './KingdomStats.vue';
-import EventBanner from './EventBanner.vue';
-import CardSelectionHand from './CardSelectionHand.vue';
-import RoundResults from './RoundResults.vue';
-import TurnHandoffOverlay from './TurnHandoffOverlay.vue';
-import OnlineLobby from './OnlineLobby.vue';
-import WaitingOverlay from './WaitingOverlay.vue';
-import DuelBoard from './DuelBoard.vue';
-import PlayerItems from './PlayerItems.vue';
-import EventReveal from './EventReveal.vue';
-import ItemReveal from './ItemReveal.vue';
-import ItemDiscard from './ItemDiscard.vue';
-import DiceOverlay from './DiceOverlay.vue';
-import CurseSelectionOverlay from './CurseSelectionOverlay.vue';
-import ConfirmModal from './ConfirmModal.vue';
-import SettingsModal from './SettingsModal.vue';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
-import { playSound } from '../sounds';
+<script setup lang="ts">
+import { computed, inject, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useRouter } from "vue-router";
+import KingdomStats from "./KingdomStats.vue";
+import EventBanner from "./EventBanner.vue";
+import CardSelectionHand from "./CardSelectionHand.vue";
+import RoundResults from "./RoundResults.vue";
+import TurnHandoffOverlay from "./TurnHandoffOverlay.vue";
+import OnlineLobby from "./OnlineLobby.vue";
+import WaitingOverlay from "./WaitingOverlay.vue";
+import DuelBoard from "./DuelBoard.vue";
+import PlayerItems from "./PlayerItems.vue";
+import EventReveal from "./EventReveal.vue";
+import ItemReveal from "./ItemReveal.vue";
+import ItemDiscard from "./ItemDiscard.vue";
+import DiceOverlay from "./DiceOverlay.vue";
+import CurseSelectionOverlay from "./CurseSelectionOverlay.vue";
+import ConfirmModal from "./ConfirmModal.vue";
+import SettingsModal from "./SettingsModal.vue";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
 
-export default {
-  name: 'GameBoard',
-  components: { KingdomStats, EventBanner, CardSelectionHand, RoundResults, TurnHandoffOverlay, OnlineLobby, WaitingOverlay, DuelBoard, PlayerItems, EventReveal, ItemReveal, ItemDiscard, DiceOverlay, CurseSelectionOverlay, ConfirmModal, SettingsModal },
-  inject: {
-    openRules: { default: () => () => {} },
-    openTutorial: { default: () => () => {} },
-    setActiveGameType: { default: () => () => {} },
-  },
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, toast, playSound };
-  },
-  props: {
-    id: { type: [String, Number], required: true },
-  },
-  data() {
-    return {
-      gameData: null,
-      loading: true,
-      activePlayerNumber: 1,
-      currentHand: [],
-      handLoading: false,
-      resolving: false,
-      positivePhase: {},
-      negativePhase: {},
-      combinedEffects: {},
-      eventEffects: {},
-      specialEffects: [],
-      isGameOver: false,
-      gameAfterPositive: null,
-      gameAfterNegative: null,
-      preResolveGame: null, // snapshot of game stats before resolution
-      currentStatPhase: null, // null, 'positive', or 'negative'
-      showTurnHandoff: false,
-      turnHandoffPlayerNumber: null,
-      // Items & Dice
-      currentPlayerItems: [],
-      diceCount: 3,
-      duelItemCount: 0,
-      duelDiceCount: 4,
-      showDiceViewer: false,
-      characterDice: null,
-      cardRedraws: 0,
-      characterWildValue: null,
-      characterWildAbility: null,
-      // Event reveal
-      showEventReveal: false,
-      // Resolve restoration
-      resolveResumed: false,
-      // Item reveal
-      itemRevealQueue: [],
-      showItemReveal: false,
-      // Connection monitoring
-      connectionStatus: 'connected',
-      // Item discard (when over 2-item limit)
-      itemsOverLimit: [],
-      // Item phase
-      itemDeciding: false,
-      usingItem: false,
-      currentItemPlayer: null,
-      allItemsDecided: false,
-      // Online mode
-      myPlayerNumber: null,
-      waitingForOthers: false,
-      echoChannel: null,
-      // Curses
-      pendingCurses: null,
-      playerCurses: {},
-      showCurseDetails: false,
-      showCurseSelection: false,
-      // Card effect preview
-      cardPreviewEffects: null,
-      // Seer's Lens curse: show stat preview bars
-      showPreviews: false,
-      // Burger menu
-      showGameMenu: false,
-      showSettingsModal: false,
-      showQuitConfirm: false,
-      // Single-player inline results
-      singlePlayerResolveData: null,
-    };
-  },
-  computed: {
-    activeCurseCount() {
-      let count = 0;
-      for (const pn in this.playerCurses) {
-        const curses = this.playerCurses[pn];
-        if (Array.isArray(curses)) count += curses.length;
-      }
-      return count;
-    },
-    monthLabel() {
-      const months = [
-        'January', 'February', 'March', 'April', 'May', 'June',
-        'July', 'August', 'September', 'October', 'November', 'December',
-      ];
-      const round = this.gameData?.current_round || 1;
-      const monthIndex = (round - 1) % 12;
-      const yearOffset = Math.floor((round - 1) / 12);
-      const total = this.gameData?.total_rounds || 24;
-      return `${months[monthIndex]}, ${1280 + yearOffset} AD (${round}/${total})`;
-    },
-    phaseLabel() {
-      const phases = {
-        selecting: "The Lord's Council",
-        resolving: 'Month Resolution',
-        dealing: 'Dealing...',
-        complete: 'Game Over',
-      };
-      return phases[this.gameData?.round_phase] || '';
-    },
-    currentPlayerHasAssigned() {
-      if (!this.gameData?.player_status) return false;
-      const ps = this.gameData.player_status.find(
-        p => p.player_number === this.activePlayerNumber
-      );
-      return ps?.has_assigned || false;
-    },
-    currentPlayerName() {
-      if (!this.gameData?.player_status) return 'Player';
-      const ps = this.gameData.player_status.find(
-        p => p.player_number === this.activePlayerNumber
-      );
-      return ps?.character_name || `Player ${this.activePlayerNumber}`;
-    },
-    isPassAndPlay() {
-      return this.gameData?.game_mode === 'pass_and_play';
-    },
-    isOnline() {
-      return this.gameData?.game_mode === 'online';
-    },
-    isSinglePlayer() {
-      return this.gameData?.game_mode === 'single' || !this.gameData?.game_mode;
-    },
-    isDuel() {
-      return (this.gameData?.game_type || this.gameData?.game?.game_type) === 'duel';
-    },
-    duelPhaseLabel() {
-      const phases = {
-        choosing: 'Selecting Cards',
-        rolling: 'Rolling Dice',
-        rolling_offerer: 'Player 1 Rolling',
-        rolling_chooser: 'Player 2 Rolling',
-        resolving: 'Month Resolution',
-      };
-      const dp = this.gameData?.duel_phase || this.gameData?.game?.duel_phase;
-      return phases[dp] || 'Duel';
-    },
-    isHost() {
-      return this.gameData?.game?.user_id === this.auth.state.user?.id;
-    },
-    turnHandoffCharacterName() {
-      if (!this.turnHandoffPlayerNumber || !this.gameData?.player_status) return '';
-      const ps = this.gameData.player_status.find(
-        p => p.player_number === this.turnHandoffPlayerNumber
-      );
-      return ps?.character_name || `Player ${this.turnHandoffPlayerNumber}`;
-    },
-    myKingdomStyleSlug() {
-      const userId = this.auth.state.user?.id;
-      const player = this.gameData?.game?.players?.find(p => p.user_id === userId);
-      return player?.user?.active_kingdom_style_slug || 'classic';
-    },
-    myKingdomStyleData() {
-      const userId = this.auth.state.user?.id;
-      const player = this.gameData?.game?.players?.find(p => p.user_id === userId);
-      return player?.user?.active_kingdom_style || null;
-    },
-    showItemPrompt() {
-      if (!this.gameData?.all_assigned) return false;
-      if (this.allItemsDecided) return false;
-      // Check if current active player has items and hasn't decided
-      const ps = this.gameData.player_status?.find(p => p.player_number === this.activePlayerNumber);
-      if (!ps) return false;
-      if (ps.item_decided) return false;
-      if (!ps.has_items) return false;
-      // Also check client-side that there are usable items
-      if (this.usableItems.length === 0) return false;
-      return true;
-    },
-    usableItems() {
-      const round = this.gameData?.current_round || 0;
-      return this.currentPlayerItems.filter(pi => !pi.is_used && !(pi.used_round && pi.used_round === round));
-    },
-    displayGame() {
-      // Before any phase is accepted, show pre-resolution stats
-      if (this.currentStatPhase === null && this.preResolveGame) {
-        return this.preResolveGame;
-      }
-      if (this.currentStatPhase === 'positive' && this.gameAfterPositive) {
-        return { ...this.gameData.game, ...this.gameAfterPositive };
-      }
-      if (this.currentStatPhase === 'negative' && this.gameAfterNegative) {
-        return { ...this.gameData.game, ...this.gameAfterNegative };
-      }
-      return this.gameData?.game || {};
-    },
-  },
-  async mounted() {
-    await this.fetchGame();
-    this.setActiveGameType(this.isDuel ? 'duel' : 'cooperative');
-    if (this.isOnline && !this.echoChannel) {
-      this.setupOnlinePlayer();
-      this.subscribeToGameChannel();
+interface Character {
+  name?: string;
+}
+
+interface CurseEffect {
+  type?: string;
+  value?: number;
+  stat?: string;
+  count?: number;
+  rounds?: number;
+}
+
+interface Curse {
+  name?: string;
+  description?: string;
+  image_path?: string;
+  negative_effect?: CurseEffect;
+  positive_effect?: CurseEffect;
+}
+
+interface PlayerCurse {
+  id: number;
+  acquired_round?: number;
+  curse?: Curse;
+}
+
+interface KingdomStyle {
+  slug?: string;
+}
+
+interface GamePlayerUser {
+  id: number;
+  active_kingdom_style_slug?: string;
+  active_kingdom_style?: KingdomStyle;
+}
+
+interface GamePlayer {
+  id: number;
+  player_number: number;
+  user_id?: number;
+  user?: GamePlayerUser;
+  character?: Character;
+}
+
+interface GameState {
+  user_id?: number;
+  status?: string;
+  game_type?: string;
+  duel_phase?: string;
+  current_round?: number;
+  turn_time_limit?: number;
+  players?: GamePlayer[];
+  [key: string]: unknown;
+}
+
+interface PlayerStatus {
+  player_number: number;
+  character_name?: string;
+  has_assigned?: boolean;
+  has_items?: boolean;
+  item_decided?: boolean;
+}
+
+interface ItemEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+  stat?: string;
+}
+
+interface Item {
+  name?: string;
+  description?: string;
+  effect?: ItemEffect;
+}
+
+interface PlayerItem {
+  id: number;
+  is_used?: boolean;
+  used_round?: number;
+  item?: Item;
+}
+
+interface HandCard {
+  hand_id: number;
+  card?: Record<string, unknown>;
+}
+
+interface PendingCurse {
+  player_id: number;
+  curse_details?: unknown;
+}
+
+interface SpecialEffect {
+  type?: string;
+  item?: unknown;
+}
+
+interface PhaseResult {
+  cards?: unknown[];
+  total_difficulty?: number;
+  total_roll?: number;
+  dice_results?: unknown[];
+  wild_triggers?: unknown[];
+  ability_effects?: unknown[];
+  success?: boolean;
+  effects?: Record<string, unknown>;
+}
+
+interface RoundResult {
+  success?: boolean;
+  stat_totals?: { total_difficulty?: number; total_roll?: number };
+  dice_results?: unknown[];
+  wild_triggers?: unknown[];
+  effects_applied?: Record<string, unknown>;
+}
+
+interface SinglePlayerResolveData {
+  positivePhase: PhaseResult;
+  negativePhase: PhaseResult;
+  combinedEffects: Record<string, unknown>;
+  eventEffects: Record<string, unknown>;
+  specialEffects: SpecialEffect[];
+  gameOver: boolean;
+}
+
+interface GameEvent {
+  id?: number;
+}
+
+interface GameData {
+  game: GameState;
+  game_mode?: string;
+  game_type?: string;
+  round_phase?: string;
+  duel_phase?: string;
+  current_round?: number;
+  total_rounds?: number;
+  current_event?: GameEvent;
+  all_assigned?: boolean;
+  all_items_decided?: boolean;
+  player_status?: PlayerStatus[];
+  pending_curses?: PendingCurse[];
+  player_curses?: Record<number, PlayerCurse[]>;
+  round_results?: RoundResult[];
+  [key: string]: unknown;
+}
+
+interface ResolveResponse {
+  positive_phase: PhaseResult;
+  negative_phase: PhaseResult;
+  combined_effects: Record<string, unknown>;
+  event_effects: Record<string, unknown>;
+  special_effects?: SpecialEffect[];
+  game_over: boolean;
+  game_after_positive?: Record<string, unknown>;
+  game_after_negative?: Record<string, unknown>;
+  game: GameState;
+  player_items?: Record<number, PlayerItem[]>;
+  items_over_limit?: unknown[];
+  pending_curses?: PendingCurse[];
+  player_curses?: Record<number, PlayerCurse[]>;
+}
+
+interface EchoChannel {
+  listen: (event: string, callback: (data: never) => void) => EchoChannel;
+}
+
+interface PusherConnection {
+  bind: (event: string, callback: (states: { current: string; previous: string }) => void) => void;
+}
+
+interface EchoInstance {
+  private: (channel: string) => EchoChannel;
+  leave: (channel: string) => void;
+  connector?: { pusher?: { connection: PusherConnection } };
+}
+
+const { id } = defineProps<{
+  id: string | number;
+}>();
+
+const router = useRouter();
+const auth = useAuth();
+const toast = useToast();
+
+function noop(): void {
+  // Fallback when the parent does not provide the handler.
+}
+
+const openRules = inject<() => void>("openRules", noop);
+const openTutorial = inject<() => void>("openTutorial", noop);
+const setActiveGameType = inject<(type: string | undefined) => void>("setActiveGameType", noop);
+
+const lobby = useTemplateRef("lobby");
+const duelBoard = useTemplateRef("duelBoard");
+const playerItems = useTemplateRef("playerItems");
+
+const gameData = ref<GameData | undefined>(undefined);
+const loading = ref(true);
+const activePlayerNumber = ref(1);
+const currentHand = ref<HandCard[]>([]);
+const handLoading = ref(false);
+const resolving = ref(false);
+const positivePhase = ref<PhaseResult>({});
+const negativePhase = ref<PhaseResult>({});
+const combinedEffects = ref<Record<string, unknown>>({});
+const eventEffects = ref<Record<string, unknown>>({});
+const specialEffects = ref<SpecialEffect[]>([]);
+const isGameOver = ref(false);
+const gameAfterPositive = ref<Record<string, unknown> | undefined>(undefined);
+const gameAfterNegative = ref<Record<string, unknown> | undefined>(undefined);
+const preResolveGame = ref<Record<string, unknown> | undefined>(undefined); // snapshot of game stats before resolution
+const currentStatPhase = ref<"positive" | "negative" | undefined>(undefined); // undefined, 'positive', or 'negative'
+const showTurnHandoff = ref(false);
+const turnHandoffPlayerNumber = ref<number | undefined>(undefined);
+// Items & Dice
+const currentPlayerItems = ref<PlayerItem[]>([]);
+const diceCount = ref(3);
+const duelItemCount = ref(0);
+const duelDiceCount = ref(4);
+const showDiceViewer = ref(false);
+const characterDice = ref<string[][] | undefined>(undefined);
+const cardRedraws = ref(0);
+const characterWildValue = ref<number | undefined>(undefined);
+const characterWildAbility = ref<string | undefined>(undefined);
+// Event reveal
+const showEventReveal = ref(false);
+// Resolve restoration
+const resolveResumed = ref(false);
+// Item reveal
+const itemRevealQueue = ref<unknown[]>([]);
+const showItemReveal = ref(false);
+// Connection monitoring
+const connectionStatus = ref("connected");
+// Item discard (when over 2-item limit)
+const itemsOverLimit = ref<unknown[]>([]);
+// Item phase
+const itemDeciding = ref(false);
+const usingItem = ref(false);
+const allItemsDecided = ref(false);
+// Online mode
+const myPlayerNumber = ref<number | undefined>(undefined);
+const waitingForOthers = ref(false);
+const echoChannel = ref<EchoChannel | undefined>(undefined);
+// Curses
+const pendingCurses = ref<PendingCurse[] | undefined>(undefined);
+const playerCurses = ref<Record<number, PlayerCurse[]>>({});
+const showCurseDetails = ref(false);
+const showCurseSelection = ref(false);
+// Card effect preview
+const cardPreviewEffects = ref<unknown>(undefined);
+// Seer's Lens curse: show stat preview bars
+const showPreviews = ref(false);
+// Burger menu
+const showGameMenu = ref(false);
+const showSettingsModal = ref(false);
+const showQuitConfirm = ref(false);
+// Single-player inline results
+const singlePlayerResolveData = ref<SinglePlayerResolveData | undefined>(undefined);
+// Concurrency guard for advanceRound (non-reactive orchestration flag)
+const advancing = ref(false);
+
+function getEcho(): EchoInstance | undefined {
+  return (window as unknown as { Echo?: EchoInstance }).Echo;
+}
+
+function errorMessage(error: unknown): string {
+  if (isAxiosError<{ message?: string; error?: string }>(error)) {
+    return error.response?.data?.error || error.response?.data?.message || error.message;
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+
+const activeCurseCount = computed<number>(() => {
+  let count = 0;
+  for (const pn in playerCurses.value) {
+    const curses = playerCurses.value[pn];
+    if (Array.isArray(curses)) {
+      count += curses.length;
     }
-    // Reconnection: visibility change
-    document.addEventListener('visibilitychange', this.onVisibilityChange);
-    // Reconnection: Pusher connection monitoring
-    this.setupConnectionMonitoring();
-  },
-  beforeUnmount() {
-    this.setActiveGameType(null);
-    if (this.echoChannel) {
-      window.Echo.leave(`game.${this.id}`);
-      this.echoChannel = null;
+  }
+  return count;
+});
+
+const currentPlayerHasAssigned = computed<boolean>(() => {
+  if (!gameData.value?.player_status) {
+    return false;
+  }
+  const ps = gameData.value.player_status.find((p) => p.player_number === activePlayerNumber.value);
+  return ps?.has_assigned || false;
+});
+
+const currentPlayerName = computed<string>(() => {
+  if (!gameData.value?.player_status) {
+    return "Player";
+  }
+  const ps = gameData.value.player_status.find((p) => p.player_number === activePlayerNumber.value);
+  return ps?.character_name || `Player ${activePlayerNumber.value}`;
+});
+
+const isPassAndPlay = computed<boolean>(() => gameData.value?.game_mode === "pass_and_play");
+const isOnline = computed<boolean>(() => gameData.value?.game_mode === "online");
+const isSinglePlayer = computed<boolean>(() => gameData.value?.game_mode === "single" || !gameData.value?.game_mode);
+const isDuel = computed<boolean>(() => (gameData.value?.game_type || gameData.value?.game?.game_type) === "duel");
+
+const isHost = computed<boolean>(() => gameData.value?.game?.user_id === auth.state.user?.id);
+
+const turnHandoffCharacterName = computed<string>(() => {
+  if (!turnHandoffPlayerNumber.value || !gameData.value?.player_status) {
+    return "";
+  }
+  const ps = gameData.value.player_status.find((p) => p.player_number === turnHandoffPlayerNumber.value);
+  return ps?.character_name || `Player ${turnHandoffPlayerNumber.value}`;
+});
+
+const myKingdomStyleSlug = computed<string>(() => {
+  const userId = auth.state.user?.id;
+  const player = gameData.value?.game?.players?.find((p) => p.user_id === userId);
+  return player?.user?.active_kingdom_style_slug || "classic";
+});
+
+const myKingdomStyleData = computed<KingdomStyle | undefined>(() => {
+  const userId = auth.state.user?.id;
+  const player = gameData.value?.game?.players?.find((p) => p.user_id === userId);
+  return player?.user?.active_kingdom_style || undefined;
+});
+
+const showItemPrompt = computed<boolean>(() => {
+  if (!gameData.value?.all_assigned) {
+    return false;
+  }
+  if (allItemsDecided.value) {
+    return false;
+  }
+  // Check if current active player has items and hasn't decided
+  const ps = gameData.value.player_status?.find((p) => p.player_number === activePlayerNumber.value);
+  if (!ps) {
+    return false;
+  }
+  if (ps.item_decided) {
+    return false;
+  }
+  if (!ps.has_items) {
+    return false;
+  }
+  // Also check client-side that there are usable items
+  if (usableItems.value.length === 0) {
+    return false;
+  }
+  return true;
+});
+
+const usableItems = computed<PlayerItem[]>(() => {
+  const round = gameData.value?.current_round || 0;
+  return currentPlayerItems.value.filter((pi) => !pi.is_used && !(pi.used_round && pi.used_round === round));
+});
+
+const displayGame = computed<Record<string, unknown>>(() => {
+  // Before any phase is accepted, show pre-resolution stats
+  if (currentStatPhase.value === undefined && preResolveGame.value) {
+    return preResolveGame.value;
+  }
+  if (currentStatPhase.value === "positive" && gameAfterPositive.value) {
+    return { ...gameData.value?.game, ...gameAfterPositive.value };
+  }
+  if (currentStatPhase.value === "negative" && gameAfterNegative.value) {
+    return { ...gameData.value?.game, ...gameAfterNegative.value };
+  }
+  return gameData.value?.game || {};
+});
+
+function onGameDataUpdated(data: GameData): void {
+  gameData.value = data;
+}
+
+function onPhaseUpdated(duelPhase: string): void {
+  if (!gameData.value) {
+  	return;
+  }
+
+  gameData.value.duel_phase = duelPhase;
+  if (gameData.value.game) {
+    gameData.value.game.duel_phase = duelPhase;
+  }
+}
+
+function onDuelGameOver(): void {
+  router.replace(`/game/${id}/over`);
+}
+
+function openInventory(): void {
+  playerItems.value?.openOverlay();
+}
+
+function openDuelInventory(): void {
+  duelBoard.value?.playerItems?.openOverlay();
+}
+
+function onVisibilityChange(): void {
+  if (!(document.visibilityState === "visible" && isOnline.value)) {
+  	return;
+  }
+
+  fetchGameWithRetry();
+  // Resubscribe if channel lost
+  if (!echoChannel.value) {
+    subscribeToGameChannel();
+  }
+}
+
+function setupConnectionMonitoring(): void {
+  try {
+    const pusher = getEcho()?.connector?.pusher;
+    if (!pusher) {
+      return;
     }
-    document.removeEventListener('visibilitychange', this.onVisibilityChange);
-  },
-  methods: {
-    onGameDataUpdated(data) {
-      this.gameData = data;
-    },
-    onPhaseUpdated(duelPhase) {
-      if (this.gameData) {
-        this.gameData.duel_phase = duelPhase;
-        if (this.gameData.game) {
-          this.gameData.game.duel_phase = duelPhase;
+    pusher.connection.bind("state_change", (states) => {
+      connectionStatus.value = states.current;
+      // On reconnect, re-fetch game state
+      if (states.current === "connected" && states.previous !== "connected" && isOnline.value) {
+        fetchGameWithRetry();
+      }
+    });
+  } catch {
+    // Pusher not available
+  }
+}
+
+async function fetchGameWithRetry(attempt = 0): Promise<void> {
+  const maxAttempts = 5;
+  try {
+    const response = await axios.get<GameData>(`/api/games/${id}`);
+    gameData.value = response.data;
+  } catch {
+    if (attempt < maxAttempts && isOnline.value) {
+      const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s, 16s
+      setTimeout(() => fetchGameWithRetry(attempt + 1), delay);
+    }
+  }
+}
+
+async function fetchGame(): Promise<void> {
+  // Only show loading spinner on initial load, not on refreshes
+  if (!gameData.value) {
+    loading.value = true;
+  }
+  try {
+    const response = await axios.get<GameData>(`/api/games/${id}`);
+    gameData.value = response.data;
+
+    // Restore pending curses and active curses from server state
+    pendingCurses.value = response.data.pending_curses || undefined;
+    playerCurses.value = response.data.player_curses || {};
+
+    if (gameData.value.game.status === "completed" || gameData.value.game.status === "cancelled") {
+      router.replace(`/game/${id}/over`);
+      return;
+    }
+
+    // Game stuck in setup (non-online): redirect back to character selection
+    if (gameData.value.game.status === "setup" && !isOnline.value) {
+      router.replace(`/?resume=${id}`);
+      return;
+    }
+
+    // Check for event reveal (round 1, 8, 15, 22, ...)
+    checkEventReveal();
+
+    // Duel mode: DuelBoard handles its own state — skip cooperative hand loading
+    if (isDuel.value) {
+      // Just ensure online setup
+      if (isOnline.value) {
+        setupOnlinePlayer();
+        if (!echoChannel.value) {
+          subscribeToGameChannel();
         }
       }
-    },
-    onVisibilityChange() {
-      if (document.visibilityState === 'visible' && this.isOnline) {
-        this.fetchGameWithRetry();
-        // Resubscribe if channel lost
-        if (!this.echoChannel) {
-          this.subscribeToGameChannel();
+      loading.value = false;
+      return;
+    }
+
+    // If in selecting phase, load current player's hand
+    if (gameData.value.round_phase === "selecting") {
+      // Update allItemsDecided from server state
+      allItemsDecided.value = gameData.value.all_items_decided ?? false;
+
+      if (isOnline.value) {
+        setupOnlinePlayer();
+        // Check if I already assigned
+        const myStatus = gameData.value.player_status?.find((p) => p.player_number === myPlayerNumber.value);
+        if (myStatus?.has_assigned) {
+          waitingForOthers.value = true;
+        } else if (myPlayerNumber.value) {
+          await loadHand(myPlayerNumber.value);
         }
-      }
-    },
-    setupConnectionMonitoring() {
-      try {
-        const pusher = window.Echo?.connector?.pusher;
-        if (!pusher) return;
-        pusher.connection.bind('state_change', (states) => {
-          this.connectionStatus = states.current;
-          // On reconnect, re-fetch game state
-          if (states.current === 'connected' && states.previous !== 'connected' && this.isOnline) {
-            this.fetchGameWithRetry();
-          }
-        });
-      } catch {
-        // Pusher not available
-      }
-    },
-    async fetchGameWithRetry(attempt = 0) {
-      const maxAttempts = 5;
-      try {
-        const res = await axios.get(`/api/games/${this.id}`);
-        this.gameData = res.data;
-      } catch {
-        if (attempt < maxAttempts && this.isOnline) {
-          const delay = Math.pow(2, attempt) * 1000; // 1s, 2s, 4s, 8s, 16s
-          setTimeout(() => this.fetchGameWithRetry(attempt + 1), delay);
-        }
-      }
-    },
-    async fetchGame() {
-      // Only show loading spinner on initial load, not on refreshes
-      if (!this.gameData) {
-        this.loading = true;
-      }
-      try {
-        const res = await axios.get(`/api/games/${this.id}`);
-        this.gameData = res.data;
-
-        // Restore pending curses and active curses from server state
-        this.pendingCurses = res.data.pending_curses || null;
-        this.playerCurses = res.data.player_curses || {};
-
-        if (this.gameData.game.status === 'completed' || this.gameData.game.status === 'cancelled') {
-          this.$router.replace(`/game/${this.id}/over`);
-          return;
-        }
-
-        // Game stuck in setup (non-online): redirect back to character selection
-        if (this.gameData.game.status === 'setup' && !this.isOnline) {
-          this.$router.replace(`/?resume=${this.id}`);
-          return;
-        }
-
-        // Check for event reveal (round 1, 8, 15, 22, ...)
-        this.checkEventReveal();
-
-        // Duel mode: DuelBoard handles its own state — skip cooperative hand loading
-        if (this.isDuel) {
-          // Just ensure online setup
-          if (this.isOnline) {
-            this.setupOnlinePlayer();
-            if (!this.echoChannel) {
-              this.subscribeToGameChannel();
-            }
-          }
-          this.loading = false;
-          return;
-        }
-
-        // If in selecting phase, load current player's hand
-        if (this.gameData.round_phase === 'selecting') {
-          // Update allItemsDecided from server state
-          this.allItemsDecided = this.gameData.all_items_decided ?? false;
-
-          // If all assigned and all items decided, show Roll button (don't auto-resolve)
-          if (this.gameData.all_assigned && this.allItemsDecided && (this.isSinglePlayer || this.isPassAndPlay)) {
-            // Don't auto-resolve — player must click "Roll Dice"
-          }
-
-          if (this.isOnline) {
-            this.setupOnlinePlayer();
-            // Check if I already assigned
-            const myStatus = this.gameData.player_status?.find(
-              p => p.player_number === this.myPlayerNumber
-            );
-            if (myStatus?.has_assigned) {
-              this.waitingForOthers = true;
-            } else if (this.myPlayerNumber) {
-              await this.loadHand(this.myPlayerNumber);
-            }
-          } else if (this.isPassAndPlay) {
-            // Show handoff overlay for first unassigned player
-            const firstUnassigned = this.gameData.player_status?.find(p => !p.has_assigned);
-            if (firstUnassigned) {
-              this.activePlayerNumber = firstUnassigned.player_number;
-              this.turnHandoffPlayerNumber = firstUnassigned.player_number;
-              this.showTurnHandoff = true;
-              // Don't load hand yet — wait for "Ready"
-            } else {
-              await this.loadHand(this.activePlayerNumber);
-            }
-          } else {
-            await this.loadHand(this.activePlayerNumber);
-          }
-        }
-
-        // If in resolving phase, restore full resolve state or reconstruct from server
-        if (this.gameData.round_phase === 'resolving') {
-          if (this.isSinglePlayer) {
-            // Single player: skip RoundResults UI, just advance to next round
-            await this.advanceRound();
-          } else if (!this.restoreResolveState()) {
-            await this.loadRoundResults();
-            this.resolveResumed = true;
-          }
-        }
-      } catch (e) {
-        this.toast.error('Failed to load game: ' + (e.response?.data?.message || e.message));
-      }
-      this.loading = false;
-    },
-    async loadHand(playerNumber) {
-      this.handLoading = true;
-      try {
-        const res = await axios.get(`/api/games/${this.id}/hand/${playerNumber}`);
-        this.currentHand = res.data.cards;
-        this.currentPlayerItems = res.data.items || [];
-        this.diceCount = res.data.dice_count ?? 3;
-        this.characterDice = res.data.character_dice || null;
-        this.characterWildValue = res.data.character_wild_value || null;
-        this.characterWildAbility = res.data.character_wild_ability || null;
-        this.cardRedraws = res.data.card_redraws_remaining ?? 0;
-        this.showPreviews = res.data.show_previews || false;
-      } catch (e) {
-        this.currentHand = [];
-        this.currentPlayerItems = [];
-      }
-      this.handLoading = false;
-    },
-    async loadRoundResults() {
-      // Results were stored from resolveRound, but if page refreshes
-      // reconstruct from game state
-      if (!this.positivePhase.cards && this.gameData.round_results) {
-        const result = this.gameData.round_results[0];
-        if (result) {
-          this.positivePhase = {
-            cards: [],
-            total_difficulty: result.stat_totals?.total_difficulty || 0,
-            total_roll: result.stat_totals?.total_roll || 0,
-            dice_results: result.dice_results || [],
-            wild_triggers: result.wild_triggers || [],
-            ability_effects: [],
-            success: result.success,
-            effects: result.effects_applied || {},
-          };
-          this.negativePhase = { cards: [], effects: {} };
-        }
-      }
-    },
-    onCardPreview(effects) {
-      this.cardPreviewEffects = effects;
-    },
-    async onCardRedraw(handId) {
-      try {
-        const res = await axios.post(`/api/games/${this.id}/card-redraw`, { hand_id: handId });
-        this.cardRedraws = res.data.redraws_remaining ?? 0;
-        // Replace the redrawn card in the current hand
-        const idx = this.currentHand.findIndex(c => c.hand_id === handId);
-        if (idx >= 0 && res.data.new_card) {
-          this.currentHand[idx] = { hand_id: res.data.hand_id, card: res.data.new_card };
-        }
-        this.toast.success('Card redrawn!');
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to redraw card');
-      }
-    },
-    async assignRoles({ positive_hand_id, negative_hand_ids }) {
-      this.cardPreviewEffects = null;
-      try {
-        const res = await axios.post(`/api/games/${this.id}/assign-roles`, {
-          positive_hand_id,
-          negative_hand_ids,
-        });
-
-        // Online mode: handle auto-resolve or show waiting
-        if (this.isOnline) {
-          if (res.data.auto_resolved) {
-            // Auto-resolved via server — RoundResolved broadcast handles the rest
-            // But also apply locally for the player who triggered it
-            const data = res.data.resolve_data;
-            this.preResolveGame = { ...this.gameData.game };
-            this.positivePhase = data.positive_phase;
-            this.negativePhase = data.negative_phase;
-            this.combinedEffects = data.combined_effects;
-            this.eventEffects = data.event_effects;
-            this.specialEffects = data.special_effects || [];
-            this.isGameOver = data.game_over;
-            this.gameAfterPositive = data.game_after_positive;
-            this.gameAfterNegative = data.game_after_negative;
-            this.currentStatPhase = null;
-            this.gameData.game = data.game;
-            this.gameData.round_phase = 'resolving';
-            this.waitingForOthers = false;
-            this.saveResolveState();
-          } else {
-            // Show waiting overlay
-            this.waitingForOthers = true;
-            // Refresh to get latest player_status
-            const gameRes = await axios.get(`/api/games/${this.id}`);
-            this.gameData = gameRes.data;
-          }
-          return;
-        }
-
-        // Refresh game state
-        const gameRes = await axios.get(`/api/games/${this.id}`);
-        this.gameData = gameRes.data;
-
-        // All assigned: start item decision phase or auto-resolve
-        if (res.data.all_assigned) {
-          this.allItemsDecided = this.gameData.all_items_decided ?? false;
-          if (!this.allItemsDecided) {
-            this.startItemPhase();
-          } else if (this.isSinglePlayer) {
-            // Single player: skip "The council is ready" prompt, auto-resolve
-            await this.resolveRound();
-          }
-          return;
-        }
-
-        // Find next unassigned player
-        if (!res.data.all_assigned && this.gameData.player_status) {
-          const next = this.gameData.player_status.find(p => !p.has_assigned);
-          if (next) {
-            this.activePlayerNumber = next.player_number;
-            if (this.isPassAndPlay) {
-              // Show handoff overlay instead of immediately loading hand
-              this.turnHandoffPlayerNumber = next.player_number;
-              this.showTurnHandoff = true;
-            } else {
-              await this.loadHand(next.player_number);
-            }
-          }
+      } else if (isPassAndPlay.value) {
+        // Show handoff overlay for first unassigned player
+        const firstUnassigned = gameData.value.player_status?.find((p) => !p.has_assigned);
+        if (firstUnassigned) {
+          activePlayerNumber.value = firstUnassigned.player_number;
+          turnHandoffPlayerNumber.value = firstUnassigned.player_number;
+          showTurnHandoff.value = true;
+          // Don't load hand yet — wait for "Ready"
         } else {
-          await this.loadHand(this.activePlayerNumber);
+          await loadHand(activePlayerNumber.value);
         }
-      } catch (e) {
-        this.toast.error('Failed to assign: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    async resolveRound() {
-      this.resolving = true;
-      try {
-        // Snapshot current stats before resolution
-        this.preResolveGame = { ...this.gameData.game };
-        const res = await axios.post(`/api/games/${this.id}/resolve-round`);
-        this.positivePhase = res.data.positive_phase;
-        this.negativePhase = res.data.negative_phase;
-        this.combinedEffects = res.data.combined_effects;
-        this.eventEffects = res.data.event_effects;
-        this.specialEffects = res.data.special_effects || [];
-        this.isGameOver = res.data.game_over;
-        this.gameAfterPositive = res.data.game_after_positive;
-        this.gameAfterNegative = res.data.game_after_negative;
-        this.gameData.game = res.data.game;
-        // Refresh items after resolution (new items may have been granted)
-        if (res.data.player_items && res.data.player_items[this.activePlayerNumber]) {
-          this.currentPlayerItems = res.data.player_items[this.activePlayerNumber];
-        }
-        // Check for players over item limit
-        this.itemsOverLimit = res.data.items_over_limit || [];
-        // Queue item reveals for any draw_item special effects
-        this.queueItemReveals(this.specialEffects);
-        // Process pending curses
-        this.pendingCurses = res.data.pending_curses || null;
-        this.playerCurses = res.data.player_curses || {};
-
-        if (this.isSinglePlayer) {
-          // Single player: show inline results on the card instead of RoundResults
-          this.singlePlayerResolveData = {
-            positivePhase: res.data.positive_phase,
-            negativePhase: res.data.negative_phase,
-            combinedEffects: res.data.combined_effects,
-            eventEffects: res.data.event_effects,
-            specialEffects: res.data.special_effects || [],
-            gameOver: res.data.game_over,
-          };
-          this.currentStatPhase = null; // bars stay at pre-resolve until results shown
-          // Keep round_phase as 'selecting' so CardSelectionHand stays visible
-        } else {
-          this.currentStatPhase = null; // stats stay at pre-resolve until accepted
-          this.gameData.round_phase = 'resolving';
-        }
-        // Persist resolve state for page refresh recovery
-        this.saveResolveState();
-      } catch (e) {
-        this.toast.error('Failed to resolve: ' + (e.response?.data?.error || e.message));
-      }
-      this.resolving = false;
-    },
-    saveResolveState() {
-      try {
-        const round = this.gameData.current_round || this.gameData.game.current_round;
-        sessionStorage.setItem(`game_${this.id}_resolve_${round}`, JSON.stringify({
-          positivePhase: this.positivePhase,
-          negativePhase: this.negativePhase,
-          combinedEffects: this.combinedEffects,
-          eventEffects: this.eventEffects,
-          specialEffects: this.specialEffects,
-          isGameOver: this.isGameOver,
-          gameAfterPositive: this.gameAfterPositive,
-          gameAfterNegative: this.gameAfterNegative,
-        }));
-      } catch { /* sessionStorage full or unavailable */ }
-    },
-    restoreResolveState() {
-      try {
-        const round = this.gameData.current_round || this.gameData.game?.current_round;
-        const saved = sessionStorage.getItem(`game_${this.id}_resolve_${round}`);
-        if (saved) {
-          const data = JSON.parse(saved);
-          this.positivePhase = data.positivePhase;
-          this.negativePhase = data.negativePhase;
-          this.combinedEffects = data.combinedEffects;
-          this.eventEffects = data.eventEffects;
-          this.specialEffects = data.specialEffects;
-          this.isGameOver = data.isGameOver;
-          this.gameAfterPositive = data.gameAfterPositive;
-          this.gameAfterNegative = data.gameAfterNegative;
-          this.resolveResumed = true;
-          return true;
-        }
-      } catch { /* ignore */ }
-      return false;
-    },
-    clearResolveState(round) {
-      try {
-        sessionStorage.removeItem(`game_${this.id}_resolve_${round}`);
-      } catch { /* ignore */ }
-    },
-    startItemPhase() {
-      // Determine which player needs to decide on items
-      if (this.isPassAndPlay) {
-        const firstUndecided = this.gameData.player_status?.find(
-          p => p.has_items && !p.item_decided
-        );
-        if (firstUndecided) {
-          this.activePlayerNumber = firstUndecided.player_number;
-          this.turnHandoffPlayerNumber = firstUndecided.player_number;
-          this.showTurnHandoff = true;
-        } else {
-          // All decided or no items
-          this.allItemsDecided = true;
-        }
-      } else if (this.isSinglePlayer) {
-        // Single player: check if they have items
-        const ps = this.gameData.player_status?.find(p => p.player_number === this.activePlayerNumber);
-        if (!ps?.has_items) {
-          this.allItemsDecided = true;
-          // Auto-resolve immediately
-          this.resolveRound();
-        }
-        // Otherwise, item prompt shows via showItemPrompt computed
-      }
-      // Online: each player sees their own prompt via showItemPrompt
-    },
-    async useItem(gamePlayerItemId) {
-      this.usingItem = true;
-      try {
-        const res = await axios.post(`/api/games/${this.id}/use-item`, {
-          game_player_item_id: gamePlayerItemId,
-          player_number: this.activePlayerNumber,
-        });
-        this.itemDeciding = false;
-        this.allItemsDecided = res.data.all_items_decided;
-        // Update items
-        if (res.data.player_items) {
-          this.currentPlayerItems = res.data.player_items;
-        }
-        // Update player_status
-        if (this.gameData.player_status) {
-          const ps = this.gameData.player_status.find(p => p.player_number === this.activePlayerNumber);
-          if (ps) ps.item_decided = true;
-        }
-        // Pass-and-play: advance to next player or show roll
-        if (this.isPassAndPlay && !this.allItemsDecided) {
-          this.advanceItemPlayer();
-        } else if (this.isSinglePlayer && this.allItemsDecided) {
-          this.usingItem = false;
-          await this.resolveRound();
-          return;
-        }
-      } catch (e) {
-        this.toast.error('Failed to use item: ' + (e.response?.data?.error || e.message));
-      }
-      this.usingItem = false;
-    },
-    async skipItem() {
-      this.usingItem = true;
-      try {
-        const res = await axios.post(`/api/games/${this.id}/skip-item`, {
-          player_number: this.activePlayerNumber,
-        });
-        this.itemDeciding = false;
-        this.allItemsDecided = res.data.all_items_decided;
-        // Update player_status
-        if (this.gameData.player_status) {
-          const ps = this.gameData.player_status.find(p => p.player_number === this.activePlayerNumber);
-          if (ps) ps.item_decided = true;
-        }
-        // Pass-and-play: advance to next player or show roll
-        if (this.isPassAndPlay && !this.allItemsDecided) {
-          this.advanceItemPlayer();
-        } else if (this.isSinglePlayer && this.allItemsDecided) {
-          this.usingItem = false;
-          await this.resolveRound();
-          return;
-        }
-      } catch (e) {
-        this.toast.error('Failed to skip item: ' + (e.response?.data?.error || e.message));
-      }
-      this.usingItem = false;
-    },
-    advanceItemPlayer() {
-      const nextUndecided = this.gameData.player_status?.find(
-        p => p.has_items && !p.item_decided
-      );
-      if (nextUndecided) {
-        this.activePlayerNumber = nextUndecided.player_number;
-        this.turnHandoffPlayerNumber = nextUndecided.player_number;
-        this.showTurnHandoff = true;
-        this.loadHand(nextUndecided.player_number);
       } else {
-        this.allItemsDecided = true;
+        await loadHand(activePlayerNumber.value);
       }
-    },
-    itemEffectLabel(item) {
-      if (!item?.effect) return '';
-      const type = item.effect.bonus_type || '';
-      const value = item.effect.bonus_value ?? 0;
-      switch (type) {
-        case 'roll_bonus': return `+${value} to roll`;
-        case 'roll_penalty': return `${value} to roll`;
-        case 'difficulty_reduction': return `-${Math.abs(value)} difficulty`;
-        case 'difficulty_increase': return `+${Math.abs(value)} difficulty`;
-        case 'stat_boost': return `+${value} ${item.effect.stat || 'stat'}`;
-        case 'heal_die': return 'Recover a lost die';
-        case 'score_bonus': return `${value > 0 ? '+' : ''}${value} renown`;
-        default: return item.description || 'Use this item';
-      }
-    },
-    setupOnlinePlayer() {
-      const userId = this.auth.state.user?.id;
-      if (!userId || !this.gameData?.game?.players) return;
-      const myPlayer = this.gameData.game.players.find(p => p.user_id === userId);
-      if (myPlayer) {
-        this.myPlayerNumber = myPlayer.player_number;
-        this.activePlayerNumber = myPlayer.player_number;
-      }
-    },
-    subscribeToGameChannel() {
-      if (!window.Echo) return;
-      this.echoChannel = window.Echo.private(`game.${this.id}`)
-        .listen('PlayerJoinedGame', () => {
-          if (this.$refs.lobby) {
-            this.$refs.lobby.fetchLobby();
-          }
-        })
-        .listen('PlayerSelectedCharacter', (data) => {
-          if (this.$refs.lobby) {
-            this.$refs.lobby.fetchLobby().then(() => {
-              if (data.all_selected && this.$refs.lobby) {
-                this.$refs.lobby.autoStartGame();
-              }
-            });
-          }
-        })
-        .listen('PlayerAssignedCards', (data) => {
-          // Update player status
-          if (this.gameData?.player_status) {
-            const ps = this.gameData.player_status.find(p => p.player_number === data.player_number);
-            if (ps) ps.has_assigned = true;
-            this.gameData.all_assigned = data.all_assigned;
-          }
-        })
-        .listen('PlayerItemDecided', (data) => {
-          // Update item decided status
-          if (this.gameData?.player_status) {
-            const ps = this.gameData.player_status.find(p => p.player_number === data.player_number);
-            if (ps) ps.item_decided = true;
-          }
-          this.allItemsDecided = data.all_decided;
-        })
-        .listen('RoundResolved', (data) => {
-          // All players receive resolve data simultaneously
-          this.preResolveGame = { ...this.gameData.game };
-          this.positivePhase = data.positive_phase;
-          this.negativePhase = data.negative_phase;
-          this.combinedEffects = data.combined_effects;
-          this.eventEffects = data.event_effects;
-          this.specialEffects = data.special_effects || [];
-          this.isGameOver = data.game_over;
-          this.gameAfterPositive = data.game_after_positive;
-          this.gameAfterNegative = data.game_after_negative;
-          this.currentStatPhase = null;
-          this.gameData.game = data.game;
-          this.gameData.round_phase = 'resolving';
-          // Refresh items after resolution
-          if (data.player_items && data.player_items[this.activePlayerNumber]) {
-            this.currentPlayerItems = data.player_items[this.activePlayerNumber];
-          }
-          this.queueItemReveals(data.special_effects || []);
-          this.waitingForOthers = false;
-          this.resolving = false;
-          this.saveResolveState();
-        })
-        .listen('NextRoundStarted', (data) => {
-          if (this.isDuel && this.$refs.duelBoard) {
-            this.gameData = data;
-            this.$refs.duelBoard.handleNextRoundStarted(data);
-            return;
-          }
-          // Clear saved resolve state for the round being advanced from
-          this.clearResolveState(this.gameData.current_round || this.gameData.game?.current_round);
-          // Non-host auto-transitions to next round
-          this.positivePhase = {};
-          this.negativePhase = {};
-          this.combinedEffects = {};
-          this.eventEffects = {};
-          this.specialEffects = [];
-          this.isGameOver = false;
-          this.gameAfterPositive = null;
-          this.gameAfterNegative = null;
-          this.preResolveGame = null;
-          this.currentStatPhase = null;
-          this.waitingForOthers = false;
-          this.itemDeciding = false;
-          this.usingItem = false;
-          this.allItemsDecided = false;
-          this.resolveResumed = false;
-          this.singlePlayerResolveData = null;
-          this.gameData = data;
-          this.checkEventReveal();
-          if (this.myPlayerNumber) {
-            this.activePlayerNumber = this.myPlayerNumber;
-            this.loadHand(this.myPlayerNumber);
-          }
-        })
-        .listen('GameStarted', () => {
-          this.fetchGame();
-        })
-        // Duel events
-        .listen('DuelChoiceMade', (data) => {
-          if (this.$refs.duelBoard) {
-            this.$refs.duelBoard.handleDuelChoiceMade(data);
-          }
-        })
-        .listen('DuelRollComplete', (data) => {
-          if (this.$refs.duelBoard) {
-            this.$refs.duelBoard.handleDuelRollComplete(data);
-          }
-        })
-        .listen('DuelGameOver', (data) => {
-          if (data.completion) {
-            sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(data.completion));
-          }
-          if (data.timed_out_player_number != null) {
-            sessionStorage.setItem(`game_timeout_${this.id}`, JSON.stringify(data.timed_out_player_number));
-          }
-          this.$router.replace(`/game/${this.id}/over`);
-        });
-    },
-    async startOnlineGame() {
-      try {
-        // Fetch lobby to get current player/character assignments
-        const lobbyRes = await axios.get(`/api/games/${this.id}/lobby`);
-        const players = lobbyRes.data.players;
-        const characters = players
-          .sort((a, b) => a.player_number - b.player_number)
-          .map(p => p.character_id);
+    }
 
-        await axios.post(`/api/games/${this.id}/start`, { characters });
+    // If in resolving phase, restore full resolve state or reconstruct from server
+    else if (gameData.value.round_phase === "resolving") {
+      if (isSinglePlayer.value) {
+        // Single player: skip RoundResults UI, just advance to next round
+        await advanceRound();
+      } else if (!didRestoreResolveState()) {
+        await loadRoundResults();
+        resolveResumed.value = true;
+      }
+    }
+  } catch (error) {
+    toast.error("Failed to load game: " + errorMessage(error));
+  }
+  loading.value = false;
+}
 
-        // Broadcast game started
-        await this.fetchGame();
-      } catch (e) {
-        this.toast.error('Failed to start: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    queueItemReveals(specialEffects) {
-      const itemEffects = (specialEffects || []).filter(e => (e.type === 'draw_item' || e.type === 'item_blocked') && e.item);
-      if (itemEffects.length) {
-        this.itemRevealQueue = [...itemEffects];
-        this.showItemReveal = true;
-      }
-    },
-    onItemRevealDismiss() {
-      this.itemRevealQueue.shift();
-      if (this.itemRevealQueue.length === 0) {
-        this.showItemReveal = false;
-      }
-    },
-    describeCurseEffect(effect, phase) {
-      if (!effect) return 'Unknown';
-      const t = effect.type;
-      if (t === 'lose_die') return `Permanently lose ${effect.value || 1} die`;
-      if (t === 'stat_per_round' && phase === 'negative') return `${effect.value} ${effect.stat} each round`;
-      if (t === 'stat_per_round' && phase === 'positive') return `+${effect.value} ${effect.stat} each round`;
-      if (t === 'difficulty_modifier') return `All cards +${effect.value || 1} difficulty`;
-      if (t === 'double_negative') return 'Negative card effects are doubled';
-      if (t === 'xp_multiplier') return `${effect.value}x XP at game end`;
-      if (t === 'auto_max_stat') return `${effect.count || 1} stat(s) set to max at game end`;
-      if (t === 'score_bonus') return `+${effect.value} score at game end`;
-      if (t === 'opponent_difficulty') return `Opponent's cards +${effect.value} difficulty`;
-      if (t === 'opponent_lose_die') return `Opponent loses a die for ${effect.rounds || 1} round(s)`;
-      if (t === 'reveal_previews') return 'Reveals stat preview bars on card hover';
-      return JSON.stringify(effect);
-    },
-    getPlayerNameForCurse(playerNumber) {
-      const pn = parseInt(playerNumber, 10);
-      const player = this.gameData?.game?.players?.find(p => p.player_number === pn);
-      return player?.character?.name || `Player ${pn}`;
-    },
-    currentPendingCurse() {
-      if (!this.pendingCurses || !this.pendingCurses.length) return null;
-      // Find the first pending curse for the active player
-      const player = this.gameData?.game?.players?.find(p => p.player_number === this.activePlayerNumber);
-      if (!player) return null;
-      return this.pendingCurses.find(pc => pc.player_id === player.id);
-    },
-    async onCurseSelected(curseId) {
-      try {
-        const res = await axios.post(`/api/games/${this.id}/choose-curse`, {
-          curse_id: curseId,
-          player_number: this.activePlayerNumber,
-        });
-        this.pendingCurses = res.data.pending_curses || null;
-        if (res.data.player_curses) {
-          this.playerCurses = {
-            ...this.playerCurses,
-            [this.activePlayerNumber]: res.data.player_curses,
-          };
-        }
-        // When all curses resolved, proceed to next round
-        if (!this.pendingCurses || this.pendingCurses.length === 0) {
-          this.showCurseSelection = false;
-          await this.advanceRound();
-        }
-      } catch (e) {
-        this.toast.error('Failed to choose curse: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    showDuelDiceViewer() {
-      // Open the character modal for the active player's character in duel mode
-      const duelBoard = this.$refs.duelBoard;
-      if (duelBoard) {
-        const playerNum = duelBoard.activePlayerNumber;
-        const player = this.gameData?.game?.players?.find(p => p.player_number === playerNum);
-        if (player?.character) {
-          duelBoard.openCharacterModal(playerNum);
-        }
-      }
-    },
-    async goHome() {
-      // Duel games are paused and resumable — don't cancel
-      if (!this.isDuel) {
-        try {
-          await axios.post(`/api/games/${this.id}/cancel`);
-        } catch {
-          // ignore cancel errors
-        }
-      }
-      this.$router.push('/');
-    },
-    async forfeitGame() {
-      this.showQuitConfirm = false;
-      try {
-        await axios.post(`/api/games/${this.id}/forfeit`);
-        this.$router.replace(`/game/${this.id}/over`);
-      } catch (e) {
-        this.toast.error('Failed to forfeit: ' + (e.response?.data?.error || e.message));
-      }
-    },
-    onItemDiscarded(updatedOverLimit) {
-      this.itemsOverLimit = updatedOverLimit || [];
-    },
-    checkEventReveal() {
-      const round = this.gameData?.current_round || 0;
-      const event = this.gameData?.current_event;
-      if (event && (round - 1) % 3 === 0) {
-        const key = `game_${this.id}_event_${event.id}`;
-        if (!sessionStorage.getItem(key)) {
-          sessionStorage.setItem(key, '1');
-          this.showEventReveal = true;
-        }
-      }
-    },
-    async onHandoffReady() {
-      this.showTurnHandoff = false;
-      await this.loadHand(this.activePlayerNumber);
-    },
-    onPhaseComplete(phase) {
-      this.currentStatPhase = phase;
-    },
-    onSinglePlayerContinue() {
-      this.advanceRound();
-    },
-    async advanceRound() {
-      // Prevent concurrent advance calls (e.g. double-tap)
-      if (this._advancing) return;
+async function loadHand(playerNumber: number): Promise<void> {
+  handLoading.value = true;
+  try {
+    const response = await axios.get<{
+      cards: HandCard[];
+      items?: PlayerItem[];
+      dice_count?: number;
+      character_dice?: string[][];
+      character_wild_value?: number;
+      character_wild_ability?: string;
+      card_redraws_remaining?: number;
+      show_previews?: boolean;
+    }>(`/api/games/${id}/hand/${playerNumber}`);
+    currentHand.value = response.data.cards;
+    currentPlayerItems.value = response.data.items || [];
+    diceCount.value = response.data.dice_count ?? 3;
+    characterDice.value = response.data.character_dice || undefined;
+    characterWildValue.value = response.data.character_wild_value || undefined;
+    characterWildAbility.value = response.data.character_wild_ability || undefined;
+    cardRedraws.value = response.data.card_redraws_remaining ?? 0;
+    showPreviews.value = response.data.show_previews || false;
+  } catch {
+    currentHand.value = [];
+    currentPlayerItems.value = [];
+  }
+  handLoading.value = false;
+}
 
-      // Show curse selection first if there are pending curses
-      if (this.pendingCurses && this.pendingCurses.length > 0) {
-        this.showCurseSelection = true;
+async function loadRoundResults(): Promise<void> {
+  // Results were stored from resolveRound, but if page refreshes
+  // reconstruct from game state
+  if (positivePhase.value.cards || !gameData.value?.round_results) {
+  	return;
+  }
+
+  const result = gameData.value.round_results[0];
+  if (result) {
+    positivePhase.value = {
+      cards: [],
+      total_difficulty: result.stat_totals?.total_difficulty || 0,
+      total_roll: result.stat_totals?.total_roll || 0,
+      dice_results: result.dice_results || [],
+      wild_triggers: result.wild_triggers || [],
+      ability_effects: [],
+      success: result.success,
+      effects: result.effects_applied || {},
+    };
+    negativePhase.value = { cards: [], effects: {} };
+  }
+}
+
+function onCardPreview(effects: unknown): void {
+  cardPreviewEffects.value = effects;
+}
+
+async function onCardRedraw(handId: number): Promise<void> {
+  try {
+    const response = await axios.post<{ redraws_remaining?: number; new_card?: Record<string, unknown>; hand_id: number }>(
+      `/api/games/${id}/card-redraw`,
+      { hand_id: handId },
+    );
+    cardRedraws.value = response.data.redraws_remaining ?? 0;
+    // Replace the redrawn card in the current hand
+    const index = currentHand.value.findIndex((c) => c.hand_id === handId);
+    if (index !== -1 && response.data.new_card) {
+      currentHand.value[index] = { hand_id: response.data.hand_id, card: response.data.new_card };
+    }
+    toast.success("Card redrawn!");
+  } catch (error) {
+    toast.error(errorMessage(error) || "Failed to redraw card");
+  }
+}
+
+async function assignRoles({
+  positive_hand_id,
+  negative_hand_ids,
+}: {
+  positive_hand_id: number;
+  negative_hand_ids: number[];
+}): Promise<void> {
+  cardPreviewEffects.value = undefined;
+  try {
+    const response = await axios.post<{
+      auto_resolved?: boolean;
+      resolve_data?: ResolveResponse;
+      all_assigned?: boolean;
+    }>(`/api/games/${id}/assign-roles`, {
+      positive_hand_id,
+      negative_hand_ids,
+    });
+
+    // Online mode: handle auto-resolve or show waiting
+    if (isOnline.value) {
+      if (response.data.auto_resolved && response.data.resolve_data && gameData.value) {
+        // Auto-resolved via server — RoundResolved broadcast handles the rest
+        // But also apply locally for the player who triggered it
+        const data = response.data.resolve_data;
+        preResolveGame.value = { ...gameData.value.game };
+        positivePhase.value = data.positive_phase;
+        negativePhase.value = data.negative_phase;
+        combinedEffects.value = data.combined_effects;
+        eventEffects.value = data.event_effects;
+        specialEffects.value = data.special_effects || [];
+        isGameOver.value = data.game_over;
+        gameAfterPositive.value = data.game_after_positive;
+        gameAfterNegative.value = data.game_after_negative;
+        currentStatPhase.value = undefined;
+        gameData.value.game = data.game;
+        gameData.value.round_phase = "resolving";
+        waitingForOthers.value = false;
+        saveResolveState();
+      } else {
+        // Show waiting overlay
+        waitingForOthers.value = true;
+        // Refresh to get latest player_status
+        const gameResponse = await axios.get<GameData>(`/api/games/${id}`);
+        gameData.value = gameResponse.data;
+      }
+      return;
+    }
+
+    // Refresh game state
+    const gameResponse = await axios.get<GameData>(`/api/games/${id}`);
+    gameData.value = gameResponse.data;
+
+    // All assigned: start item decision phase or auto-resolve
+    if (response.data.all_assigned) {
+      allItemsDecided.value = gameData.value.all_items_decided ?? false;
+      if (!allItemsDecided.value) {
+        startItemPhase();
+      } else if (isSinglePlayer.value) {
+        // Single player: skip "The council is ready" prompt, auto-resolve
+        await resolveRound();
+      }
+      return;
+    }
+
+    // Find next unassigned player
+    if (!response.data.all_assigned && gameData.value.player_status) {
+      const next = gameData.value.player_status.find((p) => !p.has_assigned);
+      if (next) {
+        activePlayerNumber.value = next.player_number;
+        if (isPassAndPlay.value) {
+          // Show handoff overlay instead of immediately loading hand
+          turnHandoffPlayerNumber.value = next.player_number;
+          showTurnHandoff.value = true;
+        } else {
+          await loadHand(next.player_number);
+        }
+      }
+    } else {
+      await loadHand(activePlayerNumber.value);
+    }
+  } catch (error) {
+    toast.error("Failed to assign: " + errorMessage(error));
+  }
+}
+
+async function resolveRound(): Promise<void> {
+  resolving.value = true;
+  try {
+    // Snapshot current stats before resolution
+    if (gameData.value) {
+      preResolveGame.value = { ...gameData.value.game };
+    }
+    const response = await axios.post<ResolveResponse>(`/api/games/${id}/resolve-round`);
+    positivePhase.value = response.data.positive_phase;
+    negativePhase.value = response.data.negative_phase;
+    combinedEffects.value = response.data.combined_effects;
+    eventEffects.value = response.data.event_effects;
+    specialEffects.value = response.data.special_effects || [];
+    isGameOver.value = response.data.game_over;
+    gameAfterPositive.value = response.data.game_after_positive;
+    gameAfterNegative.value = response.data.game_after_negative;
+    if (gameData.value) {
+      gameData.value.game = response.data.game;
+    }
+    // Refresh items after resolution (new items may have been granted)
+    const resolvedItems = response.data.player_items?.[activePlayerNumber.value];
+    if (resolvedItems) {
+      currentPlayerItems.value = resolvedItems;
+    }
+    // Check for players over item limit
+    itemsOverLimit.value = response.data.items_over_limit || [];
+    // Queue item reveals for any draw_item special effects
+    queueItemReveals(specialEffects.value);
+    // Process pending curses
+    pendingCurses.value = response.data.pending_curses || undefined;
+    playerCurses.value = response.data.player_curses || {};
+
+    if (isSinglePlayer.value) {
+      // Single player: show inline results on the card instead of RoundResults
+      singlePlayerResolveData.value = {
+        positivePhase: response.data.positive_phase,
+        negativePhase: response.data.negative_phase,
+        combinedEffects: response.data.combined_effects,
+        eventEffects: response.data.event_effects,
+        specialEffects: response.data.special_effects || [],
+        gameOver: response.data.game_over,
+      };
+      currentStatPhase.value = undefined; // bars stay at pre-resolve until results shown
+      // Keep round_phase as 'selecting' so CardSelectionHand stays visible
+    } else if (gameData.value) {
+      currentStatPhase.value = undefined; // stats stay at pre-resolve until accepted
+      gameData.value.round_phase = "resolving";
+    }
+    // Persist resolve state for page refresh recovery
+    saveResolveState();
+  } catch (error) {
+    toast.error("Failed to resolve: " + errorMessage(error));
+  }
+  resolving.value = false;
+}
+
+function saveResolveState(): void {
+  try {
+    const round = gameData.value?.current_round || gameData.value?.game.current_round;
+    sessionStorage.setItem(
+      `game_${id}_resolve_${round}`,
+      JSON.stringify({
+        positivePhase: positivePhase.value,
+        negativePhase: negativePhase.value,
+        combinedEffects: combinedEffects.value,
+        eventEffects: eventEffects.value,
+        specialEffects: specialEffects.value,
+        isGameOver: isGameOver.value,
+        gameAfterPositive: gameAfterPositive.value,
+        gameAfterNegative: gameAfterNegative.value,
+      }),
+    );
+  } catch {
+    /*
+    sessionStorage full or unavailable
+    */
+  }
+}
+
+function didRestoreResolveState(): boolean {
+  try {
+    const round = gameData.value?.current_round || gameData.value?.game?.current_round;
+    const saved = sessionStorage.getItem(`game_${id}_resolve_${round}`);
+    if (saved) {
+      const data = JSON.parse(saved);
+      positivePhase.value = data.positivePhase;
+      negativePhase.value = data.negativePhase;
+      combinedEffects.value = data.combinedEffects;
+      eventEffects.value = data.eventEffects;
+      specialEffects.value = data.specialEffects;
+      isGameOver.value = data.isGameOver;
+      gameAfterPositive.value = data.gameAfterPositive;
+      gameAfterNegative.value = data.gameAfterNegative;
+      resolveResumed.value = true;
+      return true;
+    }
+  } catch {
+    /*
+    ignore
+    */
+  }
+  return false;
+}
+
+function clearResolveState(round: number | undefined): void {
+  try {
+    sessionStorage.removeItem(`game_${id}_resolve_${round}`);
+  } catch {
+    /*
+    ignore
+    */
+  }
+}
+
+function startItemPhase(): void {
+  // Determine which player needs to decide on items
+  if (isPassAndPlay.value) {
+    const firstUndecided = gameData.value?.player_status?.find((p) => p.has_items && !p.item_decided);
+    if (firstUndecided) {
+      activePlayerNumber.value = firstUndecided.player_number;
+      turnHandoffPlayerNumber.value = firstUndecided.player_number;
+      showTurnHandoff.value = true;
+    } else {
+      // All decided or no items
+      allItemsDecided.value = true;
+    }
+  } else if (isSinglePlayer.value) {
+    // Single player: check if they have items
+    const ps = gameData.value?.player_status?.find((p) => p.player_number === activePlayerNumber.value);
+    if (!ps?.has_items) {
+      allItemsDecided.value = true;
+      // Auto-resolve immediately
+      resolveRound();
+    }
+    // Otherwise, item prompt shows via showItemPrompt computed
+  }
+  // Online: each player sees their own prompt via showItemPrompt
+}
+
+async function useItem(gamePlayerItemId: number): Promise<void> {
+  usingItem.value = true;
+  try {
+    const response = await axios.post<{ all_items_decided: boolean; player_items?: PlayerItem[] }>(
+      `/api/games/${id}/use-item`,
+      {
+        game_player_item_id: gamePlayerItemId,
+        player_number: activePlayerNumber.value,
+      },
+    );
+    itemDeciding.value = false;
+    allItemsDecided.value = response.data.all_items_decided;
+    // Update items
+    if (response.data.player_items) {
+      currentPlayerItems.value = response.data.player_items;
+    }
+    // Update player_status
+    if (gameData.value?.player_status) {
+      const ps = gameData.value.player_status.find((p) => p.player_number === activePlayerNumber.value);
+      if (ps) {
+        ps.item_decided = true;
+      }
+    }
+    // Pass-and-play: advance to next player or show roll
+    if (isPassAndPlay.value && !allItemsDecided.value) {
+      advanceItemPlayer();
+    } else if (isSinglePlayer.value && allItemsDecided.value) {
+      usingItem.value = false;
+      await resolveRound();
+      return;
+    }
+  } catch (error) {
+    toast.error("Failed to use item: " + errorMessage(error));
+  }
+  usingItem.value = false;
+}
+
+async function skipItem(): Promise<void> {
+  usingItem.value = true;
+  try {
+    const response = await axios.post<{ all_items_decided: boolean }>(`/api/games/${id}/skip-item`, {
+      player_number: activePlayerNumber.value,
+    });
+    itemDeciding.value = false;
+    allItemsDecided.value = response.data.all_items_decided;
+    // Update player_status
+    if (gameData.value?.player_status) {
+      const ps = gameData.value.player_status.find((p) => p.player_number === activePlayerNumber.value);
+      if (ps) {
+        ps.item_decided = true;
+      }
+    }
+    // Pass-and-play: advance to next player or show roll
+    if (isPassAndPlay.value && !allItemsDecided.value) {
+      advanceItemPlayer();
+    } else if (isSinglePlayer.value && allItemsDecided.value) {
+      usingItem.value = false;
+      await resolveRound();
+      return;
+    }
+  } catch (error) {
+    toast.error("Failed to skip item: " + errorMessage(error));
+  }
+  usingItem.value = false;
+}
+
+function advanceItemPlayer(): void {
+  const nextUndecided = gameData.value?.player_status?.find((p) => p.has_items && !p.item_decided);
+  if (nextUndecided) {
+    activePlayerNumber.value = nextUndecided.player_number;
+    turnHandoffPlayerNumber.value = nextUndecided.player_number;
+    showTurnHandoff.value = true;
+    loadHand(nextUndecided.player_number);
+  } else {
+    allItemsDecided.value = true;
+  }
+}
+
+function itemEffectLabel(item?: Item): string {
+  if (!item?.effect) {
+    return "";
+  }
+  const type = item.effect.bonus_type || "";
+  const value = item.effect.bonus_value ?? 0;
+  switch (type) {
+    case "roll_bonus": {
+      return `+${value} to roll`;
+    }
+    case "roll_penalty": {
+      return `${value} to roll`;
+    }
+    case "difficulty_reduction": {
+      return `-${Math.abs(value)} difficulty`;
+    }
+    case "difficulty_increase": {
+      return `+${Math.abs(value)} difficulty`;
+    }
+    case "stat_boost": {
+      return `+${value} ${item.effect.stat || "stat"}`;
+    }
+    case "heal_die": {
+      return "Recover a lost die";
+    }
+    case "score_bonus": {
+      return `${value > 0 ? "+" : ""}${value} renown`;
+    }
+    default: {
+      return item.description || "Use this item";
+    }
+  }
+}
+
+function setupOnlinePlayer(): void {
+  const userId = auth.state.user?.id;
+  if (!userId || !gameData.value?.game?.players) {
+    return;
+  }
+  const myPlayer = gameData.value.game.players.find((p) => p.user_id === userId);
+  if (myPlayer) {
+    myPlayerNumber.value = myPlayer.player_number;
+    activePlayerNumber.value = myPlayer.player_number;
+  }
+}
+
+function subscribeToGameChannel(): void {
+  const echo = getEcho();
+  if (!echo) {
+    return;
+  }
+  echoChannel.value = echo
+    .private(`game.${id}`)
+    .listen("PlayerJoinedGame", () => {
+      if (lobby.value) {
+        lobby.value.fetchLobby();
+      }
+    })
+    .listen("PlayerSelectedCharacter", async (data: { all_selected?: boolean }) => {
+      if (!lobby.value) {
         return;
       }
-      this._advancing = true;
-      try {
-        const res = await axios.post(`/api/games/${this.id}/next-round`);
-
-        if (res.data.game_over) {
-          if (res.data.completion) {
-            sessionStorage.setItem(`game_completion_${this.id}`, JSON.stringify(res.data.completion));
-          }
-          if (res.data.score_breakdown) {
-            sessionStorage.setItem(`game_score_breakdown_${this.id}`, JSON.stringify(res.data.score_breakdown));
-          }
-          this.$router.replace(`/game/${this.id}/over`);
-          return;
-        }
-
-        // Clear saved resolve state for this round before resetting
-        this.clearResolveState(this.gameData.current_round || this.gameData.game?.current_round);
-
-        // Reset state for next round
-        this.positivePhase = {};
-        this.negativePhase = {};
-        this.combinedEffects = {};
-        this.eventEffects = {};
-        this.specialEffects = [];
-        this.itemRevealQueue = [];
-        this.showItemReveal = false;
-        this.itemsOverLimit = [];
-        this.isGameOver = false;
-        this.gameAfterPositive = null;
-        this.gameAfterNegative = null;
-        this.preResolveGame = null;
-        this.currentStatPhase = null;
-        this.showCurseSelection = false;
-        this.itemDeciding = false;
-        this.usingItem = false;
-        this.allItemsDecided = false;
-        this.resolveResumed = false;
-        this.singlePlayerResolveData = null;
-        this.gameData = res.data;
-        this.activePlayerNumber = 1;
-        this.checkEventReveal();
-        if (this.isPassAndPlay) {
-          this.turnHandoffPlayerNumber = 1;
-          this.showTurnHandoff = true;
-        } else {
-          await this.loadHand(1);
-        }
-      } catch (e) {
-        this.toast.error('Failed to advance: ' + (e.response?.data?.error || e.message));
-        await this.fetchGame();
-      } finally {
-        this._advancing = false;
+      await lobby.value.fetchLobby();
+      if (data.all_selected && lobby.value) {
+        lobby.value.autoStartGame();
       }
-    },
-  },
-};
+    })
+    .listen("PlayerAssignedCards", (data: { player_number: number; all_assigned?: boolean }) => {
+      // Update player status
+      if (!gameData.value?.player_status) {
+      	return;
+      }
+
+      const ps = gameData.value.player_status.find((p) => p.player_number === data.player_number);
+      if (ps) {
+        ps.has_assigned = true;
+      }
+      gameData.value.all_assigned = data.all_assigned;
+    })
+    .listen("PlayerItemDecided", (data: { player_number: number; all_decided: boolean }) => {
+      // Update item decided status
+      if (gameData.value?.player_status) {
+        const ps = gameData.value.player_status.find((p) => p.player_number === data.player_number);
+        if (ps) {
+          ps.item_decided = true;
+        }
+      }
+      allItemsDecided.value = data.all_decided;
+    })
+    .listen("RoundResolved", (data: ResolveResponse) => {
+      // All players receive resolve data simultaneously
+      if (gameData.value) {
+        preResolveGame.value = { ...gameData.value.game };
+      }
+      positivePhase.value = data.positive_phase;
+      negativePhase.value = data.negative_phase;
+      combinedEffects.value = data.combined_effects;
+      eventEffects.value = data.event_effects;
+      specialEffects.value = data.special_effects || [];
+      isGameOver.value = data.game_over;
+      gameAfterPositive.value = data.game_after_positive;
+      gameAfterNegative.value = data.game_after_negative;
+      currentStatPhase.value = undefined;
+      if (gameData.value) {
+        gameData.value.game = data.game;
+        gameData.value.round_phase = "resolving";
+      }
+      // Refresh items after resolution
+      const resolvedItems = data.player_items?.[activePlayerNumber.value];
+      if (resolvedItems) {
+        currentPlayerItems.value = resolvedItems;
+      }
+      queueItemReveals(data.special_effects || []);
+      waitingForOthers.value = false;
+      resolving.value = false;
+      saveResolveState();
+    })
+    .listen("NextRoundStarted", (data: GameData) => {
+      if (isDuel.value && duelBoard.value) {
+        gameData.value = data;
+        duelBoard.value.handleNextRoundStarted(data);
+        return;
+      }
+      // Clear saved resolve state for the round being advanced from
+      clearResolveState(gameData.value?.current_round || gameData.value?.game?.current_round);
+      // Non-host auto-transitions to next round
+      positivePhase.value = {};
+      negativePhase.value = {};
+      combinedEffects.value = {};
+      eventEffects.value = {};
+      specialEffects.value = [];
+      isGameOver.value = false;
+      gameAfterPositive.value = undefined;
+      gameAfterNegative.value = undefined;
+      preResolveGame.value = undefined;
+      currentStatPhase.value = undefined;
+      waitingForOthers.value = false;
+      itemDeciding.value = false;
+      usingItem.value = false;
+      allItemsDecided.value = false;
+      resolveResumed.value = false;
+      singlePlayerResolveData.value = undefined;
+      gameData.value = data;
+      checkEventReveal();
+      if (myPlayerNumber.value) {
+        activePlayerNumber.value = myPlayerNumber.value;
+        loadHand(myPlayerNumber.value);
+      }
+    })
+    .listen("GameStarted", () => {
+      fetchGame();
+    })
+    // Duel events
+    .listen("DuelChoiceMade", (data: never) => {
+      if (duelBoard.value) {
+        duelBoard.value.handleDuelChoiceMade(data);
+      }
+    })
+    .listen("DuelRollComplete", (data: never) => {
+      if (duelBoard.value) {
+        duelBoard.value.handleDuelRollComplete(data);
+      }
+    })
+    .listen("DuelGameOver", (data: { completion?: unknown; timed_out_player_number?: number }) => {
+      if (data.completion) {
+        sessionStorage.setItem(`game_completion_${id}`, JSON.stringify(data.completion));
+      }
+      if (data.timed_out_player_number != undefined) {
+        sessionStorage.setItem(`game_timeout_${id}`, JSON.stringify(data.timed_out_player_number));
+      }
+      router.replace(`/game/${id}/over`);
+    });
+}
+
+async function startOnlineGame(): Promise<void> {
+  try {
+    // Fetch lobby to get current player/character assignments
+    const lobbyResponse = await axios.get<{ players: { player_number: number; character_id: number }[] }>(
+      `/api/games/${id}/lobby`,
+    );
+    const players = lobbyResponse.data.players;
+    const characters = players.toSorted((a, b) => a.player_number - b.player_number).map((p) => p.character_id);
+
+    await axios.post(`/api/games/${id}/start`, { characters });
+
+    // Broadcast game started
+    await fetchGame();
+  } catch (error) {
+    toast.error("Failed to start: " + errorMessage(error));
+  }
+}
+
+function queueItemReveals(effects: SpecialEffect[]): void {
+  const itemEffects = (effects || []).filter(
+    (effect) => (effect.type === "draw_item" || effect.type === "item_blocked") && effect.item,
+  );
+  if (itemEffects.length > 0) {
+    itemRevealQueue.value = [...itemEffects];
+    showItemReveal.value = true;
+  }
+}
+
+function onItemRevealDismiss(): void {
+  itemRevealQueue.value.shift();
+  if (itemRevealQueue.value.length === 0) {
+    showItemReveal.value = false;
+  }
+}
+
+function describeCurseEffect(effect: CurseEffect | undefined, phase: "positive" | "negative"): string {
+  if (!effect) {
+    return "Unknown";
+  }
+  const t = effect.type;
+  if (t === "lose_die") {
+    return `Permanently lose ${effect.value || 1} die`;
+  }
+  if (t === "stat_per_round" && phase === "negative") {
+    return `${effect.value} ${effect.stat} each round`;
+  }
+  if (t === "stat_per_round" && phase === "positive") {
+    return `+${effect.value} ${effect.stat} each round`;
+  }
+  if (t === "difficulty_modifier") {
+    return `All cards +${effect.value || 1} difficulty`;
+  }
+  if (t === "double_negative") {
+    return "Negative card effects are doubled";
+  }
+  if (t === "xp_multiplier") {
+    return `${effect.value}x XP at game end`;
+  }
+  if (t === "auto_max_stat") {
+    return `${effect.count || 1} stat(s) set to max at game end`;
+  }
+  if (t === "score_bonus") {
+    return `+${effect.value} score at game end`;
+  }
+  if (t === "opponent_difficulty") {
+    return `Opponent's cards +${effect.value} difficulty`;
+  }
+  if (t === "opponent_lose_die") {
+    return `Opponent loses a die for ${effect.rounds || 1} round(s)`;
+  }
+  if (t === "reveal_previews") {
+    return "Reveals stat preview bars on card hover";
+  }
+  return JSON.stringify(effect);
+}
+
+function getPlayerNameForCurse(playerNumber: string | number): string {
+  const pn = typeof playerNumber === "number" ? playerNumber : Number(playerNumber);
+  const player = gameData.value?.game?.players?.find((p) => p.player_number === pn);
+  return player?.character?.name || `Player ${pn}`;
+}
+
+function currentPendingCurse(): PendingCurse | undefined {
+  if (!pendingCurses.value || pendingCurses.value.length === 0) {
+    return undefined;
+  }
+  // Find the first pending curse for the active player
+  const player = gameData.value?.game?.players?.find((p) => p.player_number === activePlayerNumber.value);
+  if (!player) {
+    return undefined;
+  }
+  return pendingCurses.value.find((pc) => pc.player_id === player.id);
+}
+
+async function onCurseSelected(curseId: number): Promise<void> {
+  try {
+    const response = await axios.post<{ pending_curses?: PendingCurse[]; player_curses?: PlayerCurse[] }>(
+      `/api/games/${id}/choose-curse`,
+      {
+        curse_id: curseId,
+        player_number: activePlayerNumber.value,
+      },
+    );
+    pendingCurses.value = response.data.pending_curses || undefined;
+    if (response.data.player_curses) {
+      playerCurses.value = {
+        ...playerCurses.value,
+        [activePlayerNumber.value]: response.data.player_curses,
+      };
+    }
+    // When all curses resolved, proceed to next round
+    if (!pendingCurses.value || pendingCurses.value.length === 0) {
+      showCurseSelection.value = false;
+      await advanceRound();
+    }
+  } catch (error) {
+    toast.error("Failed to choose curse: " + errorMessage(error));
+  }
+}
+
+function showDuelDiceViewer(): void {
+  // Open the character modal for the active player's character in duel mode
+  const board = duelBoard.value;
+  if (board) {
+    const playerNumber = board.activePlayerNumber;
+    const player = gameData.value?.game?.players?.find((p) => p.player_number === playerNumber);
+    if (player?.character) {
+      board.openCharacterModal(playerNumber);
+    }
+  }
+}
+
+async function goHome(): Promise<void> {
+  // Duel games are paused and resumable — don't cancel
+  if (!isDuel.value) {
+    try {
+      await axios.post(`/api/games/${id}/cancel`);
+    } catch {
+      // ignore cancel errors
+    }
+  }
+  router.push("/");
+}
+
+async function forfeitGame(): Promise<void> {
+  showQuitConfirm.value = false;
+  try {
+    await axios.post(`/api/games/${id}/forfeit`);
+    router.replace(`/game/${id}/over`);
+  } catch (error) {
+    toast.error("Failed to forfeit: " + errorMessage(error));
+  }
+}
+
+function onItemDiscarded(updatedOverLimit: unknown[]): void {
+  itemsOverLimit.value = updatedOverLimit || [];
+}
+
+function checkEventReveal(): void {
+  const round = gameData.value?.current_round || 0;
+  const event = gameData.value?.current_event;
+  if (event && (round - 1) % 3 === 0) {
+    const key = `game_${id}_event_${event.id}`;
+    if (!sessionStorage.getItem(key)) {
+      sessionStorage.setItem(key, "1");
+      showEventReveal.value = true;
+    }
+  }
+}
+
+async function onHandoffReady(): Promise<void> {
+  showTurnHandoff.value = false;
+  await loadHand(activePlayerNumber.value);
+}
+
+function onPhaseComplete(phase: "positive" | "negative"): void {
+  currentStatPhase.value = phase;
+}
+
+function onSinglePlayerContinue(): void {
+  advanceRound();
+}
+
+async function advanceRound(): Promise<void> {
+  // Prevent concurrent advance calls (e.g. double-tap)
+  if (advancing.value) {
+    return;
+  }
+
+  // Show curse selection first if there are pending curses
+  if (pendingCurses.value && pendingCurses.value.length > 0) {
+    showCurseSelection.value = true;
+    return;
+  }
+  advancing.value = true;
+  try {
+    const response = await axios.post<
+      GameData & { game_over?: boolean; completion?: unknown; score_breakdown?: unknown }
+    >(`/api/games/${id}/next-round`);
+
+    if (response.data.game_over) {
+      if (response.data.completion) {
+        sessionStorage.setItem(`game_completion_${id}`, JSON.stringify(response.data.completion));
+      }
+      if (response.data.score_breakdown) {
+        sessionStorage.setItem(`game_score_breakdown_${id}`, JSON.stringify(response.data.score_breakdown));
+      }
+      router.replace(`/game/${id}/over`);
+      return;
+    }
+
+    // Clear saved resolve state for this round before resetting
+    clearResolveState(gameData.value?.current_round || gameData.value?.game?.current_round);
+
+    // Reset state for next round
+    positivePhase.value = {};
+    negativePhase.value = {};
+    combinedEffects.value = {};
+    eventEffects.value = {};
+    specialEffects.value = [];
+    itemRevealQueue.value = [];
+    showItemReveal.value = false;
+    itemsOverLimit.value = [];
+    isGameOver.value = false;
+    gameAfterPositive.value = undefined;
+    gameAfterNegative.value = undefined;
+    preResolveGame.value = undefined;
+    currentStatPhase.value = undefined;
+    showCurseSelection.value = false;
+    itemDeciding.value = false;
+    usingItem.value = false;
+    allItemsDecided.value = false;
+    resolveResumed.value = false;
+    singlePlayerResolveData.value = undefined;
+    gameData.value = response.data;
+    activePlayerNumber.value = 1;
+    checkEventReveal();
+    if (isPassAndPlay.value) {
+      turnHandoffPlayerNumber.value = 1;
+      showTurnHandoff.value = true;
+    } else {
+      await loadHand(1);
+    }
+  } catch (error) {
+    toast.error("Failed to advance: " + errorMessage(error));
+    await fetchGame();
+  } finally {
+    advancing.value = false;
+  }
+}
+
+onMounted(async () => {
+  await fetchGame();
+  setActiveGameType(isDuel.value ? "duel" : "cooperative");
+  if (isOnline.value && !echoChannel.value) {
+    setupOnlinePlayer();
+    subscribeToGameChannel();
+  }
+  // Reconnection: visibility change
+  document.addEventListener("visibilitychange", onVisibilityChange);
+  // Reconnection: Pusher connection monitoring
+  setupConnectionMonitoring();
+});
+
+onBeforeUnmount(() => {
+  setActiveGameType(undefined);
+  if (echoChannel.value) {
+    getEcho()?.leave(`game.${id}`);
+    echoChannel.value = undefined;
+  }
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+});
 </script>
 
 <style scoped>

@@ -148,7 +148,14 @@ class SeasonController extends Controller
             'reward_title' => 'nullable|string|max:255',
         ]);
 
-        $reward->update($validated);
+        // Omitted nullable reward fields mean "cleared" on an admin edit; null them explicitly.
+        $reward->update([
+            ...$validated,
+            'reward_character_id' => $validated['reward_character_id'] ?? null,
+            'reward_dice_theme_id' => $validated['reward_dice_theme_id'] ?? null,
+            'reward_kingdom_style_id' => $validated['reward_kingdom_style_id'] ?? null,
+            'reward_title' => $validated['reward_title'] ?? null,
+        ]);
         $reward->load(['rewardCharacter', 'rewardDiceTheme', 'rewardKingdomStyle']);
 
         return response()->json($reward);

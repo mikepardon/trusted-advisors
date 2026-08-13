@@ -25,7 +25,7 @@
         </div>
 
         <!-- Combined effects -->
-        <div v-if="Object.keys(getCombinedEffects(result)).length" class="effects-row">
+        <div v-if="Object.keys(getCombinedEffects(result)).length > 0" class="effects-row">
           <span
             v-for="(val, stat) in getCombinedEffects(result)"
             :key="stat"
@@ -41,7 +41,7 @@
     <button
         v-if="canAdvance"
         class="btn-primary next-btn"
-        @click="$emit('next-round')"
+        @click="$emit('nextRound')"
     >
         {{ gameOver ? 'View Results' : 'Next Month' }}
     </button>
@@ -49,46 +49,79 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'DuelResolvePhase',
-  props: {
-    offererResult: { type: Object, default: null },
-    chooserResult: { type: Object, default: null },
-    canAdvance: { type: Boolean, default: true },
-    gameOver: { type: Boolean, default: false },
-  },
-  emits: ['next-round'],
-  computed: {
-    playerResults() {
-      const results = [];
-      if (this.offererResult) results.push(this.offererResult);
-      if (this.chooserResult) results.push(this.chooserResult);
-      return results;
-    },
-  },
-  methods: {
-    getCardResults(result) {
-      // New 2-card format
-      if (result.cards) return result.cards;
-      // Legacy single-card format
-      if (result.card) {
-        return [{
-          card: result.card,
-          difficulty: result.difficulty,
-          success: result.success,
-          effects: result.effects || {},
-        }];
-      }
-      return [];
-    },
-    getCombinedEffects(result) {
-      if (result.combined_effects) return result.combined_effects;
-      if (result.effects) return result.effects;
-      return {};
-    },
-  },
-};
+<script setup lang="ts">
+import { computed } from "vue";
+
+interface CardResult {
+  card?: { title?: string };
+  difficulty: number;
+  success: boolean;
+  effects: Record<string, number>;
+}
+
+interface PlayerResult {
+  player_number: number;
+  character_name: string;
+  total_roll: number;
+  cards?: CardResult[];
+  card?: { title?: string };
+  difficulty?: number;
+  success?: boolean;
+  effects?: Record<string, number>;
+  combined_effects?: Record<string, number>;
+}
+
+const {
+  offererResult = undefined,
+  chooserResult = undefined,
+  canAdvance = true,
+  gameOver = false,
+} = defineProps<{
+  offererResult?: PlayerResult;
+  chooserResult?: PlayerResult;
+  canAdvance?: boolean;
+  gameOver?: boolean;
+}>();
+
+defineEmits<{ "nextRound": [] }>();
+
+const playerResults = computed<PlayerResult[]>(() => {
+  const results: PlayerResult[] = [];
+  if (offererResult) {
+    results.push(offererResult);
+  }
+  if (chooserResult) {
+    results.push(chooserResult);
+  }
+  return results;
+});
+
+function getCardResults(result: PlayerResult): CardResult[] {
+  // New 2-card format
+  if (result.cards) {
+    return result.cards;
+  }
+  // Legacy single-card format
+  if (result.card) {
+    return [{
+      card: result.card,
+      difficulty: result.difficulty ?? 0,
+      success: result.success ?? false,
+      effects: result.effects ?? {},
+    }];
+  }
+  return [];
+}
+
+function getCombinedEffects(result: PlayerResult): Record<string, number> {
+  if (result.combined_effects) {
+    return result.combined_effects;
+  }
+  if (result.effects) {
+    return result.effects;
+  }
+  return {};
+}
 </script>
 
 <style scoped>

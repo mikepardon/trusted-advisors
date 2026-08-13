@@ -70,7 +70,17 @@ class CardController extends Controller
         ]);
 
         $old = $card->only(array_keys($validated));
-        $card->update($validated);
+        // Omitted nullable fields mean "cleared" on an admin edit; null them explicitly.
+        $card->update([
+            ...$validated,
+            'question' => $validated['question'] ?? null,
+            'positive_flavor' => $validated['positive_flavor'] ?? null,
+            'negative_flavor' => $validated['negative_flavor'] ?? null,
+            'category' => $validated['category'] ?? null,
+            'difficulty_duel' => $validated['difficulty_duel'] ?? null,
+            'positive_effects_duel' => $validated['positive_effects_duel'] ?? null,
+            'negative_effects_duel' => $validated['negative_effects_duel'] ?? null,
+        ]);
         $this->auditModelChange('update', $card, $old);
 
         return response()->json($card);

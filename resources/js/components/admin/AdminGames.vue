@@ -46,44 +46,55 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
+<script setup lang="ts">
+import axios, { isAxiosError } from "axios";
+import { onMounted, ref } from "vue";
+import { useToast } from "../../stores/toast";
 
-export default {
-  name: 'AdminGames',
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      games: [],
-      loading: true,
-    };
-  },
-  async mounted() {
-    await this.fetch();
-  },
-  methods: {
-    async fetch() {
-      this.loading = true;
-      try {
-        const res = await axios.get('/api/admin/games');
-        this.games = res.data;
-      } catch (e) {
-        console.error('Failed to load games', e);
-      }
-      this.loading = false;
-    },
-    async cancelGame(g) {
-      if (!confirm(`Cancel game #${g.id}? This will end it as a loss for all players.`)) return;
-      try {
-        await axios.post(`/api/admin/games/${g.id}/cancel`);
-        await this.fetch();
-      } catch (e) {
-        this.toast.error('Cancel failed: ' + (e.response?.data?.error || e.message));
-      }
-    },
-  },
-};
+interface AdminGame {
+  id: number;
+  status: string;
+  game_mode: string;
+  game_type: string;
+  creator: string;
+  players: string[];
+  current_round: number;
+  total_rounds: number;
+  updated_at: string;
+}
+
+const toast = useToast();
+
+const games = ref<AdminGame[]>([]);
+const loading = ref(true);
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  try {
+    const response = await axios.get<AdminGame[]>("/api/admin/games");
+    games.value = response.data;
+  } catch (error) {
+    console.error("Failed to load games", error);
+  }
+  loading.value = false;
+}
+
+async function cancelGame(game: AdminGame): Promise<void> {
+  if (!confirm(`Cancel game #${game.id}? This will end it as a loss for all players.`)) return;
+  try {
+    await axios.post(`/api/admin/games/${game.id}/cancel`);
+    await fetch();
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error)
+      ? error.response?.data?.error ?? error.message
+      : "Unknown error";
+    toast.error(`Cancel failed: ${message}`);
+  }
+}
+
+onMounted(async () => {
+  await fetch();
+});
 </script>
 
 <style scoped>

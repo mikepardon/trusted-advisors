@@ -18,7 +18,7 @@
     <button
       v-else-if="viewPhase === 'negative' && canAdvance"
       class="btn-primary action-btn-top"
-      @click="$emit('next-round')"
+      @click="$emit('nextRound')"
     >
       {{ gameOver ? 'View Results' : 'Next Month' }}
     </button>
@@ -88,7 +88,7 @@
 
         <!-- After all rolled: Wild Triggers, Summary -->
         <template v-if="allRolled">
-          <div v-if="positivePhase.ability_effects && positivePhase.ability_effects.length" class="wild-section">
+          <div v-if="positivePhase.ability_effects && positivePhase.ability_effects.length > 0" class="wild-section">
             <div v-for="(desc, i) in positivePhase.ability_effects" :key="i" class="wild-trigger">
               {{ desc }}
             </div>
@@ -105,14 +105,14 @@
             </span>
           </div>
 
-          <div v-if="positivePhase.item_modifiers && positivePhase.item_modifiers.length" class="item-modifiers-section">
+          <div v-if="positivePhase.item_modifiers && positivePhase.item_modifiers.length > 0" class="item-modifiers-section">
             <span
-              v-for="(mod, i) in positivePhase.item_modifiers"
+              v-for="(modifier, i) in positivePhase.item_modifiers"
               :key="'im-' + i"
               class="item-mod-tag"
-              :class="modTagClass(mod)"
+              :class="modifierTagClass(modifier)"
             >
-              {{ mod.item_name }} ({{ modLabel(mod) }})
+              {{ modifier.item_name }} ({{ modifierLabel(modifier) }})
             </span>
           </div>
 
@@ -125,7 +125,7 @@
           </div>
 
           <!-- Show effects preview (but stats haven't moved yet) -->
-          <div v-if="positivePhase.success && Object.keys(filterStatEffects(positivePhase.effects || {})).length" class="effects-row">
+          <div v-if="positivePhase.success && Object.keys(filterStatEffects(positivePhase.effects || {})).length > 0" class="effects-row">
             <span
               v-for="(val, stat) in filterStatEffects(positivePhase.effects || {})"
               :key="stat"
@@ -139,7 +139,7 @@
           </div>
 
           <!-- Special effects for positive phase -->
-          <div v-if="positiveSpecialEffects.length" class="special-effects-section">
+          <div v-if="positiveSpecialEffects.length > 0" class="special-effects-section">
             <div v-for="(se, i) in positiveSpecialEffects" :key="'se-' + i" class="special-effect-line">
               <span class="special-icon">{{ specialIcon(se.type) }}</span>
               {{ se.description }}
@@ -173,7 +173,7 @@
           </div>
         </div>
 
-        <div v-if="Object.keys(negativePhase.effects || {}).length" class="effects-row">
+        <div v-if="Object.keys(negativePhase.effects || {}).length > 0" class="effects-row">
           <span
             v-for="(val, stat) in negativePhase.effects"
             :key="stat"
@@ -184,7 +184,7 @@
         </div>
 
         <!-- Special effects for negative phase -->
-        <div v-if="negativeSpecialEffects.length" class="special-effects-section special-negative">
+        <div v-if="negativeSpecialEffects.length > 0" class="special-effects-section special-negative">
           <div v-for="(se, i) in negativeSpecialEffects" :key="'nse-' + i" class="special-effect-line">
             <span class="special-icon">{{ specialIcon(se.type) }}</span>
             {{ se.description }}
@@ -205,7 +205,7 @@
             {{ statIcon(stat) }} {{ stat }}: {{ val > 0 ? '+' : '' }}{{ val }}
           </span>
         </div>
-        <div v-if="Object.keys(eventEffects || {}).length" class="event-row">
+        <div v-if="Object.keys(eventEffects || {}).length > 0" class="event-row">
           <span class="event-label">Event:</span>
           <span
             v-for="(val, stat) in eventEffects"
@@ -223,230 +223,280 @@
   </div>
 </template>
 
-<script>
-import { playSound } from '../sounds';
-import dddiceService from '../dddiceService';
-import { useIcons } from '../stores/icons';
+<script setup lang="ts">
+import { computed, nextTick, ref, watch } from "vue";
+import { playSound } from "../sounds";
+import dddiceService from "../dddice-service";
+import { useIcons } from "../stores/icons";
 
-export default {
-  name: 'RoundResults',
-  props: {
-    round: { type: Number, required: true },
-    totalRounds: { type: Number, default: 24 },
-    positivePhase: { type: Object, default: () => ({}) },
-    negativePhase: { type: Object, default: () => ({}) },
-    combinedEffects: { type: Object, default: () => ({}) },
-    eventEffects: { type: Object, default: () => ({}) },
-    specialEffects: { type: Array, default: () => [] },
-    gameOver: { type: Boolean, default: false },
-    canAdvance: { type: Boolean, default: true },
-    players: { type: Array, default: () => [] },
-    resumed: { type: Boolean, default: false },
-  },
-  emits: ['next-round', 'phase-complete'],
-  data() {
-    return {
-      rolledPlayerNumbers: [],
-      rollingPlayerNumbers: [],
-      rollingFaces: {},
-      viewPhase: 'positive',
-      resultsAccepted: false,
-    };
-  },
-  mounted() {
-    // Even on refresh, let the user roll through dice animations
-  },
-  computed: {
-    rolledCount() {
-      return this.rolledPlayerNumbers.length;
-    },
-    totalPlayers() {
-      return (this.positivePhase.dice_results || []).length;
-    },
-    remainingCount() {
-      return this.totalPlayers - this.rolledCount;
-    },
-    allRolled() {
-      return this.totalPlayers > 0 && this.rolledCount >= this.totalPlayers;
-    },
-    runningTotal() {
-      let sum = 0;
-      for (const pr of (this.positivePhase.dice_results || [])) {
-        if (this.rolledPlayerNumbers.includes(pr.player_number)) {
-          sum += this.playerSubtotal(pr);
-        }
-      }
-      return sum;
-    },
-    nextToRoll() {
-      return (this.positivePhase.dice_results || []).find(
-        pr => !this.rolledPlayerNumbers.includes(pr.player_number) && !this.rollingPlayerNumbers.includes(pr.player_number)
-      ) || null;
-    },
-    isAnyRolling() {
-      return this.rollingPlayerNumbers.length > 0;
-    },
-    positiveSpecialEffects() {
-      return (this.specialEffects || []).filter(e => e.phase === 'positive');
-    },
-    negativeSpecialEffects() {
-      return (this.specialEffects || []).filter(e => e.phase === 'negative');
-    },
-    positiveFlavorText() {
-      const cards = this.positivePhase.cards || [];
-      const flavors = cards.map(c => c.card?.positive_flavor).filter(Boolean);
-      return flavors.join(' ');
-    },
-    negativeFlavorForActed() {
-      // When the council fails the acted-on cards, show their negative flavor
-      const cards = this.positivePhase.cards || [];
-      const flavors = cards.map(c => c.card?.negative_flavor).filter(Boolean);
-      return flavors.join(' ');
-    },
-  },
-  watch: {
-    round() {
-      this.rolledPlayerNumbers = [];
-      this.rollingPlayerNumbers = [];
-      this.rollingFaces = {};
-      this.viewPhase = 'positive';
-      this.resultsAccepted = false;
-    },
-  },
-  methods: {
-    hasRolled(playerNumber) {
-      return this.rolledPlayerNumbers.includes(playerNumber);
-    },
-    isRolling(playerNumber) {
-      return this.rollingPlayerNumbers.includes(playerNumber);
-    },
-    getThemesForPlayer(playerNumber) {
-      const player = (this.players || []).find(p => p.player_number === playerNumber);
-      const slug = player?.user?.active_dice_theme_slug || 'dddice-standard';
-      return [slug, slug, slug];
-    },
-    async startRolling(pr) {
-      const pn = pr.player_number;
-      if (this.rollingPlayerNumbers.includes(pn) || this.rolledPlayerNumbers.includes(pn)) return;
+interface DiceRoll {
+  face: string;
+  value: number;
+}
 
-      const use3D = dddiceService.isReady();
+interface DiceResult {
+  player_number: number;
+  character_name: string;
+  rolls: DiceRoll[];
+}
 
-      if (!use3D) {
-        playSound('dice');
-      }
+interface PhaseCard {
+  character_name: string;
+  card: {
+    title: string;
+    difficulty?: number;
+    description?: string;
+    positive_flavor?: string;
+    negative_flavor?: string;
+  };
+}
 
-      this.rollingPlayerNumbers.push(pn);
-      this.rollingFaces[pn] = pr.rolls.map(() => '?');
+interface ItemModifier {
+  item_name: string;
+  type: string;
+  value: number;
+}
 
-      if (use3D) {
-        // 3D dice path: animate via dddice, then show final results immediately
-        const themes = this.getThemesForPlayer(pn);
-        const diceSpecs = pr.rolls.map((roll, i) => ({
-          theme: themes[i] || 'dddice-standard',
-          value: roll.value,
-        }));
-        await dddiceService.roll(diceSpecs);
+interface PositivePhase {
+  cards?: PhaseCard[];
+  total_difficulty?: number;
+  dice_results?: DiceResult[];
+  ability_effects?: string[];
+  success?: boolean;
+  total_roll?: number;
+  item_modifiers?: ItemModifier[];
+  effects?: Record<string, number>;
+}
 
-        this.rollingPlayerNumbers = this.rollingPlayerNumbers.filter(n => n !== pn);
-        this.rolledPlayerNumbers.push(pn);
+interface NegativePhase {
+  cards?: PhaseCard[];
+  effects?: Record<string, number>;
+}
 
-        this.$nextTick(() => {
-          if (this.allRolled) {
-            if (this.positivePhase.success) {
-              playSound('win');
-            } else {
-              playSound('fail');
-            }
-          }
-        });
+interface SpecialEffect {
+  phase: string;
+  type: string;
+  description: string;
+}
+
+interface RoundPlayer {
+  player_number: number;
+  user?: {
+    active_dice_theme_slug?: string;
+  };
+}
+
+const {
+  round,
+  positivePhase = {},
+  negativePhase = {},
+  specialEffects = [],
+  players = [],
+} = defineProps<{
+  round: number;
+  totalRounds?: number;
+  positivePhase?: PositivePhase;
+  negativePhase?: NegativePhase;
+  combinedEffects?: Record<string, number>;
+  eventEffects?: Record<string, number>;
+  specialEffects?: SpecialEffect[];
+  gameOver?: boolean;
+  canAdvance?: boolean;
+  players?: RoundPlayer[];
+  resumed?: boolean;
+}>();
+
+const emit = defineEmits<{
+  "nextRound": [];
+  "phaseComplete": [phase: string];
+}>();
+
+const rolledPlayerNumbers = ref<number[]>([]);
+const rollingPlayerNumbers = ref<number[]>([]);
+const rollingFaces = ref<Record<number, string[]>>({});
+const viewPhase = ref("positive");
+const resultsAccepted = ref(false);
+
+function playerSubtotal(diceResult: DiceResult): number {
+  return (diceResult.rolls || []).reduce((sum, roll) => sum + (roll.value || 0), 0);
+}
+
+const rolledCount = computed<number>(() => rolledPlayerNumbers.value.length);
+
+const totalPlayers = computed<number>(() => (positivePhase.dice_results || []).length);
+
+const remainingCount = computed<number>(() => totalPlayers.value - rolledCount.value);
+
+const allRolled = computed<boolean>(() => totalPlayers.value > 0 && rolledCount.value >= totalPlayers.value);
+
+const runningTotal = computed<number>(() => {
+  let sum = 0;
+  const diceResults = positivePhase.dice_results || [];
+  for (const diceResult of diceResults) {
+    if (rolledPlayerNumbers.value.includes(diceResult.player_number)) {
+      sum += playerSubtotal(diceResult);
+    }
+  }
+  return sum;
+});
+
+const nextToRoll = computed<DiceResult | undefined>(() => (positivePhase.dice_results || []).find(
+  (diceResult) => !rolledPlayerNumbers.value.includes(diceResult.player_number) && !rollingPlayerNumbers.value.includes(diceResult.player_number),
+));
+
+const isAnyRolling = computed<boolean>(() => rollingPlayerNumbers.value.length > 0);
+
+const positiveSpecialEffects = computed<SpecialEffect[]>(() => (specialEffects || []).filter((effect) => effect.phase === "positive"));
+
+const negativeSpecialEffects = computed<SpecialEffect[]>(() => (specialEffects || []).filter((effect) => effect.phase === "negative"));
+
+const positiveFlavorText = computed<string>(() => {
+  const cards = positivePhase.cards || [];
+  const flavors = cards.map((card) => card.card?.positive_flavor).filter(Boolean);
+  return flavors.join(" ");
+});
+
+const negativeFlavorForActed = computed<string>(() => {
+  // When the council fails the acted-on cards, show their negative flavor
+  const cards = positivePhase.cards || [];
+  const flavors = cards.map((card) => card.card?.negative_flavor).filter(Boolean);
+  return flavors.join(" ");
+});
+
+watch(() => round, () => {
+  rolledPlayerNumbers.value = [];
+  rollingPlayerNumbers.value = [];
+  rollingFaces.value = {};
+  viewPhase.value = "positive";
+  resultsAccepted.value = false;
+});
+
+function hasRolled(playerNumber: number): boolean {
+  return rolledPlayerNumbers.value.includes(playerNumber);
+}
+
+function isRolling(playerNumber: number): boolean {
+  return rollingPlayerNumbers.value.includes(playerNumber);
+}
+
+function getThemesForPlayer(playerNumber: number): string[] {
+  const player = (players || []).find((entry) => entry.player_number === playerNumber);
+  const slug = player?.user?.active_dice_theme_slug || "dddice-standard";
+  return [slug, slug, slug];
+}
+
+async function startRolling(diceResult: DiceResult): Promise<void> {
+  const playerNumber = diceResult.player_number;
+  if (rollingPlayerNumbers.value.includes(playerNumber) || rolledPlayerNumbers.value.includes(playerNumber)) return;
+
+  const use3D = dddiceService.isReady();
+
+  if (!use3D) {
+    playSound("dice");
+  }
+
+  rollingPlayerNumbers.value.push(playerNumber);
+  rollingFaces.value[playerNumber] = diceResult.rolls.map(() => "?");
+
+  if (use3D) {
+    // 3D dice path: animate via dddice, then show final results immediately
+    const themes = getThemesForPlayer(playerNumber);
+    const diceSpecs = diceResult.rolls.map((roll, index) => ({
+      theme: themes[index] || "dddice-standard",
+      value: roll.value,
+    }));
+    await dddiceService.roll(diceSpecs);
+
+    rollingPlayerNumbers.value = rollingPlayerNumbers.value.filter((number) => number !== playerNumber);
+    rolledPlayerNumbers.value.push(playerNumber);
+
+    if (allRolled.value) {
+      if (positivePhase.success) {
+        playSound("win");
       } else {
-        // Fallback: text animation
-        const possibleFaces = ['1', '2', '3', '4', '5', 'W'];
-        let ticks = 0;
-        const maxTicks = 12;
-        const interval = setInterval(() => {
-          ticks++;
-          this.rollingFaces[pn] = pr.rolls.map(() =>
-            possibleFaces[Math.floor(Math.random() * possibleFaces.length)]
-          );
-          this.rollingFaces = { ...this.rollingFaces };
+        playSound("fail");
+      }
+    }
+  } else {
+    // Fallback: text animation
+    const possibleFaces = ["1", "2", "3", "4", "5", "W"];
+    let ticks = 0;
+    const maxTicks = 12;
+    const interval = setInterval(() => {
+      ticks++;
+      rollingFaces.value[playerNumber] = diceResult.rolls.map(() =>
+        possibleFaces[Math.floor(Math.random() * possibleFaces.length)],
+      );
+      rollingFaces.value = { ...rollingFaces.value };
 
-          if (ticks >= maxTicks) {
-            clearInterval(interval);
-            this.rollingPlayerNumbers = this.rollingPlayerNumbers.filter(n => n !== pn);
-            this.rolledPlayerNumbers.push(pn);
+      if (ticks >= maxTicks) {
+        clearInterval(interval);
+        rollingPlayerNumbers.value = rollingPlayerNumbers.value.filter((number) => number !== playerNumber);
+        rolledPlayerNumbers.value.push(playerNumber);
 
-            this.$nextTick(() => {
-              if (this.allRolled) {
-                if (this.positivePhase.success) {
-                  playSound('win');
-                } else {
-                  playSound('fail');
-                }
-              }
-            });
+        if (allRolled.value) {
+          if (positivePhase.success) {
+            playSound("win");
+          } else {
+            playSound("fail");
           }
-        }, 70);
-      }
-    },
-    rollForPlayer(playerNumber) {
-      if (!this.rolledPlayerNumbers.includes(playerNumber)) {
-        this.rolledPlayerNumbers.push(playerNumber);
-      }
-    },
-    playerSubtotal(pr) {
-      return (pr.rolls || []).reduce((sum, r) => sum + (r.value || 0), 0);
-    },
-    acceptAndContinue() {
-      this.resultsAccepted = true;
-      this.$emit('phase-complete', 'positive');
-      this.$nextTick(() => {
-        this.viewPhase = 'negative';
-        this.$nextTick(() => {
-          this.$emit('phase-complete', 'negative');
-        });
-      });
-    },
-    statIcon(stat) {
-      const statIcons = useIcons().getStatIcons();
-      const s = statIcons.find(s => s.key === stat);
-      return s ? s.icon : '';
-    },
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      for (const [key, val] of Object.entries(effects)) {
-        if (!['grant_item_id', 'draw_item', 'recover_die', 'remove_curse'].includes(key)) {
-          result[key] = val;
         }
       }
-      return result;
-    },
-    modLabel(mod) {
-      const labels = {
-        roll_bonus: '+' + mod.value + ' to roll',
-        roll_penalty: mod.value + ' to roll',
-        difficulty_reduction: '-' + mod.value + ' difficulty',
-        difficulty_increase: '+' + mod.value + ' difficulty',
-      };
-      return labels[mod.type] || mod.type;
-    },
-    modTagClass(mod) {
-      if (mod.type === 'roll_bonus' || mod.type === 'difficulty_reduction') return 'mod-helpful';
-      return 'mod-harmful';
-    },
-    specialIcon(type) {
-      const icons = {
-        draw_item: '\u{1F3C6}',
-        recover_die: '\u{1FA79}',
-        lose_die: '\u{1F4A5}',
-        discard_item: '\u{1F4A8}',
-        remove_curse: '\u{2728}',
-      };
-      return icons[type] || '\u{2728}';
-    },
-  },
-};
+    }, 70);
+  }
+}
+
+async function acceptAndContinue(): Promise<void> {
+  resultsAccepted.value = true;
+  emit("phaseComplete", "positive");
+  await nextTick();
+  viewPhase.value = "negative";
+  await nextTick();
+  emit("phaseComplete", "negative");
+}
+
+function statIcon(stat: string): string {
+  const statIcons = useIcons().getStatIcons();
+  const match = statIcons.find((icon) => icon.key === stat);
+  return match ? match.icon : "";
+}
+
+function filterStatEffects(effects: Record<string, number> | undefined): Record<string, number> {
+  if (!effects) return {};
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(effects)) {
+    if (!["grant_item_id", "draw_item", "recover_die", "remove_curse"].includes(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+function modifierLabel(modifier: ItemModifier): string {
+  const labels: Record<string, string> = {
+    roll_bonus: "+" + modifier.value + " to roll",
+    roll_penalty: modifier.value + " to roll",
+    difficulty_reduction: "-" + modifier.value + " difficulty",
+    difficulty_increase: "+" + modifier.value + " difficulty",
+  };
+  return labels[modifier.type] || modifier.type;
+}
+
+function modifierTagClass(modifier: ItemModifier): string {
+  if (modifier.type === "roll_bonus" || modifier.type === "difficulty_reduction") return "mod-helpful";
+  return "mod-harmful";
+}
+
+function specialIcon(type: string): string {
+  const icons: Record<string, string> = {
+    draw_item: "\u{1F3C6}",
+    recover_die: "\u{1FA79}",
+    lose_die: "\u{1F4A5}",
+    discard_item: "\u{1F4A8}",
+    remove_curse: "\u{2728}",
+  };
+  return icons[type] || "\u{2728}";
+}
 </script>
 
 <style scoped>

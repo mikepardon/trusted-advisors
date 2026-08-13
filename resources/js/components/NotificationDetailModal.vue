@@ -59,59 +59,84 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
+<script setup lang="ts">
+import { computed, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useAuth } from "../stores/auth";
 
-export default {
-  name: 'NotificationDetailModal',
-  props: {
-    notification: { type: Object, required: true },
-  },
-  emits: ['close', 'claimed'],
-  setup() {
-    const auth = useAuth();
-    return { auth };
-  },
-  data() {
-    return {
-      claiming: false,
-      claimSuccess: false,
-      claimError: '',
-    };
-  },
-  computed: {
-    hasRewards() {
-      const d = this.notification.data;
-      return d && ((d.reward_xp ?? 0) > 0 || (d.reward_coins ?? 0) > 0 || d.reward_character_id || d.reward_dice_theme_id || d.reward_kingdom_style_id);
-    },
-  },
-  methods: {
-    async claim() {
-      this.claiming = true;
-      this.claimError = '';
-      try {
-        const res = await axios.post(`/api/notifications/${this.notification.id}/claim`);
-        // Update auth store with new user stats
-        if (res.data.user) {
-          this.auth.state.user.xp = res.data.user.xp;
-          this.auth.state.user.level = res.data.user.level;
-          this.auth.state.user.coins = res.data.user.coins;
-        }
-        this.claimSuccess = true;
-        this.$emit('claimed', this.notification.id);
-      } catch (e) {
-        this.claimError = e.response?.data?.error || 'Failed to claim reward';
-      }
-      this.claiming = false;
-    },
-    ordinal(n) {
-      const s = ['th', 'st', 'nd', 'rd'];
-      const v = n % 100;
-      return n + (s[(v - 20) % 10] || s[v] || s[0]);
-    },
-  },
-};
+interface NotificationData {
+  rank?: number;
+  reward_xp?: number;
+  reward_coins?: number;
+  reward_title?: string;
+  reward_character_id?: number;
+  reward_dice_theme_id?: number;
+  reward_kingdom_style_id?: number;
+}
+
+interface Notification {
+  id: number;
+  title: string;
+  message: string;
+  type: string;
+  claimed_at?: string;
+  data?: NotificationData;
+}
+
+interface ClaimResponse {
+  user?: { xp: number; level: number; coins: number };
+}
+
+const { notification } = defineProps<{ notification: Notification }>();
+
+const emit = defineEmits<{ close: []; claimed: [id: number] }>();
+
+const auth = useAuth();
+
+const claiming = ref(false);
+const claimSuccess = ref(false);
+const claimError = ref("");
+
+const hasRewards = computed(() => {
+  const d = notification.data;
+  return (
+    d !== undefined &&
+    ((d.reward_xp ?? 0) > 0 ||
+      (d.reward_coins ?? 0) > 0 ||
+      d.reward_character_id !== undefined ||
+      d.reward_dice_theme_id !== undefined ||
+      d.reward_kingdom_style_id !== undefined)
+  );
+});
+
+async function claim(): Promise<void> {
+  claiming.value = true;
+  claimError.value = "";
+  try {
+    const response = await axios.post<ClaimResponse>(`/api/notifications/${notification.id}/claim`);
+    // Update auth store with new user stats
+    const user = response.data.user;
+    if (user && auth.state.user) {
+      auth.state.user.xp = user.xp;
+      auth.state.user.level = user.level;
+      auth.state.user.coins = user.coins;
+    }
+    claimSuccess.value = true;
+    emit("claimed", notification.id);
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error)
+      ? error.response?.data?.error
+      : undefined;
+    claimError.value = message ?? "Failed to claim reward";
+  }
+  claiming.value = false;
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
 </script>
 
 <style scoped>

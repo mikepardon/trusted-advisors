@@ -12,12 +12,12 @@
         <div class="swiper-hand">
           <Swiper
             :modules="swiperModules"
-            :effect="'cards'"
+            effect="cards"
             :grab-cursor="true"
             :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
             :style="{ overflow: 'visible' }"
             @swiper="onSwiper"
-            @slideChange="onSlideChange"
+            @slide-change="onSlideChange"
           >
             <SwiperSlide v-for="curse in curses" :key="curse.id">
               <div
@@ -109,83 +109,130 @@
   </div>
 </template>
 
-<script>
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from "vue";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { EffectCards } from "swiper/modules";
+import type { Swiper as SwiperInstance } from "swiper";
+import "swiper/css";
+import "swiper/css/effect-cards";
 
-export default {
-  name: 'CurseSelectionOverlay',
-  components: { Swiper, SwiperSlide },
-  props: {
-    curses: { type: Array, required: true },
-    playerName: { type: String, default: '' },
-    isDuel: { type: Boolean, default: false },
-  },
-  emits: ['selected'],
-  data() {
-    return {
-      selectedId: null,
-      choosing: false,
-      isMobile: false,
-      mediaQuery: null,
-      swiperInstance: null,
-    };
-  },
-  computed: {
-    swiperModules() {
-      return [EffectCards];
-    },
-  },
-  mounted() {
-    this.mediaQuery = window.matchMedia('(max-width: 768px)');
-    this.isMobile = this.mediaQuery.matches;
-    this.mediaQuery.addEventListener('change', this.onMediaChange);
-  },
-  beforeUnmount() {
-    if (this.mediaQuery) {
-      this.mediaQuery.removeEventListener('change', this.onMediaChange);
-    }
-  },
-  methods: {
-    onMediaChange(e) {
-      this.isMobile = e.matches;
-    },
-    onSwiper(swiper) {
-      this.swiperInstance = swiper;
-    },
-    onSlideChange() {},
-    getActiveNegative(curse) {
-      if (this.isDuel && curse.negative_effect_duel) return curse.negative_effect_duel;
-      return curse.negative_effect;
-    },
-    getActivePositive(curse) {
-      if (this.isDuel && curse.positive_effect_duel) return curse.positive_effect_duel;
-      return curse.positive_effect;
-    },
-    choose(curseId) {
-      this.selectedId = curseId;
-      this.choosing = true;
-      this.$emit('selected', curseId);
-    },
-    describeEffect(effect, phase) {
-      if (!effect) return 'Unknown';
-      const t = effect.type;
-      if (t === 'lose_die') return `Permanently lose ${effect.value || 1} die`;
-      if (t === 'stat_per_round' && phase === 'negative') return `${effect.value} ${effect.stat} each round`;
-      if (t === 'stat_per_round' && phase === 'positive') return `+${effect.value} ${effect.stat} each round`;
-      if (t === 'difficulty_modifier') return `All cards +${effect.value || 1} difficulty`;
-      if (t === 'double_negative') return 'Negative card effects are doubled';
-      if (t === 'xp_multiplier') return `${effect.value}x XP at game end`;
-      if (t === 'auto_max_stat') return `${effect.count || 1} stat(s) set to max at game end`;
-      if (t === 'score_bonus') return `+${effect.value} score at game end`;
-      if (t === 'opponent_difficulty') return `Opponent's cards +${effect.value} difficulty`;
-      if (t === 'opponent_lose_die') return `Opponent loses a die for ${effect.rounds || 1} round(s)`;
-      return JSON.stringify(effect);
-    },
-  },
-};
+interface CurseEffect {
+  type: string;
+  value?: number;
+  stat?: string;
+  count?: number;
+  rounds?: number;
+}
+
+interface Curse {
+  id: number;
+  name: string;
+  description: string;
+  image_path: string | undefined;
+  negative_effect: CurseEffect | undefined;
+  positive_effect: CurseEffect | undefined;
+  negative_effect_duel: CurseEffect | undefined;
+  positive_effect_duel: CurseEffect | undefined;
+}
+
+const { curses, playerName = "", isDuel = false } = defineProps<{
+  curses: Curse[];
+  playerName?: string;
+  isDuel?: boolean;
+}>();
+
+const emit = defineEmits<{
+  selected: [curseId: number];
+}>();
+
+const swiperModules = [EffectCards];
+
+const selectedId = ref<number | undefined>(undefined);
+const choosing = ref(false);
+const isMobile = ref(false);
+const mediaQuery = ref<MediaQueryList | undefined>(undefined);
+const swiperInstance = ref<SwiperInstance | undefined>(undefined);
+
+function onMediaChange(event: MediaQueryListEvent): void {
+  isMobile.value = event.matches;
+}
+
+function onSwiper(swiper: SwiperInstance): void {
+  swiperInstance.value = swiper;
+}
+
+function onSlideChange(): void {
+  // No-op: slide changes require no handling in curse selection.
+}
+
+function getActiveNegative(curse: Curse): CurseEffect | undefined {
+  if (isDuel && curse.negative_effect_duel) {
+    return curse.negative_effect_duel;
+  }
+  return curse.negative_effect;
+}
+
+function getActivePositive(curse: Curse): CurseEffect | undefined {
+  if (isDuel && curse.positive_effect_duel) {
+    return curse.positive_effect_duel;
+  }
+  return curse.positive_effect;
+}
+
+function choose(curseId: number): void {
+  selectedId.value = curseId;
+  choosing.value = true;
+  emit("selected", curseId);
+}
+
+function describeEffect(effect: CurseEffect | undefined, phase: string): string {
+  if (!effect) {
+    return "Unknown";
+  }
+  const type = effect.type;
+  if (type === "lose_die") {
+    return `Permanently lose ${effect.value || 1} die`;
+  }
+  if (type === "stat_per_round" && phase === "negative") {
+    return `${effect.value} ${effect.stat} each round`;
+  }
+  if (type === "stat_per_round" && phase === "positive") {
+    return `+${effect.value} ${effect.stat} each round`;
+  }
+  if (type === "difficulty_modifier") {
+    return `All cards +${effect.value || 1} difficulty`;
+  }
+  if (type === "double_negative") {
+    return "Negative card effects are doubled";
+  }
+  if (type === "xp_multiplier") {
+    return `${effect.value}x XP at game end`;
+  }
+  if (type === "auto_max_stat") {
+    return `${effect.count || 1} stat(s) set to max at game end`;
+  }
+  if (type === "score_bonus") {
+    return `+${effect.value} score at game end`;
+  }
+  if (type === "opponent_difficulty") {
+    return `Opponent's cards +${effect.value} difficulty`;
+  }
+  if (type === "opponent_lose_die") {
+    return `Opponent loses a die for ${effect.rounds || 1} round(s)`;
+  }
+  return JSON.stringify(effect);
+}
+
+onMounted(() => {
+  mediaQuery.value = window.matchMedia("(max-width: 768px)");
+  isMobile.value = mediaQuery.value.matches;
+  mediaQuery.value.addEventListener("change", onMediaChange);
+});
+
+onBeforeUnmount(() => {
+  mediaQuery.value?.removeEventListener("change", onMediaChange);
+});
 </script>
 
 <style scoped>

@@ -5,16 +5,16 @@
       <div class="header-buttons">
         <button class="btn-csv" @click="exportCsv">Export CSV</button>
         <button class="btn-csv" @click="triggerImport">Import CSV</button>
-        <input type="file" ref="csvInput" accept=".csv" style="display:none" @change="handleImportFile" />
+        <input ref="csvInput" type="file" accept=".csv" style="display:none" @change="handleImportFile" />
         <button class="btn-primary" @click="openCreate">+ New Item</button>
       </div>
     </div>
 
-    <div v-if="importResult" class="import-result" :class="importResult.errors.length ? 'import-warn' : 'import-ok'">
+    <div v-if="importResult" class="import-result" :class="importResult.errors.length > 0 ? 'import-warn' : 'import-ok'">
       CSV Import: {{ importResult.created }} created, {{ importResult.updated }} updated.
-      <span v-if="importResult.errors.length"> {{ importResult.errors.length }} error(s).</span>
+      <span v-if="importResult.errors.length > 0"> {{ importResult.errors.length }} error(s).</span>
       <div v-for="(err, i) in importResult.errors" :key="i" class="import-error-line">{{ err }}</div>
-      <button class="import-dismiss" @click="importResult = null">Dismiss</button>
+      <button class="import-dismiss" @click="importResult = undefined">Dismiss</button>
     </div>
 
     <!-- Balance Stats Panel -->
@@ -160,19 +160,19 @@
           <div class="form-group">
             <label>Target</label>
             <select v-model="form.target">
-              <option :value="null">Self</option>
+              <option :value="undefined">Self</option>
               <option value="opponent">Opponent</option>
             </select>
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" v-model="form.is_negative" />
+              <input v-model="form.is_negative" type="checkbox" />
               Is Negative
             </label>
           </div>
           <div class="form-group">
             <label>
-              <input type="checkbox" v-model="form.is_consumable" />
+              <input v-model="form.is_consumable" type="checkbox" />
               Is Consumable
             </label>
           </div>
@@ -180,7 +180,7 @@
           <div class="form-group">
             <label>Addon</label>
             <select v-model="form.addon_id">
-              <option :value="null">Base Game</option>
+              <option :value="undefined">Base Game</option>
               <option v-for="a in addons" :key="a.id" :value="a.id">{{ a.name }}</option>
             </select>
           </div>
@@ -188,7 +188,7 @@
           <!-- Duel Effect Override -->
           <div style="border: 1px solid rgba(138, 58, 185, 0.3); background: rgba(138, 58, 185, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 12px;">
             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; margin-bottom: 8px;">
-              <input type="checkbox" v-model="form.useDuelEffect" />
+              <input v-model="form.useDuelEffect" type="checkbox" />
               <span style="color: #c890e0; font-weight: 700;">Use different effect for Duel mode</span>
             </label>
             <template v-if="form.useDuelEffect">
@@ -232,8 +232,8 @@
           <div class="form-group">
             <label style="color: var(--accent-gold); font-weight: 600;">Availability</label>
             <div style="display: flex; gap: 16px; margin-top: 4px;">
-              <label><input type="checkbox" v-model="form.available_cooperative" /> Co-op</label>
-              <label><input type="checkbox" v-model="form.available_duel" /> Duel</label>
+              <label><input v-model="form.available_cooperative" type="checkbox" /> Co-op</label>
+              <label><input v-model="form.available_duel" type="checkbox" /> Duel</label>
             </div>
           </div>
 
@@ -251,235 +251,311 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useToast } from '../../stores/toast';
-import AdminSearchInput from './AdminSearchInput.vue';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
+import axios, { isAxiosError } from "axios";
+import { useToast } from "../../stores/toast";
+import AdminSearchInput from "./AdminSearchInput.vue";
 
-export default {
-  name: 'AdminItems',
-  components: { AdminSearchInput },
-  setup() { return { toast: useToast() }; },
-  data() {
-    return {
-      items: [],
-      addons: [],
-      loading: true,
-      searchQuery: '',
-      showModal: false,
-      editing: null,
-      saving: false,
-      formError: '',
-      importResult: null,
-      showBalanceStats: false,
-      form: {
-        name: '',
-        description: '',
-        effect_type: 'passive',
-        bonus_type: 'roll_bonus',
-        bonus_value: 1,
-        stat: 'food',
-        is_negative: false,
-        is_consumable: false,
-        target: null,
-        addon_id: null,
-        available_cooperative: true,
-        available_duel: true,
-        useDuelEffect: false,
-        bonus_type_duel: 'roll_bonus',
-        bonus_value_duel: 1,
-        stat_duel: 'food',
-      },
-    };
-  },
-  computed: {
-    filteredItems() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.items;
-      return this.items.filter(item =>
-        (item.name || '').toLowerCase().includes(q) ||
-        (item.description || '').toLowerCase().includes(q) ||
-        (item.effect_type || '').toLowerCase().includes(q)
-      );
+interface ItemEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+  stat?: string;
+}
+
+interface Item {
+  id: number;
+  name: string;
+  description: string;
+  effect_type?: string;
+  effect?: ItemEffect;
+  effect_duel?: ItemEffect;
+  is_negative?: boolean;
+  is_consumable?: boolean;
+  target?: string;
+  addon_id?: number;
+  available_cooperative?: boolean;
+  available_duel?: boolean;
+}
+
+interface Addon {
+  id: number;
+  name: string;
+}
+
+interface ItemForm {
+  name: string;
+  description: string;
+  effect_type: string;
+  bonus_type: string;
+  bonus_value: number;
+  stat: string;
+  is_negative: boolean;
+  is_consumable: boolean;
+  target: string | undefined;
+  addon_id: number | undefined;
+  available_cooperative: boolean;
+  available_duel: boolean;
+  useDuelEffect: boolean;
+  bonus_type_duel: string;
+  bonus_value_duel: number;
+  stat_duel: string;
+}
+
+interface ImportResult {
+  created: number;
+  updated: number;
+  errors: string[];
+}
+
+interface BalanceStats {
+  count: number;
+  positiveCount: number;
+  negativeCount: number;
+  consumableCount: number;
+  permanentCount: number;
+  avgPosBonus: number;
+  avgNegBonus: number;
+  bonusTypeDist: Record<string, number>;
+  effectTypeDist: Record<string, number>;
+}
+
+function defaultForm(): ItemForm {
+  return {
+    name: "",
+    description: "",
+    effect_type: "passive",
+    bonus_type: "roll_bonus",
+    bonus_value: 1,
+    stat: "food",
+    is_negative: false,
+    is_consumable: false,
+    target: undefined,
+    addon_id: undefined,
+    available_cooperative: true,
+    available_duel: true,
+    useDuelEffect: false,
+    bonus_type_duel: "roll_bonus",
+    bonus_value_duel: 1,
+    stat_duel: "food",
+  };
+}
+
+function errorMessage(error: unknown, fallback: string): string {
+  if (isAxiosError<{ message?: string }>(error)) {
+    return error.response?.data?.message ?? error.message;
+  }
+  return fallback;
+}
+
+const toast = useToast();
+
+const items = ref<Item[]>([]);
+const addons = ref<Addon[]>([]);
+const loading = ref(true);
+const searchQuery = ref("");
+const showModal = ref(false);
+const editing = ref<Item | undefined>(undefined);
+const saving = ref(false);
+const formError = ref("");
+const importResult = ref<ImportResult | undefined>(undefined);
+const showBalanceStats = ref(false);
+const form = reactive<ItemForm>(defaultForm());
+const csvInput = useTemplateRef<HTMLInputElement>("csvInput");
+
+const filteredItems = computed<Item[]>(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) {
+    return items.value;
+  }
+  return items.value.filter((item) =>
+    (item.name || "").toLowerCase().includes(query)
+    || (item.description || "").toLowerCase().includes(query)
+    || (item.effect_type || "").toLowerCase().includes(query),
+  );
+});
+
+const itemBalanceStats = computed<BalanceStats | undefined>(() => {
+  if (items.value.length === 0) {
+    return undefined;
+  }
+
+  const positiveCount = items.value.filter((item) => !item.is_negative).length;
+  const negativeCount = items.value.filter((item) => item.is_negative).length;
+
+  const consumableCount = items.value.filter((item) => item.is_consumable).length;
+  const permanentCount = items.value.filter((item) => !item.is_consumable).length;
+
+  const positiveItems = items.value.filter((item) => !item.is_negative && item.effect?.bonus_value != undefined);
+  const negativeItems = items.value.filter((item) => item.is_negative && item.effect?.bonus_value != undefined);
+  const avgPosBonus = positiveItems.length > 0
+    ? positiveItems.reduce((sum, item) => sum + Math.abs(item.effect?.bonus_value ?? 0), 0) / positiveItems.length
+    : 0;
+  const avgNegBonus = negativeItems.length > 0
+    ? negativeItems.reduce((sum, item) => sum + Math.abs(item.effect?.bonus_value ?? 0), 0) / negativeItems.length
+    : 0;
+
+  const bonusTypeDistribution: Record<string, number> = {};
+  for (const item of items.value) {
+    const bonusType = item.effect?.bonus_type || "unknown";
+    bonusTypeDistribution[bonusType] = (bonusTypeDistribution[bonusType] || 0) + 1;
+  }
+
+  const effectTypeDistribution: Record<string, number> = {};
+  for (const item of items.value) {
+    const effectType = item.effect_type || "unknown";
+    effectTypeDistribution[effectType] = (effectTypeDistribution[effectType] || 0) + 1;
+  }
+
+  return {
+    count: items.value.length,
+    positiveCount,
+    negativeCount,
+    consumableCount,
+    permanentCount,
+    avgPosBonus,
+    avgNegBonus,
+    bonusTypeDist: bonusTypeDistribution,
+    effectTypeDist: effectTypeDistribution,
+  };
+});
+
+async function fetch(): Promise<void> {
+  loading.value = true;
+  const response = await axios.get<Item[]>("/api/admin/items");
+  items.value = response.data;
+  loading.value = false;
+}
+
+async function fetchAddons(): Promise<void> {
+  try {
+    const response = await axios.get<Addon[]>("/api/admin/addons");
+    addons.value = response.data;
+  } catch {
+    // ignore
+  }
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, defaultForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(item: Item): void {
+  editing.value = item;
+  const hasDuelEffect = item.effect_duel != undefined;
+  Object.assign(form, {
+    name: item.name,
+    description: item.description,
+    effect_type: item.effect_type || "passive",
+    bonus_type: item.effect?.bonus_type || "roll_bonus",
+    bonus_value: item.effect?.bonus_value || 1,
+    stat: item.effect?.stat || "food",
+    is_negative: item.is_negative || false,
+    is_consumable: item.is_consumable || false,
+    target: item.target || undefined,
+    addon_id: item.addon_id || undefined,
+    available_cooperative: item.available_cooperative ?? true,
+    available_duel: item.available_duel ?? true,
+    useDuelEffect: hasDuelEffect,
+    bonus_type_duel: item.effect_duel?.bonus_type || item.effect?.bonus_type || "roll_bonus",
+    bonus_value_duel: item.effect_duel?.bonus_value ?? item.effect?.bonus_value ?? 1,
+    stat_duel: item.effect_duel?.stat || item.effect?.stat || "food",
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  const payload = {
+    name: form.name,
+    description: form.description,
+    effect_type: form.effect_type,
+    is_negative: form.is_negative,
+    is_consumable: form.is_consumable,
+    target: form.target || undefined,
+    addon_id: form.addon_id || undefined,
+    available_cooperative: form.available_cooperative,
+    available_duel: form.available_duel,
+    effect: {
+      bonus_type: form.bonus_type,
+      bonus_value: form.bonus_value,
+      ...((form.bonus_type === "stat_boost") && { stat: form.stat }),
     },
-    itemBalanceStats() {
-      if (!this.items.length) return null;
-
-      // Positive vs negative count
-      const positiveCount = this.items.filter(i => !i.is_negative).length;
-      const negativeCount = this.items.filter(i => i.is_negative).length;
-
-      // Consumable vs permanent
-      const consumableCount = this.items.filter(i => i.is_consumable).length;
-      const permanentCount = this.items.filter(i => !i.is_consumable).length;
-
-      // Avg bonus value (separate for positive and negative items)
-      const posItems = this.items.filter(i => !i.is_negative && i.effect?.bonus_value != null);
-      const negItems = this.items.filter(i => i.is_negative && i.effect?.bonus_value != null);
-      const avgPosBonus = posItems.length ? posItems.reduce((s, i) => s + Math.abs(i.effect.bonus_value), 0) / posItems.length : 0;
-      const avgNegBonus = negItems.length ? negItems.reduce((s, i) => s + Math.abs(i.effect.bonus_value), 0) / negItems.length : 0;
-
-      // Bonus type distribution
-      const bonusTypeDist = {};
-      this.items.forEach(i => {
-        const bt = i.effect?.bonus_type || 'unknown';
-        bonusTypeDist[bt] = (bonusTypeDist[bt] || 0) + 1;
-      });
-
-      // Effect type distribution
-      const effectTypeDist = {};
-      this.items.forEach(i => {
-        const et = i.effect_type || 'unknown';
-        effectTypeDist[et] = (effectTypeDist[et] || 0) + 1;
-      });
-
-      return {
-        count: this.items.length,
-        positiveCount,
-        negativeCount,
-        consumableCount,
-        permanentCount,
-        avgPosBonus,
-        avgNegBonus,
-        bonusTypeDist,
-        effectTypeDist,
-      };
-    },
-  },
-  async mounted() {
-    await Promise.all([this.fetch(), this.fetchAddons()]);
-  },
-  methods: {
-    async fetch() {
-      this.loading = true;
-      const res = await axios.get('/api/admin/items');
-      this.items = res.data;
-      this.loading = false;
-    },
-    async fetchAddons() {
-      try {
-        const res = await axios.get('/api/admin/addons');
-        this.addons = res.data;
-      } catch { /* ignore */ }
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = {
-        name: '',
-        description: '',
-        effect_type: 'passive',
-        bonus_type: 'roll_bonus',
-        bonus_value: 1,
-        stat: 'food',
-        is_negative: false,
-        is_consumable: false,
-        target: null,
-        addon_id: null,
-        available_cooperative: true,
-        available_duel: true,
-        useDuelEffect: false,
-        bonus_type_duel: 'roll_bonus',
-        bonus_value_duel: 1,
-        stat_duel: 'food',
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(item) {
-      this.editing = item;
-      const hasDuelEffect = item.effect_duel != null;
-      this.form = {
-        name: item.name,
-        description: item.description,
-        effect_type: item.effect_type || 'passive',
-        bonus_type: item.effect?.bonus_type || 'roll_bonus',
-        bonus_value: item.effect?.bonus_value || 1,
-        stat: item.effect?.stat || 'food',
-        is_negative: item.is_negative || false,
-        is_consumable: item.is_consumable || false,
-        target: item.target || null,
-        addon_id: item.addon_id || null,
-        available_cooperative: item.available_cooperative ?? true,
-        available_duel: item.available_duel ?? true,
-        useDuelEffect: hasDuelEffect,
-        bonus_type_duel: item.effect_duel?.bonus_type || item.effect?.bonus_type || 'roll_bonus',
-        bonus_value_duel: item.effect_duel?.bonus_value ?? item.effect?.bonus_value ?? 1,
-        stat_duel: item.effect_duel?.stat || item.effect?.stat || 'food',
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      const payload = {
-        name: this.form.name,
-        description: this.form.description,
-        effect_type: this.form.effect_type,
-        is_negative: this.form.is_negative,
-        is_consumable: this.form.is_consumable,
-        target: this.form.target || null,
-        addon_id: this.form.addon_id || null,
-        available_cooperative: this.form.available_cooperative,
-        available_duel: this.form.available_duel,
-        effect: {
-          bonus_type: this.form.bonus_type,
-          bonus_value: this.form.bonus_value,
-          ...(this.form.bonus_type === 'stat_boost' ? { stat: this.form.stat } : {}),
-        },
-        effect_duel: this.form.useDuelEffect ? {
-          bonus_type: this.form.bonus_type_duel,
-          bonus_value: this.form.bonus_value_duel,
-          ...(this.form.bonus_type_duel === 'stat_boost' ? { stat: this.form.stat_duel } : {}),
-        } : null,
-      };
-
-      this.saving = true;
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/items/${this.editing.id}`, payload);
-        } else {
-          await axios.post('/api/admin/items', payload);
+    effect_duel: form.useDuelEffect
+      ? {
+          bonus_type: form.bonus_type_duel,
+          bonus_value: form.bonus_value_duel,
+          ...((form.bonus_type_duel === "stat_boost") && { stat: form.stat_duel }),
         }
-        this.showModal = false;
-        await this.fetch();
-      } catch (e) {
-        this.formError = e.response?.data?.message || 'Save failed';
-      }
-      this.saving = false;
-    },
-    exportCsv() {
-      window.location.href = '/api/admin/items/export-csv';
-    },
-    triggerImport() {
-      this.$refs.csvInput.click();
-    },
-    async handleImportFile(event) {
-      const file = event.target.files[0];
-      if (!file) return;
-      const formData = new FormData();
-      formData.append('file', file);
-      try {
-        const res = await axios.post('/api/admin/items/import-csv', formData, {
-          headers: { 'Content-Type': 'multipart/form-data' },
-        });
-        this.importResult = res.data;
-        await this.fetch();
-      } catch (e) {
-        this.importResult = { created: 0, updated: 0, errors: [e.response?.data?.message || 'Import failed'] };
-      }
-      event.target.value = '';
-    },
-    async confirmDelete(item) {
-      if (!confirm(`Delete item "${item.name}"?`)) return;
-      try {
-        await axios.delete(`/api/admin/items/${item.id}`);
-        await this.fetch();
-      } catch (e) {
-        this.toast.error('Delete failed: ' + (e.response?.data?.message || e.message));
-      }
-    },
-  },
-};
+      : undefined,
+  };
+
+  saving.value = true;
+  try {
+    const current = editing.value;
+    if (current) {
+      await axios.put(`/api/admin/items/${current.id}`, payload);
+    } else {
+      await axios.post("/api/admin/items", payload);
+    }
+    showModal.value = false;
+    await fetch();
+  } catch (error) {
+    formError.value = errorMessage(error, "Save failed");
+  }
+  saving.value = false;
+}
+
+function exportCsv(): void {
+  window.location.assign("/api/admin/items/export-csv");
+}
+
+function triggerImport(): void {
+  csvInput.value?.click();
+}
+
+async function handleImportFile(event: Event): Promise<void> {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) {
+    return;
+  }
+  const file = target.files?.[0];
+  if (!file) {
+    return;
+  }
+  const formData = new FormData();
+  formData.append("file", file);
+  try {
+    const response = await axios.post<ImportResult>("/api/admin/items/import-csv", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    importResult.value = response.data;
+    await fetch();
+  } catch (error) {
+    importResult.value = { created: 0, updated: 0, errors: [errorMessage(error, "Import failed")] };
+  }
+  target.value = "";
+}
+
+async function confirmDelete(item: Item): Promise<void> {
+  if (!confirm(`Delete item "${item.name}"?`)) {
+    return;
+  }
+  try {
+    await axios.delete(`/api/admin/items/${item.id}`);
+    await fetch();
+  } catch (error) {
+    toast.error(`Delete failed: ${errorMessage(error, "Delete failed")}`);
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([fetch(), fetchAddons()]);
+});
 </script>
 
 <style scoped>

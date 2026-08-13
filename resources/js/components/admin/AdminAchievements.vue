@@ -19,7 +19,7 @@
             <span v-if="a.reward_xp" class="xp-badge">+{{ a.reward_xp }} XP</span>
           </div>
           <div class="list-desc">{{ a.description }}</div>
-          <div v-if="a.linked_unlockables && a.linked_unlockables.length" class="unlockables-row">
+          <div v-if="a.linked_unlockables && a.linked_unlockables.length > 0" class="unlockables-row">
             <span class="unlockables-label">Unlocks:</span>
             <span v-for="u in a.linked_unlockables" :key="u.id" class="unlock-badge">
               {{ u.type }} &mdash; {{ u.entity_name }}
@@ -115,136 +115,183 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import AdminSearchInput from './AdminSearchInput.vue';
-import IconPicker from './IconPicker.vue';
+<script setup lang="ts">
+import { computed, onMounted, reactive, ref } from "vue";
+import axios, { isAxiosError } from "axios";
+import AdminSearchInput from "./AdminSearchInput.vue";
+import IconPicker from "./IconPicker.vue";
 
-export default {
-  name: 'AdminAchievements',
-  components: { AdminSearchInput, IconPicker },
-  data() {
-    return {
-      achievements: [],
-      searchQuery: '',
-      showModal: false,
-      editing: null,
-      formError: '',
-      form: {
-        key: '', name: '', description: '', icon: '', category: 'general',
-        criteria_type: 'total_wins', criteria_amount: 1,
-        tier_group: '', tier: 1, reward_xp: 0,
-      },
-    };
-  },
-  computed: {
-    iconPickerType() {
-      return this.form.icon?.startsWith('image:') ? 'image' : 'emoji';
-    },
-    iconPickerValue() {
-      if (this.form.icon?.startsWith('image:')) return this.form.icon.slice(6);
-      return this.form.icon || '';
-    },
-    criteriaUsesValue() {
-      return ['elo_reached', 'level_reached'].includes(this.form.criteria_type);
-    },
-    filteredAchievements() {
-      const q = this.searchQuery.toLowerCase().trim();
-      if (!q) return this.achievements;
-      return this.achievements.filter(a =>
-        a.name.toLowerCase().includes(q) ||
-        a.key.toLowerCase().includes(q) ||
-        (a.description || '').toLowerCase().includes(q) ||
-        (a.category || '').toLowerCase().includes(q) ||
-        (a.tier_group || '').toLowerCase().includes(q)
-      );
-    },
-  },
-  async mounted() { this.load(); },
-  methods: {
-    onIconValueChange(val) {
-      if (this.iconPickerType === 'image') {
-        this.form.icon = 'image:' + val;
-      } else {
-        this.form.icon = val;
-      }
-    },
-    onIconTypeChange(type) {
-      if (type === 'image' && !this.form.icon?.startsWith('image:')) {
-        this.form.icon = '';
-      } else if (type === 'emoji' && this.form.icon?.startsWith('image:')) {
-        this.form.icon = '';
-      }
-    },
-    async load() {
-      const res = await axios.get('/api/admin/achievements');
-      this.achievements = res.data;
-    },
-    openCreate() {
-      this.editing = null;
-      this.form = {
-        key: '', name: '', description: '', icon: '', category: 'general',
-        criteria_type: 'total_wins', criteria_amount: 1,
-        tier_group: '', tier: 1, reward_xp: 0,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    openEdit(a) {
-      this.editing = a.id;
-      const c = a.criteria || {};
-      this.form = {
-        key: a.key,
-        name: a.name,
-        description: a.description,
-        icon: a.icon || '',
-        category: a.category,
-        criteria_type: c.type || 'total_wins',
-        criteria_amount: c.count || c.value || 1,
-        tier_group: a.tier_group || '',
-        tier: a.tier || 1,
-        reward_xp: a.reward_xp || 0,
-      };
-      this.formError = '';
-      this.showModal = true;
-    },
-    async save() {
-      this.formError = '';
-      const criteria = this.criteriaUsesValue
-        ? { type: this.form.criteria_type, value: this.form.criteria_amount }
-        : { type: this.form.criteria_type, count: this.form.criteria_amount };
+interface AchievementCriteria {
+  type?: string;
+  count?: number;
+  value?: number;
+}
 
-      const data = {
-        key: this.form.key,
-        name: this.form.name,
-        description: this.form.description,
-        icon: this.form.icon || null,
-        category: this.form.category,
-        criteria,
-        reward_xp: this.form.reward_xp || 0,
-        tier: this.form.tier || 1,
-        tier_group: this.form.tier_group || null,
-      };
+interface LinkedUnlockable {
+  id: number;
+  type: string;
+  entity_name: string;
+}
 
-      try {
-        if (this.editing) {
-          await axios.put(`/api/admin/achievements/${this.editing}`, data);
-        } else {
-          await axios.post('/api/admin/achievements', data);
-        }
-        this.showModal = false;
-        this.load();
-      } catch (e) {
-        this.formError = e.response?.data?.error || e.response?.data?.message || 'Error';
-      }
-    },
-    async deleteAch(a) {
-      if (!confirm(`Delete "${a.name}"?`)) return;
-      await axios.delete(`/api/admin/achievements/${a.id}`);
-      this.load();
-    },
-  },
-};
+interface Achievement {
+  id: number;
+  key: string;
+  name: string;
+  description: string;
+  icon: string | undefined;
+  category: string;
+  criteria: AchievementCriteria | undefined;
+  reward_xp: number | undefined;
+  tier: number | undefined;
+  tier_group: string | undefined;
+  linked_unlockables: LinkedUnlockable[] | undefined;
+}
+
+interface AchievementForm {
+  key: string;
+  name: string;
+  description: string;
+  icon: string;
+  category: string;
+  criteria_type: string;
+  criteria_amount: number;
+  tier_group: string;
+  tier: number;
+  reward_xp: number;
+}
+
+function emptyForm(): AchievementForm {
+  return {
+    key: "", name: "", description: "", icon: "", category: "general",
+    criteria_type: "total_wins", criteria_amount: 1,
+    tier_group: "", tier: 1, reward_xp: 0,
+  };
+}
+
+const achievements = ref<Achievement[]>([]);
+const searchQuery = ref("");
+const showModal = ref(false);
+const editing = ref<number | undefined>(undefined);
+const formError = ref("");
+const form = reactive<AchievementForm>(emptyForm());
+
+const iconPickerType = computed<string>(() =>
+  form.icon.startsWith("image:") ? "image" : "emoji",
+);
+
+const iconPickerValue = computed<string>(() => {
+  if (form.icon.startsWith("image:")) {
+    return form.icon.slice(6);
+  }
+  return form.icon;
+});
+
+const criteriaUsesValue = computed<boolean>(() =>
+  ["elo_reached", "level_reached"].includes(form.criteria_type),
+);
+
+const filteredAchievements = computed<Achievement[]>(() => {
+  const query = searchQuery.value.toLowerCase().trim();
+  if (!query) {
+    return achievements.value;
+  }
+  return achievements.value.filter(achievement =>
+    achievement.name.toLowerCase().includes(query) ||
+    achievement.key.toLowerCase().includes(query) ||
+    (achievement.description || "").toLowerCase().includes(query) ||
+    (achievement.category || "").toLowerCase().includes(query) ||
+    (achievement.tier_group || "").toLowerCase().includes(query),
+  );
+});
+
+function onIconValueChange(value: string): void {
+  form.icon = iconPickerType.value === "image" ? `image:${value}` : value;
+}
+
+function onIconTypeChange(type: string): void {
+  const isImageIcon = form.icon.startsWith("image:");
+  if ((type === "image" && !isImageIcon) || (type === "emoji" && isImageIcon)) {
+    form.icon = "";
+  }
+}
+
+async function load(): Promise<void> {
+  const response = await axios.get<Achievement[]>("/api/admin/achievements");
+  achievements.value = response.data;
+}
+
+function openCreate(): void {
+  editing.value = undefined;
+  Object.assign(form, emptyForm());
+  formError.value = "";
+  showModal.value = true;
+}
+
+function openEdit(achievement: Achievement): void {
+  editing.value = achievement.id;
+  const criteria = achievement.criteria || {};
+  Object.assign(form, {
+    key: achievement.key,
+    name: achievement.name,
+    description: achievement.description,
+    icon: achievement.icon || "",
+    category: achievement.category,
+    criteria_type: criteria.type || "total_wins",
+    criteria_amount: criteria.count || criteria.value || 1,
+    tier_group: achievement.tier_group || "",
+    tier: achievement.tier || 1,
+    reward_xp: achievement.reward_xp || 0,
+  });
+  formError.value = "";
+  showModal.value = true;
+}
+
+async function save(): Promise<void> {
+  formError.value = "";
+  const criteria = criteriaUsesValue.value
+    ? { type: form.criteria_type, value: form.criteria_amount }
+    : { type: form.criteria_type, count: form.criteria_amount };
+
+  const data = {
+    key: form.key,
+    name: form.name,
+    description: form.description,
+    // Empty strings are converted to null server-side (ConvertEmptyStringsToNull),
+    // clearing the nullable icon/tier_group columns.
+    icon: form.icon || "",
+    category: form.category,
+    criteria,
+    reward_xp: form.reward_xp || 0,
+    tier: form.tier || 1,
+    tier_group: form.tier_group || "",
+  };
+
+  try {
+    if (editing.value) {
+      await axios.put(`/api/admin/achievements/${editing.value}`, data);
+    } else {
+      await axios.post("/api/admin/achievements", data);
+    }
+    showModal.value = false;
+    await load();
+  } catch (error) {
+    formError.value = isAxiosError<{ error?: string; message?: string }>(error)
+      ? (error.response?.data?.error ?? error.response?.data?.message ?? "Error")
+      : "Error";
+  }
+}
+
+async function deleteAch(achievement: Achievement): Promise<void> {
+  if (!confirm(`Delete "${achievement.name}"?`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/achievements/${achievement.id}`);
+  await load();
+}
+
+onMounted(() => {
+  void load();
+});
 </script>
 
 <style scoped>

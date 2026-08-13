@@ -1,7 +1,7 @@
 <template>
   <!-- Inventory icon button (only visible when player has available items and showButton is true) -->
-  <div v-if="showButton && availableItems.length" class="items-icon-wrapper">
-    <button class="items-icon-btn" @click="open = true" title="View Inventory">
+  <div v-if="showButton && availableItems.length > 0" class="items-icon-wrapper">
+    <button class="items-icon-btn" title="View Inventory" @click="open = true">
       <svg class="items-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
         <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
         <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
@@ -54,7 +54,7 @@
 
           <!-- Navigation -->
           <div v-if="availableItems.length > 1" class="items-nav">
-            <button class="nav-btn" @click="prev">&lsaquo;</button>
+            <button class="nav-btn" @click="previous">&lsaquo;</button>
             <span class="nav-counter">{{ currentIndex + 1 }} / {{ availableItems.length }}</span>
             <button class="nav-btn" @click="next">&rsaquo;</button>
           </div>
@@ -64,96 +64,125 @@
   </teleport>
 </template>
 
-<script>
-export default {
-  name: 'PlayerItems',
-  props: {
-    items: { type: Array, default: () => [] },
-    showButton: { type: Boolean, default: true },
-    currentRound: { type: Number, default: 0 },
-  },
-  data() {
-    return {
-      open: false,
-      currentIndex: 0,
-    };
-  },
-  computed: {
-    availableItems() {
-      return (this.items || []).filter(pi => !pi.is_used);
-    },
-    currentItem() {
-      return this.availableItems[this.currentIndex] || {};
-    },
-  },
-  watch: {
-    availableItems() {
-      // Reset index when available items change
-      if (this.currentIndex >= this.availableItems.length) {
-        this.currentIndex = 0;
-      }
-      // Auto-close overlay if no items left
-      if (this.availableItems.length === 0) {
-        this.open = false;
-      }
-    },
-  },
-  methods: {
-    openOverlay() {
-      if (this.availableItems.length) {
-        this.open = true;
-      }
-    },
-    prev() {
-      this.currentIndex = this.currentIndex <= 0 ? this.availableItems.length - 1 : this.currentIndex - 1;
-    },
-    next() {
-      this.currentIndex = this.currentIndex >= this.availableItems.length - 1 ? 0 : this.currentIndex + 1;
-    },
-    effectSummary(item) {
-      if (!item?.effect) return '';
-      const type = item.effect.bonus_type || '';
-      const value = item.effect.bonus_value ?? 0;
-      switch (type) {
-        case 'roll_bonus':
-          return `+${value} to roll`;
-        case 'roll_penalty':
-          return `${value} to roll`;
-        case 'difficulty_reduction':
-          return `-${Math.abs(value)} difficulty`;
-        case 'difficulty_increase':
-          return `+${Math.abs(value)} difficulty`;
-        case 'score_bonus':
-          return `${value > 0 ? '+' : ''}${value} renown`;
-        case 'stat_boost':
-          return `+${value} ${item.effect.stat || 'stat'}`;
-        case 'heal_die':
-          return 'Recover a lost die';
-        case 'shield_negative':
-          return 'Block negative effects';
-        case 'debuff_roll':
-          return `${value} to opponent roll`;
-        case 'increase_difficulty':
-          return `+${Math.abs(value)} opponent difficulty`;
-        case 'peek_cards':
-          return 'Peek at opponent cards';
-        case 'steal_stat':
-          return `Steal ${value} stat point`;
-        default:
-          return item.description || 'Single-use effect';
-      }
-    },
-    isOnCooldown(pi) {
-      return !pi.is_used && pi.used_round && pi.used_round === this.currentRound;
-    },
-    effectChipClass(pi) {
-      const type = pi.item?.effect?.bonus_type || '';
-      if (type === 'roll_bonus' || type === 'difficulty_reduction') return 'chip-positive';
-      if (type === 'debuff_roll' || type === 'increase_difficulty') return 'chip-negative';
-      return 'chip-neutral';
-    },
-  },
-};
+<script setup lang="ts">
+import { computed, ref, watch } from "vue";
+
+interface ItemEffect {
+  bonus_type?: string;
+  bonus_value?: number;
+  stat?: string;
+}
+
+interface Item {
+  name?: string;
+  description?: string;
+  is_consumable?: boolean;
+  target?: string;
+  effect_type?: string;
+  effect?: ItemEffect;
+}
+
+interface PlayerItem {
+  is_used?: boolean;
+  used_round?: number;
+  item?: Item;
+}
+
+const { items = [], showButton = true, currentRound = 0 } = defineProps<{
+  items?: PlayerItem[];
+  showButton?: boolean;
+  currentRound?: number;
+}>();
+
+const open = ref(false);
+const currentIndex = ref(0);
+
+const availableItems = computed(() => (items || []).filter((playerItem) => !playerItem.is_used));
+
+const currentItem = computed<PlayerItem>(() => availableItems.value[currentIndex.value] || {});
+
+watch(availableItems, () => {
+  // Reset index when available items change
+  if (currentIndex.value >= availableItems.value.length) {
+    currentIndex.value = 0;
+  }
+  // Auto-close overlay if no items left
+  if (availableItems.value.length === 0) {
+    open.value = false;
+  }
+});
+
+function previous(): void {
+  currentIndex.value = (currentIndex.value <= 0 ? availableItems.value.length : currentIndex.value) - 1;
+}
+
+function next(): void {
+  currentIndex.value = currentIndex.value >= availableItems.value.length - 1 ? 0 : currentIndex.value + 1;
+}
+
+function effectSummary(item?: Item): string {
+  if (!item?.effect) {
+    return "";
+  }
+  const type = item.effect.bonus_type || "";
+  const value = item.effect.bonus_value ?? 0;
+  switch (type) {
+    case "roll_bonus": {
+      return `+${value} to roll`;
+    }
+    case "roll_penalty": {
+      return `${value} to roll`;
+    }
+    case "difficulty_reduction": {
+      return `-${Math.abs(value)} difficulty`;
+    }
+    case "difficulty_increase": {
+      return `+${Math.abs(value)} difficulty`;
+    }
+    case "score_bonus": {
+      return `${value > 0 ? "+" : ""}${value} renown`;
+    }
+    case "stat_boost": {
+      return `+${value} ${item.effect.stat || "stat"}`;
+    }
+    case "heal_die": {
+      return "Recover a lost die";
+    }
+    case "shield_negative": {
+      return "Block negative effects";
+    }
+    case "debuff_roll": {
+      return `${value} to opponent roll`;
+    }
+    case "increase_difficulty": {
+      return `+${Math.abs(value)} opponent difficulty`;
+    }
+    case "peek_cards": {
+      return "Peek at opponent cards";
+    }
+    case "steal_stat": {
+      return `Steal ${value} stat point`;
+    }
+    default: {
+      return item.description || "Single-use effect";
+    }
+  }
+}
+
+function isOnCooldown(playerItem: PlayerItem): boolean {
+  return !playerItem.is_used && !!playerItem.used_round && playerItem.used_round === currentRound;
+}
+
+function effectChipClass(playerItem: PlayerItem): string {
+  const type = playerItem.item?.effect?.bonus_type || "";
+  if (type === "roll_bonus" || type === "difficulty_reduction") {
+    return "chip-positive";
+  }
+  if (type === "debuff_roll" || type === "increase_difficulty") {
+    return "chip-negative";
+  }
+  return "chip-neutral";
+}
 </script>
 
 <style scoped>

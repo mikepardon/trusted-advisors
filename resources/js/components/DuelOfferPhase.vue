@@ -11,12 +11,12 @@
       <div class="swiper-hand">
         <Swiper
           :modules="swiperModules"
-          :effect="'cards'"
+          effect="cards"
           :grab-cursor="true"
           :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
           :style="{ overflow: 'visible' }"
           @swiper="onSwiper"
-          @slideChange="onSlideChange"
+          @slide-change="onSlideChange"
         >
           <SwiperSlide v-for="item in cards" :key="item.hand_id">
             <div
@@ -118,80 +118,99 @@
   </div>
 </template>
 
-<script>
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
-import { playSound } from '../sounds';
+<script setup lang="ts">
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { EffectCards } from "swiper/modules";
+import type { Swiper as SwiperInstance } from "swiper";
+import "swiper/css";
+import "swiper/css/effect-cards";
+import { playSound } from "../sounds";
 
-export default {
-  name: 'DuelOfferPhase',
-  components: { Swiper, SwiperSlide },
-  props: {
-    cards: { type: Array, default: () => [] },
-  },
-  emits: ['offer'],
-  data() {
-    return {
-      selectedId: null,
-      isMobile: false,
-      swiperInstance: null,
-      mediaQuery: null,
-    };
-  },
-  computed: {
-    swiperModules() {
-      return [EffectCards];
-    },
-  },
-  mounted() {
-    this.mediaQuery = window.matchMedia('(max-width: 768px)');
-    this.isMobile = this.mediaQuery.matches;
-    this.mediaQuery.addEventListener('change', this.onMediaChange);
-  },
-  beforeUnmount() {
-    if (this.mediaQuery) {
-      this.mediaQuery.removeEventListener('change', this.onMediaChange);
+interface DuelCard {
+  title: string;
+  description: string;
+  difficulty: number;
+  positive_effects: Record<string, unknown> | undefined;
+  negative_effects: Record<string, unknown> | undefined;
+}
+
+interface DuelHandItem {
+  hand_id: number;
+  card: DuelCard;
+}
+
+const { cards = [] } = defineProps<{
+  cards?: DuelHandItem[];
+}>();
+
+const emit = defineEmits<{
+  offer: [handId: number];
+}>();
+
+const swiperModules = [EffectCards];
+
+const selectedId = ref<number | undefined>(undefined);
+const isMobile = ref(false);
+const swiperInstance = ref<SwiperInstance | undefined>(undefined);
+const mediaQuery = ref<MediaQueryList | undefined>(undefined);
+
+function onMediaChange(event: MediaQueryListEvent): void {
+  isMobile.value = event.matches;
+}
+
+function onSwiper(swiper: SwiperInstance): void {
+  swiperInstance.value = swiper;
+}
+
+function onSlideChange(): void {
+  // No-op: slide changes require no handling in the offer phase.
+}
+
+function selectAndConfirm(handId: number): void {
+  if (selectedId.value !== undefined) {
+    return;
+  }
+  playSound("clickCard");
+  selectedId.value = handId;
+  emit("offer", handId);
+}
+
+function filterStatEffects(effects: Record<string, unknown> | undefined): Record<string, unknown> {
+  if (!effects) {
+    return {};
+  }
+  const result: Record<string, unknown> = {};
+  const specialKeys = new Set(["grant_item_id", "draw_item", "recover_die", "lose_die", "discard_item", "remove_curse"]);
+  for (const [key, value] of Object.entries(effects)) {
+    if (!specialKeys.has(key)) {
+      result[key] = value;
+    }
+  }
+  return result;
+}
+
+watch(
+  () => cards,
+  () => {
+    selectedId.value = undefined;
+    if (swiperInstance.value) {
+      nextTick(() => {
+        swiperInstance.value?.slideTo(0, 0);
+      });
     }
   },
-  methods: {
-    onMediaChange(e) {
-      this.isMobile = e.matches;
-    },
-    onSwiper(swiper) {
-      this.swiperInstance = swiper;
-    },
-    onSlideChange() {},
-    selectAndConfirm(handId) {
-      if (this.selectedId !== null) return;
-      playSound('clickCard');
-      this.selectedId = handId;
-      this.$emit('offer', handId);
-    },
-    filterStatEffects(effects) {
-      if (!effects) return {};
-      const result = {};
-      const specialKeys = ['grant_item_id', 'draw_item', 'recover_die', 'lose_die', 'discard_item', 'remove_curse'];
-      for (const [key, val] of Object.entries(effects)) {
-        if (!specialKeys.includes(key)) {
-          result[key] = val;
-        }
-      }
-      return result;
-    },
-  },
-  watch: {
-    cards() {
-      this.selectedId = null;
-      if (this.swiperInstance) {
-        this.$nextTick(() => {
-          this.swiperInstance.slideTo(0, 0);
-        });
-      }
-    },
-  },
-};
+);
+
+onMounted(() => {
+  mediaQuery.value = window.matchMedia("(max-width: 768px)");
+  isMobile.value = mediaQuery.value.matches;
+  mediaQuery.value.addEventListener("change", onMediaChange);
+});
+
+onBeforeUnmount(() => {
+  mediaQuery.value?.removeEventListener("change", onMediaChange);
+});
 </script>
 
 <style scoped>

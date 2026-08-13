@@ -1,7 +1,7 @@
 <template>
   <div class="admin-layout">
     <!-- Mobile hamburger -->
-    <button class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen" v-if="isMobile">
+    <button v-if="isMobile" class="sidebar-toggle" @click="sidebarOpen = !sidebarOpen">
       <span class="hamburger-icon">&#9776;</span>
     </button>
 
@@ -20,7 +20,7 @@
         </router-link>
       </div>
 
-      <div class="nav-section" v-if="canSee('content')">
+      <div v-if="canSee('content')" class="nav-section">
         <span class="nav-group-label">Content</span>
         <router-link to="/admin/characters" class="nav-item" active-class="active">
           <span class="nav-icon">&#9812;</span> Characters
@@ -39,7 +39,7 @@
         </router-link>
       </div>
 
-      <div class="nav-section" v-if="canSee('content')">
+      <div v-if="canSee('content')" class="nav-section">
         <span class="nav-group-label">Cosmetics</span>
         <router-link to="/admin/dice" class="nav-item" active-class="active">
           <span class="nav-icon">&#127922;</span> Dice
@@ -52,7 +52,7 @@
         </router-link>
       </div>
 
-      <div class="nav-section" v-if="canSee('content')">
+      <div v-if="canSee('content')" class="nav-section">
         <span class="nav-group-label">Site Functionality</span>
         <router-link to="/admin/announcements" class="nav-item" active-class="active">
           <span class="nav-icon">&#128227;</span> Announcements
@@ -74,7 +74,7 @@
         </router-link>
       </div>
 
-      <div class="nav-section" v-if="canSee('content')">
+      <div v-if="canSee('content')" class="nav-section">
         <span class="nav-group-label">Progression</span>
         <router-link to="/admin/seasons" class="nav-item" active-class="active">
           <span class="nav-icon">&#128197;</span> Seasons
@@ -96,12 +96,12 @@
         </router-link>
       </div>
 
-      <div class="nav-section" v-if="canSee('management')">
+      <div v-if="canSee('management')" class="nav-section">
         <span class="nav-group-label">Users</span>
         <router-link to="/admin/users" class="nav-item" active-class="active">
           <span class="nav-icon">&#128100;</span> Users
         </router-link>
-        <router-link to="/admin/roles" class="nav-item" active-class="active" v-if="canSee('system')">
+        <router-link v-if="canSee('system')" to="/admin/roles" class="nav-item" active-class="active">
           <span class="nav-icon">&#128101;</span> Roles
         </router-link>
         <router-link to="/admin/gifts" class="nav-item" active-class="active">
@@ -109,7 +109,7 @@
         </router-link>
       </div>
 
-      <div class="nav-section" v-if="canSee('analytics')">
+      <div v-if="canSee('analytics')" class="nav-section">
         <span class="nav-group-label">Analytics</span>
         <router-link to="/admin/balance" class="nav-item" active-class="active">
           <span class="nav-icon">&#9878;</span> Balance
@@ -123,7 +123,7 @@
         <router-link to="/admin/games" class="nav-item" active-class="active">
           <span class="nav-icon">&#127918;</span> Games
         </router-link>
-        <router-link to="/admin/bot-games" class="nav-item" active-class="active" v-if="canSee('content')">
+        <router-link v-if="canSee('content')" to="/admin/bot-games" class="nav-item" active-class="active">
           <span class="nav-icon">&#129302;</span> Bot Games
         </router-link>
       </div>
@@ -144,65 +144,71 @@
   </div>
 </template>
 
-<script>
-import { useAuth } from '../../stores/auth';
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRoute } from "vue-router";
+import { useAuth } from "../../stores/auth";
 
-export default {
-  name: 'AdminLayout',
-  data() {
-    return {
-      sidebarOpen: false,
-      isMobile: false,
-    };
-  },
-  computed: {
-    userRole() {
-      const auth = useAuth();
-      return auth.state.user?.admin_role || null;
-    },
-  },
-  watch: {
-    $route() {
-      if (this.isMobile) {
-        this.sidebarOpen = false;
-      }
-    },
-  },
-  mounted() {
-    this.checkMobile();
-    window.addEventListener('resize', this.checkMobile);
-  },
-  beforeUnmount() {
-    window.removeEventListener('resize', this.checkMobile);
-  },
-  methods: {
-    checkMobile() {
-      this.isMobile = window.innerWidth <= 768;
-      if (!this.isMobile) {
-        this.sidebarOpen = false;
-      }
-    },
-    canSee(section) {
-      const role = this.userRole;
-      // If no role set (legacy admin without role), show everything
-      if (!role) return true;
-      if (role === 'super_admin') return true;
+const auth = useAuth();
+const route = useRoute();
 
-      switch (section) {
-        case 'content':
-          return role === 'content_admin';
-        case 'management':
-          return ['content_admin', 'moderator'].includes(role);
-        case 'analytics':
-          return ['content_admin', 'moderator', 'analyst'].includes(role);
-        case 'system':
-          return false; // super_admin only
-        default:
-          return false;
-      }
-    },
+const sidebarOpen = ref(false);
+const isMobile = ref(false);
+
+const userRole = computed<string | undefined>(() => auth.state.user?.admin_role ?? undefined);
+
+const mobileQuery = window.matchMedia("(max-width: 768px)");
+
+function applyMobileState(isMobileWidth: boolean): void {
+  isMobile.value = isMobileWidth;
+  if (!isMobile.value) {
+    sidebarOpen.value = false;
+  }
+}
+
+function onMobileQueryChange(event: MediaQueryListEvent): void {
+  applyMobileState(event.matches);
+}
+
+function canSee(section: string): boolean {
+  const role = userRole.value;
+  // If no role set (legacy admin without role), show everything
+  if (!role) {
+    return true;
+  }
+  if (role === "super_admin") {
+    return true;
+  }
+  if (section === "content") {
+    return role === "content_admin";
+  }
+  if (section === "management") {
+    return ["content_admin", "moderator"].includes(role);
+  }
+  if (section === "analytics") {
+    return ["content_admin", "moderator", "analyst"].includes(role);
+  }
+  // "system" is super_admin only, handled above; everything else denied
+  return false;
+}
+
+watch(
+  () => route.fullPath,
+  () => {
+    if (isMobile.value) {
+      sidebarOpen.value = false;
+    }
   },
-};
+);
+
+onMounted(() => {
+  applyMobileState(mobileQuery.matches);
+  mobileQuery.addEventListener("change", onMobileQueryChange);
+});
+
+onBeforeUnmount(() => {
+  mobileQuery.removeEventListener("change", onMobileQueryChange);
+});
 </script>
 
 <style scoped>

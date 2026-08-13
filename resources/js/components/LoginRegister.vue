@@ -29,23 +29,16 @@
   </div>
 </template>
 
-<script>
-import { isNativeApp } from 'webtonative';
+<script setup lang="ts">
+import { isNativeApp } from "webtonative";
 
-export default {
-  name: 'LoginRegister',
-  setup() {
-    return { isNativeApp };
-  },
-  methods: {
-    signIn(provider = null) {
-      // The OAuth handshake is driven entirely server-side.
-      window.location.href = provider
-        ? `/auth/redirect?provider=${encodeURIComponent(provider)}`
-        : '/auth/redirect';
-    },
-  },
-};
+function signIn(provider?: string): void {
+  // The OAuth handshake is driven entirely server-side.
+  const url = provider
+    ? `/auth/redirect?provider=${encodeURIComponent(provider)}`
+    : "/auth/redirect";
+  window.location.assign(url);
+}
 </script>
 
 <style scoped>

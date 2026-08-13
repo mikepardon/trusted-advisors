@@ -4,11 +4,11 @@
     <Transition name="fade" mode="out-in">
     <div v-if="!allJoined" key="gathering" class="card-panel lobby-panel">
       <h2 class="section-title">Gathering Advisors</h2>
-      <p class="lobby-subtitle">Waiting for players to join ({{ filledSlots }}/{{ numPlayers }})</p>
+      <p class="lobby-subtitle">Waiting for players to join ({{ filledSlots }}/{{ numberPlayers }})</p>
 
       <div class="player-slots">
         <div
-          v-for="slot in numPlayers"
+          v-for="slot in numberPlayers"
           :key="slot"
           :class="['player-slot', slotState(slot)]"
         >
@@ -30,7 +30,7 @@
       </div>
 
       <!-- Invite Friends (host only) -->
-      <div v-if="isHost && availableFriends.length > 0 && filledSlots < numPlayers" class="invite-section">
+      <div v-if="isHost && availableFriends.length > 0 && filledSlots < numberPlayers" class="invite-section">
         <h3 class="invite-title">Invite Friends</h3>
         <div class="friend-invite-list">
           <div
@@ -39,7 +39,7 @@
             class="friend-invite-row"
           >
             <span class="friend-name">{{ friend.user.name }}</span>
-            <button class="btn-small" @click="inviteFriend(friend.user.id)" :disabled="inviting">
+            <button class="btn-small" :disabled="inviting" @click="inviteFriend(friend.user.id)">
               Invite
             </button>
           </div>
@@ -64,12 +64,12 @@
         <div class="carousel-wrapper">
           <Swiper
             :modules="swiperModules"
-            :effect="'cards'"
+            effect="cards"
             :grab-cursor="true"
             :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
             :style="{ overflow: 'visible' }"
             @swiper="onSwiper"
-            @slideChange="onSlideChange"
+            @slide-change="onSlideChange"
           >
             <SwiperSlide
               v-for="char in availableCharacters"
@@ -82,9 +82,9 @@
                 <h3 class="advisor-name">{{ char.name }}</h3>
                 <p class="advisor-desc">{{ char.description }}</p>
                 <div class="advisor-dice">
-                  <div class="dice-row" v-for="(die, di) in char.dice" :key="di">
+                  <div v-for="(die, di) in char.dice" :key="di" class="dice-row">
                     <span class="dice-label">Die {{ di + 1 }}:</span>
-                    <span class="dice-face" v-for="(face, fi) in die" :key="fi">{{ face }}</span>
+                    <span v-for="(face, fi) in die" :key="fi" class="dice-face">{{ face }}</span>
                   </div>
                 </div>
                 <div class="advisor-wild">
@@ -99,7 +99,7 @@
         <p class="tap-hint">Tap an advisor to select</p>
 
         <!-- Show who has already picked -->
-        <div v-if="pickedPlayers.length" class="already-picked">
+        <div v-if="pickedPlayers.length > 0" class="already-picked">
           <div v-for="p in pickedPlayers" :key="p.player_number" class="picked-line">
             {{ p.user?.name }} chose <strong>{{ p.character?.name }}</strong>
           </div>
@@ -113,7 +113,7 @@
           You chose <strong>{{ myPlayer.character?.name }}</strong>. Waiting for others...
         </p>
         <div class="pick-progress">
-          <div v-for="slot in numPlayers" :key="slot" class="pick-slot">
+          <div v-for="slot in numberPlayers" :key="slot" class="pick-slot">
             <span class="pick-number">Player {{ slot }}</span>
             <span v-if="getPlayerForSlot(slot)?.character" class="pick-char">
               {{ getPlayerForSlot(slot).character.name }}
@@ -140,235 +140,298 @@
   </div>
 </template>
 
-<script>
-import axios from 'axios';
-import { useAuth } from '../stores/auth';
-import { useToast } from '../stores/toast';
-import { playSound } from '../sounds';
-import { Swiper, SwiperSlide } from 'swiper/vue';
-import { EffectCards } from 'swiper/modules';
-import 'swiper/css';
-import 'swiper/css/effect-cards';
+<script setup lang="ts">
+import axios, { isAxiosError } from "axios";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Swiper, SwiperSlide } from "swiper/vue";
+import { EffectCards } from "swiper/modules";
+import type { Swiper as SwiperInstance } from "swiper";
+import "swiper/css";
+import "swiper/css/effect-cards";
+import { useAuth } from "../stores/auth";
+import { useToast } from "../stores/toast";
+import { playSound } from "../sounds";
 
-export default {
-  name: 'OnlineLobby',
-  components: { Swiper, SwiperSlide },
-  props: {
-    gameId: { type: [String, Number], required: true },
-    hostId: { type: Number, required: true },
-    gameType: { type: String, default: 'cooperative' },
-    turnTimeLimit: { type: Number, default: 0 },
-  },
-  emits: ['start-game', 'lobby-updated'],
-  setup() {
-    const auth = useAuth();
-    const toast = useToast();
-    return { auth, playSound, toast };
-  },
-  data() {
-    return {
-      players: [],
-      invites: [],
-      characters: [],
-      friends: [],
-      numPlayers: 2,
-      allJoined: false,
-      allSelected: false,
-      inviting: false,
-      selectingCharacter: false,
-      autoStarting: false,
-      swiperInstance: null,
-      activeSlideIndex: 0,
-      timeRemaining: 0,
-      timerInterval: null,
-    };
-  },
-  computed: {
-    isHost() {
-      return this.auth.state.user?.id === this.hostId;
-    },
-    myPlayer() {
-      return this.players.find(p => p.user_id === this.auth.state.user?.id);
-    },
-    filledSlots() {
-      return this.players.length;
-    },
-    pendingInvites() {
-      return this.invites.filter(i => i.status === 'pending');
-    },
-    availableFriends() {
-      const playerUserIds = this.players.map(p => p.user_id);
-      const invitedUserIds = this.invites.map(i => i.receiver_id);
-      return this.friends.filter(f =>
-        !playerUserIds.includes(f.user.id) && !invitedUserIds.includes(f.user.id)
-      );
-    },
-    takenCharacterIds() {
-      return this.players.filter(p => p.character_id).map(p => p.character_id);
-    },
-    availableCharacters() {
-      if (this.gameType === 'duel') {
-        // Duel: both players can pick the same character
-        return this.characters.filter(c => !c.is_locked_for_user);
-      }
-      return this.characters.filter(c => !this.takenCharacterIds.includes(c.id) && !c.is_locked_for_user);
-    },
-    swiperModules() {
-      return [EffectCards];
-    },
-    myPlayerNeedsPick() {
-      if (!this.myPlayer) return false;
-      return !this.myPlayer.character_id;
-    },
-    pickedPlayers() {
-      return this.players.filter(p => p.character_id);
-    },
-    formattedTime() {
-      const mins = Math.floor(this.timeRemaining / 60);
-      const secs = this.timeRemaining % 60;
-      return `${mins}:${secs.toString().padStart(2, '0')}`;
-    },
-  },
-  watch: {
-    allJoined(joined) {
-      if (joined && this.turnTimeLimit) {
-        this.startTimer();
-      }
-    },
-  },
-  async mounted() {
-    await this.fetchLobby();
-    await this.fetchFriends();
-    if (this.allJoined && this.turnTimeLimit) {
-      this.startTimer();
+interface LobbyUser {
+  id: number;
+  name?: string;
+}
+
+interface LobbyCharacter {
+  id: number;
+  name: string;
+  description?: string;
+  image_url?: string;
+  dice?: number[][];
+  wild_value?: number;
+  wild_ability?: string;
+  wild_ability_description?: string;
+  is_locked_for_user?: boolean;
+}
+
+interface LobbyPlayer {
+  user_id: number;
+  player_number: number;
+  character_id?: number;
+  user?: LobbyUser;
+  character?: LobbyCharacter;
+}
+
+interface LobbyInvite {
+  status: string;
+  receiver_id: number;
+  receiver?: LobbyUser;
+}
+
+interface LobbyFriend {
+  user: LobbyUser;
+}
+
+interface LobbyResponse {
+  players: LobbyPlayer[];
+  invites: LobbyInvite[];
+  characters: LobbyCharacter[];
+  num_players: number;
+  all_joined: boolean;
+  all_selected: boolean;
+}
+
+interface FriendsResponse {
+  friends?: LobbyFriend[];
+}
+
+interface SelectCharacterResponse {
+  all_selected: boolean;
+}
+
+const { gameId, hostId, gameType = "cooperative", turnTimeLimit = 0 } = defineProps<{
+  gameId: string | number;
+  hostId: number;
+  gameType?: string;
+  turnTimeLimit?: number;
+}>();
+
+const emit = defineEmits<{ "startGame": []; "lobbyUpdated": [] }>();
+
+const auth = useAuth();
+const toast = useToast();
+
+const players = ref<LobbyPlayer[]>([]);
+const invites = ref<LobbyInvite[]>([]);
+const characters = ref<LobbyCharacter[]>([]);
+const friends = ref<LobbyFriend[]>([]);
+const numberPlayers = ref(2);
+const allJoined = ref(false);
+const allSelected = ref(false);
+const inviting = ref(false);
+const selectingCharacter = ref(false);
+const autoStarting = ref(false);
+const activeSlideIndex = ref(0);
+const timeRemaining = ref(0);
+const timerInterval = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+
+const swiperModules = [EffectCards];
+
+const isHost = computed(() => auth.state.user?.id === hostId);
+
+const myPlayer = computed(() => players.value.find((p) => p.user_id === auth.state.user?.id));
+
+const filledSlots = computed(() => players.value.length);
+
+const pendingInvites = computed(() => invites.value.filter((index) => index.status === "pending"));
+
+const availableFriends = computed(() => {
+  const playerUserIds = new Set(players.value.map((p) => p.user_id));
+  const invitedUserIds = new Set(invites.value.map((index) => index.receiver_id));
+  return friends.value.filter(
+    (f) => !playerUserIds.has(f.user.id) && !invitedUserIds.has(f.user.id),
+  );
+});
+
+const takenCharacterIds = computed(() =>
+  players.value.filter((p) => p.character_id).map((p) => p.character_id),
+);
+
+const availableCharacters = computed(() => {
+  if (gameType === "duel") {
+    // Duel: both players can pick the same character
+    return characters.value.filter((c) => !c.is_locked_for_user);
+  }
+  return characters.value.filter(
+    (c) => !takenCharacterIds.value.includes(c.id) && !c.is_locked_for_user,
+  );
+});
+
+const myPlayerNeedsPick = computed(() => {
+  if (!myPlayer.value) return false;
+  return !myPlayer.value.character_id;
+});
+
+const pickedPlayers = computed(() => players.value.filter((p) => p.character_id));
+
+const formattedTime = computed(() => {
+  const mins = Math.floor(timeRemaining.value / 60);
+  const secs = timeRemaining.value % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+});
+
+async function fetchLobby(): Promise<void> {
+  try {
+    const response = await axios.get<LobbyResponse>(`/api/games/${gameId}/lobby`);
+    players.value = response.data.players;
+    invites.value = response.data.invites;
+    characters.value = response.data.characters;
+    numberPlayers.value = response.data.num_players;
+    allJoined.value = response.data.all_joined;
+    allSelected.value = response.data.all_selected;
+  } catch (error) {
+    console.error("Failed to fetch lobby", error);
+  }
+}
+
+async function fetchFriends(): Promise<void> {
+  try {
+    const response = await axios.get<FriendsResponse>("/api/friends");
+    friends.value = response.data.friends || [];
+  } catch (error) {
+    console.error("Failed to fetch friends", error);
+  }
+}
+
+async function inviteFriend(userId: number): Promise<void> {
+  inviting.value = true;
+  try {
+    await axios.post(`/api/games/${gameId}/invite`, { user_id: userId });
+    await fetchLobby();
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error)
+      ? error.response?.data?.error ?? "Failed to invite"
+      : "Failed to invite";
+    toast.error(message);
+  }
+  inviting.value = false;
+}
+
+function onSwiper(swiper: SwiperInstance): void {
+  activeSlideIndex.value = swiper.activeIndex;
+}
+
+function onSlideChange(swiper: SwiperInstance): void {
+  activeSlideIndex.value = swiper.activeIndex;
+}
+
+async function selectCharacterByIndex(index: number): Promise<void> {
+  if (selectingCharacter.value) return;
+  if (index !== activeSlideIndex.value) return;
+
+  const char = availableCharacters.value[index];
+  if (!char) return;
+
+  playSound("clickCard");
+  selectingCharacter.value = true;
+  try {
+    const response = await axios.post<SelectCharacterResponse>(
+      `/api/games/${gameId}/select-character`,
+      { character_id: char.id },
+    );
+    await fetchLobby();
+
+    // If I'm host and all selected, auto-start
+    if (response.data.all_selected && isHost.value) {
+      await autoStartGame();
     }
-  },
-  beforeUnmount() {
-    this.clearTimer();
-  },
-  methods: {
-    async fetchLobby() {
-      try {
-        const res = await axios.get(`/api/games/${this.gameId}/lobby`);
-        this.players = res.data.players;
-        this.invites = res.data.invites;
-        this.characters = res.data.characters;
-        this.numPlayers = res.data.num_players;
-        this.allJoined = res.data.all_joined;
-        this.allSelected = res.data.all_selected;
-      } catch (e) {
-        console.error('Failed to fetch lobby', e);
-      }
-    },
-    async fetchFriends() {
-      try {
-        const res = await axios.get('/api/friends');
-        this.friends = res.data.friends || [];
-      } catch (e) {
-        console.error('Failed to fetch friends', e);
-      }
-    },
-    async inviteFriend(userId) {
-      this.inviting = true;
-      try {
-        await axios.post(`/api/games/${this.gameId}/invite`, { user_id: userId });
-        await this.fetchLobby();
-      } catch (e) {
-        this.toast.error(e.response?.data?.error || 'Failed to invite');
-      }
-      this.inviting = false;
-    },
-    onSwiper(swiper) {
-      this.swiperInstance = swiper;
-    },
-    onSlideChange(swiper) {
-      this.activeSlideIndex = swiper.activeIndex;
-    },
-    async selectCharacterByIndex(index) {
-      if (this.selectingCharacter) return;
-      if (index !== this.activeSlideIndex) return;
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error)
+      ? error.response?.data?.error ?? "Failed to select character"
+      : "Failed to select character";
+    if (message.toLowerCase().includes("already taken") || message.toLowerCase().includes("already selected")) {
+      await fetchLobby();
+    } else {
+      toast.error(message);
+    }
+  }
+  selectingCharacter.value = false;
+}
 
-      const char = this.availableCharacters[index];
-      if (!char) return;
+async function autoStartGame(): Promise<void> {
+  if (autoStarting.value) return;
+  if (!isHost.value) return;
+  autoStarting.value = true;
+  try {
+    const lobbyResponse = await axios.get<LobbyResponse>(`/api/games/${gameId}/lobby`);
+    const lobbyPlayers = lobbyResponse.data.players;
+    const characterIds = lobbyPlayers
+      .toSorted((a, b) => a.player_number - b.player_number)
+      .map((p) => p.character_id);
 
-      playSound('clickCard');
-      this.selectingCharacter = true;
-      try {
-        const res = await axios.post(`/api/games/${this.gameId}/select-character`, {
-          character_id: char.id,
-        });
-        await this.fetchLobby();
+    await axios.post(`/api/games/${gameId}/start`, { characters: characterIds });
+    // GameStarted broadcast will trigger lobby-updated
+  } catch (error) {
+    console.error("Auto-start failed", error);
+    // Fallback: let host click manually
+    emit("startGame");
+  }
+  autoStarting.value = false;
+}
 
-        // If I'm host and all selected, auto-start
-        if (res.data.all_selected && this.isHost) {
-          await this.autoStartGame();
-        }
-      } catch (e) {
-        const msg = e.response?.data?.error || 'Failed to select character';
-        if (msg.toLowerCase().includes('already taken') || msg.toLowerCase().includes('already selected')) {
-          await this.fetchLobby();
-        } else {
-          this.toast.error(msg);
-        }
-      }
-      this.selectingCharacter = false;
-    },
-    async autoStartGame() {
-      if (this.autoStarting) return;
-      if (!this.isHost) return;
-      this.autoStarting = true;
-      try {
-        const lobbyRes = await axios.get(`/api/games/${this.gameId}/lobby`);
-        const players = lobbyRes.data.players;
-        const characters = players
-          .sort((a, b) => a.player_number - b.player_number)
-          .map(p => p.character_id);
+function startTimer(): void {
+  clearTimer();
+  timeRemaining.value = turnTimeLimit;
+  timerInterval.value = setInterval(() => {
+    if (timeRemaining.value > 0) {
+      timeRemaining.value--;
+    } else {
+      clearTimer();
+    }
+  }, 1000);
+}
 
-        await axios.post(`/api/games/${this.gameId}/start`, { characters });
-        // GameStarted broadcast will trigger lobby-updated
-      } catch (e) {
-        console.error('Auto-start failed', e);
-        // Fallback: let host click manually
-        this.$emit('start-game');
-      }
-      this.autoStarting = false;
-    },
-    startTimer() {
-      this.clearTimer();
-      this.timeRemaining = this.turnTimeLimit;
-      this.timerInterval = setInterval(() => {
-        if (this.timeRemaining > 0) {
-          this.timeRemaining--;
-        } else {
-          this.clearTimer();
-        }
-      }, 1000);
-    },
-    clearTimer() {
-      if (this.timerInterval) {
-        clearInterval(this.timerInterval);
-        this.timerInterval = null;
-      }
-    },
-    getPlayerForSlot(slot) {
-      return this.players.find(p => p.player_number === slot);
-    },
-    getPendingInviteForSlot(slot) {
-      const filledSlots = this.players.map(p => p.player_number);
-      const emptySlotIndex = slot - filledSlots.filter(s => s <= slot).length;
-      const pending = this.pendingInvites;
-      if (emptySlotIndex >= 0 && emptySlotIndex < pending.length) {
-        return pending[emptySlotIndex];
-      }
-      return null;
-    },
-    slotState(slot) {
-      if (this.getPlayerForSlot(slot)) return 'slot-joined';
-      if (this.getPendingInviteForSlot(slot)) return 'slot-invited';
-      return 'slot-vacant';
-    },
-  },
-};
+function clearTimer(): void {
+  if (!timerInterval.value) {
+  	return;
+  }
+
+  clearInterval(timerInterval.value);
+  timerInterval.value = undefined;
+}
+
+function getPlayerForSlot(slot: number): LobbyPlayer | undefined {
+  return players.value.find((p) => p.player_number === slot);
+}
+
+function getPendingInviteForSlot(slot: number): LobbyInvite | undefined {
+  const filledPlayerSlots = players.value.map((p) => p.player_number);
+  const emptySlotIndex = slot - filledPlayerSlots.filter((s) => s <= slot).length;
+  const pending = pendingInvites.value;
+  if (emptySlotIndex >= 0 && emptySlotIndex < pending.length) {
+    return pending[emptySlotIndex];
+  }
+  return undefined;
+}
+
+function slotState(slot: number): string {
+  if (getPlayerForSlot(slot)) return "slot-joined";
+  if (getPendingInviteForSlot(slot)) return "slot-invited";
+  return "slot-vacant";
+}
+
+watch(allJoined, (joined) => {
+  if (joined && turnTimeLimit) {
+    startTimer();
+  }
+});
+
+onMounted(async () => {
+  await fetchLobby();
+  await fetchFriends();
+  if (turnTimeLimit && allJoined.value) {
+    startTimer();
+  }
+});
+
+onBeforeUnmount(() => {
+  clearTimer();
+});
 </script>
 
 <style scoped>

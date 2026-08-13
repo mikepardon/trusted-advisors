@@ -9,47 +9,56 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: 'EventBanner',
-  props: {
-    event: { type: Object, default: null },
-  },
-  data() {
-    return {
-      expanded: false,
-    };
-  },
-  computed: {
-    effectSummary() {
-      if (!this.event) return '';
-      // Build summary from stat_modifiers if available
-      if (this.event.stat_modifiers && Object.keys(this.event.stat_modifiers).length > 0) {
-        return Object.entries(this.event.stat_modifiers)
-          .map(([stat, val]) => `${stat.charAt(0).toUpperCase() + stat.slice(1)} ${val > 0 ? '+' : ''}${val} each round`)
-          .join(', ');
-      }
-      // Fallback: use mechanic description
-      if (this.event.mechanic === 'reduce_dice') {
-        const amount = this.event.mechanic_data?.amount || 1;
-        return `Each advisor loses ${amount} die`;
-      }
-      if (this.event.mechanic === 'altered_deal') {
-        const pos = this.event.mechanic_data?.positive_cards || 1;
-        const neg = this.event.mechanic_data?.negative_cards || 1;
-        return `Deal ${pos} positive, ${neg} negative cards`;
-      }
-      if (this.event.mechanic === 'grant_items') {
-        return 'All advisors receive an item';
-      }
-      // Final fallback: truncate effect text
-      if (this.event.effect && this.event.effect.length > 40) {
-        return this.event.effect.substring(0, 40) + '...';
-      }
-      return this.event.effect || '';
-    },
-  },
-};
+<script setup lang="ts">
+import { computed, ref } from "vue";
+
+interface BannerEvent {
+  title?: string;
+  effect?: string;
+  mechanic?: string;
+  stat_modifiers?: Record<string, number>;
+  mechanic_data?: {
+    amount?: number;
+    positive_cards?: number;
+    negative_cards?: number;
+  };
+}
+
+const { event = undefined } = defineProps<{
+  event?: BannerEvent;
+}>();
+
+const expanded = ref(false);
+
+const effectSummary = computed(() => {
+  if (!event) {
+    return "";
+  }
+  // Build summary from stat_modifiers if available
+  if (event.stat_modifiers && Object.keys(event.stat_modifiers).length > 0) {
+    return Object.entries(event.stat_modifiers)
+      .map(([stat, value]) => `${stat.charAt(0).toUpperCase() + stat.slice(1)} ${value > 0 ? "+" : ""}${value} each round`)
+      .join(", ");
+  }
+  // Fallback: use mechanic description
+  if (event.mechanic === "reduce_dice") {
+    const amount = event.mechanic_data?.amount || 1;
+    return `Each advisor loses ${amount} die`;
+  }
+  if (event.mechanic === "altered_deal") {
+    const pos = event.mechanic_data?.positive_cards || 1;
+    const neg = event.mechanic_data?.negative_cards || 1;
+    return `Deal ${pos} positive, ${neg} negative cards`;
+  }
+  if (event.mechanic === "grant_items") {
+    return "All advisors receive an item";
+  }
+  // Final fallback: truncate effect text
+  if (event.effect && event.effect.length > 40) {
+    return event.effect.slice(0, 40) + "...";
+  }
+  return event.effect || "";
+});
 </script>
 
 <style scoped>

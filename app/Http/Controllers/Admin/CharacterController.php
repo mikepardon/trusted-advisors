@@ -99,7 +99,17 @@ class CharacterController extends Controller
         ]);
 
         $old = $character->only(array_keys($validated));
-        $character->update($validated);
+        // Omitted nullable fields mean "cleared" on an admin edit; null them explicitly.
+        $character->update([
+            ...$validated,
+            'wild_ability_description' => $validated['wild_ability_description'] ?? null,
+            'addon_id' => $validated['addon_id'] ?? null,
+            'dice_duel' => $validated['dice_duel'] ?? null,
+            'wild_value_duel' => $validated['wild_value_duel'] ?? null,
+            'wild_ability_duel' => $validated['wild_ability_duel'] ?? null,
+            'wild_ability_description_duel' => $validated['wild_ability_description_duel'] ?? null,
+            'starting_bonus' => $validated['starting_bonus'] ?? null,
+        ]);
         $this->auditModelChange('update', $character, $old);
 
         return response()->json($character);
