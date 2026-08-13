@@ -115,7 +115,12 @@ class AuthController extends Controller
 
         $user->save();
 
-        return response()->json($user->toArray());
+        $data = $user->toArray();
+        if ($user->needsAdvisors()) {
+            $data['needs_advisors'] = true;
+        }
+
+        return response()->json($data);
     }
 
     public function checkUsername(Request $request, string $username): JsonResponse

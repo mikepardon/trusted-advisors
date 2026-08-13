@@ -146,10 +146,13 @@ router.beforeEach(async (to, from, next) => {
         next('/');
     } else if (requiresAdmin && !auth.state.user?.is_admin) {
         next('/');
-    } else if (auth.state.user?.needs_username && to.path !== '/choose-username') {
-        next('/choose-username');
-    } else if (auth.state.user?.needs_advisors && to.path !== '/choose-advisors' && !requiresAdmin) {
-        next('/choose-advisors');
+    } else if (auth.state.user?.needs_username) {
+        // Username must be chosen before anything else (including advisors).
+        // A brand-new user has both flags set; without this taking full
+        // priority the guard bounces between the two screens forever.
+        to.path === '/choose-username' ? next() : next('/choose-username');
+    } else if (auth.state.user?.needs_advisors && !requiresAdmin) {
+        to.path === '/choose-advisors' ? next() : next('/choose-advisors');
     } else {
         next();
     }
