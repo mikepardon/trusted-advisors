@@ -52,12 +52,15 @@
       <div v-if="error" class="lvlup-error">{{ error }}</div>
 
       <div class="lvlup-actions">
+        <p v-if="cost > 0" class="lvlup-cost" :class="{ 'lvlup-cost-short': !canAfford }">
+          Cost: &#129689; {{ cost }}<span v-if="!canAfford"> — not enough coins</span>
+        </p>
         <p class="lvlup-warning">This choice is permanent.</p>
         <button
           class="btn-lvlup-confirm"
           :disabled="!canConfirm || saving"
           @click="confirm"
-        >{{ saving ? 'Choosing...' : 'Confirm' }}</button>
+        >{{ saving ? 'Choosing...' : (cost > 0 ? `Confirm · ${cost}` : 'Confirm') }}</button>
       </div>
     </div>
   </div>
@@ -67,11 +70,13 @@
 import { computed, onMounted, ref } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../stores/toast";
+import { useAuth } from "../stores/auth";
 
 interface Advisor {
   id: number;
   display_name?: string;
   modified_dice: string[][];
+  next_upgrade_cost?: number;
 }
 
 interface LevelOption {
@@ -96,6 +101,10 @@ const { advisor } = defineProps<{ advisor: Advisor }>();
 const emit = defineEmits<{ close: []; chosen: [result: unknown] }>();
 
 const toast = useToast();
+const auth = useAuth();
+
+const cost = computed(() => advisor.next_upgrade_cost ?? 0);
+const canAfford = computed(() => cost.value === 0 || (auth.state.user?.coins ?? 0) >= cost.value);
 
 const loading = ref(true);
 const options = ref<LevelOption[]>([]);
@@ -106,7 +115,7 @@ const saving = ref(false);
 const error = ref("");
 
 const canConfirm = computed(() => {
-  if (!selectedOption.value) {
+  if (!selectedOption.value || !canAfford.value) {
     return false;
   }
   const type = selectedOption.value.type;
@@ -214,11 +223,14 @@ async function confirm(): Promise<void> {
   saving.value = true;
   error.value = "";
   try {
-    const response = await axios.post(`/api/my-advisors/${advisor.id}/choose-upgrade`, {
+    const response = await axios.post<{ new_coins?: number }>(`/api/my-advisors/${advisor.id}/choose-upgrade`, {
       option_id: selectedOption.value.id,
       user_choice: buildUserChoice(),
     });
     toast.success(`Chose: ${selectedOption.value.name}`);
+    if (typeof response.data.new_coins === "number") {
+      auth.updateUserStats({ coins: response.data.new_coins });
+    }
     emit("chosen", response.data);
   } catch (error_) {
     const message = isAxiosError<{ error?: string }>(error_) ? error_.response?.data?.error : undefined;
@@ -435,6 +447,18 @@ onMounted(async () => {
 
 .lvlup-actions {
   text-align: center;
+}
+
+.lvlup-cost {
+  color: var(--accent-gold);
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin: 0 0 6px;
+}
+
+.lvlup-cost.lvlup-cost-short {
+  color: #e07070;
 }
 
 .lvlup-warning {

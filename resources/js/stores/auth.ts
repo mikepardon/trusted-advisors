@@ -10,6 +10,18 @@ export interface StreakNotification {
  * Shape returned by /api/auth/me (see App\Http\Resources\UserResource plus the
  * computed extras merged by AuthController::me).
  */
+export interface CrestConfig {
+    shape?: string;
+    pattern?: string;
+    charge?: string;
+    tincture1?: string;
+    tincture2?: string;
+    /**
+    Tiered heraldic crest style (1-5).
+    */
+    style?: number;
+}
+
 export interface User {
     id: number;
     name: string | undefined;
@@ -27,6 +39,7 @@ export interface User {
     timeout_count: number;
     login_streak: number;
     max_login_streak: number;
+    daily_reward_streak: number;
     last_login_at: string | undefined;
     username_chosen: boolean;
     notification_preferences: Record<string, unknown> | undefined;
@@ -34,6 +47,15 @@ export interface User {
     active_dice_theme_slug: string | undefined;
     active_kingdom_style_slug: string | undefined;
     active_title: string | undefined;
+    avatar_frame: string | undefined;
+    victory_fx: string | undefined;
+    league_tier: number;
+    league_points: number;
+    season_pass_tier: number;
+    season_pass_points: number;
+    crest: CrestConfig | undefined;
+    crest_style: number;
+    crest_colour: number;
     created_at: string | undefined;
     needs_username?: boolean;
     needs_advisors?: boolean;
@@ -85,7 +107,12 @@ async function logout(): Promise<void> {
     state.user = undefined;
 }
 
-function updateUserStats({ xp, level, coins, is_premium }: UserStatsUpdate): void {
+function updateUserStats({
+    xp,
+    level,
+    coins,
+    is_premium,
+}: UserStatsUpdate): void {
     if (!state.user) {
         return;
     }

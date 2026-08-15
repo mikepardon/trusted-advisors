@@ -31,7 +31,7 @@
       <!-- Advisor Leveling -->
       <div class="section-panel">
         <h3 class="section-title">Advisor Leveling</h3>
-        <p class="section-desc">Configure how much XP advisors need per level. Changes save automatically.</p>
+        <p class="section-desc">Set the total XP required to reach each advisor level. Changes save automatically.</p>
         <table class="admin-table">
           <thead>
             <tr>
@@ -41,10 +41,10 @@
             </tr>
           </thead>
           <tbody>
-            <tr>
-              <td class="name-col">XP Per Level</td>
-              <td class="desc-col">Multiplier for the advisor level formula: XP = value &times; (L&minus;1) &times; L / 2</td>
-              <td><input v-model.number="advisorConfig.xp_per_level" type="number" class="xp-input" min="10" step="10" @change="saveAdvisorConfig" /></td>
+            <tr v-for="level in advisorThresholdLevels" :key="level">
+              <td class="name-col">Level {{ level }} XP</td>
+              <td class="desc-col">Total XP required to reach level {{ level }}</td>
+              <td><input v-model.number="advisorConfig.level_xp[level]" type="number" class="xp-input" min="0" step="50" @change="saveAdvisorConfig" /></td>
             </tr>
             <tr>
               <td class="name-col">Max Level</td>
@@ -257,7 +257,7 @@ interface CoinConfig {
 }
 
 interface AdvisorConfig {
-  xp_per_level: number;
+  level_xp: Record<number, number>;
   max_level: number;
   options_per_level_up: number;
 }
@@ -308,8 +308,8 @@ const loading = ref(true);
 const saved = ref(false);
 const config = reactive<XpConfig>({
   base_xp: 50,
-  coop_win_bonus: 100,
-  duel_win_bonus: 150,
+  coop_win_bonus: 50,
+  duel_win_bonus: 75,
   online_multiplier: 1.5,
 });
 const coinConfig = reactive<CoinConfig>({
@@ -322,7 +322,7 @@ const levels = ref<LevelRow[]>([]);
 const characters = ref<Entity[]>([]);
 const items = ref<Entity[]>([]);
 const advisorConfig = reactive<AdvisorConfig>({
-  xp_per_level: 100,
+  level_xp: { 1: 0, 2: 400, 3: 1000, 4: 2100, 5: 4000, 6: 7000, 7: 11_500, 8: 18_000 },
   max_level: 8,
   options_per_level_up: 2,
 });
@@ -337,14 +337,23 @@ const unlockEntityOptions = computed(() =>
   unlockForm.type === "character" ? characters.value : items.value,
 );
 
+const advisorThresholdLevels = computed<number[]>(() => {
+  const max = advisorConfig.max_level || 8;
+  const levels: number[] = [];
+  for (let level = 2; level <= max; level++) {
+    levels.push(level);
+  }
+  return levels;
+});
+
 const advisorLevelPreview = computed<AdvisorLevelPreviewRow[]>(() => {
   const rows: AdvisorLevelPreviewRow[] = [];
-  const multiplier = advisorConfig.xp_per_level || 100;
   const max = advisorConfig.max_level || 8;
+  const levelXp = advisorConfig.level_xp || {};
   for (let level = 1; level <= max; level++) {
-    const total = Math.floor((multiplier * (level - 1) * level) / 2);
-    const next = level < max ? Math.floor((multiplier * level * (level + 1)) / 2) - total : 0;
-    rows.push({ level, total, toNext: next });
+    const total = Math.floor(levelXp[level] ?? 0);
+    const nextTotal = Math.floor(levelXp[level + 1] ?? total);
+    rows.push({ level, total, toNext: level < max ? nextTotal - total : 0 });
   }
   return rows;
 });

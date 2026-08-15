@@ -1,5 +1,14 @@
 <template>
   <div class="hand-container">
+    <div
+      v-if="!loading && selectedPositive === undefined && !(hasAssigned && !singlePlayer)"
+      class="choose-heading"
+    >
+      <span class="choose-heading-title">Choose One Matter</span>
+      <span class="choose-heading-line"></span>
+      <span class="choose-heading-sub">the other{{ cards.length > 2 ? 's are' : ' is' }} lost</span>
+    </div>
+
     <div v-if="loading" class="loading">Loading hand...</div>
 
     <div v-else-if="hasAssigned && !singlePlayer" class="hand-assigned">
@@ -7,30 +16,20 @@
       <p class="assigned-msg">Decision recorded. Waiting for the rest of the council...</p>
     </div>
 
-    <!-- ===== MOBILE: Swiper carousel ===== -->
+    <!-- ===== MOBILE: two cards side by side ===== -->
     <template v-else-if="isMobile">
-      <div class="swiper-hand">
-        <Swiper
-          :modules="swiperModules"
-          effect="cards"
-          :grab-cursor="true"
-          :cards-effect="{ perSlideOffset: 8, perSlideRotate: 2, rotate: true, slideShadows: false }"
-          :style="{ overflow: 'visible' }"
-          @swiper="onSwiper"
-          @slide-change="onSlideChange"
+      <div class="hand-grid" :class="{ 'grid-focused': selectedPositive !== undefined }">
+        <div
+          v-for="item in cards"
+          v-show="!singlePlayer || selectedPositive === undefined || selectedPositive === item.hand_id"
+          :key="item.hand_id"
+          class="parchment-card"
+          :class="{
+            'card-acting': selectedPositive === item.hand_id,
+            'card-unattended': selectedPositive !== undefined && selectedPositive !== item.hand_id,
+          }"
+          @click="isResolving(item) && resolvePhase === 'results' ? $emit('continue') : selectAndConfirm(item.hand_id)"
         >
-          <SwiperSlide
-v-for="item in cards" :key="item.hand_id"
-            :class="{ 'slide-hidden': singlePlayer && selectedPositive !== undefined && selectedPositive !== item.hand_id }"
-          >
-            <div
-              class="parchment-card"
-              :class="{
-                'card-acting': selectedPositive === item.hand_id,
-                'card-unattended': selectedPositive !== undefined && selectedPositive !== item.hand_id,
-              }"
-              @click="isResolving(item) && resolvePhase === 'results' ? $emit('continue') : selectAndConfirm(item.hand_id)"
-            >
               <!-- Special effect badges (hide when resolving) -->
               <div v-if="hasSpecialEffects(item.card) && !isResolving(item)" class="special-badges">
                 <span v-if="item.card.positive_effects?.reveal_stats" class="special-badge badge-foresight">Foresight</span>
@@ -130,8 +129,6 @@ v-for="item in cards" :key="item.hand_id"
                 </p>
               </template>
             </div>
-          </SwiperSlide>
-        </Swiper>
       </div>
     </template>
 
@@ -259,12 +256,7 @@ v-for="item in cards" :key="item.hand_id"
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Swiper, SwiperSlide } from "swiper/vue";
-import { EffectCards } from "swiper/modules";
-import type { Swiper as SwiperInstance } from "swiper";
-import "swiper/css";
-import "swiper/css/effect-cards";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { playSound } from "../sounds";
 import dddiceService from "../dddice-service";
 
@@ -364,11 +356,8 @@ interface EffectArrow {
   value: number;
 }
 
-const swiperModules = [EffectCards];
-
 const selectedPositive = ref<number | undefined>(undefined);
 const isMobile = ref(false);
-const swiperInstance = ref<SwiperInstance | undefined>(undefined);
 const mediaQuery = ref<MediaQueryList | undefined>(undefined);
 const resolvePhase = ref<"rolling" | "results" | undefined>(undefined);
 
@@ -424,10 +413,6 @@ function onMediaChange(event: MediaQueryListEvent): void {
   isMobile.value = event.matches;
 }
 
-function onSwiper(swiper: SwiperInstance): void {
-  swiperInstance.value = swiper;
-}
-
 function filterStatEffects(effects: CardEffects | undefined): Record<string, number> {
   if (!effects) {
     return {};
@@ -474,29 +459,12 @@ function emitPreview(item: HandItem | undefined): void {
   emit("preview", { positive, negative });
 }
 
-function onSlideChange(swiper: SwiperInstance): void {
-  if (selectedPositive.value !== undefined) {
-    return;
-  }
-  const item = cards[swiper.activeIndex];
-  if (item) {
-    emitPreview(item);
-  }
-}
-
 function selectAndConfirm(handId: number): void {
   if (selectedPositive.value !== undefined) {
     return;
   }
   playSound("clickCard");
   selectedPositive.value = handId;
-  // Ensure Swiper shows the selected card on top
-  if (singlePlayer && swiperInstance.value) {
-    const index = cards.findIndex((item) => item.hand_id === handId);
-    if (index !== -1) {
-      swiperInstance.value.slideTo(index, 300);
-    }
-  }
   emit("preview", undefined);
   const negativeIds = cards
     .filter((item) => item.hand_id !== handId)
@@ -584,18 +552,8 @@ watch(
 
 watch(
   () => cards,
-  (newCards) => {
+  () => {
     selectedPositive.value = undefined;
-    if (swiperInstance.value) {
-      nextTick(() => {
-        swiperInstance.value?.slideTo(0, 0);
-      });
-    }
-    if (isMobile.value && newCards?.length) {
-      nextTick(() => {
-        emitPreview(newCards[0]);
-      });
-    }
   },
 );
 
@@ -603,11 +561,6 @@ onMounted(() => {
   mediaQuery.value = window.matchMedia("(max-width: 768px)");
   isMobile.value = mediaQuery.value.matches;
   mediaQuery.value.addEventListener("change", onMediaChange);
-  if (isMobile.value && cards.length > 0) {
-    nextTick(() => {
-      emitPreview(cards[0]);
-    });
-  }
 });
 
 onBeforeUnmount(() => {
@@ -616,6 +569,106 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.choose-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 4px 14px;
+}
+
+.choose-heading-title {
+  flex: none;
+  font-family: 'Cinzel', serif;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--accent-gold, #f0c050);
+}
+
+.choose-heading-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(240, 192, 80, 0.4), transparent);
+}
+
+.choose-heading-sub {
+  flex: none;
+  font-family: 'Crimson Text', Georgia, serif;
+  font-style: italic;
+  font-size: 12px;
+  color: #9a8a6a;
+}
+
+/* Two decision cards side by side (mobile) */
+.hand-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  align-items: stretch;
+  zoom: 0.9;
+}
+
+/* Once a card is chosen, the other is removed and this one zooms into focus —
+   centred at a comfortable width (not edge to edge), with space above. */
+.hand-grid.grid-focused {
+  grid-template-columns: 1fr;
+  max-width: 340px;
+  margin-inline: auto;
+  margin-top: 16px;
+}
+
+.hand-grid.grid-focused .parchment-card.card-acting {
+  animation: card-zoom-focus 0.36s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes card-zoom-focus {
+  from {
+    transform: scale(0.9);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.hand-grid .parchment-card {
+  width: auto;
+  height: auto;
+  min-height: 300px;
+  padding: 14px 11px;
+}
+
+.hand-grid .parchment-title {
+  font-size: 1rem;
+}
+
+.hand-grid .parchment-desc {
+  font-size: 1rem;
+  line-height: 1.15;
+}
+
+.hand-grid .parchment-question {
+  font-size: 0.8rem;
+}
+
+.hand-grid .parchment-difficulty {
+  font-size: 3.4rem;
+  line-height: 2.2rem;
+  bottom: 6px;
+  left: 8px;
+}
+
+.hand-grid .outcome-label {
+  font-size: 0.64rem;
+}
+
+.hand-grid .arrow-chip {
+  font-size: 0.68rem;
+  padding: 2px 7px;
+}
+
 .hand-container {
   margin-bottom: 20px;
   overflow: hidden;
@@ -677,6 +730,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
   display: flex;
   flex-direction: column;
+  justify-content: center;
   overflow: hidden;
 }
 

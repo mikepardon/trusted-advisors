@@ -26,6 +26,10 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => \App\Http\Middleware\AdminMiddleware::class,
             'premium' => \App\Http\Middleware\RequirePremium::class,
         ]);
+
+        // Local-only dev auto-login; runs after StartSession so it persists.
+        $middleware->web(append: [\App\Http\Middleware\DevAutoLogin::class]);
+        $middleware->api(append: [\App\Http\Middleware\DevAutoLogin::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         Integration::handles($exceptions);

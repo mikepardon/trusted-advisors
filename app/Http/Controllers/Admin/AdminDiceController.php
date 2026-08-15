@@ -126,9 +126,9 @@ class AdminDiceController extends Controller
             $extension = pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION) ?: 'png';
             $s3Path = "dice-previews/{$slug}.{$extension}";
 
-            Storage::disk('s3')->put($s3Path, $imageResponse->body(), 'public');
+            Storage::disk(config('filesystems.media_disk'))->put($s3Path, $imageResponse->body(), 'public');
 
-            return Storage::disk('s3')->url($s3Path);
+            return Storage::disk(config('filesystems.media_disk'))->url($s3Path);
         } catch (\Exception $e) {
             // S3 upload failed — return null so we fall back to the original URL
             return null;

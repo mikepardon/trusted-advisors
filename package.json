@@ -12,6 +12,7 @@
     "devDependencies": {
         "@eslint/js": "^9.39.5",
         "@tailwindcss/vite": "^4.0.0",
+        "@types/luxon": "^3.7.4",
         "@vue/tsconfig": "^0.9.1",
         "axios": "^1.13.5",
         "concurrently": "^9.0.1",
@@ -38,6 +39,7 @@
         "chart.js": "^4.5.1",
         "dddice-js": "^0.19.34-974",
         "laravel-echo": "^2.3.0",
+        "luxon": "^3.7.2",
         "pusher-js": "^8.4.0",
         "swiper": "^12.1.2",
         "vue": "^3.5.29",

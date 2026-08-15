@@ -210,7 +210,7 @@ const auth = useAuth();
 
 const settings = reactive<SoundSettings>(getSoundSettings());
 const hintsEnabled = ref<boolean>(getHintsSetting());
-const gameBgEnabled = ref(localStorage.getItem("game_bg_enabled") !== "false");
+const gameBgEnabled = ref(localStorage.getItem("game_bg_enabled") === "true");
 const notifPrefs = reactive<NotifPrefs>({
   push_game: true,
   push_social: true,
@@ -244,7 +244,7 @@ watch(
 
     Object.assign(settings, getSoundSettings());
     hintsEnabled.value = areHintsEnabled();
-    gameBgEnabled.value = localStorage.getItem("game_bg_enabled") !== "false";
+    gameBgEnabled.value = localStorage.getItem("game_bg_enabled") === "true";
     applyNotifPrefs();
   },
 );

@@ -1,120 +1,197 @@
 <template>
-  <div class="card-panel friends-panel">
-    <h2 class="section-title">Friends</h2>
-
-    <!-- Add Friend -->
-    <div class="add-friend">
-      <input
-        v-model="username"
-        type="text"
-        placeholder="Enter username..."
-        class="friend-input"
-        @keyup.enter="sendRequest"
-      />
-      <button class="btn-primary send-btn" :disabled="sending || !username.trim()" @click="sendRequest">
-        {{ sending ? '...' : 'Send' }}
-      </button>
-    </div>
-    <p v-if="error" class="friend-error">{{ error }}</p>
-    <p v-if="success" class="friend-success">{{ success }}</p>
-
-    <!-- Pending Received -->
-    <div v-if="pendingReceived.length > 0" class="friend-section">
-      <h3 class="section-subtitle">Pending Requests</h3>
-      <div v-for="req in pendingReceived" :key="req.id" class="friend-item">
-        <span class="friend-name">{{ req.user.name }}</span>
-        <div class="friend-actions">
-          <button class="btn-success action-btn" @click="acceptRequest(req.id)">Accept</button>
-          <button class="btn-danger action-btn" @click="removeFriendship(req.id)">Decline</button>
+    <TaSubPage title="Allies" subtitle="Duel the people you know">
+        <!-- Count tiles -->
+        <div class="ally-tiles">
+            <div class="ally-tile">
+                <div class="ally-tile-num">{{ friends.length }}</div>
+                <div class="ally-tile-label">Allies</div>
+            </div>
+            <div class="ally-tile">
+                <div class="ally-tile-num ally-tile-num--online">
+                    {{ onlineCount }}
+                </div>
+                <div class="ally-tile-label">Online</div>
+            </div>
+            <div class="ally-tile">
+                <div class="ally-tile-num ally-tile-num--pending">
+                    {{ pendingCount }}
+                </div>
+                <div class="ally-tile-label">Requests</div>
+            </div>
         </div>
-      </div>
-    </div>
 
-    <!-- Friends -->
-    <div v-if="friends.length > 0" class="friend-section">
-      <h3 class="section-subtitle">Your Allies</h3>
-      <div
-        v-for="f in friends"
-        :key="f.id"
-        class="friend-card"
-        @click="showProfileFriend = f"
-      >
-        <div class="friend-card-left">
-          <div class="friend-avatar-wrap">
-            <div class="friend-avatar">{{ f.user.name?.charAt(0)?.toUpperCase() || '?' }}</div>
-            <span class="status-dot" :class="isOnline(f) ? 'online' : 'offline'"></span>
-          </div>
-          <div class="friend-info">
-            <span class="friend-card-name">{{ f.user.name }}</span>
-            <span class="friend-card-level">Lv.{{ f.user.level ?? 1 }} <span class="last-seen">{{ lastSeenText(f) }}</span></span>
-          </div>
-        </div>
-        <div class="friend-card-stats">
-          <div class="friend-stat">
-            <span class="friend-stat-val stat-win">{{ f.stats?.wins ?? 0 }}</span>
-            <span class="friend-stat-label">W</span>
-          </div>
-          <span class="stat-slash">/</span>
-          <div class="friend-stat">
-            <span class="friend-stat-val stat-draw">{{ f.stats?.draws ?? 0 }}</span>
-            <span class="friend-stat-label">D</span>
-          </div>
-          <span class="stat-slash">/</span>
-          <div class="friend-stat">
-            <span class="friend-stat-val stat-loss">{{ f.stats?.losses ?? 0 }}</span>
-            <span class="friend-stat-label">L</span>
-          </div>
-        </div>
-        <div v-if="f.stats?.last_played" class="friend-last-played">{{ f.stats.last_played }}</div>
-      </div>
-    </div>
+        <!-- Add ally -->
+        <form class="add-ally" @submit.prevent="sendRequest">
+            <input
+                v-model="username"
+                type="text"
+                placeholder="Enter username..."
+                class="ally-input"
+            />
+            <button
+                type="submit"
+                class="ta-pill ta-pill--gold add-ally-btn"
+                :disabled="sending || !username.trim()"
+            >
+                {{ sending ? "..." : "ADD" }}
+            </button>
+        </form>
+        <p v-if="error" class="ally-msg ally-msg--error">{{ error }}</p>
+        <p v-if="success" class="ally-msg ally-msg--success">{{ success }}</p>
 
-    <!-- Sent -->
-    <div v-if="pendingSent.length > 0" class="friend-section">
-      <h3 class="section-subtitle">Sent Requests</h3>
-      <div v-for="req in pendingSent" :key="req.id" class="friend-item">
-        <span class="friend-name">{{ req.user.name }}</span>
-        <button class="btn-danger action-btn" @click="removeFriendship(req.id)">Cancel</button>
-      </div>
-    </div>
+        <!-- Pending received -->
+        <template v-if="pendingReceived.length > 0">
+            <div class="ta-divider">
+                <span class="ta-divider-label">Pending Requests</span>
+                <span class="ta-divider-line"></span>
+            </div>
+            <div class="ally-rows">
+                <div
+                    v-for="req in pendingReceived"
+                    :key="req.id"
+                    class="ta-row"
+                >
+                    <div class="ally-portrait"></div>
+                    <div class="ta-row-body">
+                        <div class="ta-row-title">{{ req.user.name }}</div>
+                        <div class="ta-row-meta">Wants to be your ally</div>
+                    </div>
+                    <div class="ally-request-actions">
+                        <button
+                            class="ta-pill ta-pill--gold ally-action"
+                            @click="acceptRequest(req.id)"
+                        >
+                            ACCEPT
+                        </button>
+                        <button
+                            class="ta-pill ta-pill--claimed ally-action"
+                            @click="removeFriendship(req.id)"
+                        >
+                            DECLINE
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </template>
 
-    <p v-if="friends.length === 0 && pendingReceived.length === 0 && pendingSent.length === 0" class="friends-empty">
-      No allies yet. Send a friend request above!
-    </p>
+        <!-- Allies -->
+        <template v-if="friends.length > 0">
+            <div class="ta-divider">
+                <span class="ta-divider-label">Your Allies</span>
+                <span class="ta-divider-line"></span>
+            </div>
+            <div class="ally-rows">
+                <div
+                    v-for="f in friends"
+                    :key="f.id"
+                    class="ta-row"
+                    @click="showProfileFriend = f"
+                >
+                    <div
+                        class="ally-portrait"
+                        :class="{ 'ally-portrait--online': isOnline(f) }"
+                    ></div>
+                    <div class="ta-row-body">
+                        <div class="ta-row-title">
+                            {{ f.user.name }}
+                            <span
+                                v-if="f.league"
+                                class="league-badge"
+                                :style="{ borderColor: f.league.color, color: f.league.color }"
+                                >{{ f.league.name }}</span
+                            >
+                        </div>
+                        <div
+                            class="ta-row-meta"
+                            :class="{ 'ally-status--online': isOnline(f) }"
+                        >
+                            {{ statusText(f) }}
+                        </div>
+                    </div>
+                    <span
+                        class="ta-pill ta-pill--gold ally-action"
+                        @click.stop="showProfileFriend = f"
+                        >DUEL</span
+                    >
+                </div>
+            </div>
+        </template>
 
-    <PlayerProfile
-      v-if="showProfileFriend"
-      :user-id="showProfileFriend.user.id"
-      :friendship-id="showProfileFriend.id"
-      @close="showProfileFriend = null"
-      @removed="showProfileFriend = null; fetchFriends()"
-    />
-  </div>
+        <!-- Sent -->
+        <template v-if="pendingSent.length > 0">
+            <div class="ta-divider">
+                <span class="ta-divider-label">Sent Requests</span>
+                <span class="ta-divider-line"></span>
+            </div>
+            <div class="ally-rows">
+                <div v-for="req in pendingSent" :key="req.id" class="ta-row">
+                    <div class="ally-portrait"></div>
+                    <div class="ta-row-body">
+                        <div class="ta-row-title">{{ req.user.name }}</div>
+                        <div class="ta-row-meta">Invited · pending</div>
+                    </div>
+                    <button
+                        class="ta-pill ta-pill--claimed ally-action"
+                        @click="removeFriendship(req.id)"
+                    >
+                        CANCEL
+                    </button>
+                </div>
+            </div>
+        </template>
+
+        <p
+            v-if="
+                friends.length === 0 &&
+                pendingReceived.length === 0 &&
+                pendingSent.length === 0
+            "
+            class="ally-empty"
+        >
+            No allies yet. Add someone by username above!
+        </p>
+
+        <PlayerProfile
+            v-if="showProfileFriend"
+            :user-id="showProfileFriend.user.id"
+            :friendship-id="showProfileFriend.id"
+            @close="showProfileFriend = undefined"
+            @removed="onProfileRemoved"
+        />
+    </TaSubPage>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue";
+import { ref, computed, onMounted } from "vue";
 import axios, { isAxiosError } from "axios";
+import TaSubPage from "./TaSubPage.vue";
 import PlayerProfile from "./PlayerProfile.vue";
 
 interface FriendUser {
-  id: number;
-  name?: string;
-  level?: number;
+    id: number;
+    name?: string;
+    level?: number;
 }
 
 interface FriendStats {
-  wins?: number;
-  draws?: number;
-  losses?: number;
-  last_played?: string;
+    wins?: number;
+    draws?: number;
+    losses?: number;
+    last_played?: string;
+}
+
+interface FriendLeague {
+    tier: number;
+    name: string;
+    color: string;
 }
 
 interface Friendship {
-  id: number;
-  user: FriendUser;
-  stats?: FriendStats;
-  last_login_at?: string;
+    id: number;
+    user: FriendUser;
+    stats?: FriendStats;
+    last_login_at?: string;
+    league?: FriendLeague;
 }
 
 const username = ref("");
@@ -126,344 +203,283 @@ const error = ref("");
 const success = ref("");
 const sending = ref(false);
 
+// Presentation-only counts derived from real data for the top tiles.
+const onlineCount = computed(
+    () => friends.value.filter((friend) => isOnline(friend)).length,
+);
+const pendingCount = computed(
+    () => pendingReceived.value.length + pendingSent.value.length,
+);
+
 onMounted(async () => {
-  await fetchFriends();
+    await fetchFriends();
 });
 
 async function fetchFriends(): Promise<void> {
-  try {
-    const response = await axios.get<{
-      friends: Friendship[];
-      pending_sent: Friendship[];
-      pending_received: Friendship[];
-    }>("/api/friends");
-    friends.value = response.data.friends;
-    pendingSent.value = response.data.pending_sent;
-    pendingReceived.value = response.data.pending_received;
-  } catch {
-    // silently fail
-  }
+    try {
+        const response = await axios.get<{
+            friends: Friendship[];
+            pending_sent: Friendship[];
+            pending_received: Friendship[];
+        }>("/api/friends");
+        friends.value = response.data.friends;
+        pendingSent.value = response.data.pending_sent;
+        pendingReceived.value = response.data.pending_received;
+    } catch {
+        // silently fail
+    }
 }
 
 async function sendRequest(): Promise<void> {
-  if (!username.value.trim()) {
-    return;
-  }
-  error.value = "";
-  success.value = "";
-  sending.value = true;
-  try {
-    await axios.post("/api/friends", { username: username.value.trim() });
-    success.value = `Request sent to ${username.value}`;
-    username.value = "";
-    await fetchFriends();
-  } catch (error_) {
-    error.value = requestErrorMessage(error_, "Failed to send request");
-  }
-  sending.value = false;
+    if (!username.value.trim()) {
+        return;
+    }
+    error.value = "";
+    success.value = "";
+    sending.value = true;
+    try {
+        await axios.post("/api/friends", { username: username.value.trim() });
+        success.value = `Request sent to ${username.value}`;
+        username.value = "";
+        await fetchFriends();
+    } catch (error_) {
+        error.value = requestErrorMessage(error_, "Failed to send request");
+    }
+    sending.value = false;
 }
 
 async function acceptRequest(id: number): Promise<void> {
-  try {
-    await axios.post(`/api/friends/${id}/accept`);
-    await fetchFriends();
-  } catch (error_) {
-    error.value = requestErrorMessage(error_, "Failed to accept");
-  }
+    try {
+        await axios.post(`/api/friends/${id}/accept`);
+        await fetchFriends();
+    } catch (error_) {
+        error.value = requestErrorMessage(error_, "Failed to accept");
+    }
 }
 
 async function removeFriendship(id: number): Promise<void> {
-  try {
-    await axios.delete(`/api/friends/${id}`);
-    await fetchFriends();
-  } catch (error_) {
-    error.value = requestErrorMessage(error_, "Failed to remove");
-  }
+    try {
+        await axios.delete(`/api/friends/${id}`);
+        await fetchFriends();
+    } catch (error_) {
+        error.value = requestErrorMessage(error_, "Failed to remove");
+    }
+}
+
+function onProfileRemoved(): void {
+    showProfileFriend.value = undefined;
+    void fetchFriends();
 }
 
 function requestErrorMessage(error_: unknown, fallback: string): string {
-  if (isAxiosError<{ message?: string }>(error_)) {
-    return error_.response?.data?.message ?? fallback;
-  }
-  return fallback;
+    if (isAxiosError<{ message?: string }>(error_)) {
+        return error_.response?.data?.message ?? fallback;
+    }
+    return fallback;
 }
 
 function isOnline(friend: Friendship): boolean {
-  if (!friend.last_login_at) {
-    return false;
-  }
-  const last = new Date(friend.last_login_at);
-  return Date.now() - last.getTime() < 15 * 60 * 1000; // 15 minutes
+    if (!friend.last_login_at) {
+        return false;
+    }
+    const last = new Date(friend.last_login_at);
+    return Date.now() - last.getTime() < 15 * 60 * 1000; // 15 minutes
 }
 
-function lastSeenText(friend: Friendship): string {
-  if (!friend.last_login_at) {
-    return "";
-  }
-  if (isOnline(friend)) {
-    return "Online";
-  }
-  const diff = Date.now() - new Date(friend.last_login_at).getTime();
-  const mins = Math.floor(diff / 60_000);
-  if (mins < 60) {
-    return `${mins}m ago`;
-  }
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) {
-    return `${hours}h ago`;
-  }
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+function statusText(friend: Friendship): string {
+    if (isOnline(friend)) {
+        return "Online now";
+    }
+    if (!friend.last_login_at) {
+        return `Lv.${friend.user.level ?? 1}`;
+    }
+    const diff = Date.now() - new Date(friend.last_login_at).getTime();
+    const mins = Math.floor(diff / 60_000);
+    if (mins < 60) {
+        return `Last seen ${mins}m ago`;
+    }
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) {
+        return `Last seen ${hours}h ago`;
+    }
+    const days = Math.floor(hours / 24);
+    if (days === 1) {
+        return "Last seen yesterday";
+    }
+    return `Last seen ${days}d ago`;
 }
 </script>
 
 <style scoped>
-.friends-panel {
-  margin-top: 20px;
+/* League tier badge next to an ally's name */
+.league-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 7px;
+    border: 1px solid currentColor;
+    border-radius: 9px;
+    font-size: 0.64rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    vertical-align: middle;
+    opacity: 0.9;
 }
 
-.section-title {
-  font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 1.3rem;
-  margin-bottom: 15px;
-  text-align: center;
+/* Count tiles across the top */
+.ally-tiles {
+    display: flex;
+    gap: 9px;
 }
 
-.add-friend {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
+.ally-tile {
+    flex: 1;
+    text-align: center;
+    padding: 10px 6px;
+    border-radius: 13px;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(240, 192, 80, 0.28);
 }
 
-.friend-input {
-  flex: 1;
-  background: rgba(0, 0, 0, 0.3);
-  border: 2px solid var(--border-gold);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font-family: 'Crimson Text', Georgia, serif;
-  font-size: 1rem;
-  padding: 8px 12px;
-  outline: none;
-  transition: border-color 0.2s;
+.ally-tile-num {
+    font-family: "Cinzel", serif;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--accent-gold);
 }
 
-.friend-input:focus {
-  border-color: var(--accent-gold);
-  box-shadow: 0 0 8px rgba(212, 168, 67, 0.2);
+.ally-tile-num--online {
+    color: #8ef0c8;
 }
 
-.send-btn {
-  padding: 8px 20px;
-  font-size: 0.9rem;
+.ally-tile-num--pending {
+    color: #9ad0ff;
 }
 
-.friend-error {
-  color: var(--accent-red);
-  font-size: 0.85rem;
-  margin-bottom: 8px;
+.ally-tile-label {
+    font-family: "Cinzel", serif;
+    font-size: 8.5px;
+    letter-spacing: 1.6px;
+    color: #8a7a5a;
+    text-transform: uppercase;
 }
 
-.friend-success {
-  color: var(--accent-green);
-  font-size: 0.85rem;
-  margin-bottom: 8px;
+/* Add-ally form */
+.add-ally {
+    display: flex;
+    gap: 9px;
+    margin-top: 14px;
 }
 
-.friend-section {
-  margin-top: 16px;
+.ally-input {
+    flex: 1;
+    min-width: 0;
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid rgba(240, 192, 80, 0.35);
+    border-radius: 11px;
+    color: var(--text-primary, #f0e0c8);
+    font-family: "Crimson Text", Georgia, serif;
+    font-size: 15px;
+    padding: 9px 12px;
+    outline: none;
+    transition:
+        border-color 0.2s,
+        box-shadow 0.2s;
 }
 
-.section-subtitle {
-  font-family: 'Cinzel', serif;
-  color: var(--text-bright);
-  font-size: 0.9rem;
-  margin-bottom: 8px;
-  letter-spacing: 1px;
-  text-transform: uppercase;
+.ally-input:focus {
+    border-color: var(--accent-gold);
+    box-shadow: 0 0 8px rgba(240, 192, 80, 0.25);
 }
 
-.friend-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid rgba(138, 106, 46, 0.15);
+.add-ally-btn {
+    cursor: pointer;
+    transition:
+        transform 0.12s,
+        box-shadow 0.12s;
 }
 
-.friend-name {
-  color: var(--text-primary);
-  font-size: 1rem;
+.add-ally-btn:active:not(:disabled) {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 #7a5410;
 }
 
-.friend-actions {
-  display: flex;
-  gap: 8px;
+.add-ally-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
-.action-btn {
-  padding: 4px 12px;
-  font-size: 0.75rem;
+.ally-msg {
+    margin-top: 8px;
+    font-size: 12px;
 }
 
-/* Friend cards */
-.friend-card {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(138, 106, 46, 0.2);
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
+.ally-msg--error {
+    color: #f0a8a0;
 }
 
-.friend-card:hover {
-  border-color: var(--accent-gold);
-  background: rgba(212, 168, 67, 0.06);
+.ally-msg--success {
+    color: #8ef0c8;
 }
 
-.friend-card-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  min-width: 0;
+/* Rows */
+.ally-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 
-.friend-avatar-wrap {
-  position: relative;
-  flex-shrink: 0;
+.ta-row {
+    cursor: pointer;
 }
 
-.friend-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--accent-gold), #8a6a14);
-  color: var(--wood-dark);
-  font-family: 'Cinzel', serif;
-  font-size: 1rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px solid var(--border-gold);
-  flex-shrink: 0;
+.ally-portrait {
+    position: relative;
+    width: 42px;
+    height: 42px;
+    flex: none;
+    border-radius: 50%;
+    border: 2px solid rgba(240, 192, 80, 0.35);
+    background-image: url("/images/character.png");
+    background-size: cover;
+    background-position: center 18%;
 }
 
-.status-dot {
-  position: absolute;
-  bottom: -1px;
-  right: -1px;
-  width: 11px;
-  height: 11px;
-  border-radius: 50%;
-  border: 2px solid var(--bg-primary, #1a1209);
+.ally-portrait--online {
+    border-color: #8ef0c8;
+    box-shadow: 0 0 8px rgba(142, 240, 200, 0.4);
 }
 
-.status-dot.online {
-  background: #4caf50;
-  box-shadow: 0 0 6px rgba(76, 175, 80, 0.5);
+.ally-status--online {
+    color: #8ef0c8;
 }
 
-.status-dot.offline {
-  background: #666;
+.ally-action {
+    cursor: pointer;
+    transition: transform 0.12s;
 }
 
-.friend-info {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.ally-action:active {
+    transform: translateY(2px);
 }
 
-.friend-card-name {
-  color: var(--text-bright);
-  font-family: 'Cinzel', serif;
-  font-size: 0.9rem;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.ally-request-actions {
+    display: flex;
+    flex: none;
+    gap: 6px;
 }
 
-.friend-card-level {
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-}
-
-.last-seen {
-  margin-left: 4px;
-  opacity: 0.7;
-  font-size: 0.65rem;
-}
-
-.friend-card-stats {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.friend-stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 20px;
-}
-
-.friend-stat-val {
-  font-family: 'Cinzel', serif;
-  font-size: 0.85rem;
-  font-weight: 700;
-}
-
-.stat-win { color: #6abf50; }
-.stat-draw { color: var(--text-secondary); }
-.stat-loss { color: #d05040; }
-
-.stat-slash {
-  color: var(--text-secondary);
-  font-size: 0.7rem;
-  opacity: 0.5;
-}
-
-.friend-stat-label {
-  font-size: 0.55rem;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.friend-last-played {
-  font-size: 0.65rem;
-  color: var(--text-secondary);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.friends-empty {
-  text-align: center;
-  color: var(--text-secondary);
-  font-style: italic;
-  padding: 15px 0;
+.ally-empty {
+    margin-top: 20px;
+    text-align: center;
+    color: var(--text-secondary, #9a8a68);
+    font-style: italic;
+    padding: 15px 0;
 }
 
 @media (max-width: 768px) {
-  .section-title {
-    font-size: 1.1rem;
-  }
-
-  .action-btn {
-    padding: 4px 10px;
-    font-size: 0.7rem;
-  }
-
-  .friend-last-played {
-    display: none;
-  }
+    .ally-request-actions {
+        flex-direction: column;
+    }
 }
 </style>

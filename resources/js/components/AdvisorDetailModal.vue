@@ -76,7 +76,7 @@
           v-if="advisor.can_immortalise && !showImmortaliseConfirm"
           class="btn-adv-immortalise"
           @click="showImmortaliseConfirm = true"
-        >Immortalise</button>
+        >Immortalise &#183; &#129689; {{ immortaliseCost }}</button>
       </div>
 
     </div>
@@ -88,8 +88,11 @@
           <div class="adv-immortalise-icon">&#10047;</div>
           <p class="adv-immortalise-title">Immortalise this advisor?</p>
           <p class="adv-immortalise-desc">They will reset to Level 1 with a new title. Previous upgrades will be lost for this incarnation.</p>
+          <p class="adv-immortalise-cost" :class="{ short: !canAffordImmortalise }">
+            Cost: &#129689; {{ immortaliseCost }}<span v-if="!canAffordImmortalise"> — not enough coins</span>
+          </p>
           <div class="adv-immortalise-btns">
-            <button class="btn-adv-immortalise-yes" :disabled="immortalising" @click="doImmortalise">
+            <button class="btn-adv-immortalise-yes" :disabled="immortalising || !canAffordImmortalise" @click="doImmortalise">
               {{ immortalising ? 'Immortalising...' : 'Confirm' }}
             </button>
             <button class="btn-adv-immortalise-no" :disabled="immortalising" @click="showImmortaliseConfirm = false">Cancel</button>
@@ -104,6 +107,7 @@
 import { computed, ref } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../stores/toast";
+import { useAuth } from "../stores/auth";
 
 interface UpgradeChoice {
   die_index?: number;
@@ -141,6 +145,7 @@ interface AdvisorDetail {
   upgrades?: AdvisorUpgrade[];
   pending_upgrades: number;
   can_immortalise: boolean;
+  immortalise_cost?: number;
 }
 
 const { advisor } = defineProps<{
@@ -154,6 +159,10 @@ const emit = defineEmits<{
 }>();
 
 const toast = useToast();
+const auth = useAuth();
+
+const immortaliseCost = computed(() => advisor.immortalise_cost ?? 0);
+const canAffordImmortalise = computed(() => (auth.state.user?.coins ?? 0) >= immortaliseCost.value);
 
 const immortalising = ref(false);
 const showImmortaliseConfirm = ref(false);
@@ -232,8 +241,11 @@ function isUpgraded(dieIndex: number, faceIndex: number): boolean {
 async function doImmortalise(): Promise<void> {
   immortalising.value = true;
   try {
-    const response = await axios.post(`/api/my-advisors/${advisor.id}/immortalise`);
+    const response = await axios.post<{ message: string; new_coins?: number }>(`/api/my-advisors/${advisor.id}/immortalise`);
     toast.success(response.data.message);
+    if (typeof response.data.new_coins === "number") {
+      auth.updateUserStats({ coins: response.data.new_coins });
+    }
     emit("updated");
     emit("close");
   } catch (error) {
@@ -620,6 +632,18 @@ async function doImmortalise(): Promise<void> {
   font-size: 0.72rem;
   line-height: 1.4;
   margin: 0 0 12px;
+}
+
+.adv-immortalise-cost {
+  color: var(--accent-gold);
+  font-family: 'Cinzel', serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  margin: 0 0 12px;
+}
+
+.adv-immortalise-cost.short {
+  color: #e07070;
 }
 
 .adv-immortalise-btns {

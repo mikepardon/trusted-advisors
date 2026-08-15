@@ -132,7 +132,9 @@ class CharacterProgressionController extends Controller
                 'incarnation_name' => $uc->incarnation_name,
                 'display_name' => $uc->getDisplayName(),
                 'pending_upgrades' => $uc->pendingLevelUpCount(),
+                'next_upgrade_cost' => $uc->nextPendingLevel() !== null ? $uc->coinCostForLevel($uc->nextPendingLevel()) : 0,
                 'can_immortalise' => $uc->level >= UserCharacter::getMaxLevel() && $uc->pendingLevelUpCount() === 0,
+                'immortalise_cost' => $uc->immortaliseCost(),
                 'modified_dice' => $uc->getModifiedDice(false),
                 'modified_dice_duel' => $uc->getModifiedDice(true),
                 'extra_item_slots' => $uc->getExtraItemSlots(),
@@ -229,6 +231,7 @@ class CharacterProgressionController extends Controller
 
         return response()->json([
             'message' => 'Upgrade chosen!',
+            'new_coins' => $request->user()->fresh()->coins,
             'upgrade' => [
                 'id' => $upgrade->id,
                 'chosen_at_level' => $upgrade->chosen_at_level,
@@ -265,6 +268,7 @@ class CharacterProgressionController extends Controller
 
         return response()->json([
             'message' => "Character immortalised as {$userCharacter->incarnation_name}!",
+            'new_coins' => $request->user()->fresh()->coins,
             'user_character' => [
                 'id' => $userCharacter->id,
                 'level' => $userCharacter->level,

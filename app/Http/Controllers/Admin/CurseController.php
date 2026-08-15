@@ -82,10 +82,10 @@ class CurseController extends Controller
         ]);
 
         if ($curse->image_path) {
-            Storage::disk('s3')->delete($curse->image_path);
+            Storage::disk(config('filesystems.media_disk'))->delete($curse->image_path);
         }
 
-        $path = $request->file('image')->store('curses', 's3');
+        $path = $request->file('image')->store('curses', config('filesystems.media_disk'));
         $curse->update(['image_path' => $path]);
 
         return response()->json(['image_path' => $path]);

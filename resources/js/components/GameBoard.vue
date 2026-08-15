@@ -16,6 +16,7 @@
         :turn-time-limit="gameData.game.turn_time_limit || 0"
         @start-game="startOnlineGame"
         @lobby-updated="fetchGame"
+        @leave="goHome"
       />
     </template>
 
@@ -72,45 +73,45 @@
 
     <!-- COOPERATIVE MODE -->
     <template v-else>
-    <!-- Round display -->
-    <div class="time-bar">
-      <div class="time-bar-right" style="width: unset;">
-        <div class="time-bar-icons">
-          <button
-            class="bar-icon-btn"
-            title="View Inventory"
-            @click="openInventory()"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
-              <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
-              <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-            </svg>
-            <span class="bar-icon-badge">{{ usableItems.length }}</span>
-          </button>
-          <button class="bar-icon-btn" title="View Your Dice" @click="showDiceViewer = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
-              <rect x="3" y="3" width="18" height="18" rx="3"/>
-              <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
-              <circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
-              <circle cx="12" cy="12" r="1" fill="currentColor"/>
-              <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
-              <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
-            </svg>
-            <span class="bar-icon-badge">{{ diceCount }}</span>
-          </button>
-          <button v-if="activeCurseCount > 0" class="bar-icon-btn bar-icon-curse" title="View Curses" @click="showCurseDetails = true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
-              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
-              <path d="M12 8v4M12 16h.01"/>
-            </svg>
-            <span class="bar-icon-badge bar-icon-badge-curse">{{ activeCurseCount }}</span>
-          </button>
-        </div>
+    <!-- Board header (flush, war-table style) -->
+    <div class="board-header">
+      <button class="board-menu-btn" aria-label="Menu" @click.stop="showGameMenu = !showGameMenu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div class="board-heading">
+        <div class="board-title">{{ isSinglePlayer ? 'Solo Reign' : 'Shared Reign' }}</div>
+        <div class="board-sub">vs the realm &middot; {{ diceCount }} dice in hand</div>
       </div>
-      <div class="time-info">
-        <span class="round-label">Month {{ gameData.current_round }}/{{ gameData.total_rounds }}</span>
-      </div>
-      <button class="burger-btn" @click.stop="showGameMenu = !showGameMenu"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:block;min-width:15px;"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg></button>
+      <span class="board-month-pill">MONTH {{ gameData.current_round }}</span>
+    </div>
+
+    <!-- Board tools (inventory / dice / curses) -->
+    <div class="board-tools">
+      <button class="bar-icon-btn" title="View Inventory" @click="openInventory()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+          <path d="M20 7H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1Z"/>
+          <path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+        </svg>
+        <span class="bar-icon-badge">{{ usableItems.length }}</span>
+      </button>
+      <button class="bar-icon-btn" title="View Your Dice" @click="showDiceViewer = true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+          <rect x="3" y="3" width="18" height="18" rx="3"/>
+          <circle cx="8.5" cy="8.5" r="1" fill="currentColor"/>
+          <circle cx="15.5" cy="8.5" r="1" fill="currentColor"/>
+          <circle cx="12" cy="12" r="1" fill="currentColor"/>
+          <circle cx="8.5" cy="15.5" r="1" fill="currentColor"/>
+          <circle cx="15.5" cy="15.5" r="1" fill="currentColor"/>
+        </svg>
+        <span class="bar-icon-badge">{{ diceCount }}</span>
+      </button>
+      <button v-if="activeCurseCount > 0" class="bar-icon-btn bar-icon-curse" title="View Curses" @click="showCurseDetails = true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="bar-icon-svg">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/>
+          <path d="M12 8v4M12 16h.01"/>
+        </svg>
+        <span class="bar-icon-badge bar-icon-badge-curse">{{ activeCurseCount }}</span>
+      </button>
     </div>
 
     <!-- Kingdom Stats -->
@@ -1961,6 +1962,87 @@ onBeforeUnmount(() => {
   padding: 60px;
   color: var(--text-secondary);
   font-size: 1.2rem;
+}
+
+/* Flush war-table board header (cooperative) */
+.board-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 2px 0 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(240, 192, 80, 0.2);
+}
+
+.board-menu-btn {
+  flex: none;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Match the app-wide .ta-back icon button so the menu control reads consistently. */
+  background: linear-gradient(180deg, #3a2a18, #181008);
+  border: 1.5px solid rgba(240, 192, 80, 0.5);
+  border-radius: 11px;
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+  color: var(--accent-gold, #f0c050);
+  cursor: pointer;
+  transition: box-shadow 0.2s, transform 0.1s;
+}
+
+.board-menu-btn:hover {
+  box-shadow:
+    0 3px 0 rgba(0, 0, 0, 0.5),
+    0 0 10px rgba(240, 192, 80, 0.25);
+}
+
+.board-menu-btn:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.board-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.board-title {
+  font-family: 'Cinzel', serif;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--accent-gold, #f0c050);
+}
+
+.board-sub {
+  font-size: 12px;
+  color: #9a8a6a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-month-pill {
+  flex: none;
+  font-family: 'Cinzel', serif;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #f0dcb0;
+  background: rgba(0, 0, 0, 0.45);
+  border: 1px solid rgba(240, 192, 80, 0.3);
+  border-radius: 10px;
+  padding: 7px 12px;
+}
+
+.board-tools {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 
 .time-bar {

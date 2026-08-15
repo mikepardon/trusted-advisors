@@ -303,6 +303,7 @@ import CurseSelectionOverlay from "./CurseSelectionOverlay.vue";
 import { useRouter } from "vue-router";
 import { isDddiceAvailable } from "../dddice-service";
 import { useAuth } from "../stores/auth";
+import { haptic } from "../haptics";
 import { useToast } from "../stores/toast";
 
 interface Character {
@@ -1184,6 +1185,11 @@ function applyRollResult(rollResult: RollResult): void {
   // Clear 3D dice immediately so they don't linger after outcome is shown
   const pn = rollResult.player_number || activePlayerNumber.value;
   kingdomStats.value?.clearDice(pn);
+
+  // Per-roll micro-win feedback for the local player when the outcome reveals
+  if (pn === activePlayerNumber.value && rollResult.cards?.length) {
+    haptic(rollResult.cards[0].success ? "success" : "warning");
+  }
 
   if (duelPhase.value === "rolling") {
     if (rollResult.player_number === offererNumber.value) {

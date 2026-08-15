@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\FriendRequestReceived;
 use App\Models\Friendship;
 use App\Models\User;
+use App\Services\LeagueService;
 use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ class FriendshipController extends Controller
 
         $friends = Friendship::where('status', 'accepted')
             ->where(fn ($q) => $q->where('sender_id', $userId)->orWhere('receiver_id', $userId))
-            ->with(['sender:id,name,level,elo_rating,last_login_at', 'receiver:id,name,level,elo_rating,last_login_at'])
+            ->with(['sender:id,name,level,elo_rating,last_login_at,league_tier', 'receiver:id,name,level,elo_rating,last_login_at,league_tier'])
             ->get()
             ->map(function ($f) use ($userId) {
                 $friend = $f->sender_id === $userId ? $f->receiver : $f->sender;
@@ -46,10 +47,17 @@ class FriendshipController extends Controller
                     }
                 }
 
+                $tier = max(0, min((int) ($friend->league_tier ?? 0), count(LeagueService::TIERS) - 1));
+
                 return [
                     'id' => $f->id,
                     'user' => $friend,
                     'last_login_at' => $friend->last_login_at?->toIso8601String(),
+                    'league' => [
+                        'tier' => $tier,
+                        'name' => LeagueService::TIERS[$tier]['name'],
+                        'color' => LeagueService::TIERS[$tier]['color'],
+                    ],
                     'stats' => [
                         'wins' => $wins,
                         'losses' => $losses,

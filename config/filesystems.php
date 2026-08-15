@@ -17,6 +17,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Media Disk
+    |--------------------------------------------------------------------------
+    |
+    | The disk used for uploaded media (dice, kingdom styles, character images,
+    | media library, etc.). Point at 's3' in production, or 'public' for local
+    | development without Minio/S3.
+    |
+    */
+
+    'media_disk' => env('MEDIA_DISK', 's3'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Filesystem Disks
     |--------------------------------------------------------------------------
     |
@@ -57,6 +70,12 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
             'throw' => true,
+            // Fail fast when the S3/Minio endpoint is unreachable (e.g. local
+            // Minio is down) instead of hanging until PHP's max_execution_time.
+            'http' => [
+                'connect_timeout' => (int) env('AWS_CONNECT_TIMEOUT', 3),
+                'timeout' => (int) env('AWS_TIMEOUT', 8),
+            ],
         ],
 
     ],

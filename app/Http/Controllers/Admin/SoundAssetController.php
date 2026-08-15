@@ -47,14 +47,14 @@ class SoundAssetController extends Controller
 
         if ($sound->path) {
             try {
-                Storage::disk('s3')->delete($sound->path);
+                Storage::disk(config('filesystems.media_disk'))->delete($sound->path);
             } catch (\Exception $e) {
                 // ignore delete errors
             }
         }
 
         try {
-            $path = $request->file('file')->store('sounds', 's3');
+            $path = $request->file('file')->store('sounds', config('filesystems.media_disk'));
 
             if (!$path) {
                 return response()->json(['error' => 'Upload failed — check S3/Minio configuration'], 500);

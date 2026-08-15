@@ -123,14 +123,14 @@ class CharacterController extends Controller
 
         if ($character->image_path) {
             try {
-                Storage::disk('s3')->delete($character->image_path);
+                Storage::disk(config('filesystems.media_disk'))->delete($character->image_path);
             } catch (\Exception $e) {
                 // ignore delete errors
             }
         }
 
         try {
-            $path = $request->file('image')->store('characters', 's3');
+            $path = $request->file('image')->store('characters', config('filesystems.media_disk'));
 
             if (!$path) {
                 return response()->json(['error' => 'Upload failed — check S3/Minio configuration'], 500);
@@ -160,7 +160,7 @@ class CharacterController extends Controller
     {
         if ($character->image_path) {
             try {
-                Storage::disk('s3')->delete($character->image_path);
+                Storage::disk(config('filesystems.media_disk'))->delete($character->image_path);
             } catch (\Exception $e) {
                 // ignore
             }

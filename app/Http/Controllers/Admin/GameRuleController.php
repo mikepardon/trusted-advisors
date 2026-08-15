@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Storage;
 class GameRuleController extends Controller
 {
     use AuditsAdminActions;
+
     public function index(): JsonResponse
     {
         $rules = GameRule::all()->pluck('value', 'key');
@@ -45,7 +46,7 @@ class GameRuleController extends Controller
         $existing = GameRule::where('key', 'homepage_background_image')->first();
         if ($existing && $existing->value) {
             try {
-                Storage::disk('s3')->delete($existing->value);
+                Storage::disk(config('filesystems.media_disk'))->delete($existing->value);
             } catch (\Exception $e) {
                 // ignore delete errors
             }
@@ -61,12 +62,14 @@ class GameRuleController extends Controller
             'homepage_background_image',
             'classic_game_background_image',
             'duel_game_background_image',
+            'hub_center_image',
         ])->pluck('value', 'key');
 
         return response()->json([
-            'homepage_background_url' => ($bgs['homepage_background_image'] ?? null) ? '/api/storage/' . $bgs['homepage_background_image'] : null,
-            'classic_game_background_url' => ($bgs['classic_game_background_image'] ?? null) ? '/api/storage/' . $bgs['classic_game_background_image'] : null,
-            'duel_game_background_url' => ($bgs['duel_game_background_image'] ?? null) ? '/api/storage/' . $bgs['duel_game_background_image'] : null,
+            'homepage_background_url' => ($bgs['homepage_background_image'] ?? null) ? '/api/storage/'.$bgs['homepage_background_image'] : null,
+            'classic_game_background_url' => ($bgs['classic_game_background_image'] ?? null) ? '/api/storage/'.$bgs['classic_game_background_image'] : null,
+            'duel_game_background_url' => ($bgs['duel_game_background_image'] ?? null) ? '/api/storage/'.$bgs['duel_game_background_image'] : null,
+            'hub_center_image_url' => ($bgs['hub_center_image'] ?? null) ? '/api/storage/'.$bgs['hub_center_image'] : null,
         ]);
     }
 }

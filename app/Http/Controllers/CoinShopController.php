@@ -16,6 +16,7 @@ use App\Models\UserCharacter;
 use App\Models\UserUnlockable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class CoinShopController extends Controller
 {
@@ -97,7 +98,7 @@ class CoinShopController extends Controller
 
     public function purchase(Request $request, Unlockable $unlockable): JsonResponse
     {
-        $user = $request->user();
+        $userId = $request->user()->id;
 
         if ($unlockable->unlock_method !== 'coins') {
             return response()->json(['error' => 'This item is not available for coin purchase.'], 422);
@@ -105,47 +106,64 @@ class CoinShopController extends Controller
 
         $price = (int) $unlockable->unlock_value;
 
-        if ($user->coins < $price) {
+        // Lock the user row and re-check balance + ownership inside the transaction.
+        // Otherwise a concurrent spend between the balance check and the debit can
+        // drive coins negative (and trip the unsigned-column constraint with a 500).
+        $result = DB::transaction(function () use ($userId, $unlockable, $price): array {
+            $user = User::query()->whereKey($userId)->lockForUpdate()->first();
+
+            if ($user->coins < $price) {
+                return ['status' => 'insufficient'];
+            }
+
+            $alreadyOwned = UserUnlockable::where('user_id', $user->id)
+                ->where('unlockable_id', $unlockable->id)
+                ->exists();
+
+            if ($alreadyOwned) {
+                return ['status' => 'owned'];
+            }
+
+            $user->coins -= $price;
+            $user->save();
+
+            $entityName = match ($unlockable->type) {
+                'character' => Character::find($unlockable->entity_id)?->name ?? 'Unknown',
+                'dice_theme' => DiceTheme::find($unlockable->entity_id)?->name ?? 'Unknown',
+                'kingdom_style' => KingdomStyle::find($unlockable->entity_id)?->name ?? 'Unknown',
+                default => Item::find($unlockable->entity_id)?->name ?? 'Unknown',
+            };
+
+            $user->recordCoinTransaction(-$price, 'spend', 'shop', $unlockable->id, "Purchased {$unlockable->type}: {$entityName}");
+
+            UserUnlockable::create([
+                'user_id' => $user->id,
+                'unlockable_id' => $unlockable->id,
+                'unlocked_at' => now(),
+            ]);
+
+            // Auto-create UserCharacter when a character is purchased
+            if ($unlockable->type === 'character' && $unlockable->entity_id) {
+                UserCharacter::firstOrCreate([
+                    'user_id' => $user->id,
+                    'character_id' => $unlockable->entity_id,
+                ]);
+            }
+
+            return ['status' => 'ok', 'new_coins' => $user->coins];
+        });
+
+        if ($result['status'] === 'insufficient') {
             return response()->json(['error' => 'Not enough coins.'], 422);
         }
 
-        $alreadyOwned = UserUnlockable::where('user_id', $user->id)
-            ->where('unlockable_id', $unlockable->id)
-            ->exists();
-
-        if ($alreadyOwned) {
+        if ($result['status'] === 'owned') {
             return response()->json(['error' => 'Already owned.'], 409);
-        }
-
-        $user->coins -= $price;
-        $user->save();
-
-        $entityName = match ($unlockable->type) {
-            'character' => Character::find($unlockable->entity_id)?->name ?? 'Unknown',
-            'dice_theme' => DiceTheme::find($unlockable->entity_id)?->name ?? 'Unknown',
-            'kingdom_style' => KingdomStyle::find($unlockable->entity_id)?->name ?? 'Unknown',
-            default => Item::find($unlockable->entity_id)?->name ?? 'Unknown',
-        };
-
-        $user->recordCoinTransaction(-$price, 'spend', 'shop', $unlockable->id, "Purchased {$unlockable->type}: {$entityName}");
-
-        UserUnlockable::create([
-            'user_id' => $user->id,
-            'unlockable_id' => $unlockable->id,
-            'unlocked_at' => now(),
-        ]);
-
-        // Auto-create UserCharacter when a character is purchased
-        if ($unlockable->type === 'character' && $unlockable->entity_id) {
-            UserCharacter::firstOrCreate([
-                'user_id' => $user->id,
-                'character_id' => $unlockable->entity_id,
-            ]);
         }
 
         return response()->json([
             'message' => 'Purchase successful!',
-            'new_coins' => $user->coins,
+            'new_coins' => $result['new_coins'],
         ]);
     }
 
@@ -177,21 +195,9 @@ class CoinShopController extends Controller
 
         $price = (int) $unlockable->unlock_value;
 
-        if ($user->coins < $price) {
-            return response()->json(['error' => 'Not enough coins.'], 422);
-        }
-
         $recipient = User::find($friendId);
         if (!$recipient) {
             return response()->json(['error' => 'User not found.'], 404);
-        }
-
-        $alreadyOwned = UserUnlockable::where('user_id', $recipient->id)
-            ->where('unlockable_id', $unlockable->id)
-            ->exists();
-
-        if ($alreadyOwned) {
-            return response()->json(['error' => 'Your friend already owns this item.'], 409);
         }
 
         $entityName = match ($unlockable->type) {
@@ -201,45 +207,77 @@ class CoinShopController extends Controller
             default => Item::find($unlockable->entity_id)?->name ?? 'Unknown',
         };
 
-        $user->coins -= $price;
-        $user->save();
+        $notificationTitle = "Gift from {$user->name}!";
 
-        $user->recordCoinTransaction(-$price, 'spend', 'shop', $unlockable->id, "Gifted {$unlockable->type}: {$entityName} to {$recipient->name}");
+        // Lock the payer row and re-check balance + recipient ownership inside the
+        // transaction so a concurrent spend can't drive the gifter's coins negative.
+        $result = DB::transaction(function () use ($user, $recipient, $unlockable, $price, $entityName, $notificationTitle): array {
+            $payer = User::query()->whereKey($user->id)->lockForUpdate()->first();
 
-        UserUnlockable::create([
-            'user_id' => $recipient->id,
-            'unlockable_id' => $unlockable->id,
-            'unlocked_at' => now(),
-        ]);
+            if ($payer->coins < $price) {
+                return ['status' => 'insufficient'];
+            }
 
-        // Auto-create UserCharacter when a character is gifted
-        if ($unlockable->type === 'character' && $unlockable->entity_id) {
-            UserCharacter::firstOrCreate([
+            $alreadyOwned = UserUnlockable::where('user_id', $recipient->id)
+                ->where('unlockable_id', $unlockable->id)
+                ->exists();
+
+            if ($alreadyOwned) {
+                return ['status' => 'owned'];
+            }
+
+            $payer->coins -= $price;
+            $payer->save();
+
+            $payer->recordCoinTransaction(-$price, 'spend', 'shop', $unlockable->id, "Gifted {$unlockable->type}: {$entityName} to {$recipient->name}");
+
+            UserUnlockable::create([
                 'user_id' => $recipient->id,
-                'character_id' => $unlockable->entity_id,
+                'unlockable_id' => $unlockable->id,
+                'unlocked_at' => now(),
             ]);
+
+            // Auto-create UserCharacter when a character is gifted
+            if ($unlockable->type === 'character' && $unlockable->entity_id) {
+                UserCharacter::firstOrCreate([
+                    'user_id' => $recipient->id,
+                    'character_id' => $unlockable->entity_id,
+                ]);
+            }
+
+            $notification = UserNotification::create([
+                'user_id' => $recipient->id,
+                'type' => 'gift_received',
+                'title' => $notificationTitle,
+                'message' => "{$payer->name} gifted you {$entityName}!",
+                'data' => [
+                    'gifter_id' => $payer->id,
+                    'gifter_name' => $payer->name,
+                    'unlockable_id' => $unlockable->id,
+                    'item_name' => $entityName,
+                    'item_type' => $unlockable->type,
+                ],
+            ]);
+
+            return ['status' => 'ok', 'new_coins' => $payer->coins, 'notification_id' => $notification->id];
+        });
+
+        if ($result['status'] === 'insufficient') {
+            return response()->json(['error' => 'Not enough coins.'], 422);
         }
 
-        $notification = UserNotification::create([
-            'user_id' => $recipient->id,
-            'type' => 'gift_received',
-            'title' => "Gift from {$user->name}!",
-            'message' => "{$user->name} gifted you {$entityName}!",
-            'data' => [
-                'gifter_id' => $user->id,
-                'gifter_name' => $user->name,
-                'unlockable_id' => $unlockable->id,
-                'item_name' => $entityName,
-                'item_type' => $unlockable->type,
-            ],
-        ]);
+        if ($result['status'] === 'owned') {
+            return response()->json(['error' => 'Your friend already owns this item.'], 409);
+        }
 
+        // Broadcast only after the transaction commits, so a rolled-back gift never
+        // fires a notification for a grant that did not persist.
         try {
             broadcast(new UserNotificationReceived(
                 $recipient->id,
-                $notification->id,
+                $result['notification_id'],
                 'gift_received',
-                $notification->title,
+                $notificationTitle,
             ));
         } catch (\Throwable) {
             // Broadcast failure is non-critical; notification is saved in DB
@@ -247,7 +285,7 @@ class CoinShopController extends Controller
 
         return response()->json([
             'message' => "Gift sent to {$recipient->name}!",
-            'new_coins' => $user->coins,
+            'new_coins' => $result['new_coins'],
         ]);
     }
 

@@ -12,6 +12,8 @@ export default defineConfig([
         "vendor/**",
         "public/build/**",
         "public/hot",
+        // Vendor-published OneSignal service worker; not our source to lint.
+        "public/OneSignalSDKWorker.js",
         "bootstrap/ssr/**",
         "storage/**",
     ]),
@@ -87,6 +89,14 @@ export default defineConfig([
             ],
             "unicorn/no-useless-undefined": "off",
             "unicorn/prevent-abbreviations": "off",
+        },
+    },
+    {
+        // Build config: @vitejs/plugin-vue's transformAssetUrls.base API requires a
+        // literal null to disable asset-URL rebasing, so no-null cannot apply here.
+        files: ["vite.config.js"],
+        rules: {
+            "unicorn/no-null": "off",
         },
     },
     {

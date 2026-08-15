@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             CardSeeder::class,
             EventSeeder::class,
             ItemSeeder::class,
+            CosmeticSeeder::class,
+            SeasonPassSeeder::class,
         ]);
     }
 }

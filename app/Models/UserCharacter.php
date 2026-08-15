@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use Brick\Math\BigDecimal;
+use Brick\Math\RoundingMode;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -46,23 +48,80 @@ class UserCharacter extends Model
     {
         return Cache::remember('advisor_level_config', 60, function () {
             return GameRule::getValue('advisor_level_config', [
-                'xp_per_level' => 100,
+                // Cumulative XP required to reach each level. Deliberately steeper than a
+                // flat curve so late levels (and immortalising) are a real commitment.
+                'level_xp' => [1 => 0, 2 => 400, 3 => 1000, 4 => 2100, 5 => 4000, 6 => 7000, 7 => 11500, 8 => 18000],
                 'max_level' => 8,
+                'level_coin_costs' => [4 => 100, 5 => 200, 6 => 350, 7 => 550, 8 => 800],
+                'immortalise_base_cost' => 2000,
+                'incarnation_cost_multiplier' => 1.2,
             ]);
         });
     }
 
     public static function xpForLevel(int $level): int
     {
-        $config = static::getLevelConfig();
-        $xpPerLevel = $config['xp_per_level'] ?? 100;
-        return (int) ($xpPerLevel * ($level - 1) * $level / 2);
+        $levelXp = static::getLevelConfig()['level_xp'] ?? [1 => 0];
+
+        if (isset($levelXp[$level])) {
+            return (int) $levelXp[$level];
+        }
+
+        // Below the first threshold is 0; above the last defined level clamps to its cost.
+        if ($level < 1) {
+            return 0;
+        }
+
+        return (int) max($levelXp);
     }
 
     public static function getMaxLevel(): int
     {
         $config = static::getLevelConfig();
         return $config['max_level'] ?? 8;
+    }
+
+    /**
+     * Coin cost to apply the upgrade for a given level at this incarnation.
+     * Levels 1-3 are free; 4-8 cost coins, scaled by the incarnation ramp.
+     */
+    public function coinCostForLevel(int $level): int
+    {
+        if ($level <= 3) {
+            return 0;
+        }
+
+        $costs = static::getLevelConfig()['level_coin_costs'] ?? [4 => 100, 5 => 200, 6 => 350, 7 => 550, 8 => 800];
+
+        return $this->scaleForIncarnation((int) ($costs[$level] ?? 0));
+    }
+
+    public function immortaliseCost(): int
+    {
+        $base = (int) (static::getLevelConfig()['immortalise_base_cost'] ?? 2000);
+
+        return $this->scaleForIncarnation($base);
+    }
+
+    /**
+     * Scale a base coin cost by the incarnation ramp (×multiplier per prior
+     * incarnation). Coins are an integer soft currency, so the result is rounded
+     * to a whole coin via brick/math.
+     */
+    private function scaleForIncarnation(int $base): int
+    {
+        if ($base <= 0) {
+            return 0;
+        }
+
+        $multiplier = static::getLevelConfig()['incarnation_cost_multiplier'] ?? 1.2;
+        $exponent = max(0, $this->incarnation - 1);
+        $factor = BigDecimal::of((string) $multiplier)->power($exponent);
+
+        return BigDecimal::of($base)
+            ->multipliedBy($factor)
+            ->toScale(0, RoundingMode::HALF_UP)
+            ->toInt();
     }
 
     public static function calculateLevel(int $xp): int

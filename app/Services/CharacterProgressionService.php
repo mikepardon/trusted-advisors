@@ -9,6 +9,7 @@ use App\Models\GameRule;
 use App\Models\User;
 use App\Models\UserCharacter;
 use App\Models\UserCharacterUpgrade;
+use Illuminate\Support\Facades\DB;
 
 class CharacterProgressionService
 {
@@ -35,8 +36,8 @@ class CharacterProgressionService
 
         $globalXpConfig = GameRule::getValue('xp_config', [
             'base_xp' => 50,
-            'coop_win_bonus' => 100,
-            'duel_win_bonus' => 150,
+            'coop_win_bonus' => 50,
+            'duel_win_bonus' => 75,
             'online_multiplier' => 1.5,
         ]);
 
@@ -145,21 +146,36 @@ class CharacterProgressionService
         // Validate user_choice for types that require it
         $this->validateUserChoice($option, $userChoice);
 
-        $upgrade = UserCharacterUpgrade::create([
-            'user_character_id' => $userCharacter->id,
-            'character_level_option_id' => $option->id,
-            'chosen_at_level' => $forLevel,
-            'incarnation' => $userCharacter->incarnation,
-            'user_choice' => $userChoice,
-        ]);
-
-        // Recompute denormalized max_item_slots_bonus
-        if ($option->type === 'extra_item_slot') {
-            $userCharacter->max_item_slots_bonus = $userCharacter->getExtraItemSlots();
-            $userCharacter->save();
+        // Levels 4-8 cost coins to apply (levels 1-3 are free).
+        $cost = $userCharacter->coinCostForLevel($forLevel);
+        $user = $userCharacter->user;
+        if ($cost > 0 && $user->coins < $cost) {
+            throw new \InvalidArgumentException("Not enough coins to upgrade — this level costs {$cost} coins.");
         }
 
-        return $upgrade;
+        return DB::transaction(function () use ($userCharacter, $option, $forLevel, $userChoice, $cost, $user): UserCharacterUpgrade {
+            $upgrade = UserCharacterUpgrade::create([
+                'user_character_id' => $userCharacter->id,
+                'character_level_option_id' => $option->id,
+                'chosen_at_level' => $forLevel,
+                'incarnation' => $userCharacter->incarnation,
+                'user_choice' => $userChoice,
+            ]);
+
+            if ($cost > 0) {
+                $user->coins -= $cost;
+                $user->save();
+                $user->recordCoinTransaction(-$cost, 'spend', 'advisor_upgrade', $userCharacter->id, "Upgraded {$userCharacter->character->name} to level {$forLevel}");
+            }
+
+            // Recompute denormalized max_item_slots_bonus
+            if ($option->type === 'extra_item_slot') {
+                $userCharacter->max_item_slots_bonus = $userCharacter->getExtraItemSlots();
+                $userCharacter->save();
+            }
+
+            return $upgrade;
+        });
     }
 
     /**
@@ -177,15 +193,30 @@ class CharacterProgressionService
             throw new \InvalidArgumentException('All pending level-up choices must be made before immortalising');
         }
 
-        $userCharacter->xp = 0;
-        $userCharacter->level = 1;
-        $userCharacter->incarnation++;
-        $userCharacter->incarnation_name = $this->generateIncarnationName(
-            $userCharacter->character->name,
-            $userCharacter->incarnation
-        );
-        $userCharacter->max_item_slots_bonus = 0;
-        $userCharacter->save();
+        // Immortalising is a big coin sink, scaled by the incarnation ramp.
+        $cost = $userCharacter->immortaliseCost();
+        $user = $userCharacter->user;
+        if ($user->coins < $cost) {
+            throw new \InvalidArgumentException("Not enough coins to immortalise — it costs {$cost} coins.");
+        }
+
+        DB::transaction(function () use ($userCharacter, $user, $cost): void {
+            if ($cost > 0) {
+                $user->coins -= $cost;
+                $user->save();
+                $user->recordCoinTransaction(-$cost, 'spend', 'advisor_immortalise', $userCharacter->id, "Immortalised {$userCharacter->character->name}");
+            }
+
+            $userCharacter->xp = 0;
+            $userCharacter->level = 1;
+            $userCharacter->incarnation++;
+            $userCharacter->incarnation_name = $this->generateIncarnationName(
+                $userCharacter->character->name,
+                $userCharacter->incarnation
+            );
+            $userCharacter->max_item_slots_bonus = 0;
+            $userCharacter->save();
+        });
 
         return $userCharacter;
     }

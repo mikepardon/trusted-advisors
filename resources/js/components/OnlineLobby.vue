@@ -1,5 +1,9 @@
 <template>
   <div class="lobby">
+    <div class="lobby-header">
+      <button class="ta-back" aria-label="Leave lobby" @click="leaveLobby">&lsaquo;</button>
+    </div>
+
     <!-- PHASE 1: Gathering Players -->
     <Transition name="fade" mode="out-in">
     <div v-if="!allJoined" key="gathering" class="card-panel lobby-panel">
@@ -211,7 +215,11 @@ const { gameId, hostId, gameType = "cooperative", turnTimeLimit = 0 } = definePr
   turnTimeLimit?: number;
 }>();
 
-const emit = defineEmits<{ "startGame": []; "lobbyUpdated": [] }>();
+const emit = defineEmits<{ "startGame": []; "lobbyUpdated": []; "leave": [] }>();
+
+function leaveLobby(): void {
+  emit("leave");
+}
 
 const auth = useAuth();
 const toast = useToast();
@@ -437,6 +445,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .lobby { height: 100%; }
 
+.lobby-header {
+  display: flex;
+  align-items: center;
+  padding: 4px 4px 12px;
+}
+
 .lobby-panel {
   padding: 30px 20px;
 }
@@ -480,6 +494,17 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* The single child fills the row and lays its label/name/badge out with spacing;
+   without this the spans collapse together (e.g. "Player 1MIKE"). */
+.slot-filled,
+.slot-pending,
+.slot-empty {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
 }
 
 .slot-joined {

@@ -1,59 +1,65 @@
 <?php
 
-use App\Http\Controllers\AuthController;
-use App\Http\Controllers\CoinShopController;
-use App\Http\Controllers\FriendshipController;
-use App\Http\Controllers\GameController;
-use App\Http\Controllers\GameLobbyController;
-use App\Http\Controllers\LeaderboardController;
-use App\Http\Controllers\MatchmakingController;
-use App\Http\Controllers\ReplayController;
 use App\Http\Controllers\Admin\AchievementController;
-use App\Http\Controllers\UserProfileController;
-use App\Http\Controllers\Admin\CharacterController;
+use App\Http\Controllers\Admin\AddonController;
+use App\Http\Controllers\Admin\AdminAuditLogController;
+use App\Http\Controllers\Admin\AdminCosmeticController;
+use App\Http\Controllers\Admin\AdminDiceController;
+use App\Http\Controllers\Admin\AdminGiftController;
+use App\Http\Controllers\Admin\AdminKingdomStyleController;
+use App\Http\Controllers\Admin\AdminPaymentController;
+use App\Http\Controllers\Admin\AdminRoleController;
+use App\Http\Controllers\Admin\AdminUserController;
+use App\Http\Controllers\Admin\AiGeneratorController;
+use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
+use App\Http\Controllers\Admin\AppIconController;
+use App\Http\Controllers\Admin\BalanceDashboardController;
+use App\Http\Controllers\Admin\BotGameController;
 use App\Http\Controllers\Admin\CardController;
+use App\Http\Controllers\Admin\CharacterController;
+use App\Http\Controllers\Admin\CharacterLevelOptionController;
+use App\Http\Controllers\Admin\CsvController;
+use App\Http\Controllers\Admin\CurseController;
 use App\Http\Controllers\Admin\DailyChallengeController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EventController;
-use App\Http\Controllers\Admin\ItemController;
+use App\Http\Controllers\Admin\GameManagementController;
 use App\Http\Controllers\Admin\GameRuleController;
-use App\Http\Controllers\Admin\BotGameController;
+use App\Http\Controllers\Admin\ItemController;
+use App\Http\Controllers\Admin\MediaLibraryController;
+use App\Http\Controllers\Admin\RetentionDashboardController;
+use App\Http\Controllers\Admin\RotatingEventController as AdminRotatingEventController;
 use App\Http\Controllers\Admin\SeasonController;
 use App\Http\Controllers\Admin\SoundAssetController;
 use App\Http\Controllers\Admin\UnlockableController;
-use App\Http\Controllers\Admin\AddonController;
-use App\Http\Controllers\Admin\AdminUserController;
-use App\Http\Controllers\Admin\AdminDiceController;
-use App\Http\Controllers\Admin\AdminKingdomStyleController;
-use App\Http\Controllers\Admin\AiGeneratorController;
-use App\Http\Controllers\Admin\CsvController;
-use App\Http\Controllers\Admin\GameManagementController;
-use App\Http\Controllers\AnnouncementController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\WebhookController;
-use App\Http\Controllers\Admin\AdminGiftController;
-use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
-use App\Http\Controllers\Admin\CurseController;
-use App\Http\Controllers\Admin\RotatingEventController as AdminRotatingEventController;
 use App\Http\Controllers\Admin\WeeklyChallengeController;
-use App\Http\Controllers\ReferralController;
+use App\Http\Controllers\AnnouncementController;
+use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CharacterProgressionController;
+use App\Http\Controllers\CoinShopController;
+use App\Http\Controllers\CosmeticController;
+use App\Http\Controllers\DailyRewardController;
 use App\Http\Controllers\DddiceController;
 use App\Http\Controllers\DiceController;
+use App\Http\Controllers\FreeChestController;
+use App\Http\Controllers\FriendshipController;
+use App\Http\Controllers\GameController;
+use App\Http\Controllers\GameLobbyController;
 use App\Http\Controllers\KingdomStyleController;
-use App\Http\Controllers\RotatingEventController;
+use App\Http\Controllers\LeaderboardController;
+use App\Http\Controllers\LeagueController;
+use App\Http\Controllers\MatchmakingController;
+use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
-use App\Http\Controllers\StripeWebhookController;
-use App\Http\Controllers\Admin\AdminPaymentController;
-use App\Http\Controllers\Admin\AdminRoleController;
-use App\Http\Controllers\Admin\AdminAuditLogController;
-use App\Http\Controllers\Admin\AppIconController;
-use App\Http\Controllers\Admin\BalanceDashboardController;
-use App\Http\Controllers\Admin\RetentionDashboardController;
-use App\Http\Controllers\Admin\MediaLibraryController;
-use App\Http\Controllers\CharacterProgressionController;
+use App\Http\Controllers\ReferralController;
+use App\Http\Controllers\ReplayController;
+use App\Http\Controllers\RotatingEventController;
+use App\Http\Controllers\SeasonPassController;
 use App\Http\Controllers\StatsController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\TournamentController;
-use App\Http\Controllers\Admin\CharacterLevelOptionController;
+use App\Http\Controllers\UserProfileController;
+use App\Http\Controllers\WebhookController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
@@ -76,12 +82,18 @@ Route::get('/characters', [GameController::class, 'characters']);
 
 // Serve S3/Minio files through the app (works behind ngrok)
 Route::get('/storage/{path}', function (string $path) {
-    if (!Storage::disk('s3')->exists($path)) {
+    try {
+        if (! Storage::disk(config('filesystems.media_disk'))->exists($path)) {
+            abort(404);
+        }
+
+        return response(Storage::disk(config('filesystems.media_disk'))->get($path))
+            ->header('Content-Type', Storage::disk(config('filesystems.media_disk'))->mimeType($path))
+            ->header('Cache-Control', 'public, max-age=86400');
+    } catch (\League\Flysystem\FilesystemException|\Aws\Exception\AwsException) {
+        // S3/Minio unreachable (e.g. local Minio down) — 404 rather than a 500.
         abort(404);
     }
-    return response(Storage::disk('s3')->get($path))
-        ->header('Content-Type', Storage::disk('s3')->mimeType($path))
-        ->header('Cache-Control', 'public, max-age=86400');
 })->where('path', '.*');
 Route::get('/sound-assets', [SoundAssetController::class, 'publicIndex']);
 Route::get('/app-icons', [AppIconController::class, 'publicIndex']);
@@ -192,6 +204,28 @@ Route::middleware('auth:web')->group(function () {
     Route::post('/shop/{unlockable}/gift', [CoinShopController::class, 'gift']);
     Route::get('/coin-transactions', [CoinShopController::class, 'transactions']);
 
+    // Daily reward ladder
+    Route::get('/daily-reward', [DailyRewardController::class, 'status']);
+    Route::post('/daily-reward/claim', [DailyRewardController::class, 'claim']);
+
+    // Free timed chest
+    Route::get('/free-chest', [FreeChestController::class, 'status']);
+    Route::post('/free-chest/claim', [FreeChestController::class, 'claim']);
+
+    // Cosmetics (own / equip)
+    Route::get('/cosmetics', [CosmeticController::class, 'index']);
+    Route::post('/cosmetics/{cosmetic}/equip', [CosmeticController::class, 'equip']);
+    Route::post('/cosmetics/unequip', [CosmeticController::class, 'unequip']);
+
+    // Season Pass (free track)
+    Route::get('/season-pass', [SeasonPassController::class, 'index']);
+    Route::post('/season-pass/claim', [SeasonPassController::class, 'claim']);
+
+    // Weekly league
+    Route::get('/league', [LeagueController::class, 'index']);
+    Route::get('/league/last-result', [LeagueController::class, 'lastResult']);
+    Route::post('/league/last-result/seen', [LeagueController::class, 'markLastResultSeen']);
+
     // Announcements
     Route::get('/announcements', [AnnouncementController::class, 'index']);
     Route::post('/announcements/{announcement}/dismiss', [AnnouncementController::class, 'dismiss']);
@@ -284,6 +318,10 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::apiResource('achievements', AchievementController::class);
     Route::apiResource('character-level-options', CharacterLevelOptionController::class);
     Route::apiResource('unlockables', UnlockableController::class);
+    Route::get('cosmetics', [AdminCosmeticController::class, 'index']);
+    Route::post('cosmetics', [AdminCosmeticController::class, 'store']);
+    Route::put('cosmetics/{cosmetic}', [AdminCosmeticController::class, 'update']);
+    Route::delete('cosmetics/{cosmetic}', [AdminCosmeticController::class, 'destroy']);
     Route::post('daily-challenges/generate', [DailyChallengeController::class, 'generateRange']);
     Route::apiResource('daily-challenges', DailyChallengeController::class);
     Route::apiResource('addons', AddonController::class);

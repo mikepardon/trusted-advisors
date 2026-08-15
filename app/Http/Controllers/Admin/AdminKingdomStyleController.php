@@ -34,7 +34,7 @@ class AdminKingdomStyleController extends Controller
     {
         if ($kingdomStyle->background_image_path) {
             try {
-                Storage::disk('s3')->delete($kingdomStyle->background_image_path);
+                Storage::disk(config('filesystems.media_disk'))->delete($kingdomStyle->background_image_path);
             } catch (\Exception $e) {
                 // ignore delete errors
             }
@@ -53,14 +53,14 @@ class AdminKingdomStyleController extends Controller
 
         if ($kingdomStyle->background_image_path) {
             try {
-                Storage::disk('s3')->delete($kingdomStyle->background_image_path);
+                Storage::disk(config('filesystems.media_disk'))->delete($kingdomStyle->background_image_path);
             } catch (\Exception $e) {
                 // ignore delete errors
             }
         }
 
         try {
-            $path = $request->file('image')->store('kingdom-styles', 's3');
+            $path = $request->file('image')->store('kingdom-styles', config('filesystems.media_disk'));
 
             if (!$path) {
                 return response()->json(['error' => 'Upload failed — check S3/Minio configuration'], 500);

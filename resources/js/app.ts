@@ -1,4 +1,5 @@
 import "./bootstrap";
+import "../css/ta-design.css";
 import { createApp } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
@@ -16,6 +17,8 @@ import ProfilePage from "./components/ProfilePage.vue";
 import LeaderboardPage from "./components/LeaderboardPage.vue";
 import AchievementsList from "./components/AchievementsList.vue";
 import SeasonPage from "./components/SeasonPage.vue";
+import SeasonPassPage from "./components/SeasonPassPage.vue";
+import LeaguePage from "./components/LeaguePage.vue";
 import CharactersPage from "./components/CharactersPage.vue";
 import AdminLayout from "./components/admin/AdminLayout.vue";
 import AdminDashboard from "./components/admin/AdminDashboard.vue";
@@ -29,6 +32,7 @@ import AdminBotGames from "./components/admin/AdminBotGames.vue";
 import AdminSeasons from "./components/admin/AdminSeasons.vue";
 import AdminAchievements from "./components/admin/AdminAchievements.vue";
 import AdminUnlockables from "./components/admin/AdminUnlockables.vue";
+import AdminCosmetics from "./components/admin/AdminCosmetics.vue";
 import AdminChallenges from "./components/admin/AdminChallenges.vue";
 import AdminGames from "./components/admin/AdminGames.vue";
 import AdminXp from "./components/admin/AdminXp.vue";
@@ -70,27 +74,65 @@ declare module "vue-router" {
 
 const routes: RouteRecordRaw[] = [
     { path: "/", component: GameSetup },
-    { path: "/choose-username", component: ChooseUsername, meta: { auth: true } },
-    { path: "/choose-advisors", component: ChooseAdvisors, meta: { auth: true } },
+    {
+        path: "/choose-username",
+        component: ChooseUsername,
+        meta: { auth: true },
+    },
+    {
+        path: "/choose-advisors",
+        component: ChooseAdvisors,
+        meta: { auth: true },
+    },
     { path: "/campaigns", component: GameHistory, meta: { auth: true } },
     { path: "/friends", component: FriendsList, meta: { auth: true } },
     { path: "/profile", component: ProfilePage, meta: { auth: true } },
     { path: "/leaderboard", component: LeaderboardPage, meta: { auth: true } },
-    { path: "/achievements", component: AchievementsList, meta: { auth: true } },
+    {
+        path: "/achievements",
+        component: AchievementsList,
+        meta: { auth: true },
+    },
     { path: "/season", component: SeasonPage, meta: { auth: true } },
+    { path: "/season-pass", component: SeasonPassPage, meta: { auth: true } },
+    { path: "/league", component: LeaguePage, meta: { auth: true } },
     { path: "/collection", component: CharactersPage, meta: { auth: true } },
     { path: "/shop", component: ShopPage, meta: { auth: true } },
     { path: "/stats", component: StatsPage, meta: { auth: true } },
-    { path: "/payment/processing", component: PaymentProcessing, meta: { auth: true } },
+    {
+        path: "/payment/processing",
+        component: PaymentProcessing,
+        meta: { auth: true },
+    },
     { path: "/premium", component: PremiumPage, meta: { auth: true } },
     { path: "/tournaments", component: TournamentPage, meta: { auth: true } },
-    { path: "/events/:id", component: RotatingEventPage, props: true, meta: { auth: true } },
+    {
+        path: "/events/:id",
+        component: RotatingEventPage,
+        props: true,
+        meta: { auth: true },
+    },
     { path: "/terms", component: TermsPage },
     { path: "/privacy", component: PrivacyPage },
     { path: "/settings", component: SettingsPage },
-    { path: "/game/:id", component: GameBoard, props: true, meta: { auth: true } },
-    { path: "/game/:id/over", component: GameOver, props: true, meta: { auth: true } },
-    { path: "/game/:id/replay", component: GameReplay, props: true, meta: { auth: true } },
+    {
+        path: "/game/:id",
+        component: GameBoard,
+        props: true,
+        meta: { auth: true },
+    },
+    {
+        path: "/game/:id/over",
+        component: GameOver,
+        props: true,
+        meta: { auth: true },
+    },
+    {
+        path: "/game/:id/replay",
+        component: GameReplay,
+        props: true,
+        meta: { auth: true },
+    },
     { path: "/replay/:token", component: PublicReplay, props: true },
     {
         path: "/admin",
@@ -114,6 +156,7 @@ const routes: RouteRecordRaw[] = [
             { path: "seasons", component: AdminSeasons },
             { path: "achievements", component: AdminAchievements },
             { path: "unlockables", component: AdminUnlockables },
+            { path: "cosmetics", component: AdminCosmetics },
             { path: "challenges", component: AdminChallenges },
             { path: "gifts", component: AdminGifts },
             { path: "announcements", component: AdminAnnouncements },

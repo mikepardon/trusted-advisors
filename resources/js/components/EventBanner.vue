@@ -66,7 +66,7 @@ const effectSummary = computed(() => {
   background: linear-gradient(135deg, #2c1810, #4a2020);
   border: 1px solid #8b4513;
   border-radius: 8px;
-  padding: 12px 18px;
+  padding: 14px 20px;
   cursor: pointer;
   transition: border-color 0.2s;
 }
@@ -79,6 +79,7 @@ const effectSummary = computed(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
 }
 
 .event-toggle {
@@ -114,7 +115,7 @@ const effectSummary = computed(() => {
 /* ---- Mobile compact ---- */
 @media (max-width: 768px) {
   .event-banner {
-    padding: 8px 12px;
+    padding: 12px 16px;
   }
 
   .event-title {

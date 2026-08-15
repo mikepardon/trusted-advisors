@@ -310,7 +310,7 @@ onMounted(async () => {
     // Character list is optional; leave empty on failure.
   }
   try {
-    const rulesResponse = await axios.get<{ advisor_level_config?: string | { max_level?: number } }>("/api/admin/game-rules");
+    const rulesResponse = await axios.get<{ advisor_level_config?: string | { max_level?: number } }>("/api/admin/rules");
     const config = rulesResponse.data?.advisor_level_config;
     if (config) {
       const parsed = typeof config === "string" ? JSON.parse(config) : config;

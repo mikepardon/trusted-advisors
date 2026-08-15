@@ -1,0 +1,479 @@
+/*
+ * Trusted Advisors — shared "war table" design system.
+ *
+ * Distilled from the Game Screens mockup (Cinzel/Crimson Text, dark radial
+ * ground, gold #f0c050). These are global, unscoped utility classes so every
+ * screen reskin can share the exact chrome (sub-page shell, reward rows,
+ * medallions, pills, dividers) without drifting apart.
+ *
+ * Palette lives on :root in App.vue (--accent-gold etc). The extra tokens the
+ * mockup relies on are declared here so they resolve everywhere.
+ */
+
+:root {
+    --ta-gold: #f0c050;
+    --ta-gold-bright: #ffe070;
+    --ta-text: #f0e0c8;
+    --ta-mute: #9a8a68;
+    --ta-mute-dim: #8a7a5a;
+    --ta-good: #8ef0c8; /* success chip text */
+    --ta-bad: #f0a8a0; /* failure chip text */
+    --ta-blue: #9ad0ff;
+    --ta-ground: radial-gradient(
+        ellipse at 50% 34%,
+        #3a2a18 0%,
+        #150f08 62%,
+        #0b0805 100%
+    );
+    --ta-drawer: linear-gradient(
+        180deg,
+        rgba(20, 14, 8, 0.94),
+        rgba(11, 8, 5, 0.98)
+    );
+    --ta-rim-gold: linear-gradient(180deg, #ffe9a8, #b8842a);
+    --ta-face-gold: radial-gradient(circle at 40% 28%, #6b4f14, #241704);
+    --ta-good-fill: linear-gradient(180deg, #a8f0a8, #3a8a2a);
+}
+
+/* ---------------------------------------------------------------- Sub-page shell
+ * The recurring chrome for screens 03-10: a rounded-top drawer over the dark
+ * ground, a fixed header (back / title / subtitle / context stat pill), and a
+ * scrolling body. Used via <TaSubPage> but exposed as classes for hand-markup.
+ */
+.ta-page {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--ta-ground);
+    font-family: "Crimson Text", Georgia, serif;
+    color: var(--ta-text);
+}
+
+.ta-drawer {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--ta-drawer);
+    border-top: 1px solid rgba(240, 192, 80, 0.3);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.6);
+}
+
+.ta-page-header {
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 13px 16px 11px;
+    border-bottom: 1px solid rgba(240, 192, 80, 0.2);
+}
+
+.ta-back {
+    width: 36px;
+    height: 36px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    background: linear-gradient(180deg, #3a2a18, #181008);
+    border: 1.5px solid rgba(240, 192, 80, 0.5);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+    color: var(--ta-gold);
+    /* system-ui centres the chevron glyph cleanly; the serif face sat it too high */
+    font-family: system-ui, sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0;
+    transition:
+        transform 0.12s,
+        box-shadow 0.12s;
+}
+
+.ta-back:hover {
+    box-shadow:
+        0 3px 0 rgba(0, 0, 0, 0.5),
+        0 0 10px rgba(240, 192, 80, 0.25);
+}
+
+.ta-back:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+}
+
+.ta-page-heading {
+    flex: 1;
+    min-width: 0;
+}
+
+.ta-page-title {
+    font-family: "Cinzel", serif;
+    font-size: 18px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--ta-gold);
+}
+
+.ta-page-sub {
+    font-size: 11.5px;
+    color: var(--ta-mute-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ta-page-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: none;
+    padding: 13px 16px 18px;
+}
+
+.ta-page-body::-webkit-scrollbar {
+    display: none;
+}
+
+/* Per-page bottom footer (option/tab nav), pinned under the scrolling body. */
+.ta-page-footer {
+    flex: none;
+    padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+    border-top: 1px solid rgba(240, 192, 80, 0.25);
+    background: linear-gradient(
+        180deg,
+        rgba(24, 17, 10, 0.98),
+        rgba(13, 9, 5, 0.99)
+    );
+}
+
+/* Footer tab nav — evenly spaced pills to switch a page's sub-options. */
+.ta-footer-nav {
+    display: flex;
+    gap: 6px;
+}
+
+.ta-footer-tab {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 7px 6px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(240, 192, 80, 0.22);
+    color: var(--ta-mute);
+    font-family: "Cinzel", serif;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    box-shadow: none;
+    white-space: nowrap;
+}
+
+.ta-footer-tab-icon {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+.ta-footer-tab.active {
+    color: #241703;
+    background: linear-gradient(180deg, #ffe897, #c8952e);
+    border-color: #fff0b0;
+}
+
+/* ---------------------------------------------------------------- Pills */
+.ta-stat-pill {
+    flex: none;
+    font-family: "Cinzel", serif;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    color: #f0dcb0;
+    background: rgba(0, 0, 0, 0.45);
+    border: 1px solid rgba(240, 192, 80, 0.3);
+    border-radius: 9px;
+    padding: 6px 10px;
+    white-space: nowrap;
+}
+
+/* State pill on reward/tier/achievement rows */
+.ta-pill {
+    flex: none;
+    font-family: "Cinzel", serif;
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    border-radius: 9px;
+    padding: 6px 10px;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.ta-pill--claim {
+    color: #0d2a0d;
+    background: var(--ta-good-fill);
+    border-color: #b8f0b8;
+}
+
+.ta-pill--claimed {
+    color: var(--ta-mute);
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(138, 106, 46, 0.4);
+}
+
+.ta-pill--locked {
+    color: #6a5a3a;
+    background: rgba(0, 0, 0, 0.4);
+    border-color: rgba(138, 106, 46, 0.3);
+}
+
+.ta-pill--gold {
+    color: #241703;
+    background: linear-gradient(180deg, #ffe897, #c8952e);
+    border-color: #fff0b0;
+    box-shadow: 0 3px 0 #7a5410;
+}
+
+.ta-pill--blue {
+    color: #0d1a26;
+    background: linear-gradient(180deg, #9ad0ff, #3a8ad4);
+    border-color: #cfe8ff;
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+}
+
+/* ---------------------------------------------------------------- Reward rows */
+.ta-row {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 10px;
+    border-radius: 13px;
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(240, 192, 80, 0.24);
+}
+
+.ta-row + .ta-row {
+    margin-top: 8px;
+}
+
+.ta-row--ready {
+    background: linear-gradient(
+        90deg,
+        rgba(92, 184, 92, 0.16),
+        rgba(0, 0, 0, 0.35)
+    );
+    border-color: rgba(142, 240, 200, 0.5);
+}
+
+.ta-row--me {
+    background: linear-gradient(
+        90deg,
+        rgba(240, 192, 80, 0.22),
+        rgba(24, 17, 9, 0.9)
+    );
+    border-color: rgba(240, 192, 80, 0.7);
+}
+
+.ta-row-body {
+    flex: 1;
+    min-width: 0;
+}
+
+.ta-row-title {
+    font-family: "Cinzel", serif;
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ta-text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.ta-row-title--locked {
+    color: var(--ta-mute-dim);
+}
+
+.ta-row-meta {
+    font-size: 11.5px;
+    color: var(--ta-mute);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ---------------------------------------------------------------- Medallion
+ * Gold-rimmed square/round token with a dark inner face and a centred glyph.
+ * .ta-medallion is the rim; .ta-medallion-face is the inner disc.
+ */
+.ta-medallion {
+    width: 44px;
+    height: 44px;
+    flex: none;
+    box-sizing: border-box;
+    padding: 2.5px;
+    border-radius: 13px;
+    background: var(--ta-rim-gold);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.ta-medallion--round {
+    border-radius: 50%;
+}
+
+.ta-medallion--locked {
+    background: linear-gradient(180deg, #6a6252, #33301f);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+}
+
+.ta-medallion--silver {
+    background: linear-gradient(180deg, #dfe8f2, #6a7a8c);
+}
+
+.ta-medallion-face {
+    width: 100%;
+    height: 100%;
+    border-radius: 10px;
+    background: var(--ta-face-gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: var(--ta-gold-bright);
+}
+
+.ta-medallion--round .ta-medallion-face {
+    border-radius: 50%;
+}
+
+.ta-medallion-face--locked {
+    background: radial-gradient(circle at 40% 28%, #2c2618, #14110a);
+    color: #6a5a3a;
+}
+
+/* ---------------------------------------------------------------- Section divider */
+.ta-divider {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 14px 0 9px;
+}
+
+.ta-divider-label {
+    font-family: "Cinzel", serif;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 2.2px;
+    color: var(--ta-mute-dim);
+    white-space: nowrap;
+}
+
+.ta-divider-line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(90deg, rgba(240, 192, 80, 0.35), transparent);
+}
+
+/* ---------------------------------------------------------------- Progress bar */
+.ta-bar {
+    height: 9px;
+    border-radius: 5px;
+    background: rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(240, 192, 80, 0.3);
+    overflow: hidden;
+}
+
+.ta-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #c8952e, #ffe070);
+}
+
+.ta-bar--thin {
+    height: 5px;
+    border: none;
+}
+
+/* ---------------------------------------------------------------- Effect chips */
+.ta-chip {
+    font-size: 11px;
+    border-radius: 7px;
+    padding: 3px 6px;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+
+.ta-chip--good {
+    color: var(--ta-good);
+    background: rgba(92, 184, 92, 0.15);
+    border-color: rgba(142, 240, 200, 0.4);
+}
+
+.ta-chip--bad {
+    color: var(--ta-bad);
+    background: rgba(208, 64, 48, 0.15);
+    border-color: rgba(240, 168, 160, 0.4);
+}
+
+/* ---------------------------------------------------------------- Big CTA button */
+.ta-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 14px;
+    border-radius: 14px;
+    background: linear-gradient(180deg, #ffe897, #f0c050 55%, #b8842a);
+    border: 1.5px solid #fff0b0;
+    box-shadow: 0 5px 0 #7a5410;
+    font-family: "Cinzel", serif;
+    font-size: 15px;
+    font-weight: 800;
+    letter-spacing: 1.4px;
+    color: #241703;
+    cursor: pointer;
+    transition:
+        transform 0.12s,
+        box-shadow 0.12s;
+}
+
+.ta-cta:hover:not(:disabled) {
+    box-shadow:
+        0 5px 0 #7a5410,
+        0 0 20px rgba(240, 192, 80, 0.4);
+}
+
+.ta-cta:active:not(:disabled) {
+    transform: translateY(3px);
+    box-shadow: 0 2px 0 #7a5410;
+}
+
+.ta-cta:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+.ta-cta--dark {
+    background: linear-gradient(180deg, #4a3624, #241a10);
+    border-color: rgba(240, 192, 80, 0.5);
+    box-shadow: 0 4px 0 #120c06;
+    color: var(--ta-gold);
+}
+
+/* ---------------------------------------------------------------- Notification dot */
+.ta-dot {
+    width: 13px;
+    height: 13px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 36% 30%, #ff8a6a, #c0301c);
+    border: 2px solid #100b06;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}

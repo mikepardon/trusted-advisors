@@ -38,7 +38,7 @@ class MediaLibraryController extends Controller
 
         try {
             $file = $request->file('file');
-            $path = $file->store('media', 's3');
+            $path = $file->store('media', config('filesystems.media_disk'));
 
             if (!$path) {
                 return response()->json(['error' => 'Upload failed — check S3/Minio configuration'], 500);
@@ -81,7 +81,7 @@ class MediaLibraryController extends Controller
     public function destroy(MediaLibraryItem $mediaLibrary): JsonResponse
     {
         try {
-            Storage::disk('s3')->delete($mediaLibrary->path);
+            Storage::disk(config('filesystems.media_disk'))->delete($mediaLibrary->path);
         } catch (\Exception $e) {
             // ignore delete errors
         }

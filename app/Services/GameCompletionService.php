@@ -37,6 +37,8 @@ class GameCompletionService
             'xp_awards' => [],
             'xp_details' => [],
             'coin_awards' => [],
+            'bonus_chests' => [],
+            'season_pass_points' => [],
             'level_ups' => [],
             'new_unlocks' => [],
             'elo_changes' => [],
@@ -102,6 +104,19 @@ class GameCompletionService
             // Coins
             $coinResult = $this->awardCoins($user, $game, $players);
             $summary['coin_awards'][$user->id] = $coinResult;
+
+            // Bonus mystery chest — a variable reward for the dopamine hit
+            $summary['bonus_chests'][$user->id] = $this->rollBonusChest($user, $game);
+
+            // Season Pass points — earned in every non-custom game (single, pass-and-play,
+            // online), more for a win. League score is competitive, so it only counts online
+            // games; otherwise the ladder could be farmed offline against bots.
+            $passPoints = $this->isWinner($user, $game, $players) ? 150 : 100;
+            app(SeasonPassService::class)->addPoints($user, $passPoints);
+            if ($game->isOnline()) {
+                app(LeagueService::class)->addScore($user, $passPoints);
+            }
+            $summary['season_pass_points'][$user->id] = $passPoints;
 
             // Achievements
             $newAchievements = $this->checkAchievements($user, $game);
@@ -317,8 +332,8 @@ class GameCompletionService
     {
         $globalXpConfig = GameRule::getValue('xp_config', [
             'base_xp' => 50,
-            'coop_win_bonus' => 100,
-            'duel_win_bonus' => 150,
+            'coop_win_bonus' => 50,
+            'duel_win_bonus' => 75,
             'online_multiplier' => 1.5,
         ]);
 
@@ -420,6 +435,31 @@ class GameCompletionService
             'old_coins' => $oldCoins,
             'new_coins' => $user->coins,
         ];
+    }
+
+    /**
+     * Roll a variable "mystery chest" bonus. The rarity weighting is the point:
+     * most opens are small, but the rare/epic/legendary tail is what keeps
+     * players opening. Rolled server-side so it cannot be gamed.
+     *
+     * @return array{tier: string, coins: int}
+     */
+    private function rollBonusChest(User $user, Game $game): array
+    {
+        $roll = random_int(1, 100);
+
+        [$tier, $coins] = match (true) {
+            $roll <= 1 => ['legendary', random_int(150, 300)],
+            $roll <= 10 => ['epic', random_int(60, 120)],
+            $roll <= 35 => ['rare', random_int(25, 50)],
+            default => ['common', random_int(5, 20)],
+        };
+
+        $user->coins += $coins;
+        $user->save();
+        $user->recordCoinTransaction($coins, 'earn', 'bonus_chest', $game->id, 'Mystery chest reward');
+
+        return ['tier' => $tier, 'coins' => $coins];
     }
 
     private function isWinner(User $user, Game $game, $players): bool

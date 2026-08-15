@@ -20,7 +20,7 @@
             :class="[getBarClass(stat.key), barFlashClass[stat.key]]"
           ></div>
         </div>
-        <!-- Mobile: radial progress with number centered inside -->
+        <!-- Mobile: radial progress with the stat value centred inside -->
         <div class="radial-wrap">
           <svg class="radial-svg" viewBox="0 0 48 48">
             <circle class="radial-bg" cx="24" cy="24" r="20" />
@@ -28,11 +28,12 @@
               class="radial-fill"
               :class="[getBarClass(stat.key), barFlashClass[stat.key]]"
               cx="24" cy="24" r="20"
-              :style="{ strokeDashoffset: radialOffset(game[stat.key]) }"
+              :style="{ strokeDashoffset: radialOffset(game[stat.key]), '--stat-color': statColor(stat.key) }"
             />
           </svg>
-          <span class="radial-value" :class="[getValueClass(game[stat.key]), flashClass[stat.key]]"><AppIcon :type="stat.type" :value="stat.value" size="md" /></span>
+          <span class="radial-value" :class="flashClass[stat.key]" :style="{ color: statColor(stat.key) }">{{ tweenedValues[stat.key] }}</span>
         </div>
+        <span class="radial-label">{{ statLabel(stat.key) }}</span>
         <span class="stat-short">{{ stat.short }}</span>
       </div>
     </div>
@@ -46,7 +47,7 @@
         <span class="bonus-value" :class="game.score_modifier > 0 ? 'mod-positive' : 'mod-negative'">{{ game.score_modifier > 0 ? '+' : '' }}{{ game.score_modifier }}%</span>
       </div>
       <div class="live-score-indicator clickable-score" @click="showBreakdown = true">
-        <span class="score-label">Score</span>
+        <span class="score-label">Realm Score</span>
         <span class="score-value">{{ liveScore }}</span>
         <span class="score-rank" :class="'rank-' + liveRank.toLowerCase()">{{ liveRank }}</span>
       </div>
@@ -112,7 +113,6 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, reactive, ref, watch } from "vue";
-import AppIcon from "./AppIcon.vue";
 import { useIcons } from "../stores/icons";
 import "../styles/kingdom-styles.css";
 
@@ -424,6 +424,34 @@ function getValueClass(value: number): string {
   return "val-safe";
 }
 
+// Short thematic label shown under each radial ring (fits the compact ring and
+// matches the board mockup). The underlying stat keys are unchanged.
+function statLabel(statKey: string): string {
+  const labels: Record<string, string> = {
+    wealth: "Wealth",
+    influence: "People",
+    security: "Military",
+    religion: "Church",
+    food: "Food",
+    happiness: "Mood",
+  };
+  return labels[statKey] ?? statKey;
+}
+
+// Signature ring colour per stat (used as the radial's default arc colour;
+// card-effect previews still override it via the bar-preview-* classes).
+function statColor(statKey: string): string {
+  const colours: Record<string, string> = {
+    wealth: "#f0c050",
+    influence: "#b072e0",
+    security: "#4d9de0",
+    religion: "#cdd3dc",
+    food: "#5fad56",
+    happiness: "#e0685a",
+  };
+  return colours[statKey] ?? "#f0c050";
+}
+
 function radialOffset(value: number): number {
   const circumference = 2 * Math.PI * 20; // ~125.66
   const pct = Math.min(value, 20) / 20;
@@ -586,8 +614,23 @@ function extractSolidColor(value: string | undefined, fallback: string): string 
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  font-weight: 700;
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
   font-size: 1rem;
+  line-height: 1;
+}
+
+/* Label under each radial (mobile only; desktop uses the bar + name row) */
+.radial-label {
+  display: none;
+  font-family: 'Cinzel', serif;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: #b09a6c;
+  text-align: center;
+  margin-top: 4px;
   line-height: 1;
 }
 
@@ -605,7 +648,7 @@ function extractSolidColor(value: string | undefined, fallback: string): string 
   transition: stroke-dashoffset 0.5s ease;
 }
 
-.radial-fill.bar-default { stroke: var(--ks-bar-caution-stroke, var(--ks-bar-caution, #d4a843)); transition: stroke 0.25s ease; }
+.radial-fill.bar-default { stroke: var(--stat-color, var(--ks-bar-caution-stroke, var(--ks-bar-caution, #d4a843))); transition: stroke 0.25s ease; }
 .radial-fill.bar-preview-positive { stroke: #4caf50; transition: stroke 0.25s ease; }
 .radial-fill.bar-preview-negative { stroke: #e74c3c; transition: stroke 0.25s ease; }
 .radial-fill.bar-preview-mixed { stroke: #e67e22; transition: stroke 0.25s ease; }
@@ -618,47 +661,55 @@ function extractSolidColor(value: string | undefined, fallback: string): string 
   align-items: center;
   justify-content: center;
   gap: 12px;
-  margin-top: 8px;
+  margin-top: 12px;
   flex-wrap: wrap;
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid rgba(240, 192, 80, 0.28);
+  border-radius: 18px;
+  padding: 11px 16px;
 }
 
 .live-score-indicator {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  background: rgba(39, 174, 96, 0.1);
-  border: 1px solid rgba(39, 174, 96, 0.3);
-  border-radius: 6px;
+  gap: 10px;
+  padding: 0;
+  background: none;
+  border: none;
   font-size: 0.85rem;
 }
 
 .score-label {
-  color: var(--text-secondary);
+  color: #c9a24a;
   font-family: 'Cinzel', serif;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 
 .score-value {
-  color: var(--text-bright);
-  font-weight: 700;
-  font-size: 1rem;
+  color: var(--accent-gold, #f0c050);
+  font-family: 'Cinzel', serif;
+  font-weight: 800;
+  font-size: 1.15rem;
 }
 
 .score-rank {
   font-family: 'Cinzel', serif;
-  font-size: 0.7rem;
-  padding: 1px 6px;
-  border-radius: 3px;
+  font-size: 0.68rem;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 1px solid currentColor;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
-.rank-legendary { color: #f0c040; background: rgba(240, 192, 64, 0.15); }
-.rank-excellent { color: #4caf50; background: rgba(76, 175, 80, 0.15); }
-.rank-good { color: #60b8e0; background: rgba(96, 184, 224, 0.15); }
-.rank-adequate { color: var(--text-secondary); background: rgba(160, 144, 128, 0.15); }
-.rank-poor { color: #e57373; background: rgba(229, 115, 115, 0.15); }
+.rank-legendary { color: #f0c040; }
+.rank-excellent { color: #6cc070; }
+.rank-good { color: #60b8e0; }
+.rank-adequate { color: #b7a486; }
+.rank-poor { color: #e57373; }
 
 .bonus-score-indicator {
   display: flex;
@@ -697,8 +748,7 @@ function extractSolidColor(value: string | undefined, fallback: string): string 
 }
 
 .clickable-score:hover {
-  background: rgba(39, 174, 96, 0.2);
-  border-color: rgba(39, 174, 96, 0.5);
+  opacity: 0.85;
 }
 
 /* Score Breakdown Modal */
@@ -800,7 +850,11 @@ function extractSolidColor(value: string | undefined, fallback: string): string 
 
   .stats-grid {
     grid-template-columns: repeat(6, 1fr);
-    gap: 4px;
+    gap: 2px;
+    background: rgba(0, 0, 0, 0.24);
+    border: 1px solid rgba(240, 192, 80, 0.24);
+    border-radius: 18px;
+    padding: 12px 6px 8px;
   }
 
   .stat-item {
@@ -840,10 +894,21 @@ function extractSolidColor(value: string | undefined, fallback: string): string 
 
   .radial-wrap {
     display: block;
+    width: 46px;
+    height: 46px;
+  }
+
+  .radial-svg {
+    width: 46px;
+    height: 46px;
   }
 
   .radial-value {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
+  }
+
+  .radial-label {
+    display: block;
   }
 }
 </style>

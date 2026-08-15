@@ -4,6 +4,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Dev auto-login (local only)
+    |--------------------------------------------------------------------------
+    |
+    | When true AND the app is running locally, the DevAutoLogin middleware
+    | authenticates as user 1 so the OAuth flow can be skipped in development.
+    | It never takes effect outside the local environment.
+    |
+    */
+
+    'dev_auto_login' => env('IS_LOGGED_IN', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Authentication Defaults
     |--------------------------------------------------------------------------
     |

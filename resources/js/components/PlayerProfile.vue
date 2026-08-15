@@ -103,6 +103,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import axios, { isAxiosError } from "axios";
+import { xpForLevel } from "../xp";
 
 interface RecentAchievement {
   id: number;
@@ -175,8 +176,8 @@ const xpPercent = computed(() => {
   }
   const level = profile.value.level || 1;
   const xp = profile.value.xp || 0;
-  const currentLevelXp = (100 * (level - 1) * level) / 2;
-  const nextLevelXp = profile.value.xp_for_next_level || (100 * level * (level + 1)) / 2;
+  const currentLevelXp = xpForLevel(level);
+  const nextLevelXp = profile.value.xp_for_next_level || xpForLevel(level + 1);
   const range = nextLevelXp - currentLevelXp;
   if (range <= 0) {
     return 0;
