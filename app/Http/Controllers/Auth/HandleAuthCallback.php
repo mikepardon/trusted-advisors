@@ -82,14 +82,7 @@ final class HandleAuthCallback extends Controller
         Auth::login($user);
         $request->session()->regenerate();
 
-        $streakXp = DB::transaction(fn (): int => $this->recordLogin($user, $request));
-
-        if ($streakXp > 0) {
-            $request->session()->put('pending_streak_notification', [
-                'streak' => $user->login_streak,
-                'xp' => $streakXp,
-            ]);
-        }
+        DB::transaction(fn () => $this->recordLogin($user, $request));
 
         if (! $user->username_chosen) {
             return redirect('/choose-username');
@@ -153,11 +146,11 @@ final class HandleAuthCallback extends Controller
     }
 
     /**
-     * Apply the daily login streak and record the login. Returns the streak XP awarded.
+     * Track the daily login streak (for the header flame) and record the login.
+     * Login streaks no longer award XP.
      */
-    private function recordLogin(User $user, Request $request): int
+    private function recordLogin(User $user, Request $request): void
     {
-        $streakXp = 0;
         $now = CarbonImmutable::now();
         $lastLogin = $user->last_login_at;
 
@@ -165,9 +158,6 @@ final class HandleAuthCallback extends Controller
             $user->login_streak = 1;
         } elseif ($lastLogin->lt($now->startOfDay())) {
             $user->login_streak++;
-            $streakXp = $user->login_streak * 10;
-            $user->xp += $streakXp;
-            $user->level = User::calculateLevel($user->xp);
         }
 
         if ($user->login_streak > $user->max_login_streak) {
@@ -182,7 +172,5 @@ final class HandleAuthCallback extends Controller
             'user_agent' => $request->userAgent(),
             'logged_in_at' => $now,
         ]);
-
-        return $streakXp;
     }
 }

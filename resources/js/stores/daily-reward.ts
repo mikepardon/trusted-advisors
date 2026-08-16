@@ -1,12 +1,17 @@
 import { reactive } from "vue";
 import axios from "axios";
 
+export interface DailyRewardEntry {
+  type: "coins" | "xp";
+  amount: number;
+}
+
 export interface DailyRewardStatus {
   available: boolean;
   streak: number;
   day: number;
-  ladder: number[];
-  reward: number;
+  ladder: DailyRewardEntry[];
+  reward: DailyRewardEntry;
 }
 
 interface DailyRewardState {

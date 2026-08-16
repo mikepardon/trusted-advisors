@@ -25,8 +25,9 @@
         <div class="reward-title">{{ current.title }}</div>
 
         <div class="reward-amount">
-          <span class="amount-coin">&#9673;</span>
+          <span class="amount-coin">{{ current.kind === "xp" ? "★" : "◉" }}</span>
           <span class="amount-num">{{ displayAmount }}</span>
+          <span v-if="current.kind === 'xp'" class="amount-unit">XP</span>
         </div>
 
         <div v-if="tierLabel" class="reward-tier">{{ tierLabel }}</div>
@@ -276,6 +277,17 @@ watch(
   text-shadow:
     0 0 18px var(--glow),
     0 3px 6px rgba(0, 0, 0, 0.6);
+}
+
+.amount-unit {
+  font-family: "Cinzel", serif;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--glow);
+  align-self: flex-end;
+  margin-bottom: 8px;
+  text-shadow: 0 0 10px var(--glow);
 }
 
 .reward-tier {

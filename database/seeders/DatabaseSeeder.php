@@ -16,8 +16,17 @@ class DatabaseSeeder extends Seeder
             CardSeeder::class,
             EventSeeder::class,
             ItemSeeder::class,
+            CurseSeeder::class,
             CosmeticSeeder::class,
+            KingdomStyleSeeder::class,
+            CharacterLevelOptionSeeder::class,
+            AchievementSeeder::class,
+            AppIconSeeder::class,
             SeasonPassSeeder::class,
+            // Placeholder art references the content above, so it runs after it.
+            PlaceholderImageSeeder::class,
+            // Bot opponents — required for duel matchmaking's bot fallback.
+            BotAccountSeeder::class,
         ]);
     }
 }

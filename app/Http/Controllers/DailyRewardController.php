@@ -12,13 +12,20 @@ use Illuminate\Support\Facades\DB;
 class DailyRewardController extends Controller
 {
     /**
-     * Back-weighted 7-day coin ladder: modest early days that ramp to the Day 7
-     * payoff, so the reward is mostly in sustaining the streak. The cycle then
-     * repeats. Streak is driven by daily claim cadence, not re-authentication.
+     * Cycling 7-day reward ladder: coins on days 1–3, XP on days 4–6, a coin payoff on
+     * day 7. Streak is driven by daily claim cadence, not re-authentication.
      *
-     * @var list<int>
+     * @var list<array{type: string, amount: int}>
      */
-    private const LADDER = [10, 10, 15, 20, 30, 40, 50];
+    private const LADDER = [
+        ['type' => 'coins', 'amount' => 10],
+        ['type' => 'coins', 'amount' => 15],
+        ['type' => 'coins', 'amount' => 20],
+        ['type' => 'xp', 'amount' => 30],
+        ['type' => 'xp', 'amount' => 40],
+        ['type' => 'xp', 'amount' => 50],
+        ['type' => 'coins', 'amount' => 100],
+    ];
 
     public function status(Request $request): JsonResponse
     {
@@ -40,9 +47,9 @@ class DailyRewardController extends Controller
     {
         $userId = $request->user()->id;
 
-        // Lock the user row and re-check the claim inside the transaction:
-        // without this, two concurrent requests both pass an outside-the-lock
-        // "already claimed today" check and each grant coins, farming the reward.
+        // Lock the user row and re-check the claim inside the transaction: without this,
+        // two concurrent requests both pass an outside-the-lock "already claimed today"
+        // check and each grant the reward, farming it.
         $result = DB::transaction(function () use ($userId): array {
             $user = User::query()->whereKey($userId)->lockForUpdate()->first();
 
@@ -52,20 +59,32 @@ class DailyRewardController extends Controller
 
             $streak = $this->streakForToday($user);
             $day = (($streak - 1) % 7) + 1;
-            $coins = self::LADDER[$day - 1];
+            $reward = self::LADDER[$day - 1];
 
-            $user->coins += $coins;
+            if ($reward['type'] === 'xp') {
+                $user->xp += $reward['amount'];
+                $user->level = User::calculateLevel($user->xp);
+            } else {
+                $user->coins += $reward['amount'];
+            }
+
             $user->daily_reward_streak = $streak;
             $user->daily_reward_claimed_at = now();
             $user->save();
-            $user->recordCoinTransaction($coins, 'earn', 'daily_reward', null, "Daily reward — day {$day}");
+
+            if ($reward['type'] === 'coins') {
+                $user->recordCoinTransaction($reward['amount'], 'earn', 'daily_reward', null, "Daily reward — day {$day}");
+            }
 
             return [
                 'claimed' => false,
-                'coins' => $coins,
+                'type' => $reward['type'],
+                'amount' => $reward['amount'],
                 'streak' => $streak,
                 'day' => $day,
                 'new_coins' => $user->coins,
+                'new_xp' => $user->xp,
+                'new_level' => $user->level,
             ];
         });
 
@@ -74,10 +93,13 @@ class DailyRewardController extends Controller
         }
 
         return response()->json([
-            'coins' => $result['coins'],
+            'type' => $result['type'],
+            'amount' => $result['amount'],
             'streak' => $result['streak'],
             'day' => $result['day'],
             'new_coins' => $result['new_coins'],
+            'new_xp' => $result['new_xp'],
+            'new_level' => $result['new_level'],
         ]);
     }
 

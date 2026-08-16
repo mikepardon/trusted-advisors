@@ -1,10 +1,12 @@
 import { reactive } from "vue";
 
 export type RewardTier = "common" | "rare" | "epic" | "legendary";
+export type RewardKind = "coins" | "xp";
 
 export interface Reward {
   id: number;
   amount: number;
+  kind: RewardKind;
   tier: RewardTier;
   title: string;
   icon: string;
@@ -40,6 +42,7 @@ function tierForAmount(amount: number): RewardTier {
 
 function reveal(reward: {
   amount: number;
+  kind?: RewardKind;
   tier?: RewardTier;
   title?: string;
   icon?: string;
@@ -47,6 +50,7 @@ function reveal(reward: {
   const item: Reward = {
     id: sequence.next++,
     amount: reward.amount,
+    kind: reward.kind ?? "coins",
     tier: reward.tier ?? tierForAmount(reward.amount),
     title: reward.title ?? "Reward",
     icon: reward.icon ?? "🪙",

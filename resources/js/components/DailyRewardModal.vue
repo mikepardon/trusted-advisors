@@ -11,7 +11,7 @@
 
             <div class="dr-ladder">
                 <div
-                    v-for="(coins, index) in ladder"
+                    v-for="(entry, index) in ladder"
                     :key="index"
                     class="dr-day"
                     :class="{
@@ -23,7 +23,13 @@
                     }"
                 >
                     <span class="dr-day-label">Day {{ index + 1 }}</span>
-                    <span class="dr-day-coins">&#9673; {{ coins }}</span>
+                    <span
+                        class="dr-day-coins"
+                        :class="{ 'dr-day-xp': entry.type === 'xp' }"
+                    >
+                        {{ entry.type === "xp" ? "★" : "◉" }} {{ entry.amount
+                        }}{{ entry.type === "xp" ? " XP" : "" }}
+                    </span>
                     <span
                         v-if="
                             index + 1 < day || (!available && index + 1 === day)
@@ -40,7 +46,11 @@
                 :disabled="claiming"
                 @click="claim"
             >
-                {{ claiming ? "Claiming…" : `Claim ${reward} coins!` }}
+                {{
+                    claiming
+                        ? "Claiming…"
+                        : `Claim ${reward.amount} ${reward.type === "xp" ? "XP" : "coins"}!`
+                }}
             </button>
             <button v-else type="button" class="dr-claim dr-claimed" disabled>
                 Claimed today &middot; back tomorrow
@@ -53,21 +63,28 @@
 import { ref } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useAuth } from "../stores/auth";
-import { playSound } from "../sounds";
-import { haptic } from "../haptics";
+import type { DailyRewardEntry } from "../stores/daily-reward";
 
 const { day, reward, available } = defineProps<{
     day: number;
     streak: number;
-    ladder: number[];
-    reward: number;
+    ladder: DailyRewardEntry[];
+    reward: DailyRewardEntry;
     available: boolean;
 }>();
 
-const emit = defineEmits<{ close: []; claimed: [coins: number] }>();
+const emit = defineEmits<{ close: []; claimed: [reward: DailyRewardEntry] }>();
 
 const auth = useAuth();
 const claiming = ref(false);
+
+interface ClaimResponse {
+    type: "coins" | "xp";
+    amount: number;
+    new_coins: number;
+    new_xp: number;
+    new_level: number;
+}
 
 function close(): void {
     emit("close");
@@ -80,13 +97,17 @@ async function claim(): Promise<void> {
     claiming.value = true;
 
     try {
-        const response = await axios.post<{ coins: number; new_coins: number }>(
-            "/api/daily-reward/claim",
-        );
-        playSound("win");
-        haptic("success");
-        auth.updateUserStats({ coins: response.data.new_coins });
-        emit("claimed", response.data.coins);
+        const response = await axios.post<ClaimResponse>("/api/daily-reward/claim");
+        const data = response.data;
+
+        // The reveal overlay (triggered by the parent) plays its own sound + haptics.
+        if (data.type === "xp") {
+            auth.updateUserStats({ xp: data.new_xp, level: data.new_level });
+        } else {
+            auth.updateUserStats({ coins: data.new_coins });
+        }
+
+        emit("claimed", { type: data.type, amount: data.amount });
         close();
     } catch (error) {
         // Already claimed (e.g. a race across two tabs) — just close quietly.
@@ -217,6 +238,12 @@ async function claim(): Promise<void> {
     font-size: 0.95rem;
     font-weight: 700;
     color: var(--accent-gold);
+    white-space: nowrap;
+}
+
+/* XP reward days read cyan to set them apart from the gold coin days. */
+.dr-day-xp {
+    color: #7fd4ff;
 }
 
 .dr-check {

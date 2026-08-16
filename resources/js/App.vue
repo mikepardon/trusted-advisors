@@ -298,6 +298,7 @@ import { useAuth } from "./stores/auth";
 import type { StreakNotification } from "./stores/auth";
 import { useToast } from "./stores/toast";
 import { useDailyReward } from "./stores/daily-reward";
+import type { DailyRewardEntry } from "./stores/daily-reward";
 import { useLeagueResult } from "./stores/league-result";
 import { useReward } from "./stores/reward";
 import { playSound } from "./sounds";
@@ -546,10 +547,15 @@ async function fetchDailyReward(): Promise<void> {
     await dailyReward.fetchStatus();
 }
 
-function onDailyRewardClaimed(coins: number): void {
+function onDailyRewardClaimed(claimed: DailyRewardEntry): void {
     dailyReward.markClaimed(dailyReward.state.status?.streak ?? 0);
     dailyReward.closeModal();
-    reward.reveal({ amount: coins, title: "Daily Reward", icon: "🎁" });
+    reward.reveal({
+        amount: claimed.amount,
+        kind: claimed.type,
+        title: "Daily Reward",
+        icon: claimed.type === "xp" ? "⭐" : "🎁",
+    });
 }
 
 async function fetchNotifCount(): Promise<void> {

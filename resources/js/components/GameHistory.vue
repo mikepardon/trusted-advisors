@@ -1,6 +1,11 @@
 <template>
   <div class="history-page">
-    <h2 class="section-title">Campaign History</h2>
+    <div class="history-header">
+      <button class="ta-back" aria-label="Back" @click="$router.push('/')">
+        &lsaquo;
+      </button>
+      <h2 class="section-title">Campaign History</h2>
+    </div>
 
     <HintBubble hint-id="campaigns-replay">
       Tap any completed game to see the results, or hit <strong>Replay</strong> to watch a round-by-round recap.
@@ -176,12 +181,25 @@ onMounted(async () => {
   margin: 0 auto;
 }
 
+.history-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
 .section-title {
   font-family: 'Cinzel', serif;
   color: var(--accent-gold);
   font-size: 1.3rem;
   margin-bottom: 16px;
   text-align: center;
+}
+
+.history-header .section-title {
+  flex: 1;
+  margin-bottom: 0;
+  margin-right: 36px;
 }
 
 .sub-title {

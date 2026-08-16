@@ -12,18 +12,14 @@ class DailyRewardTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_first_claim_awards_day_one_and_starts_a_streak(): void
+    public function test_first_claim_awards_day_one_coins_and_starts_a_streak(): void
     {
         $user = User::factory()->create(['coins' => 100]);
 
-        $response = $this->actingAs($user, 'web')->postJson('/api/daily-reward/claim');
+        $this->actingAs($user, 'web')->postJson('/api/daily-reward/claim')
+            ->assertOk()
+            ->assertJson(['type' => 'coins', 'amount' => 10, 'day' => 1, 'streak' => 1, 'new_coins' => 110]);
 
-        $response->assertOk()->assertJson([
-            'coins' => 10,
-            'day' => 1,
-            'streak' => 1,
-            'new_coins' => 110,
-        ]);
         $this->assertSame(110, $user->fresh()->coins);
         $this->assertSame(1, $user->fresh()->daily_reward_streak);
     }
@@ -36,17 +32,22 @@ class DailyRewardTest extends TestCase
         $this->actingAs($user, 'web')->postJson('/api/daily-reward/claim')->assertStatus(422);
     }
 
-    public function test_a_consecutive_day_continues_the_streak(): void
+    public function test_a_mid_week_day_awards_xp_and_leaves_coins_untouched(): void
     {
+        // Streak 3 + a claim yesterday → day 4, which pays XP on the new ladder.
         $user = User::factory()->create([
+            'xp' => 0,
+            'coins' => 100,
             'daily_reward_streak' => 3,
             'daily_reward_claimed_at' => now()->subDay(),
         ]);
 
-        // Day 4 on the 10/10/15/20/30/40/50 ladder pays 20.
         $this->actingAs($user, 'web')->postJson('/api/daily-reward/claim')
             ->assertOk()
-            ->assertJson(['day' => 4, 'streak' => 4, 'coins' => 20]);
+            ->assertJson(['type' => 'xp', 'amount' => 30, 'day' => 4, 'streak' => 4]);
+
+        $this->assertSame(30, $user->fresh()->xp);
+        $this->assertSame(100, $user->fresh()->coins);
     }
 
     public function test_a_lapsed_streak_resets_to_day_one(): void
@@ -58,6 +59,6 @@ class DailyRewardTest extends TestCase
 
         $this->actingAs($user, 'web')->postJson('/api/daily-reward/claim')
             ->assertOk()
-            ->assertJson(['day' => 1, 'streak' => 1, 'coins' => 10]);
+            ->assertJson(['type' => 'coins', 'amount' => 10, 'day' => 1, 'streak' => 1]);
     }
 }

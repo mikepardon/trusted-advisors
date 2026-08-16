@@ -12,7 +12,8 @@
         <div class="ta-row-body">
             <div class="ta-row-title">Daily Tribute &middot; Day {{ day }}</div>
             <div class="ta-row-meta">
-                +{{ reward }} gold &middot; &#128293; {{ streak }}-day streak
+                +{{ rewardAmount }} {{ rewardUnit }} &middot; &#128293;
+                {{ streak }}-day streak
             </div>
         </div>
         <span class="ta-pill ta-pill--claim">CLAIM</span>
@@ -26,7 +27,10 @@ import { useDailyReward } from "../stores/daily-reward";
 const dailyReward = useDailyReward();
 
 const claimable = computed(() => dailyReward.state.status?.available === true);
-const reward = computed(() => dailyReward.state.status?.reward ?? 0);
+const rewardAmount = computed(() => dailyReward.state.status?.reward?.amount ?? 0);
+const rewardUnit = computed(() =>
+    dailyReward.state.status?.reward?.type === "xp" ? "XP" : "gold",
+);
 const day = computed(() => dailyReward.state.status?.day ?? 1);
 const streak = computed(() => dailyReward.state.status?.streak ?? 0);
 
