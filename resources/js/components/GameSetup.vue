@@ -511,51 +511,6 @@
                                 </div>
                             </div>
 
-                            <!-- Speed mode selector for online duel -->
-                            <div
-                                v-if="gameMode === 'online'"
-                                class="speed-select"
-                            >
-                                <label>Game Speed:</label>
-                                <div class="speed-cards">
-                                    <div
-                                        class="speed-card"
-                                        :class="{
-                                            selected: speedMode === 'speed',
-                                        }"
-                                        @click="
-                                            playSound('clickToggle');
-                                            speedMode = 'speed';
-                                        "
-                                    >
-                                        <span class="speed-icon">&#9889;</span>
-                                        <span class="speed-title"
-                                            >Speed Game</span
-                                        >
-                                        <span class="speed-desc"
-                                            >45 sec per turn</span
-                                        >
-                                    </div>
-                                    <div
-                                        class="speed-card"
-                                        :class="{
-                                            selected: speedMode === 'daily',
-                                        }"
-                                        @click="
-                                            playSound('clickToggle');
-                                            speedMode = 'daily';
-                                        "
-                                    >
-                                        <span class="speed-icon">&#9203;</span>
-                                        <span class="speed-title"
-                                            >Daily Turns</span
-                                        >
-                                        <span class="speed-desc"
-                                            >24 hours per turn</span
-                                        >
-                                    </div>
-                                </div>
-                            </div>
                         </template>
 
                         <!-- Online: friends picker (cooperative only) -->
@@ -850,9 +805,8 @@
                 <div v-else-if="step === 'matchmaking'" key="matchmaking">
                     <MatchmakingQueue
                         :total-rounds="totalRounds"
-                        :speed-mode="speedMode"
                         @matched="onMatchFound"
-                        @cancelled="step = 'settings'"
+                        @cancelled="step = 'mode'"
                     />
                 </div>
 
@@ -1390,7 +1344,6 @@ const homeStats = reactive({
 });
 const notifCount = ref(0);
 const showMobileMenu = ref(false);
-const speedMode = ref("speed");
 // Custom game
 const isCustomGame = ref(false);
 const customStartingStats = ref(8);
@@ -1641,11 +1594,12 @@ function inviteErrorMessage(error: unknown): string | undefined {
 
 function selectMode(): void {
     if (gameMode.value === "online") {
-        // Online goes straight to duel
+        // Online is always a duel — straight to the find-opponent screen, which owns
+        // turn-length selection and the search itself.
         numberPlayers.value = 2;
         gameType.value = "duel";
         totalRounds.value = 24;
-        step.value = "settings";
+        step.value = "matchmaking";
         return;
     }
     numberPlayers.value = gameMode.value === "single" ? 1 : 2;
@@ -2544,74 +2498,6 @@ async function startGame(): Promise<void> {
     min-width: 80px;
     padding: 8px 16px;
     font-size: 1rem;
-}
-
-/* Speed mode selector */
-.speed-select {
-    text-align: center;
-    margin-top: 20px;
-    margin-bottom: 20px;
-}
-
-.speed-select label {
-    display: block;
-    font-family: "Cinzel", serif;
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 2px;
-    margin-bottom: 10px;
-}
-
-.speed-cards {
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-}
-
-.speed-card {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 4px;
-    padding: 14px 20px;
-    border: 2px solid rgba(138, 106, 46, 0.3);
-    border-radius: 10px;
-    background: rgba(0, 0, 0, 0.2);
-    cursor: pointer;
-    transition: all 0.2s;
-    min-width: 120px;
-}
-
-.speed-card:hover {
-    border-color: var(--accent-gold);
-    background: rgba(212, 168, 67, 0.08);
-}
-
-.speed-card.selected {
-    border-color: var(--accent-gold);
-    background: linear-gradient(
-        180deg,
-        rgba(184, 148, 46, 0.3),
-        rgba(138, 106, 20, 0.2)
-    );
-    box-shadow: 0 0 12px rgba(212, 168, 67, 0.25);
-}
-
-.speed-icon {
-    font-size: 1.6rem;
-}
-
-.speed-title {
-    font-family: "Cinzel", serif;
-    color: var(--accent-gold);
-    font-size: 0.9rem;
-    font-weight: 700;
-}
-
-.speed-desc {
-    color: var(--text-secondary);
-    font-size: 0.8rem;
 }
 
 /* Friends picker */

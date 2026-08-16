@@ -24,6 +24,7 @@ use App\Models\GamePlayerKingdom;
 use App\Models\UserNotification;
 use App\Events\UserNotificationReceived;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class GameCompletionService
 {
@@ -47,6 +48,27 @@ class GameCompletionService
             'weekly_challenge_completed' => null,
             'character_xp_awards' => [],
         ];
+
+        // Idempotency: award a game's rewards exactly once. Completion can fire more than
+        // once for the same game (both players resolving the final round, a bot turn plus
+        // the human, or a retried request/job after a broadcast failure). Claim the game
+        // under a row lock; if it was already claimed, return the empty summary and stop.
+        $claimed = DB::transaction(function () use ($game): bool {
+            $locked = Game::query()->whereKey($game->id)->lockForUpdate()->first();
+
+            if ($locked === null || $locked->rewards_processed_at !== null) {
+                return false;
+            }
+
+            $locked->rewards_processed_at = now();
+            $locked->save();
+
+            return true;
+        });
+
+        if (! $claimed) {
+            return $summary;
+        }
 
         // Custom games do not award XP, coins, ELO, achievements, or challenges
         if ($game->is_custom) {

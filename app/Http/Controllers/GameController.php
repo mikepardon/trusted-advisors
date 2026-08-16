@@ -44,6 +44,7 @@ use App\Services\OneSignalService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 
 class GameController extends Controller
@@ -1033,7 +1034,7 @@ class GameController extends Controller
                 $allAssigned = $this->allPlayersAssigned($game, $event);
                 $assigningPlayer = GamePlayer::find($positiveHand->game_player_id);
 
-                broadcast(new PlayerAssignedCards(
+                $this->broadcastSafely(new PlayerAssignedCards(
                     $game->id,
                     $assigningPlayer->player_number,
                     $allAssigned,
@@ -1043,7 +1044,7 @@ class GameController extends Controller
                 if ($allAssigned) {
                     $resolveResponse = $this->resolveRound($game);
                     $resolveData = json_decode($resolveResponse->getContent(), true);
-                    broadcast(new RoundResolved($game->id, $resolveData));
+                    $this->broadcastSafely(new RoundResolved($game->id, $resolveData));
 
                     return response()->json([
                         'assigned' => true,
@@ -1834,11 +1835,25 @@ class GameController extends Controller
 
         if ($game->isOnline()) {
             $showData = json_decode($showResponse->getContent(), true);
-            broadcast(new NextRoundStarted($game->id, $showData));
+            $this->broadcastSafely(new NextRoundStarted($game->id, $showData));
             $this->notifyTurn($game, 'Round ' . $game->current_round . ' has started — pick your cards!');
         }
 
         return $showResponse;
+    }
+
+    /**
+     * Broadcast an event without letting a websocket or oversized-payload failure abort
+     * the request or a bot job. Game state is always persisted before we broadcast, and
+     * clients recover via refetch, so a dropped broadcast is non-fatal.
+     */
+    private function broadcastSafely(object $event): void
+    {
+        try {
+            broadcast($event);
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function nextRoundDuel(Game $game): JsonResponse
@@ -1864,7 +1879,9 @@ class GameController extends Controller
                     'completion' => $completionSummary,
                 ];
                 if ($game->isOnline()) {
-                    broadcast(new DuelGameOver($game->id, $gameOverData));
+                    // Drop the heavy full-model keys from the broadcast — the client only
+                    // reads `completion`/`timed_out_player_number` and refetches the rest.
+                    $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
                 }
                 return response()->json($gameOverData);
             }
@@ -1885,7 +1902,9 @@ class GameController extends Controller
                     'completion' => $completionSummary,
                 ];
                 if ($game->isOnline()) {
-                    broadcast(new DuelGameOver($game->id, $gameOverData));
+                    // Drop the heavy full-model keys from the broadcast — the client only
+                    // reads `completion`/`timed_out_player_number` and refetches the rest.
+                    $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
                 }
                 return response()->json($gameOverData);
             }
@@ -1916,7 +1935,9 @@ class GameController extends Controller
                 'completion' => $completionSummary,
             ];
             if ($game->isOnline()) {
-                broadcast(new DuelGameOver($game->id, $gameOverData));
+                // Drop the heavy full-model keys from the broadcast — the client only
+                // reads `completion`/`timed_out_player_number` and refetches the rest.
+                $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
             }
             return response()->json($gameOverData);
         }
@@ -1945,7 +1966,7 @@ class GameController extends Controller
 
         if ($game->isOnline()) {
             $showData = json_decode($showResponse->getContent(), true);
-            broadcast(new NextRoundStarted($game->id, $showData));
+            $this->broadcastSafely(new NextRoundStarted($game->id, $showData));
             $this->notifyPlayer($game, 1, 'Round ' . $game->current_round . ' — choose your card!');
             $this->notifyPlayer($game, 2, 'Round ' . $game->current_round . ' — choose your card!');
         }
@@ -2200,7 +2221,7 @@ class GameController extends Controller
         $p2Cards = $updatedHands->where('game_player_id', $p2->id)->values()->map(fn ($h) => ['hand_id' => $h->id, 'card' => $h->card]);
 
         if ($game->isOnline()) {
-            broadcast(new DuelChoiceMade(
+            $this->broadcastSafely(new DuelChoiceMade(
                 $game->id,
                 $p1Cards->toArray(),
                 $p2Cards->toArray(),
@@ -2744,7 +2765,7 @@ class GameController extends Controller
 
         if ($game->isOnline()) {
             $freshGame = $game->fresh();
-            broadcast(new DuelRollComplete(
+            $this->broadcastSafely(new DuelRollComplete(
                 $game->id,
                 $rollingPlayer->player_number,
                 $rollData,
@@ -4260,7 +4281,7 @@ class GameController extends Controller
             'completion' => $completionSummary,
         ];
 
-        broadcast(new DuelGameOver($game->id, $gameOverData));
+        $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
 
         return response()->json($gameOverData);
     }

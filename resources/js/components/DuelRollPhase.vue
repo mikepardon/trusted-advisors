@@ -437,6 +437,9 @@ watch(
     });
   },
 );
+
+// DuelBoard triggers the roll from its own button via this ref.
+defineExpose({ startRolling });
 </script>
 
 <style scoped>

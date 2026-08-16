@@ -128,17 +128,56 @@
       </template>
     </div>
 
-    <!-- PHASE 3: All selected, starting -->
-    <div v-else key="starting" class="card-panel lobby-panel">
-      <h2 class="section-title">All Advisors Gathered!</h2>
-      <p class="lobby-subtitle">The campaign is about to begin...</p>
-      <div class="selected-advisors">
-        <div v-for="p in players" :key="p.player_number" class="selected-row">
-          <span class="selected-player">{{ p.user?.name }}</span>
-          <span class="selected-char">{{ p.character?.name }}</span>
+    <!-- PHASE 3: The Council — both seats filled, ready to begin -->
+    <div v-else key="council" class="card-panel lobby-panel council">
+      <h2 class="section-title">The Council</h2>
+      <p class="lobby-subtitle">Both seats filled &mdash; the reign is about to begin</p>
+
+      <div class="council-seats">
+        <div
+          v-for="seat in councilSeats"
+          :key="seat.number"
+          class="council-seat"
+          :class="seat.isPlayerOne ? 'seat-p1' : 'seat-p2'"
+        >
+          <div class="seat-portrait" :style="{ backgroundImage: `url(${seat.image})` }"></div>
+          <div class="seat-body">
+            <div class="seat-role">Player {{ seat.number }}</div>
+            <div class="seat-name">{{ seat.name }}</div>
+            <div v-if="seat.wild" class="seat-meta">{{ seat.wild }}</div>
+          </div>
+          <span class="seat-ready">Ready</span>
         </div>
       </div>
-      <div class="starting-spinner">Preparing the realm...</div>
+
+      <div class="council-first-month">
+        <div class="fm-head">
+          <span class="fm-label">First Month</span>
+          <span class="fm-line"></span>
+          <span class="fm-speed">{{ speedLabel }}</span>
+        </div>
+        <div class="fm-dials">
+          <div v-for="stat in firstMonthStats" :key="stat.label" class="fm-dial">
+            <div class="fm-ring" :style="{ borderColor: stat.color }">
+              <span class="fm-val" :style="{ color: stat.color }">{{ stat.value }}</span>
+            </div>
+            <span class="fm-dial-label">{{ stat.label }}</span>
+          </div>
+        </div>
+        <p class="fm-note">Both realms open on the same figures. Every month after this one, they diverge.</p>
+      </div>
+
+      <div class="council-rules">
+        <div v-for="rule in councilRules" :key="rule.text" class="rule-row">
+          <span class="rule-glyph">{{ rule.glyph }}</span>
+          <span class="rule-text">{{ rule.text }}</span>
+        </div>
+      </div>
+
+      <div class="council-begin">
+        <span class="begin-crown">&#9819;</span>
+        <span>{{ beginCountdown > 0 ? `The reign begins in ${beginCountdown}…` : "Beginning…" }}</span>
+      </div>
     </div>
     </Transition>
   </div>
@@ -237,6 +276,25 @@ const autoStarting = ref(false);
 const activeSlideIndex = ref(0);
 const timeRemaining = ref(0);
 const timerInterval = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+const beginCountdown = ref(0);
+const beginTimer = ref<ReturnType<typeof setInterval> | undefined>(undefined);
+
+// The six shared opening kingdom figures (all realms start level at 8). Colours match
+// the app's stat identities: Wealth/People/Military/Church/Food/Mood.
+const firstMonthStats = [
+  { label: "Wealth", value: 8, color: "#f0c050" },
+  { label: "Church", value: 8, color: "#e8e0d0" },
+  { label: "Military", value: 8, color: "#5a9bd4" },
+  { label: "People", value: 8, color: "#a070d0" },
+  { label: "Food", value: 8, color: "#5ea84a" },
+  { label: "Mood", value: 8, color: "#c0392b" },
+];
+
+const councilRules = [
+  { glyph: "✦", text: "Two cards are drawn each month. Keep one, pass the other to your rival." },
+  { glyph: "⬡", text: "Three dice per turn. Your advisor's wild face counts as any value." },
+  { glyph: "♛", text: "Highest realm score after twelve months wins the crown." },
+];
 
 const swiperModules = [EffectCards];
 
@@ -282,6 +340,44 @@ const formattedTime = computed(() => {
   const secs = timeRemaining.value % 60;
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 });
+
+const councilSeats = computed(() =>
+  players.value
+    .toSorted((a, b) => a.player_number - b.player_number)
+    .map((p) => ({
+      number: p.player_number,
+      name: p.character?.name ?? p.user?.name ?? `Player ${p.player_number}`,
+      wild:
+        p.character && p.character.wild_value !== undefined
+          ? `Wild ${p.character.wild_value} · ${p.character.wild_ability ?? ""}`.trim()
+          : "",
+      image: p.character?.image_url || "/images/character.png",
+      isPlayerOne: p.player_number === 1,
+    })),
+);
+
+const speedLabel = computed(() => {
+  if (turnTimeLimit >= 3600) {
+    return "Daily";
+  }
+  return turnTimeLimit > 0 ? `Speed · ${turnTimeLimit}s` : "Speed";
+});
+
+// Hold the Council on screen for a five-count before the reign begins.
+function startBeginCountdown(): void {
+  if (beginTimer.value) {
+    return;
+  }
+  beginCountdown.value = 5;
+  beginTimer.value = setInterval(() => {
+    if (beginCountdown.value > 0) {
+      beginCountdown.value--;
+    } else {
+      clearInterval(beginTimer.value);
+      beginTimer.value = undefined;
+    }
+  }, 1000);
+}
 
 async function fetchLobby(): Promise<void> {
   try {
@@ -365,6 +461,11 @@ async function autoStartGame(): Promise<void> {
   if (autoStarting.value) return;
   if (!isHost.value) return;
   autoStarting.value = true;
+
+  // Let the Council screen and its countdown play out before the reign begins.
+  startBeginCountdown();
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
   try {
     const lobbyResponse = await axios.get<LobbyResponse>(`/api/games/${gameId}/lobby`);
     const lobbyPlayers = lobbyResponse.data.players;
@@ -429,17 +530,34 @@ watch(allJoined, (joined) => {
   }
 });
 
+// When both advisors are locked in, run the Council countdown (both players see it;
+// only the host actually starts the game, inside autoStartGame).
+watch(allSelected, (selected) => {
+  if (selected) {
+    startBeginCountdown();
+  }
+});
+
 onMounted(async () => {
   await fetchLobby();
   await fetchFriends();
   if (turnTimeLimit && allJoined.value) {
     startTimer();
   }
+  if (allSelected.value) {
+    startBeginCountdown();
+  }
 });
 
 onBeforeUnmount(() => {
   clearTimer();
+  if (beginTimer.value) {
+    clearInterval(beginTimer.value);
+  }
 });
+
+// The parent (GameBoard) drives real-time refresh and start through these.
+defineExpose({ fetchLobby, autoStartGame });
 </script>
 
 <style scoped>
@@ -738,40 +856,224 @@ onBeforeUnmount(() => {
   opacity: 0.5;
 }
 
-/* All selected / starting */
-.selected-advisors {
+/* The Council — both seats filled, ready to begin */
+.council-seats {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 24px;
+  gap: 9px;
 }
 
-.selected-row {
+.council-seat {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.45);
+}
+
+.council-seat.seat-p1 {
+  background: linear-gradient(90deg, rgba(240, 192, 80, 0.14), rgba(18, 12, 7, 0.9));
+  border: 1.5px solid rgba(240, 192, 80, 0.5);
+}
+
+.council-seat.seat-p2 {
+  background: linear-gradient(90deg, rgba(154, 208, 255, 0.14), rgba(18, 12, 7, 0.9));
+  border: 1.5px solid rgba(154, 208, 255, 0.45);
+}
+
+.seat-portrait {
+  width: 54px;
+  height: 54px;
+  flex: none;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center 18%;
+}
+
+.seat-p1 .seat-portrait { border: 2.5px solid #f0c050; }
+.seat-p2 .seat-portrait { border: 2.5px solid #9ad0ff; }
+
+.seat-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.seat-role {
+  font-family: 'Cinzel', serif;
+  font-size: 0.56rem;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: #8a7a5a;
+}
+
+.seat-name {
+  margin-top: 2px;
+  font-family: 'Cinzel', serif;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: var(--text-bright, #f0e0c8);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.seat-meta {
+  font-size: 0.72rem;
+  color: #bcac8c;
+}
+
+.seat-ready {
+  flex: none;
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  padding: 6px 10px;
+  border-radius: 9px;
+  background: rgba(74, 138, 58, 0.22);
+  color: #6fd06a;
+  border: 1px solid rgba(74, 138, 58, 0.45);
+}
+
+.council-first-month {
+  margin-top: 15px;
+  padding: 13px;
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(240, 192, 80, 0.22);
+}
+
+.fm-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fm-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 2.2px;
+  text-transform: uppercase;
+  color: var(--accent-gold);
+}
+
+.fm-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(240, 192, 80, 0.3), transparent);
+}
+
+.fm-speed {
+  font-size: 0.7rem;
+  color: #8a7a5a;
+}
+
+.fm-dials {
+  margin-top: 11px;
   display: flex;
   justify-content: space-between;
+  gap: 3px;
+}
+
+.fm-dial {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  padding: 12px 16px;
-  border-radius: 8px;
-  border: 1px solid rgba(74, 138, 58, 0.3);
-  background: rgba(74, 138, 58, 0.06);
+  gap: 4px;
 }
 
-.selected-player {
-  color: var(--text-bright);
-  font-size: 0.95rem;
+.fm-ring {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 2px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #100b06;
 }
 
-.selected-char {
+.fm-val {
   font-family: 'Cinzel', serif;
-  color: var(--accent-gold);
-  font-size: 1rem;
+  font-size: 0.85rem;
+  font-weight: 800;
 }
 
-.starting-spinner {
+.fm-dial-label {
+  font-family: 'Cinzel', serif;
+  font-size: 0.48rem;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: #8a7a5a;
+}
+
+.fm-note {
+  margin-top: 10px;
+  margin-bottom: 0;
+  font-size: 0.75rem;
+  line-height: 1.4;
+  color: #8a7a5a;
+}
+
+.council-rules {
+  margin-top: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rule-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.rule-glyph {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  border-radius: 8px;
+  background: rgba(240, 192, 80, 0.12);
+  border: 1px solid rgba(240, 192, 80, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: var(--accent-gold);
+}
+
+.rule-text {
+  flex: 1;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  color: #9a8a68;
+}
+
+.council-begin {
+  margin-top: 16px;
   text-align: center;
-  color: var(--text-secondary);
-  font-style: italic;
-  animation: pulse 1.5s ease-in-out infinite;
+  padding: 16px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #ffe897, #f0c050 55%, #b8842a);
+  border: 2px solid #fff0b0;
+  box-shadow: 0 6px 0 #7a5410;
+  font-family: 'Cinzel', serif;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #241703;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.begin-crown {
+  font-size: 1.1rem;
 }
 
 /* Advisor card inside swiper (matches GameSetup) */

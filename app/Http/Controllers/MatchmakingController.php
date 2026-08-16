@@ -157,7 +157,7 @@ class MatchmakingController extends Controller
             return;
         }
 
-        DB::transaction(function () use ($entry, $bot) {
+        $game = DB::transaction(function () use ($entry, $bot): Game {
             $turnTimeLimit = $entry->speed_mode === 'daily' ? 86400 : 45;
             $game = Game::create([
                 'status' => 'setup',
@@ -185,13 +185,22 @@ class MatchmakingController extends Controller
 
             $entry->update(['status' => 'matched', 'matched_game_id' => $game->id]);
 
-            broadcast(new MatchFound($entry->user_id, $game->id, $bot->name, $bot->elo_rating ?? 1200));
+            return $game;
         });
+
+        // Broadcast after commit: MatchFound is ShouldBroadcastNow, so a websocket outage
+        // must not roll the match back. The client also polls status, so this is best-effort.
+        try {
+            broadcast(new MatchFound($entry->user_id, $game->id, $bot->name, $bot->elo_rating ?? 1200));
+        } catch (\Throwable) {
+            // Non-critical — the matchmaking status poll will still surface the match.
+        }
     }
 
     private function createMatch(MatchmakingEntry $entry1, MatchmakingEntry $entry2): Game
     {
-        return DB::transaction(function () use ($entry1, $entry2) {
+        /** @var array{0: Game, 1: User, 2: User} $result */
+        $result = DB::transaction(function () use ($entry1, $entry2): array {
             $turnTimeLimit = $entry1->speed_mode === 'daily' ? 86400 : 45;
             $game = Game::create([
                 'status' => 'setup',
@@ -219,13 +228,20 @@ class MatchmakingController extends Controller
             $entry1->update(['status' => 'matched', 'matched_game_id' => $game->id]);
             $entry2->update(['status' => 'matched', 'matched_game_id' => $game->id]);
 
-            $user1 = $entry1->user;
-            $user2 = $entry2->user;
+            return [$game, $entry1->user, $entry2->user];
+        });
 
+        [$game, $user1, $user2] = $result;
+
+        // Broadcast after commit so a websocket outage can't roll the match back; clients
+        // also poll matchmaking status.
+        try {
             broadcast(new MatchFound($entry1->user_id, $game->id, $user2->name, $user2->elo_rating ?? 1200));
             broadcast(new MatchFound($entry2->user_id, $game->id, $user1->name, $user1->elo_rating ?? 1200));
+        } catch (\Throwable) {
+            // Non-critical — the matchmaking status poll will still surface the match.
+        }
 
-            return $game;
-        });
+        return $game;
     }
 }

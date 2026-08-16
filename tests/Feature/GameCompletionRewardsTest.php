@@ -69,6 +69,24 @@ class GameCompletionRewardsTest extends TestCase
         $this->assertFalse(LeagueMember::query()->where('user_id', $user->id)->exists());
     }
 
+    public function test_completion_is_idempotent_and_only_awards_once(): void
+    {
+        $this->makeActiveSeason();
+        $user = User::factory()->create(['xp' => 0]);
+        $game = $this->completedGameFor($user, ['mode' => 'online', 'type' => 'cooperative', 'win' => true]);
+
+        $service = app(GameCompletionService::class);
+        $service->processCompletion($game);
+        // Simulate the completion path firing again (retry / both players / bot+human).
+        $service->processCompletion($game->fresh());
+        $service->processCompletion($game->fresh());
+
+        // XP was granted exactly once despite three completion calls.
+        $this->assertSame(150, $user->fresh()->xp);
+        $this->assertSame(150, UserPassProgress::query()->where('user_id', $user->id)->value('points'));
+        $this->assertSame(150, LeagueMember::query()->where('user_id', $user->id)->value('score'));
+    }
+
     public function test_custom_games_award_nothing(): void
     {
         $this->makeActiveSeason();

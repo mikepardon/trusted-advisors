@@ -35,6 +35,7 @@ class Game extends Model
         'turn_time_limit' => 'integer',
         'turn_started_at' => 'datetime',
         'cancelled_at' => 'datetime',
+        'rewards_processed_at' => 'datetime',
         'pending_curses' => 'array',
     ];
 

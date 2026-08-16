@@ -31,19 +31,17 @@ import Pusher from 'pusher-js';
 
 Reflect.set(globalThis, 'Pusher', Pusher);
 
-const isUseTLS = (import.meta.env.VITE_PUSHER_SCHEME ?? 'https') === 'https';
+const isUseTLS = (import.meta.env.VITE_REVERB_SCHEME ?? 'https') === 'https';
 
 try {
     const echo = new Echo({
-        broadcaster: 'pusher',
-        key: import.meta.env.VITE_PUSHER_APP_KEY,
-        cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
-        wsHost: import.meta.env.VITE_PUSHER_HOST,
-        wsPort: import.meta.env.VITE_PUSHER_PORT ?? 80,
-        wssPort: import.meta.env.VITE_PUSHER_PORT ?? 443,
+        broadcaster: 'reverb',
+        key: import.meta.env.VITE_REVERB_APP_KEY,
+        wsHost: import.meta.env.VITE_REVERB_HOST,
+        wsPort: Number(import.meta.env.VITE_REVERB_PORT ?? 80),
+        wssPort: Number(import.meta.env.VITE_REVERB_PORT ?? 443),
         forceTLS: isUseTLS,
         enabledTransports: ['ws', 'wss'],
-        disableStats: true,
     });
     Reflect.set(globalThis, 'Echo', echo);
 } catch (error) {

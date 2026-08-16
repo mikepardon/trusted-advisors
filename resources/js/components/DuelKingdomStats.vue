@@ -105,16 +105,17 @@
                                     strokeDashoffset: radialOffset(
                                         kingdom[stat.key],
                                     ),
+                                    '--stat-color': statColor(stat.key),
                                 }"
                             />
                         </svg>
-                        <span class="radial-icon"
-                            ><AppIcon
-                                :type="stat.type"
-                                :value="stat.value"
-                                size="md"
-                        /></span>
+                        <span
+                            class="radial-value"
+                            :style="{ color: statColor(stat.key) }"
+                            >{{ kingdom[stat.key] }}</span
+                        >
                     </div>
+                    <span class="radial-label">{{ statLabel(stat.key) }}</span>
                 </div>
             </div>
             <div class="kingdom-total">
@@ -134,7 +135,6 @@ import {
     shallowRef,
     watch,
 } from "vue";
-import AppIcon from "./AppIcon.vue";
 import LeagueCrest from "./LeagueCrest.vue";
 import { useIcons } from "../stores/icons";
 import { createDddiceInstance, isDddiceAvailable } from "../dddice-service";
@@ -533,6 +533,31 @@ function radialOffset(value: number | undefined): number {
     return circumference * (1 - percentage);
 }
 
+// Thematic label + signature colour per stat, matching the solo KingdomStats board.
+function statLabel(statKey: string): string {
+    const labels: Record<string, string> = {
+        wealth: "Wealth",
+        influence: "People",
+        security: "Military",
+        religion: "Church",
+        food: "Food",
+        happiness: "Mood",
+    };
+    return labels[statKey] ?? statKey;
+}
+
+function statColor(statKey: string): string {
+    const colours: Record<string, string> = {
+        wealth: "#f0c050",
+        influence: "#b072e0",
+        security: "#4d9de0",
+        religion: "#cdd3dc",
+        food: "#5fad56",
+        happiness: "#e0685a",
+    };
+    return colours[statKey] ?? "#f0c050";
+}
+
 onMounted(async () => {
     if (!isDddiceAvailable()) {
         return;
@@ -763,8 +788,9 @@ defineExpose({ clearDice });
 
 .stat-cell {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
+    gap: 3px;
 }
 
 /* Radial progress */
@@ -780,21 +806,24 @@ defineExpose({ clearDice });
     transform: rotate(-90deg);
 }
 
-.radial-icon {
+.radial-value {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 71%;
-    height: 71%;
-    border-radius: 50%;
-    background: #120d07;
-    border: 1px solid rgba(240, 192, 80, 0.35);
-    font-size: 1rem;
+    font-family: "Cinzel", serif;
+    font-weight: 800;
+    font-size: 0.85rem;
     line-height: 1;
+}
+
+.radial-label {
+    font-family: "Cinzel", serif;
+    font-size: 0.48rem;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #8a7a5a;
 }
 
 .radial-bg {
@@ -812,7 +841,7 @@ defineExpose({ clearDice });
 }
 
 .radial-fill.bar-default {
-    stroke: var(--ks-bar-caution, #d4a843);
+    stroke: var(--stat-color, #d4a843);
     transition: stroke 0.25s ease;
 }
 .radial-fill.bar-preview-positive {
@@ -877,8 +906,12 @@ defineExpose({ clearDice });
         height: 38px;
     }
 
-    .radial-icon {
-        font-size: 0.85rem;
+    .radial-value {
+        font-size: 0.75rem;
+    }
+
+    .radial-label {
+        font-size: 0.44rem;
     }
 
     .roll-info {

@@ -1,6 +1,15 @@
 <template>
     <div class="replay-page">
-        <h2 class="section-title">Game Replay</h2>
+        <div class="replay-header">
+            <button
+                class="ta-back"
+                aria-label="Back"
+                @click="$router.push(shareToken ? '/' : '/campaigns')"
+            >
+                &lsaquo;
+            </button>
+            <h2 class="section-title">Game Replay</h2>
+        </div>
 
         <div v-if="loading" class="replay-loading">Loading replay...</div>
         <div v-else-if="error" class="card-panel replay-unavailable">
@@ -1359,12 +1368,27 @@ async function shareReplay(): Promise<void> {
     margin: 0 auto;
 }
 
+.replay-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
 .section-title {
     font-family: "Cinzel", serif;
     color: var(--accent-gold);
     font-size: 1.3rem;
     margin-bottom: 16px;
     text-align: center;
+}
+
+/* Inside the header row the title sits beside the back button, no extra gap. */
+.replay-header .section-title {
+    flex: 1;
+    margin-bottom: 0;
+    /* Nudge left so the title stays visually centred despite the back button. */
+    margin-right: 36px;
 }
 
 .replay-loading,

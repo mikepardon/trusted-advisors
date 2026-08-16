@@ -1,5 +1,8 @@
 <template>
-    <VictoryEffect ref="confetti" />
+    <!-- Single root element: a multi-root component breaks the router's
+         <transition mode="out-in">, leaving the next page (home) blank. -->
+    <div class="game-over-root">
+        <VictoryEffect ref="confetti" />
     <div v-if="loading" class="loading">Loading final results...</div>
     <div v-else-if="gameData" class="game-over">
         <!-- DUEL END SCREEN -->
@@ -517,6 +520,7 @@
             :user-id="showProfileUserId"
             @close="showProfileUserId = undefined"
         />
+    </div>
     </div>
 </template>
 

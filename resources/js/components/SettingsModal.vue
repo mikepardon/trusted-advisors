@@ -209,7 +209,7 @@ defineEmits<{ close: [] }>();
 const auth = useAuth();
 
 const settings = reactive<SoundSettings>(getSoundSettings());
-const hintsEnabled = ref<boolean>(getHintsSetting());
+const hintsEnabled = ref<boolean>(areHintsEnabled());
 const gameBgEnabled = ref(localStorage.getItem("game_bg_enabled") === "true");
 const notifPrefs = reactive<NotifPrefs>({
   push_game: true,

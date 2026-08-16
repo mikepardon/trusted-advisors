@@ -267,6 +267,8 @@
             @close="leagueResult.markSeen()"
         />
 
+        <RewardReveal />
+
         <ConfirmModal
             :visible="showLogoutConfirm"
             title="Logout"
@@ -291,11 +293,13 @@ import ToastContainer from "./components/ToastContainer.vue";
 import TutorialOverlay from "./components/TutorialOverlay.vue";
 import DailyRewardModal from "./components/DailyRewardModal.vue";
 import LeagueResultModal from "./components/LeagueResultModal.vue";
+import RewardReveal from "./components/RewardReveal.vue";
 import { useAuth } from "./stores/auth";
 import type { StreakNotification } from "./stores/auth";
 import { useToast } from "./stores/toast";
 import { useDailyReward } from "./stores/daily-reward";
 import { useLeagueResult } from "./stores/league-result";
+import { useReward } from "./stores/reward";
 import { playSound } from "./sounds";
 import { initOneSignal, promptPushPermission } from "./onesignal";
 import { xpForLevel } from "./xp";
@@ -339,6 +343,7 @@ const auth = useAuth();
 const toast = useToast();
 const dailyReward = useDailyReward();
 const leagueResult = useLeagueResult();
+const reward = useReward();
 const router = useRouter();
 const route = useRoute();
 
@@ -544,7 +549,7 @@ async function fetchDailyReward(): Promise<void> {
 function onDailyRewardClaimed(coins: number): void {
     dailyReward.markClaimed(dailyReward.state.status?.streak ?? 0);
     dailyReward.closeModal();
-    toast.success(`+${coins} coins — daily reward claimed!`);
+    reward.reveal({ amount: coins, title: "Daily Reward", icon: "🎁" });
 }
 
 async function fetchNotifCount(): Promise<void> {
@@ -1614,7 +1619,9 @@ button:disabled {
     z-index: 0;
 }
 
-#game-app > main > :not(.main-bg-overlay) {
+/* The victory canvas is a fixed full-screen overlay; exclude it so this rule's
+   position:relative / z-index:1 doesn't trap it in the main stacking context. */
+#game-app > main > :not(.main-bg-overlay):not(.victory-canvas) {
     position: relative;
     z-index: 1;
 }

@@ -8,96 +8,8 @@
             >
         </div>
 
-        <!-- MOBILE: Swiper carousel -->
-        <template v-if="isMobile">
-            <div class="swiper-hand">
-                <Swiper
-                    :modules="swiperModules"
-                    effect="cards"
-                    :grab-cursor="true"
-                    :cards-effect="{
-                        perSlideOffset: 8,
-                        perSlideRotate: 2,
-                        rotate: true,
-                        slideShadows: false,
-                    }"
-                    :style="{ overflow: 'visible' }"
-                    @swiper="onSwiper"
-                    @slide-change="onSlideChange"
-                >
-                    <SwiperSlide v-for="item in cards" :key="item.hand_id">
-                        <div
-                            class="parchment-card"
-                            :class="{
-                                'card-acting': selectedId === item.hand_id,
-                                'card-unattended':
-                                    selectedId !== null &&
-                                    selectedId !== item.hand_id,
-                            }"
-                            @click="selectAndConfirm(item.hand_id)"
-                        >
-                            <div
-                                v-if="selectedId === item.hand_id"
-                                class="card-ribbon acting"
-                            >
-                                Keeping this
-                            </div>
-                            <div
-                                v-else-if="selectedId !== null"
-                                class="card-ribbon unattended"
-                            >
-                                Sending this
-                            </div>
-
-                            <h3 class="parchment-title">
-                                {{ item.card.title }}
-                            </h3>
-                            <p class="parchment-desc">
-                                {{ item.card.description }}
-                            </p>
-                            <span class="parchment-difficulty"
-                                >Difficulty {{ item.card.difficulty }}</span
-                            >
-
-                            <div class="parchment-divider">
-                                <span class="divider-ornament">&#9830;</span>
-                            </div>
-
-                            <div class="outcome-section">
-                                <p class="outcome-label">On Success:</p>
-                                <div class="outcome-chips">
-                                    <span
-                                        v-for="(val, stat) in filterStatEffects(
-                                            getDuelPositive(item.card),
-                                        )"
-                                        :key="'p-' + stat"
-                                        class="stat-chip chip-positive"
-                                        >{{ stat }}</span
-                                    >
-                                </div>
-                            </div>
-
-                            <div class="outcome-section">
-                                <p class="outcome-label">On Failure:</p>
-                                <div class="outcome-chips">
-                                    <span
-                                        v-for="(val, stat) in filterStatEffects(
-                                            getDuelNegative(item.card),
-                                        )"
-                                        :key="'n-' + stat"
-                                        class="stat-chip chip-negative"
-                                        >{{ stat }}</span
-                                    >
-                                </div>
-                            </div>
-                        </div>
-                    </SwiperSlide>
-                </Swiper>
-            </div>
-        </template>
-
-        <!-- DESKTOP: Side-by-side -->
-        <div v-else class="choose-cards">
+        <!-- Two cards, always side by side (opaque) -->
+        <div class="choose-cards">
             <div
                 v-for="item in cards"
                 :key="item.hand_id"
@@ -169,12 +81,7 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { Swiper, SwiperSlide } from "swiper/vue";
-import { EffectCards } from "swiper/modules";
-import type { Swiper as SwiperInstance } from "swiper";
-import "swiper/css";
-import "swiper/css/effect-cards";
+import { ref, watch } from "vue";
 import { playSound } from "../sounds";
 
 interface DuelChooseCard {
@@ -206,21 +113,8 @@ const emit = defineEmits<{
     preview: [payload: PreviewPayload | undefined];
 }>();
 
-const swiperModules = [EffectCards];
-
 const selectedId = ref<number | undefined>(undefined);
-const isMobile = ref(false);
-const swiperInstance = ref<SwiperInstance | undefined>(undefined);
-const mediaQuery = ref<MediaQueryList | undefined>(undefined);
 const hoveredId = ref<number | undefined>(undefined);
-
-function onMediaChange(event: MediaQueryListEvent): void {
-    isMobile.value = event.matches;
-}
-
-function onSwiper(swiper: SwiperInstance): void {
-    swiperInstance.value = swiper;
-}
 
 function getDuelPositive(
     card: DuelChooseCard,
@@ -269,17 +163,6 @@ function emitPreview(item: DuelChooseItem | undefined): void {
     });
 }
 
-function onSlideChange(): void {
-    if (!swiperInstance.value || selectedId.value !== undefined) {
-        return;
-    }
-    const index = swiperInstance.value.activeIndex;
-    const item = cards[index];
-    if (item) {
-        emitPreview(item);
-    }
-}
-
 function selectAndConfirm(handId: number): void {
     if (selectedId.value !== undefined) {
         return;
@@ -303,35 +186,13 @@ function onCardLeave(): void {
     emit("preview", undefined);
 }
 
+// Reset the selection whenever a fresh pair of cards is dealt.
 watch(
     () => cards,
-    (newCards) => {
+    () => {
         selectedId.value = undefined;
-        if (swiperInstance.value) {
-            nextTick(() => {
-                swiperInstance.value?.slideTo(0, 0);
-            });
-        }
-        // Auto-emit preview for first card on mobile
-        if (isMobile.value && newCards?.length) {
-            nextTick(() => emitPreview(newCards[0]));
-        }
     },
 );
-
-onMounted(() => {
-    mediaQuery.value = window.matchMedia("(max-width: 768px)");
-    isMobile.value = mediaQuery.value.matches;
-    mediaQuery.value.addEventListener("change", onMediaChange);
-    // Emit initial preview for the first card on mobile
-    if (isMobile.value && cards.length > 0) {
-        nextTick(() => emitPreview(cards[0]));
-    }
-});
-
-onBeforeUnmount(() => {
-    mediaQuery.value?.removeEventListener("change", onMediaChange);
-});
 </script>
 
 <style scoped>
@@ -370,36 +231,27 @@ onBeforeUnmount(() => {
     white-space: nowrap;
 }
 
-/* Desktop side-by-side */
+/* Two cards, always side by side */
 .choose-cards {
     display: flex;
-    gap: 20px;
+    gap: 12px;
     justify-content: center;
-    flex-wrap: wrap;
-}
-
-/* Mobile swiper */
-.swiper-hand {
-    max-width: 340px;
-    margin: 0 auto;
-    padding: 0;
-}
-
-.swiper-hand :deep(.swiper-slide) {
-    padding: 20px 20px 10px;
+    align-items: stretch;
 }
 
 /* Parchment card */
 .parchment-card {
     background: linear-gradient(
         180deg,
-        rgba(58, 42, 26, 0.96),
-        rgba(16, 11, 6, 0.98)
+        rgba(58, 42, 26, 0.98),
+        rgba(16, 11, 6, 1)
     );
     border: 1.5px solid rgba(240, 192, 80, 0.6);
     border-radius: 16px;
     padding: 16px 14px;
-    width: 300px;
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 300px;
     cursor: pointer;
     transition: all 0.3s ease;
     position: relative;
@@ -579,15 +431,26 @@ onBeforeUnmount(() => {
 }
 
 @media (max-width: 768px) {
+    .choose-cards {
+        gap: 8px;
+    }
+
     .parchment-card {
-        width: 100%;
-        max-width: 320px;
         min-height: auto;
-        padding: 13px 12px;
+        padding: 12px 9px;
     }
 
     .parchment-title {
-        font-size: 0.95rem;
+        font-size: 0.82rem;
+    }
+
+    .parchment-desc {
+        font-size: 0.72rem;
+    }
+
+    /* No hover lift on touch — keep both cards flat and readable side by side. */
+    .parchment-card:hover {
+        transform: none;
     }
 }
 </style>

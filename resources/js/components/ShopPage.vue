@@ -515,8 +515,7 @@ import { DateTime } from "luxon";
 import { useAuth } from "../stores/auth";
 import { useToast } from "../stores/toast";
 import { useFreeChest } from "../stores/free-chest";
-import { playSound } from "../sounds";
-import { haptic } from "../haptics";
+import { useReward } from "../stores/reward";
 import { createDddiceInstance, isDddiceAvailable } from "../dddice-service";
 import {
     isWebToNative,
@@ -598,6 +597,7 @@ interface DddiceInstance {
 const { updateUserStats, state: authState } = useAuth();
 const toast = useToast();
 const freeChest = useFreeChest();
+const reward = useReward();
 
 const items = ref<ShopItem[]>([]);
 const coins = ref(0);
@@ -649,9 +649,8 @@ async function claimFreeChest(): Promise<void> {
     claimingChest.value = false;
     if (claimed !== undefined) {
         coins.value += claimed;
-        playSound("win");
-        haptic("success");
-        toast.success(`+${claimed} coins from the free chest!`);
+        // The reveal overlay handles its own sound + haptics.
+        reward.reveal({ amount: claimed, title: "Free Chest", icon: "🎁" });
     }
 }
 const isPremium = ref(false);
