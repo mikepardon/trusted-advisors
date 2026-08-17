@@ -1398,7 +1398,18 @@ function subscribeToGameChannel(): void {
       resolving.value = false;
       saveResolveState();
     })
-    .listen("NextRoundStarted", (data: GameData) => {
+    .listen("NextRoundStarted", async (payload: GameData & { refetch?: boolean }) => {
+      let data: GameData = payload;
+      // Oversized state is broadcast as a marker instead of the full payload
+      if (payload.refetch) {
+        try {
+          const response = await axios.get<GameData>(`/api/games/${id}`);
+          data = response.data;
+        } catch {
+          fetchGameWithRetry();
+          return;
+        }
+      }
       if (isDuel.value && duelBoard.value) {
         gameData.value = data;
         duelBoard.value.handleNextRoundStarted(data);
