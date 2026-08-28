@@ -124,6 +124,7 @@
             <td>{{ card.category || '-' }}</td>
             <td class="desc-col">{{ truncate(card.description, 60) }}</td>
             <td class="actions-col">
+              <button @click="openPreview(card)">Preview</button>
               <button @click="openEdit(card)">Edit</button>
               <button class="btn-danger" @click="confirmDelete(card)">Delete</button>
             </td>
@@ -413,6 +414,15 @@
         </div>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewCard !== undefined"
+      :title="previewCard?.title"
+      @close="previewCard = undefined"
+    >
+      <CardDisplay :card="previewCard" />
+    </AdminPreviewModal>
   </div>
 </template>
 
@@ -420,6 +430,8 @@
 import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../../stores/toast";
+import CardDisplay from "../CardDisplay.vue";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
 import AdminSearchInput from "./AdminSearchInput.vue";
 import SortableHeader from "./SortableHeader.vue";
 import { useIcons } from "../../stores/icons";
@@ -609,6 +621,7 @@ const sortField = ref("sort_order");
 const sortDirection = ref<"asc" | "desc">("asc");
 const showModal = ref(false);
 const editing = ref<Card | undefined>(undefined);
+const previewCard = ref<Card | undefined>(undefined);
 const saving = ref(false);
 const formError = ref("");
 const showAiModal = ref(false);
@@ -898,6 +911,10 @@ function objectToForm(effects: EffectMap | undefined): ObjectToFormResult {
     bonusScore: source.bonus_score ?? 0,
     endGameModifier: source.end_game_modifier ?? 0,
   };
+}
+
+function openPreview(card: Card): void {
+  previewCard.value = card;
 }
 
 function openCreate(): void {

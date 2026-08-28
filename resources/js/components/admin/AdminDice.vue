@@ -35,7 +35,10 @@
             <span v-if="theme.is_default_unlocked" class="badge badge-default">Default</span>
           </div>
         </div>
-        <button class="btn-edit" @click="openEdit(theme)">Edit</button>
+        <div class="theme-actions">
+          <button class="btn-edit" @click="openPreview(theme)">Preview</button>
+          <button class="btn-edit" @click="openEdit(theme)">Edit</button>
+        </div>
       </div>
     </div>
 
@@ -74,6 +77,15 @@
         </div>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewTheme !== undefined"
+      :title="previewTheme?.name"
+      @close="previewTheme = undefined"
+    >
+      <DiceThemePreviewCard v-if="previewTheme" :theme="previewTheme" />
+    </AdminPreviewModal>
   </div>
 </template>
 
@@ -81,6 +93,8 @@
 import { computed, onMounted, reactive, ref } from "vue";
 import axios, { isAxiosError } from "axios";
 import AdminSearchInput from "./AdminSearchInput.vue";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
+import DiceThemePreviewCard from "./DiceThemePreviewCard.vue";
 
 interface DiceTheme {
   id: number;
@@ -110,6 +124,7 @@ const syncing = ref(false);
 const syncMessage = ref("");
 const searchQuery = ref("");
 const editingTheme = ref<DiceTheme | undefined>(undefined);
+const previewTheme = ref<DiceTheme | undefined>(undefined);
 const editForm = reactive<DiceThemeForm>({ name: "", description: "", is_active: true, is_default_unlocked: false });
 const editSaving = ref(false);
 const editError = ref("");
@@ -153,6 +168,10 @@ async function syncThemes(): Promise<void> {
     syncMessage.value = `Sync failed: ${detail}`;
   }
   syncing.value = false;
+}
+
+function openPreview(theme: DiceTheme): void {
+  previewTheme.value = theme;
 }
 
 function openEdit(theme: DiceTheme): void {
@@ -342,6 +361,17 @@ onMounted(() => {
   background: rgba(67, 160, 212, 0.15);
   border: 1px solid rgba(67, 160, 212, 0.3);
   color: #60b8e0;
+}
+
+.theme-actions {
+  display: flex;
+  gap: 8px;
+  margin: 0 12px 10px;
+}
+
+.theme-actions .btn-edit {
+  flex: 1;
+  margin: 0;
 }
 
 .btn-edit {

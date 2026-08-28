@@ -60,6 +60,9 @@
                                 >
                             </td>
                             <td class="actions-col">
+                                <button @click="openPreview(cosmetic)">
+                                    Preview
+                                </button>
                                 <button @click="openEdit(cosmetic)">
                                     Edit
                                 </button>
@@ -326,6 +329,25 @@
             @close="showMediaLibrary = false"
             @select="onMediaSelected"
         />
+
+        <!-- In-game preview -->
+        <AdminPreviewModal
+            :visible="previewCosmetic !== undefined"
+            :title="previewCosmetic?.name"
+            @close="previewCosmetic = undefined"
+        >
+            <CosmeticPreviewCard
+                v-if="previewCosmetic"
+                :cosmetic="{
+                    type: previewCosmetic.type,
+                    name: previewCosmetic.name,
+                    slug: previewCosmetic.slug,
+                    rarity: previewCosmetic.rarity,
+                    value: previewCosmetic.value,
+                    imageUrl: previewImageUrl(previewCosmetic),
+                }"
+            />
+        </AdminPreviewModal>
     </div>
 </template>
 
@@ -334,6 +356,8 @@ import { computed, onMounted, reactive, ref } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../../stores/toast";
 import MediaLibraryModal from "./MediaLibraryModal.vue";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
+import CosmeticPreviewCard from "./CosmeticPreviewCard.vue";
 import LeagueCrest from "../LeagueCrest.vue";
 
 type CosmeticType =
@@ -473,6 +497,7 @@ const loading = ref(true);
 const showModal = ref(false);
 const showMediaLibrary = ref(false);
 const editing = ref<Cosmetic | undefined>(undefined);
+const previewCosmetic = ref<Cosmetic | undefined>(undefined);
 const saving = ref(false);
 const formError = ref("");
 const form = reactive<CosmeticForm>(defaultForm());
@@ -541,6 +566,17 @@ function openCreate(): void {
     previewColour.value = 0;
     formError.value = "";
     showModal.value = true;
+}
+
+// Resolve a cosmetic's uploaded meta image to a servable URL, mirroring openEdit's
+// mapping of the stored path onto the /api/storage route. Absent when there is none.
+function previewImageUrl(cosmetic: Cosmetic): string | undefined {
+    const image = cosmetic.meta?.image;
+    return image === undefined ? undefined : `/api/storage/${image}`;
+}
+
+function openPreview(cosmetic: Cosmetic): void {
+    previewCosmetic.value = cosmetic;
 }
 
 function openEdit(cosmetic: Cosmetic): void {

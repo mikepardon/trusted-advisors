@@ -40,6 +40,7 @@ class GameCompletionService
             'coin_awards' => [],
             'bonus_chests' => [],
             'season_pass_points' => [],
+            'league_delta' => [],
             'level_ups' => [],
             'new_unlocks' => [],
             'elo_changes' => [],
@@ -83,6 +84,14 @@ class GameCompletionService
         $players = $game->players()->with(['user', 'curses.curse'])->get();
         $users = $players->pluck('user')->filter();
 
+        // Season Pass + League point rewards (admin-configurable via the XP & Rewards panel).
+        $pointsConfig = GameRule::getValue('points_config', [
+            'season_pass_win' => 100,
+            'season_pass_loss' => 0,
+            'league_win' => 100,
+            'league_loss' => -50,
+        ]);
+
         // Apply end-game curse effects before scoring
         $this->applyCurseEndGameEffects($game, $players);
 
@@ -116,11 +125,14 @@ class GameCompletionService
                 $this->processReferralReward($user);
             }
 
-            // Character XP
-            $charXpResult = app(CharacterProgressionService::class)
-                ->awardCharacterXp($user, $game, $players, $this->isWinner($user, $game, $players));
-            if ($charXpResult) {
-                $summary['character_xp_awards'][$user->id] = $charXpResult;
+            // Character XP — skipped for daily runs: the advisor is assigned by the
+            // challenge, not chosen by the player, so it should not gain experience.
+            if (! $game->is_daily) {
+                $charXpResult = app(CharacterProgressionService::class)
+                    ->awardCharacterXp($user, $game, $players, $this->isWinner($user, $game, $players));
+                if ($charXpResult) {
+                    $summary['character_xp_awards'][$user->id] = $charXpResult;
+                }
             }
 
             // Coins
@@ -130,15 +142,25 @@ class GameCompletionService
             // Bonus mystery chest — a variable reward for the dopamine hit
             $summary['bonus_chests'][$user->id] = $this->rollBonusChest($user, $game);
 
-            // Season Pass points — earned in every non-custom game (single, pass-and-play,
-            // online), more for a win. League score is competitive, so it only counts online
-            // games; otherwise the ladder could be farmed offline against bots.
-            $passPoints = $this->isWinner($user, $game, $players) ? 150 : 100;
-            app(SeasonPassService::class)->addPoints($user, $passPoints);
-            if ($game->isOnline()) {
-                app(LeagueService::class)->addScore($user, $passPoints);
+            // Season Pass progresses on a win only — a loss is 0 (never negative by default).
+            // Earned in every non-custom game (single, pass-and-play, online).
+            $isWinner = $this->isWinner($user, $game, $players);
+            $seasonPassPoints = (int) ($isWinner ? $pointsConfig['season_pass_win'] : $pointsConfig['season_pass_loss']);
+            if ($seasonPassPoints > 0) {
+                app(SeasonPassService::class)->addPoints($user, $seasonPassPoints);
             }
-            $summary['season_pass_points'][$user->id] = $passPoints;
+
+            // League is competitive and online only: a win climbs the ladder, a loss drops it
+            // (floored at 0 in addScore). Offline games don't count, so the ladder can't be
+            // farmed against bots.
+            $leagueDelta = 0;
+            if ($game->isOnline()) {
+                $leagueDelta = (int) ($isWinner ? $pointsConfig['league_win'] : $pointsConfig['league_loss']);
+                app(LeagueService::class)->addScore($user, $leagueDelta);
+            }
+
+            $summary['season_pass_points'][$user->id] = $seasonPassPoints;
+            $summary['league_delta'][$user->id] = $leagueDelta;
 
             // Achievements
             $newAchievements = $this->checkAchievements($user, $game);
@@ -152,14 +174,16 @@ class GameCompletionService
                 }
             }
 
-            // Daily challenge
+            // Daily challenge (seeded run only)
             $challengeResult = $this->checkDailyChallenge($user, $game);
             if ($challengeResult) {
                 $summary['challenge_completed'] = $challengeResult;
-                // Push: Daily challenge complete
-                try {
-                    $oneSignal->notifyUser($user, 'challenge', 'Challenge Complete!', "{$challengeResult['title']} — +{$challengeResult['reward_xp']} XP");
-                } catch (\Throwable) {}
+                // Push only on a win — a loss still finalises the attempt but earns no XP.
+                if ($challengeResult['won']) {
+                    try {
+                        $oneSignal->notifyUser($user, 'challenge', 'Challenge Complete!', "{$challengeResult['title']} — +{$challengeResult['reward_xp']} XP");
+                    } catch (\Throwable) {}
+                }
             }
 
             // Weekly challenge
@@ -1163,107 +1187,115 @@ class GameCompletionService
         return $total < $value;
     }
 
+    /**
+     * Finalise a daily-challenge run. Only seeded daily games count now — the old
+     * "any completed game that meets the criteria" behaviour is retired. The single
+     * attempt is locked to won/lost here, and reward XP is granted only on a win.
+     *
+     * @return array{challenge_id: int, title: string, reward_xp: int, won: bool}|null
+     */
     private function checkDailyChallenge(User $user, Game $game): ?array
     {
-        $today = Carbon::today();
-        $challenge = DailyChallenge::where('date', $today)->first();
-        if (!$challenge) return null;
+        if (! $game->is_daily || ! $game->daily_challenge_id) {
+            return null;
+        }
 
-        // Already completed?
+        $challenge = $game->dailyChallenge;
+        if (! $challenge) {
+            return null;
+        }
+
         $entry = DailyChallengeEntry::where('user_id', $user->id)
             ->where('daily_challenge_id', $challenge->id)
             ->first();
 
-        if ($entry && $entry->completed_at) return null;
-
-        // Check criteria
-        if (!$this->evaluateChallengeCriteria($user, $game, $challenge->criteria)) {
+        // Already finalised — never flip a settled result (idempotent under retries).
+        if ($entry && $entry->completed_at) {
             return null;
         }
 
-        // Mark completed
+        $won = $this->evaluateDailyGoal($game, $challenge->criteria['goal'] ?? []);
+        $status = $won ? DailyChallengeEntry::STATUS_WON : DailyChallengeEntry::STATUS_LOST;
+        // Endless mode: months taken is the round the target was reached on.
+        $roundsTaken = $won ? $game->current_round : null;
+
         if ($entry) {
-            $entry->update([
-                'game_id' => $game->id,
-                'completed_at' => now(),
-            ]);
+            $entry->update(['game_id' => $game->id, 'status' => $status, 'completed_at' => now(), 'rounds_taken' => $roundsTaken]);
         } else {
             DailyChallengeEntry::create([
                 'user_id' => $user->id,
                 'daily_challenge_id' => $challenge->id,
                 'game_id' => $game->id,
+                'status' => $status,
                 'completed_at' => now(),
+                'rounds_taken' => $roundsTaken,
             ]);
         }
 
-        // Award bonus XP
-        $user->xp += $challenge->reward_xp;
-        $user->level = User::calculateLevel($user->xp);
-        $user->save();
+        $rewardCoins = (int) ($challenge->criteria['reward_coins'] ?? 0);
+
+        if ($won) {
+            $user->xp += $challenge->reward_xp;
+            $user->level = User::calculateLevel($user->xp);
+            if ($rewardCoins > 0) {
+                $user->coins += $rewardCoins;
+                $user->recordCoinTransaction($rewardCoins, 'earn', 'daily_challenge', $game->id, 'Daily challenge reward');
+            }
+            $user->save();
+        }
 
         return [
             'challenge_id' => $challenge->id,
             'title' => $challenge->title,
-            'reward_xp' => $challenge->reward_xp,
+            'description' => $challenge->description,
+            'reward_xp' => $won ? $challenge->reward_xp : 0,
+            'reward_coins' => $won ? $rewardCoins : 0,
+            'won' => $won,
         ];
     }
 
-    private function evaluateChallengeCriteria(User $user, Game $game, array $criteria): bool
+    /**
+     * Evaluate a daily run's win condition against the final cooperative kingdom stats.
+     *
+     * @param  array<string, mixed>  $goal
+     */
+    private function evaluateDailyGoal(Game $game, array $goal): bool
     {
-        $type = $criteria['type'] ?? null;
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
 
-        switch ($type) {
-            case 'play_game':
-                $mode = $criteria['mode'] ?? 'any';
-                return $mode === 'any' || $game->game_mode === $mode;
-
-            case 'win_game':
-                $mode = $criteria['mode'] ?? 'any';
-                $modeMatch = $mode === 'any' || $game->game_mode === $mode;
-                $isWin = $game->isDuel()
-                    ? GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->where('player_number', $game->winner_player_number)->exists()
-                    : $game->win;
-                return $modeMatch && $isWin;
-
-            case 'stat_threshold':
-                $stat = $criteria['stat'] ?? 'wealth';
-                $value = $criteria['value'] ?? 15;
-                if ($game->isDuel()) {
-                    $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
-                    if (!$player) return false;
-                    $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
-                    return $kingdom && $kingdom->{$stat} >= $value;
-                }
-                return $game->{$stat} >= $value;
-
-            case 'use_character':
-                $characterId = $criteria['character_id'] ?? null;
-                return GamePlayer::where('game_id', $game->id)
-                    ->where('user_id', $user->id)
-                    ->where('character_id', $characterId)
-                    ->exists();
-
-            case 'no_stat_below':
-                $value = $criteria['value'] ?? 8;
-                $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-                if ($game->isDuel()) {
-                    $player = GamePlayer::where('game_id', $game->id)->where('user_id', $user->id)->first();
-                    if (!$player) return false;
-                    $kingdom = $game->playerKingdoms()->where('game_player_id', $player->id)->first();
-                    if (!$kingdom) return false;
-                    foreach ($stats as $s) {
-                        if ($kingdom->{$s} < $value) return false;
+        return match ($goal['type'] ?? null) {
+            'stat_threshold_all' => $this->allStatTargetsMet($game, $goal['targets'] ?? []),
+            'stat_threshold' => ($game->{$goal['stat'] ?? 'wealth'} ?? 0) >= (int) ($goal['value'] ?? 15),
+            'no_stat_below' => (function () use ($game, $goal, $stats): bool {
+                $value = (int) ($goal['value'] ?? 8);
+                foreach ($stats as $stat) {
+                    if (($game->{$stat} ?? 0) < $value) {
+                        return false;
                     }
-                    return true;
                 }
-                foreach ($stats as $s) {
-                    if ($game->{$s} < $value) return false;
-                }
-                return true;
 
-            default:
-                return false;
+                return true;
+            })(),
+            default => (bool) $game->win,
+        };
+    }
+
+    /**
+     * @param  array<string, int|string>  $targets
+     */
+    private function allStatTargetsMet(Game $game, array $targets): bool
+    {
+        if (empty($targets)) {
+            return false;
         }
+
+        foreach ($targets as $stat => $value) {
+            if (($game->{$stat} ?? 0) < (int) $value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function checkWeeklyChallenge(User $user, Game $game): ?array

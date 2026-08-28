@@ -105,6 +105,62 @@
                 </div>
             </div>
 
+            <!-- Items Tab (owned items + loadout: equip up to 3 to bring into a reign) -->
+            <div v-if="collectionTab === 'items'">
+                <p class="items-hint">
+                    Equip up to {{ maxEquipped }} items to bring into your next
+                    reign —
+                    <strong>{{ equippedIds.length }}/{{ maxEquipped }}</strong>
+                    equipped.
+                </p>
+                <div v-if="itemsLoading" class="loading-text">
+                    Loading items...
+                </div>
+                <div v-else-if="myItems.length === 0" class="loading-text">
+                    No items yet — buy them in the Shop or earn them through the
+                    Season Pass.
+                </div>
+                <div v-else class="item-grid">
+                    <div
+                        v-for="it in myItems"
+                        :key="it.id"
+                        class="item-card"
+                        :class="[
+                            'rarity-' + (it.rarity || 'common'),
+                            { equipped: equippedIds.includes(it.id) },
+                        ]"
+                    >
+                        <span class="item-glyph">{{ itemGlyph(it.type) }}</span>
+                        <span class="item-name">{{ it.name }}</span>
+                        <span class="item-rarity">{{
+                            it.rarity || "common"
+                        }}</span>
+                        <span class="item-cadence">{{
+                            cadenceLabel(it.cadence)
+                        }}</span>
+                        <p class="item-desc">{{ it.description }}</p>
+                        <button
+                            class="btn-item-equip"
+                            :class="{
+                                'btn-item-equipped': equippedIds.includes(it.id),
+                            }"
+                            :disabled="
+                                togglingItems ||
+                                (!equippedIds.includes(it.id) &&
+                                    equippedIds.length >= maxEquipped)
+                            "
+                            @click="toggleEquip(it.id)"
+                        >
+                            {{
+                                equippedIds.includes(it.id)
+                                    ? "Equipped"
+                                    : "Equip"
+                            }}
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- Advisor Detail Modal -->
             <AdvisorDetailModal
                 v-if="selectedAdvisor"
@@ -143,7 +199,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, useTemplateRef } from "vue";
+import {
+    computed,
+    markRaw,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    useTemplateRef,
+} from "vue";
 import type { CSSProperties } from "vue";
 import axios, { isAxiosError } from "axios";
 import { createDddiceInstance, isDddiceAvailable } from "../dddice-service";
@@ -218,11 +281,45 @@ interface KingdomStyle {
     is_active_selection?: boolean;
 }
 
+interface LoadoutItem {
+    id: number;
+    name: string;
+    type?: string;
+    cadence?: string;
+    rarity?: string;
+    description?: string;
+    equipped?: boolean;
+}
+
 interface CollectionTab {
     key: string;
     icon: string;
     label: string;
     count: number;
+}
+
+const ITEM_GLYPHS: Record<string, string> = {
+    weapon: "\u{2694}\u{FE0F}",
+    armour: "\u{1F6E1}\u{FE0F}",
+    potion: "\u{1F9EA}",
+    scroll: "\u{1F4DC}",
+    relic: "\u{2728}",
+    coin: "\u{1F4B0}",
+    hex: "\u{1F52E}",
+};
+
+const CADENCE_LABELS: Record<string, string> = {
+    passive: "Always active",
+    per_round: "Once per round",
+    per_game: "Once per game",
+};
+
+function itemGlyph(type?: string): string {
+    return (type && ITEM_GLYPHS[type]) || "\u{2694}";
+}
+
+function cadenceLabel(cadence?: string): string {
+    return (cadence && CADENCE_LABELS[cadence]) || "";
 }
 
 const toast = useToast();
@@ -235,6 +332,11 @@ const myDice = ref<DiceTheme[]>([]);
 const diceLoading = ref(true);
 const myStyles = ref<KingdomStyle[]>([]);
 const stylesLoading = ref(true);
+const myItems = ref<LoadoutItem[]>([]);
+const itemsLoading = ref(true);
+const equippedIds = ref<number[]>([]);
+const maxEquipped = ref(3);
+const togglingItems = ref(false);
 const collectionTab = ref("advisors");
 const activatingDice = ref(false);
 const activatingStyle = ref(false);
@@ -267,6 +369,15 @@ const collectionTabs = computed<CollectionTab[]>(() => {
             count: diceCount,
         });
     }
+    const itemCount = myItems.value.length;
+    if (itemCount > 0 || itemsLoading.value) {
+        tabs.push({
+            key: "items",
+            icon: "\u{2694}\u{FE0F}",
+            label: "Items",
+            count: itemCount,
+        });
+    }
     const styleCount = myStyles.value.length;
     if (styleCount > 0 || stylesLoading.value) {
         tabs.push({
@@ -278,6 +389,29 @@ const collectionTabs = computed<CollectionTab[]>(() => {
     }
     return tabs;
 });
+
+async function toggleEquip(itemId: number): Promise<void> {
+    const currentlyEquipped = equippedIds.value.includes(itemId);
+    if (!currentlyEquipped && equippedIds.value.length >= maxEquipped.value) {
+        return;
+    }
+
+    const next = currentlyEquipped
+        ? equippedIds.value.filter((id) => id !== itemId)
+        : [...equippedIds.value, itemId];
+
+    togglingItems.value = true;
+    const previous = equippedIds.value;
+    equippedIds.value = next;
+    try {
+        await axios.put("/api/loadout", { item_ids: next });
+    } catch {
+        equippedIds.value = previous;
+        toast.error("Could not update your loadout.");
+    } finally {
+        togglingItems.value = false;
+    }
+}
 
 function activationErrorMessage(error: unknown, fallback: string): string {
     if (isAxiosError<{ error?: string }>(error)) {
@@ -378,7 +512,9 @@ async function initDiceCanvas(): Promise<void> {
     }
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    diceInstance.value = createDddiceInstance();
+    // markRaw: the dddice instance uses private class fields, which throw when accessed
+    // through a Vue reactive proxy (e.g. on destroy) and can break navigation.
+    diceInstance.value = markRaw(createDddiceInstance());
     await diceInstance.value.init(canvas);
     onResize.value = () => {
         if (!(diceInstance.value && diceCanvas.value)) {
@@ -405,11 +541,16 @@ function testDice(dice: DiceTheme): void {
 }
 
 onMounted(async () => {
-    const [advisorResult, diceResult, kingdomStyleResult] =
+    const [advisorResult, diceResult, kingdomStyleResult, loadoutResult] =
         await Promise.allSettled([
             axios.get<Advisor[]>("/api/my-advisors"),
             axios.get<DiceTheme[]>("/api/my-dice"),
             axios.get<KingdomStyle[]>("/api/my-kingdom-styles"),
+            axios.get<{
+                items: LoadoutItem[];
+                equipped: number[];
+                max_equipped: number;
+            }>("/api/loadout"),
         ]);
     myAdvisors.value =
         advisorResult.status === "fulfilled" ? advisorResult.value.data : [];
@@ -422,6 +563,12 @@ onMounted(async () => {
             ? kingdomStyleResult.value.data
             : [];
     stylesLoading.value = false;
+    if (loadoutResult.status === "fulfilled") {
+        myItems.value = loadoutResult.value.data.items;
+        equippedIds.value = [...loadoutResult.value.data.equipped];
+        maxEquipped.value = loadoutResult.value.data.max_equipped;
+    }
+    itemsLoading.value = false;
     await initDiceCanvas();
 });
 
@@ -742,6 +889,111 @@ onBeforeUnmount(() => {
 }
 
 .btn-ks-activate:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+/* Items / Loadout */
+.items-hint {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+    margin-bottom: 14px;
+}
+
+.item-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 12px;
+}
+
+.item-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+    padding: 12px 10px;
+    background: linear-gradient(180deg, var(--bg-secondary), var(--bg-primary));
+    border: 2px solid var(--rarity-color, var(--border-gold));
+    border-radius: 10px;
+}
+
+.item-card.equipped {
+    box-shadow: 0 0 12px var(--rarity-glow, rgba(212, 168, 67, 0.4));
+}
+
+.rarity-common {
+    --rarity-color: #9aa0a6;
+    --rarity-glow: rgba(154, 160, 166, 0.4);
+}
+.rarity-rare {
+    --rarity-color: #4d9de0;
+    --rarity-glow: rgba(77, 157, 224, 0.45);
+}
+.rarity-epic {
+    --rarity-color: #b072e0;
+    --rarity-glow: rgba(176, 114, 224, 0.45);
+}
+.rarity-legendary {
+    --rarity-color: #e0a83c;
+    --rarity-glow: rgba(224, 168, 60, 0.5);
+}
+
+.item-glyph {
+    font-size: 1.8rem;
+}
+
+.item-name {
+    font-family: "Cinzel", serif;
+    color: var(--text-bright);
+    font-size: 0.85rem;
+    font-weight: 700;
+}
+
+.item-rarity {
+    font-size: 0.6rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--rarity-color, var(--accent-gold));
+    font-weight: 700;
+}
+
+.item-cadence {
+    font-size: 0.68rem;
+    color: var(--accent-gold);
+}
+
+.item-desc {
+    font-size: 0.72rem;
+    color: var(--text-secondary);
+    line-height: 1.3;
+    margin: 2px 0 6px;
+}
+
+.btn-item-equip {
+    margin-top: auto;
+    padding: 5px 16px;
+    font-size: 0.75rem;
+    font-family: "Cinzel", serif;
+    border-radius: 6px;
+    cursor: pointer;
+    background: rgba(212, 168, 67, 0.15);
+    border: 1px solid rgba(212, 168, 67, 0.3);
+    color: var(--accent-gold);
+}
+
+.btn-item-equip:hover:not(:disabled) {
+    background: rgba(212, 168, 67, 0.25);
+}
+
+.btn-item-equip.btn-item-equipped {
+    background: rgba(39, 174, 96, 0.15);
+    border-color: rgba(39, 174, 96, 0.4);
+    color: #5ab87a;
+}
+
+.btn-item-equip:disabled {
     opacity: 0.5;
     cursor: default;
 }

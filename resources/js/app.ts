@@ -1,5 +1,6 @@
 import "./bootstrap";
 import "../css/ta-design.css";
+import "../css/admin.css";
 import { createApp } from "vue";
 import { createRouter, createWebHistory } from "vue-router";
 import type { RouteRecordRaw } from "vue-router";
@@ -10,6 +11,7 @@ import GameSetup from "./components/GameSetup.vue";
 import GameBoard from "./components/GameBoard.vue";
 import GameOver from "./components/GameOver.vue";
 import GameHistory from "./components/GameHistory.vue";
+import ChallengesPage from "./components/ChallengesPage.vue";
 import GameReplay from "./components/GameReplay.vue";
 import PublicReplay from "./components/PublicReplay.vue";
 import FriendsList from "./components/FriendsList.vue";
@@ -37,6 +39,9 @@ import AdminChallenges from "./components/admin/AdminChallenges.vue";
 import AdminGames from "./components/admin/AdminGames.vue";
 import AdminXp from "./components/admin/AdminXp.vue";
 import AdminAddons from "./components/admin/AdminAddons.vue";
+import AdminSeeders from "./components/admin/AdminSeeders.vue";
+import AdminSchedule from "./components/admin/AdminSchedule.vue";
+import AdminSettings from "./components/admin/AdminSettings.vue";
 import AdminGifts from "./components/admin/AdminGifts.vue";
 import AdminAnnouncements from "./components/admin/AdminAnnouncements.vue";
 import AdminUsers from "./components/admin/AdminUsers.vue";
@@ -85,6 +90,7 @@ const routes: RouteRecordRaw[] = [
         meta: { auth: true },
     },
     { path: "/campaigns", component: GameHistory, meta: { auth: true } },
+    { path: "/challenges", component: ChallengesPage, meta: { auth: true } },
     { path: "/friends", component: FriendsList, meta: { auth: true } },
     { path: "/profile", component: ProfilePage, meta: { auth: true } },
     { path: "/leaderboard", component: LeaderboardPage, meta: { auth: true } },
@@ -169,6 +175,9 @@ const routes: RouteRecordRaw[] = [
             { path: "retention", component: AdminRetention },
             { path: "icons", component: AdminIcons },
             { path: "advisor-levels", component: AdminCharacterLevelOptions },
+            { path: "seeders", component: AdminSeeders },
+            { path: "schedule", component: AdminSchedule },
+            { path: "settings", component: AdminSettings },
         ],
     },
 ];

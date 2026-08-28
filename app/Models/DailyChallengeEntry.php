@@ -7,10 +7,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class DailyChallengeEntry extends Model
 {
-    protected $fillable = ['user_id', 'daily_challenge_id', 'game_id', 'completed_at'];
+    public const STATUS_PENDING = 'pending';
+    public const STATUS_IN_PROGRESS = 'in_progress';
+    public const STATUS_WON = 'won';
+    public const STATUS_LOST = 'lost';
+
+    protected $fillable = ['user_id', 'daily_challenge_id', 'game_id', 'completed_at', 'status', 'started_at', 'rounds_taken'];
 
     protected $casts = [
         'completed_at' => 'datetime',
+        'started_at' => 'datetime',
+        'rounds_taken' => 'integer',
     ];
 
     public function user(): BelongsTo

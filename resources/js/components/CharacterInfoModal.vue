@@ -75,7 +75,7 @@ interface CharacterInfo {
   name?: string;
   image_url?: string;
   description?: string;
-  dice?: string[][];
+  dice?: (number | string)[][];
   wild_ability?: string;
   wild_ability_description?: string;
   starting_bonus?: StartingBonus;

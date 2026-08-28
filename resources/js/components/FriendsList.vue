@@ -97,7 +97,10 @@
                             <span
                                 v-if="f.league"
                                 class="league-badge"
-                                :style="{ borderColor: f.league.color, color: f.league.color }"
+                                :style="{
+                                    borderColor: f.league.color,
+                                    color: f.league.color,
+                                }"
                                 >{{ f.league.name }}</span
                             >
                         </div>
@@ -394,14 +397,11 @@ function statusText(friend: Friendship): string {
 
 .add-ally-btn {
     cursor: pointer;
-    transition:
-        transform 0.12s,
-        box-shadow 0.12s;
+    transition: transform 0.12s;
 }
 
 .add-ally-btn:active:not(:disabled) {
     transform: translateY(2px);
-    box-shadow: 0 1px 0 #7a5410;
 }
 
 .add-ally-btn:disabled {

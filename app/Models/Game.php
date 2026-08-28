@@ -18,6 +18,7 @@ class Game extends Model
         'turn_time_limit', 'turn_started_at', 'cancelled_at',
         'is_custom', 'custom_rules', 'is_private', 'lobby_password', 'tournament_match_id',
         'pending_curses',
+        'is_daily', 'daily_seed', 'daily_challenge_id',
     ];
 
     protected $casts = [
@@ -37,6 +38,8 @@ class Game extends Model
         'cancelled_at' => 'datetime',
         'rewards_processed_at' => 'datetime',
         'pending_curses' => 'array',
+        'is_daily' => 'boolean',
+        'daily_challenge_id' => 'integer',
     ];
 
     public function user(): BelongsTo
@@ -107,6 +110,16 @@ class Game extends Model
     public function isCooperative(): bool
     {
         return $this->game_type !== 'duel';
+    }
+
+    public function isDaily(): bool
+    {
+        return (bool) $this->is_daily;
+    }
+
+    public function dailyChallenge(): BelongsTo
+    {
+        return $this->belongsTo(DailyChallenge::class);
     }
 
     public function getOfferer(): ?GamePlayer

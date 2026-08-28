@@ -137,6 +137,9 @@ interface KingdomCssVariables {
   bar_caution?: string;
   stat_color?: string;
   text_color?: string;
+  // Admin-authored styles carry these keyed dynamically (Record<string, string>);
+  // the index signature keeps that source assignable without a cast.
+  [key: string]: string | undefined;
 }
 
 interface KingdomStyleData {
@@ -429,11 +432,11 @@ function getValueClass(value: number): string {
 function statLabel(statKey: string): string {
   const labels: Record<string, string> = {
     wealth: "Wealth",
-    influence: "People",
-    security: "Military",
-    religion: "Church",
+    influence: "Influence",
+    security: "Security",
+    religion: "Religion",
     food: "Food",
-    happiness: "Mood",
+    happiness: "Happiness",
   };
   return labels[statKey] ?? statKey;
 }

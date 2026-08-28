@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\GameRule;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 
@@ -10,9 +11,10 @@ class AiGeneratorController extends Controller
 {
     private function getApiKey(): string
     {
-        $key = config('services.anthropic.api_key');
+        // Prefer an admin-configured key (Admin → Settings), fall back to env config.
+        $key = GameRule::getValue('anthropic_api_key') ?: config('services.anthropic.api_key');
         if (!$key) {
-            abort(500, 'ANTHROPIC_API_KEY not configured');
+            abort(500, 'Anthropic API key not configured (set it in Admin → Settings, or via ANTHROPIC_API_KEY).');
         }
         return $key;
     }

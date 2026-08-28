@@ -87,6 +87,7 @@
         <div class="item-header">
           <h4>{{ ev.title }}</h4>
           <div class="item-actions">
+            <button @click="openPreview(ev)">Preview</button>
             <button @click="openEdit(ev)">Edit</button>
             <button class="btn-danger" @click="confirmDelete(ev)">Delete</button>
           </div>
@@ -284,6 +285,23 @@
         </div>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewEvent !== undefined"
+      :title="previewEvent?.title"
+      @close="previewEvent = undefined"
+    >
+      <EventBanner
+        v-if="previewEvent"
+        :event="{
+          title: previewEvent.title,
+          effect: previewEvent.effect,
+          stat_modifiers: previewEvent.stat_modifiers ?? undefined,
+          mechanic: previewEvent.mechanic,
+        }"
+      />
+    </AdminPreviewModal>
   </div>
 </template>
 
@@ -291,6 +309,8 @@
 import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../../stores/toast";
+import EventBanner from "../EventBanner.vue";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
 import AdminSearchInput from "./AdminSearchInput.vue";
 import { useIcons } from "../../stores/icons";
 
@@ -392,6 +412,7 @@ const loading = ref(true);
 const searchQuery = ref("");
 const showModal = ref(false);
 const editing = ref<GameEvent | undefined>(undefined);
+const previewEvent = ref<GameEvent | undefined>(undefined);
 const saving = ref(false);
 const formError = ref("");
 const showAiModal = ref(false);
@@ -528,6 +549,10 @@ function setDuelModifier(key: string, value: string): void {
   } else {
     form.modifiers_duel[key] = parsed;
   }
+}
+
+function openPreview(event: GameEvent): void {
+  previewEvent.value = event;
 }
 
 function openCreate(): void {

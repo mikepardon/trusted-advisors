@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Models\Cosmetic;
+use App\Models\Item;
 use App\Models\Season;
 use App\Models\SeasonPassTier;
+use App\Models\Unlockable;
 use App\Models\User;
 use App\Models\UserPassProgress;
+use App\Models\UserUnlockable;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -40,12 +43,17 @@ class SeasonPassService
                 ? null
                 : Cosmetic::query()->where('slug', $tier['cosmetic'])->value('id');
 
+            $itemId = ($tier['item'] ?? null) === null
+                ? null
+                : Item::query()->where('name', $tier['item'])->value('id');
+
             SeasonPassTier::updateOrCreate(
                 ['season_id' => $season->id, 'tier' => $tier['tier']],
                 [
                     'points_required' => $tier['points'],
                     'reward_coins' => $tier['coins'],
                     'reward_cosmetic_id' => $cosmeticId,
+                    'reward_item_id' => $itemId,
                     'name' => $tier['name'],
                 ],
             );
@@ -56,23 +64,23 @@ class SeasonPassService
      * The free-track reward ladder: coins fill the in-between tiers; seeded cosmetics are
      * the milestone payoffs.
      *
-     * @return list<array{tier: int, points: int, coins: int, cosmetic: string|null, name: string}>
+     * @return list<array{tier: int, points: int, coins: int, cosmetic: string|null, item?: string|null, name: string}>
      */
     private function tierLadder(): array
     {
         return [
-            ['tier' => 1, 'points' => 150, 'coins' => 200, 'cosmetic' => null, 'name' => '200 Gold'],
-            ['tier' => 2, 'points' => 400, 'coins' => 0, 'cosmetic' => 'the-wise', 'name' => 'Title: The Wise'],
-            ['tier' => 3, 'points' => 750, 'coins' => 300, 'cosmetic' => null, 'name' => '300 Gold'],
-            ['tier' => 4, 'points' => 1150, 'coins' => 0, 'cosmetic' => 'bronze-ring', 'name' => 'Bronze Ring'],
-            ['tier' => 5, 'points' => 1600, 'coins' => 0, 'cosmetic' => 'midnight', 'name' => 'Midnight Card Back'],
-            ['tier' => 6, 'points' => 2200, 'coins' => 400, 'cosmetic' => null, 'name' => '400 Gold'],
-            ['tier' => 7, 'points' => 2900, 'coins' => 0, 'cosmetic' => 'petals', 'name' => 'Falling Petals'],
-            ['tier' => 8, 'points' => 3700, 'coins' => 0, 'cosmetic' => 'kingmaker', 'name' => 'Title: Kingmaker'],
-            ['tier' => 9, 'points' => 4600, 'coins' => 0, 'cosmetic' => 'silver-ring', 'name' => 'Silver Ring'],
-            ['tier' => 10, 'points' => 5600, 'coins' => 500, 'cosmetic' => null, 'name' => '500 Gold'],
-            ['tier' => 11, 'points' => 6700, 'coins' => 0, 'cosmetic' => 'dragonsbane', 'name' => 'Title: Dragonsbane'],
-            ['tier' => 12, 'points' => 8000, 'coins' => 0, 'cosmetic' => 'royal-ring', 'name' => 'Royal Ring'],
+            ['tier' => 1, 'points' => 150, 'coins' => 200, 'cosmetic' => null, 'item' => null, 'name' => '200 Gold'],
+            ['tier' => 2, 'points' => 400, 'coins' => 0, 'cosmetic' => 'the-wise', 'item' => null, 'name' => 'Title: The Wise'],
+            ['tier' => 3, 'points' => 750, 'coins' => 300, 'cosmetic' => null, 'item' => null, 'name' => '300 Gold'],
+            ['tier' => 4, 'points' => 1150, 'coins' => 0, 'cosmetic' => 'bronze-ring', 'item' => null, 'name' => 'Bronze Ring'],
+            ['tier' => 5, 'points' => 1600, 'coins' => 0, 'cosmetic' => 'midnight', 'item' => null, 'name' => 'Midnight Card Back'],
+            ['tier' => 6, 'points' => 2200, 'coins' => 400, 'cosmetic' => null, 'item' => null, 'name' => '400 Gold'],
+            ['tier' => 7, 'points' => 2900, 'coins' => 0, 'cosmetic' => 'petals', 'item' => null, 'name' => 'Falling Petals'],
+            ['tier' => 8, 'points' => 3700, 'coins' => 0, 'cosmetic' => 'kingmaker', 'item' => null, 'name' => 'Title: Kingmaker'],
+            ['tier' => 9, 'points' => 4600, 'coins' => 0, 'cosmetic' => 'silver-ring', 'item' => null, 'name' => 'Silver Ring'],
+            ['tier' => 10, 'points' => 5600, 'coins' => 0, 'cosmetic' => null, 'item' => "Excalibur's Shard", 'name' => "Item: Excalibur's Shard"],
+            ['tier' => 11, 'points' => 6700, 'coins' => 0, 'cosmetic' => 'dragonsbane', 'item' => null, 'name' => 'Title: Dragonsbane'],
+            ['tier' => 12, 'points' => 8000, 'coins' => 0, 'cosmetic' => 'royal-ring', 'item' => null, 'name' => 'Royal Ring'],
         ];
     }
 
@@ -138,6 +146,12 @@ class SeasonPassService
                     'rarity' => $tier->rewardCosmetic->rarity,
                     'value' => $tier->rewardCosmetic->value,
                 ],
+                'reward_item' => $tier->rewardItem === null ? null : [
+                    'name' => $tier->rewardItem->name,
+                    'type' => $tier->rewardItem->type,
+                    'cadence' => $tier->rewardItem->cadence,
+                    'description' => $tier->rewardItem->description,
+                ],
                 'reached' => $reached,
                 'claimed' => $isClaimed,
                 'claimable' => $reached && ! $isClaimed,
@@ -170,7 +184,7 @@ class SeasonPassService
      * same tier can't both pass the controller's pre-check and double-grant: the
      * second caller receives `alreadyClaimed` and nothing is granted twice.
      *
-     * @return array{coins: int, cosmetic: string|null, alreadyClaimed: bool}
+     * @return array{coins: int, cosmetic: string|null, item: string|null, alreadyClaimed: bool}
      */
     public function grantTier(User $user, Season $season, SeasonPassTier $tier): array
     {
@@ -184,7 +198,7 @@ class SeasonPassService
             $claimed = $progress->claimed_tiers ?? [];
 
             if (in_array($tier->tier, $claimed, true)) {
-                return ['coins' => 0, 'cosmetic' => null, 'alreadyClaimed' => true];
+                return ['coins' => 0, 'cosmetic' => null, 'item' => null, 'alreadyClaimed' => true];
             }
 
             if ($tier->reward_coins > 0) {
@@ -204,11 +218,26 @@ class SeasonPassService
                 $cosmeticName = $tier->rewardCosmetic->name;
             }
 
+            // Grant an item reward through the Unlockable system so it appears in the
+            // player's loadout picker (see User::ownedItemIds()).
+            $itemName = null;
+            if ($tier->rewardItem !== null) {
+                $unlockable = Unlockable::firstOrCreate(
+                    ['type' => 'item', 'entity_id' => $tier->reward_item_id],
+                    ['unlock_method' => 'reward'],
+                );
+                UserUnlockable::firstOrCreate(
+                    ['user_id' => $user->id, 'unlockable_id' => $unlockable->id],
+                    ['unlocked_at' => now()],
+                );
+                $itemName = $tier->rewardItem->name;
+            }
+
             $claimed[] = $tier->tier;
             $progress->claimed_tiers = array_values(array_unique($claimed));
             $progress->save();
 
-            return ['coins' => $tier->reward_coins, 'cosmetic' => $cosmeticName, 'alreadyClaimed' => false];
+            return ['coins' => $tier->reward_coins, 'cosmetic' => $cosmeticName, 'item' => $itemName, 'alreadyClaimed' => false];
         });
     }
 }

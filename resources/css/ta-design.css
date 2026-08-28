@@ -88,7 +88,8 @@
     font-size: 22px;
     line-height: 1;
     cursor: pointer;
-    padding: 0;
+    /* Bottom padding nudges the chevron down — its font metrics sit it slightly high. */
+    padding: 0 0 5px;
     transition:
         transform 0.12s,
         box-shadow 0.12s;
@@ -433,27 +434,17 @@
     border-radius: 14px;
     background: linear-gradient(180deg, #ffe897, #f0c050 55%, #b8842a);
     border: 1.5px solid #fff0b0;
-    box-shadow: 0 5px 0 #7a5410;
     font-family: "Cinzel", serif;
     font-size: 15px;
     font-weight: 800;
     letter-spacing: 1.4px;
     color: #241703;
     cursor: pointer;
-    transition:
-        transform 0.12s,
-        box-shadow 0.12s;
-}
-
-.ta-cta:hover:not(:disabled) {
-    box-shadow:
-        0 5px 0 #7a5410,
-        0 0 20px rgba(240, 192, 80, 0.4);
+    transition: transform 0.12s;
 }
 
 .ta-cta:active:not(:disabled) {
-    transform: translateY(3px);
-    box-shadow: 0 2px 0 #7a5410;
+    transform: translateY(2px);
 }
 
 .ta-cta:disabled {
@@ -464,7 +455,6 @@
 .ta-cta--dark {
     background: linear-gradient(180deg, #4a3624, #241a10);
     border-color: rgba(240, 192, 80, 0.5);
-    box-shadow: 0 4px 0 #120c06;
     color: var(--ta-gold);
 }
 

@@ -16,6 +16,8 @@ class DatabaseSeeder extends Seeder
             CardSeeder::class,
             EventSeeder::class,
             ItemSeeder::class,
+            // Makes non-starter items purchasable in the coin shop (needs items seeded first).
+            ItemShopSeeder::class,
             CurseSeeder::class,
             CosmeticSeeder::class,
             KingdomStyleSeeder::class,

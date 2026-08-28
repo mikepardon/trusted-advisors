@@ -537,11 +537,11 @@ function radialOffset(value: number | undefined): number {
 function statLabel(statKey: string): string {
     const labels: Record<string, string> = {
         wealth: "Wealth",
-        influence: "People",
-        security: "Military",
-        religion: "Church",
+        influence: "Influence",
+        security: "Security",
+        religion: "Religion",
         food: "Food",
-        happiness: "Mood",
+        happiness: "Happiness",
     };
     return labels[statKey] ?? statKey;
 }

@@ -121,7 +121,8 @@
                     v-for="item in filteredItems"
                     :key="item.id"
                     class="shop-card"
-                    :class="{ owned: item.owned }"
+                    :class="{ owned: item.owned, clickable: item.type === 'item' }"
+                    @click="item.type === 'item' && openItemDetail(item)"
                 >
                     <div class="shop-card-preview">
                         <img
@@ -173,7 +174,7 @@
                             v-if="item.owned"
                             class="ta-pill ta-pill--claimed"
                             :disabled="!item.price || coins < item.price"
-                            @click="openGiftPicker(item)"
+                            @click.stop="openGiftPicker(item)"
                         >
                             OWNED
                         </button>
@@ -184,7 +185,7 @@
                                 :disabled="
                                     coins < item.price || purchasing === item.id
                                 "
-                                @click="confirmPurchase(item)"
+                                @click.stop="confirmPurchase(item)"
                             >
                                 <span v-if="purchasing === item.id">...</span>
                                 <span v-else>&#9673; {{ item.price }}</span>
@@ -193,7 +194,7 @@
                                 v-if="item.cash_price_cents"
                                 class="ta-pill ta-pill--blue"
                                 :disabled="purchasing === item.id"
-                                @click="purchaseCash(item)"
+                                @click.stop="purchaseCash(item)"
                             >
                                 ${{ (item.cash_price_cents / 100).toFixed(2) }}
                             </button>
@@ -251,6 +252,57 @@
                 </div>
             </div>
 
+            <!-- Item Detail Modal -->
+            <div
+                v-if="detailItem"
+                class="modal-overlay"
+                @click.self="detailItem = undefined"
+            >
+                <div class="modal-box item-detail-box">
+                    <button
+                        class="item-detail-close"
+                        @click="detailItem = undefined"
+                    >
+                        &times;
+                    </button>
+                    <span class="item-detail-glyph">{{
+                        typeIcon("item")
+                    }}</span>
+                    <h3 class="item-detail-name">{{ detailItem.name }}</h3>
+                    <div class="item-detail-tags">
+                        <span
+                            v-if="detailItem.rarity"
+                            class="item-detail-rarity"
+                            :class="'rarity-' + detailItem.rarity"
+                            >{{ detailItem.rarity }}</span
+                        >
+                        <span
+                            v-if="detailItem.cadence"
+                            class="item-detail-cadence"
+                            >{{ cadenceLabel(detailItem.cadence) }}</span
+                        >
+                    </div>
+                    <p class="item-detail-effect">
+                        {{ itemEffectSummary(detailItem) }}
+                    </p>
+                    <p class="item-detail-desc">{{ detailItem.description }}</p>
+                    <button
+                        v-if="!detailItem.owned && detailItem.price"
+                        class="ta-pill ta-pill--gold item-detail-buy"
+                        :disabled="
+                            coins < detailItem.price ||
+                            purchasing === detailItem.id
+                        "
+                        @click="confirmPurchase(detailItem)"
+                    >
+                        &#9673; {{ detailItem.price }}
+                    </button>
+                    <span v-else-if="detailItem.owned" class="item-detail-owned"
+                        >Owned</span
+                    >
+                </div>
+            </div>
+
             <!-- Friend Picker Modal -->
             <div
                 v-if="giftItem"
@@ -261,8 +313,9 @@
                     <h3>Gift to Friend</h3>
                     <p>
                         Send <strong>{{ giftItem.name }}</strong> (&#129689;
-                        {{ giftItem.price }})
+                        {{ giftItem.gift_price ?? giftItem.price }})
                     </p>
+                    <p class="gift-note">Gifting costs 4&times; the shop price.</p>
                     <div v-if="friendsLoading" class="shop-loading">
                         Loading friends...
                     </div>
@@ -506,7 +559,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, useTemplateRef } from "vue";
+import {
+    ref,
+    computed,
+    markRaw,
+    onMounted,
+    onBeforeUnmount,
+    useTemplateRef,
+    watch,
+} from "vue";
 import type { CSSProperties } from "vue";
 import axios, { isAxiosError } from "axios";
 import HintBubble from "./HintBubble.vue";
@@ -553,6 +614,8 @@ interface ShopItem {
     background_image_url?: string;
     css_vars?: KingdomStyleCssVariables;
     price?: number;
+    gift_price?: number;
+    rarity?: string;
     cash_price_cents?: number;
     owned?: boolean;
     apple_product_id?: string;
@@ -561,6 +624,9 @@ interface ShopItem {
     wild_ability?: string;
     wild_value?: number;
     wild_ability_description?: string;
+    cadence?: string;
+    item_type?: string;
+    effect?: { bonus_type?: string; bonus_value?: number; stat?: string };
 }
 
 interface PremiumProduct {
@@ -664,6 +730,67 @@ const previewStyle = ref<ShopItem>();
 const diceInstance = ref<DddiceInstance>();
 const activeTab = ref<ShopItemType>("dice_theme");
 const giftItem = ref<ShopItem>();
+const detailItem = ref<ShopItem>();
+
+function openItemDetail(item: ShopItem): void {
+    detailItem.value = item;
+}
+
+const CADENCE_LABELS: Record<string, string> = {
+    passive: "Always active",
+    per_round: "Once per round",
+    per_game: "Once per game",
+};
+
+function cadenceLabel(cadence?: string): string {
+    return (cadence && CADENCE_LABELS[cadence]) || "";
+}
+
+function itemEffectSummary(item: ShopItem): string {
+    const effect = item.effect;
+    if (!effect?.bonus_type) {
+        return item.description || "";
+    }
+    const value = effect.bonus_value ?? 0;
+    switch (effect.bonus_type) {
+        case "roll_bonus": {
+            return `+${value} to your dice roll`;
+        }
+        case "roll_penalty": {
+            return `${value} to your dice roll`;
+        }
+        case "difficulty_reduction": {
+            return `-${Math.abs(value)} to your challenge difficulty`;
+        }
+        case "increase_difficulty": {
+            return `+${Math.abs(value)} to your opponent's difficulty`;
+        }
+        case "stat_boost": {
+            return `+${value} ${effect.stat || "to a stat"}`;
+        }
+        case "heal_die": {
+            return "Recover a lost die";
+        }
+        case "score_bonus": {
+            return `+${value} renown`;
+        }
+        case "shield_negative": {
+            return "Blocks negative card effects for a round";
+        }
+        case "debuff_roll": {
+            return `${value} to your opponent's roll`;
+        }
+        case "steal_stat": {
+            return `Steal ${value} stat point from your opponent`;
+        }
+        case "peek_cards": {
+            return "Peek at your opponent's cards";
+        }
+        default: {
+            return item.description || "";
+        }
+    }
+}
 const friends = ref<ShopFriend[]>([]);
 const friendsLoading = ref(false);
 const giftingTo = ref<GiftTarget>();
@@ -702,12 +829,29 @@ const tabs = computed<ShopTab[]>(() => {
             label: "Styles",
             count: typeCounts.kingdom_style ?? 0,
         },
+        {
+            key: "item",
+            icon: "\u{2694}\u{FE0F}",
+            label: "Items",
+            count: typeCounts.item ?? 0,
+        },
     ];
     return allTabs.filter((tab) => tab.count > 0);
 });
 
 const filteredItems = computed(() =>
     items.value.filter((item) => item.type === activeTab.value),
+);
+
+// The default tab (dice) may have nothing for sale; land on the first tab that does.
+watch(
+    tabs,
+    (available) => {
+        if (available.length > 0 && available.every((tab) => tab.key !== activeTab.value)) {
+            activeTab.value = available[0].key;
+        }
+    },
+    { immediate: true },
 );
 
 const activeSectionLabel = computed(() => {
@@ -828,7 +972,9 @@ async function initDiceCanvas(): Promise<void> {
     }
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
-    const instance: DddiceInstance = createDddiceInstance();
+    // markRaw: the dddice instance uses private class fields (#ready), which throw
+    // "cannot write private member" when accessed through a Vue reactive proxy.
+    const instance: DddiceInstance = markRaw(createDddiceInstance());
     diceInstance.value = instance;
     await instance.init(canvas);
     onResize.value = () => {
@@ -1512,7 +1658,91 @@ function ksModalStyle(item: ShopItem): CSSProperties {
     padding: 20px 24px;
     max-width: 320px;
     width: 90%;
+    max-height: 85vh;
+    overflow-y: auto;
     text-align: center;
+}
+
+.gift-note {
+    font-size: 0.75rem !important;
+    color: var(--accent-gold) !important;
+    font-style: italic;
+    margin: -8px 0 12px !important;
+}
+
+/* Item detail modal */
+.item-detail-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+.item-detail-close {
+    position: absolute;
+    top: 6px;
+    right: 10px;
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 1.5rem;
+    line-height: 1;
+    cursor: pointer;
+}
+.item-detail-glyph {
+    font-size: 2.2rem;
+}
+.item-detail-name {
+    margin: 0 !important;
+}
+.item-detail-tags {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+.item-detail-rarity {
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid currentColor;
+}
+.item-detail-rarity.rarity-common {
+    color: #9aa0a6;
+}
+.item-detail-rarity.rarity-rare {
+    color: #4d9de0;
+}
+.item-detail-rarity.rarity-epic {
+    color: #b072e0;
+}
+.item-detail-rarity.rarity-legendary {
+    color: #e0a83c;
+}
+.item-detail-cadence {
+    font-size: 0.75rem;
+    color: var(--accent-gold);
+}
+.item-detail-effect {
+    font-weight: 700;
+    color: var(--text-bright) !important;
+    margin: 6px 0 0 !important;
+}
+.item-detail-desc {
+    font-style: italic;
+    font-size: 0.82rem !important;
+    color: var(--text-secondary) !important;
+    margin: 0 0 6px !important;
+}
+.item-detail-owned {
+    color: #5ab87a;
+    font-weight: 700;
+    font-family: "Cinzel", serif;
+}
+.shop-card.clickable {
+    cursor: pointer;
 }
 
 .modal-box h3 {

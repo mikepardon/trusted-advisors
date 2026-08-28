@@ -24,6 +24,7 @@
         <div class="curse-header">
           <h4>{{ curse.name }}</h4>
           <div class="curse-actions">
+            <button @click="openPreview(curse)">Preview</button>
             <button @click="openEdit(curse)">Edit</button>
             <button class="btn-danger" @click="confirmDelete(curse)">Delete</button>
           </div>
@@ -199,6 +200,18 @@
         </form>
       </div>
     </div>
+
+    <!-- In-game preview (Teleported to body so it renders in the real game skin) -->
+    <Teleport to="body">
+      <div v-if="previewCurse" class="curse-preview-wrap">
+        <CurseSelectionOverlay
+          :curses="[previewCurse]"
+          player-name="Preview"
+          @selected="previewCurse = undefined"
+        />
+        <button class="curse-preview-close" aria-label="Close preview" @click="previewCurse = undefined">&times;</button>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -206,6 +219,7 @@
 import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../../stores/toast";
+import CurseSelectionOverlay from "../CurseSelectionOverlay.vue";
 
 interface CurseEffect {
   type: string;
@@ -284,6 +298,7 @@ const loading = ref(true);
 const searchQuery = ref("");
 const showModal = ref(false);
 const editing = ref<Curse | undefined>(undefined);
+const previewCurse = ref<Curse | undefined>(undefined);
 const saving = ref(false);
 const formError = ref("");
 const importResult = ref<ImportResult | undefined>(undefined);
@@ -359,6 +374,10 @@ function parseEffect(effect: CurseEffect | undefined): EffectFields {
     stat: effect.stat || "wealth",
     value: effect.value ?? effect.count ?? effect.rounds ?? 1,
   };
+}
+
+function openPreview(curse: Curse): void {
+  previewCurse.value = curse;
 }
 
 function openCreate(): void {
@@ -727,4 +746,28 @@ onMounted(async () => {
 .form-error { color: var(--accent-red); font-size: 0.9rem; margin-bottom: 10px; }
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .header-buttons { display: flex; gap: 8px; }
+
+/* In-game preview close button (overlay itself has no dismiss control) */
+.curse-preview-close {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 301;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(155, 89, 182, 0.5);
+  border-radius: 10px;
+  color: #c890e0;
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.curse-preview-close:hover {
+  border-color: #9b59b6;
+  color: #e0c0f0;
+}
 </style>

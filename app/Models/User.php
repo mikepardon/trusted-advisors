@@ -251,6 +251,53 @@ class User extends Authenticatable
         return $this->userCharacters()->where('character_id', $characterId)->exists();
     }
 
+    public function items(): HasMany
+    {
+        return $this->hasMany(UserItem::class);
+    }
+
+    /**
+     * IDs of every item this user may bring into a game: the shared starter set
+     * plus any items unlocked through the Unlockable/UserUnlockable system.
+     *
+     * @return list<int>
+     */
+    public function ownedItemIds(): array
+    {
+        $starterIds = Item::query()->where('is_starter', true)->pluck('id');
+
+        $unlockedIds = Unlockable::query()
+            ->where('type', 'item')
+            ->whereIn('id', $this->unlockables()->select('unlockable_id'))
+            ->pluck('entity_id');
+
+        return $starterIds->concat($unlockedIds)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function ownsItem(int $itemId): bool
+    {
+        return in_array($itemId, $this->ownedItemIds(), true);
+    }
+
+    /**
+     * IDs of the (max 3) items in the user's ready loadout, in slot order.
+     *
+     * @return list<int>
+     */
+    public function equippedItemIds(): array
+    {
+        return $this->items()
+            ->where('equipped', true)
+            ->orderBy('slot')
+            ->pluck('item_id')
+            ->map(fn ($id) => (int) $id)
+            ->all();
+    }
+
     public function eloHistory(): HasMany
     {
         return $this->hasMany(UserEloHistory::class);

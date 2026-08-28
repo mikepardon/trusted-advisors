@@ -65,7 +65,7 @@ class SeasonPassController extends Controller
         }
 
         return response()->json([
-            'granted' => ['coins' => $granted['coins'], 'cosmetic' => $granted['cosmetic']],
+            'granted' => ['coins' => $granted['coins'], 'cosmetic' => $granted['cosmetic'], 'item' => $granted['item']],
             'state' => $this->passService->state($request->user(), $season),
         ]);
     }

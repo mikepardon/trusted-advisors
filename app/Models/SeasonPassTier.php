@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class SeasonPassTier extends Model
 {
     protected $fillable = [
-        'season_id', 'tier', 'points_required', 'reward_coins', 'reward_cosmetic_id', 'name',
+        'season_id', 'tier', 'points_required', 'reward_coins', 'reward_cosmetic_id', 'reward_item_id', 'name',
     ];
 
     protected function casts(): array
@@ -20,6 +20,7 @@ class SeasonPassTier extends Model
             'points_required' => 'integer',
             'reward_coins' => 'integer',
             'reward_cosmetic_id' => 'integer',
+            'reward_item_id' => 'integer',
         ];
     }
 
@@ -33,5 +34,11 @@ class SeasonPassTier extends Model
     public function rewardCosmetic(): BelongsTo
     {
         return $this->belongsTo(Cosmetic::class, 'reward_cosmetic_id');
+    }
+
+    /** @return BelongsTo<Item, $this> */
+    public function rewardItem(): BelongsTo
+    {
+        return $this->belongsTo(Item::class, 'reward_item_id');
     }
 }

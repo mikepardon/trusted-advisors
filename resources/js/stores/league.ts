@@ -1,5 +1,6 @@
 import { reactive } from "vue";
 import axios from "axios";
+import { useAuth } from "./auth";
 
 export interface LeagueRow {
     rank: number;
@@ -55,6 +56,14 @@ async function fetchStandings(): Promise<void> {
         const response = await axios.get<LeagueResponse>("/api/league");
         state.standings = response.data.standings;
         state.tiers = response.data.tiers;
+
+        // Keep the header's league_points in sync with the live ladder — it's otherwise
+        // cached from login and goes stale after a game changes your score.
+        const auth = useAuth();
+        const you = response.data.standings.rows.find((row) => row.is_you);
+        if (you && auth.state.user) {
+            auth.state.user.league_points = you.score;
+        }
     } finally {
         state.loading = false;
         state.loaded = true;

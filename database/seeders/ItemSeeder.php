@@ -288,7 +288,7 @@ class ItemSeeder extends Seeder
                 'effect_type' => 'active',
                 'is_negative' => false,
                 'is_consumable' => false,
-                'available_cooperative' => false,
+                'available_cooperative' => true,
                 'available_duel' => true,
                 'target' => 'self',
             ],
@@ -361,13 +361,115 @@ class ItemSeeder extends Seeder
                 'target' => 'opponent',
             ],
 
+            // =========================================
+            // LOADOUT SHOWCASE ITEMS (varied cadence)
+            // =========================================
+
+            // Passive: always-on. A permanent +1 to a stat, applied once at game start.
+            [
+                'name' => 'Crown Jewels',
+                'description' => 'The realm\'s treasured regalia. While carried, your kingdom holds a permanent +1 wealth.',
+                'effect' => ['bonus_type' => 'stat_boost', 'bonus_value' => 1, 'stat' => 'wealth'],
+                'effect_type' => 'passive',
+                'is_negative' => false,
+                'is_consumable' => false,
+                'available_cooperative' => true,
+                'available_duel' => false,
+            ],
+            [
+                'name' => 'Sovereign\'s Regalia',
+                'description' => 'The symbols of rightful rule. While carried, your kingdom holds a permanent +1 wealth.',
+                'effect' => ['bonus_type' => 'stat_boost', 'bonus_value' => 1, 'stat' => 'wealth'],
+                'effect_type' => 'passive',
+                'is_negative' => false,
+                'is_consumable' => false,
+                'available_cooperative' => false,
+                'available_duel' => true,
+                'target' => 'self',
+            ],
+
+            // Per-round: a modest boost usable once each round.
+            [
+                'name' => 'Steady Hand',
+                'description' => 'A practised composure. Once each round, add +1 to your roll.',
+                'effect' => ['bonus_type' => 'roll_bonus', 'bonus_value' => 1],
+                'effect_type' => 'active',
+                'is_negative' => false,
+                'is_consumable' => false,
+                'available_cooperative' => true,
+                'available_duel' => false,
+            ],
+            [
+                'name' => 'Veteran\'s Instinct',
+                'description' => 'Hard-won battle sense. Once each round, add +1 to your roll.',
+                'effect' => ['bonus_type' => 'roll_bonus', 'bonus_value' => 1],
+                'effect_type' => 'active',
+                'is_negative' => false,
+                'is_consumable' => false,
+                'available_cooperative' => false,
+                'available_duel' => true,
+                'target' => 'self',
+            ],
         ];
 
+        // New players start with a single item — everything else is bought or earned.
+        $starterNames = [
+            'Shield of Valor',
+        ];
+
+        // Presentation type derived from the item's effect, drives the loadout/inventory icon.
+        $typeByBonus = [
+            'roll_bonus' => 'weapon',
+            'difficulty_reduction' => 'scroll',
+            'stat_boost' => 'potion',
+            'heal_die' => 'potion',
+            'score_bonus' => 'relic',
+            'shield_negative' => 'armour',
+            'debuff_roll' => 'hex',
+            'increase_difficulty' => 'hex',
+            'peek_cards' => 'scroll',
+            'steal_stat' => 'coin',
+        ];
+
+        // Cadence per item name. Everything else defaults to per_game (a single use per game),
+        // which matches the original "single-use" design and fixes the old reappear-next-round bug.
+        $cadenceByName = [
+            'Crown Jewels' => Item::CADENCE_PASSIVE,
+            'Sovereign\'s Regalia' => Item::CADENCE_PASSIVE,
+            'Steady Hand' => Item::CADENCE_PER_ROUND,
+            'Veteran\'s Instinct' => Item::CADENCE_PER_ROUND,
+        ];
+
+        // A few standout items are legendary regardless of their raw numbers.
+        $legendaryNames = ['Excalibur\'s Shard', 'Holy Grail Fragment', 'Crown of Laurels'];
+
         foreach ($items as $item) {
+            $bonusType = $item['effect']['bonus_type'] ?? '';
+            $bonusValue = (int) ($item['effect']['bonus_value'] ?? 0);
+            $item['type'] = $typeByBonus[$bonusType] ?? 'relic';
+            $item['icon_key'] = null;
+            $item['cadence'] = $cadenceByName[$item['name']] ?? Item::CADENCE_PER_GAME;
+            $item['is_starter'] = in_array($item['name'], $starterNames, true);
+            $item['rarity'] = $this->rarityFor($item['name'], $item['cadence'], $bonusValue, $legendaryNames);
+
             Item::updateOrCreate(
                 ['name' => $item['name']],
                 $item
             );
         }
+    }
+
+    /**
+     * @param  list<string>  $legendaryNames
+     */
+    private function rarityFor(string $name, string $cadence, int $bonusValue, array $legendaryNames): string
+    {
+        return match (true) {
+            in_array($name, $legendaryNames, true) => 'legendary',
+            $cadence === Item::CADENCE_PASSIVE => 'epic',
+            $cadence === Item::CADENCE_PER_ROUND => 'rare',
+            $bonusValue >= 2 => 'rare',
+            default => 'common',
+        };
     }
 }

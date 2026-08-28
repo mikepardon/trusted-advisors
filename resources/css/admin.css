@@ -1,0 +1,418 @@
+/*
+ * Trusted Advisors — Admin "Scriptorium" theme.
+ *
+ * A clean, light control surface for the admin panel, deliberately distinct from
+ * the dark "war table" game chrome. Everything here is scoped under
+ * `#game-app.is-admin` so it never touches player-facing screens.
+ *
+ * The leverage: admin components reference the game's theme tokens
+ * (var(--bg-secondary), var(--accent-gold), var(--text-primary)...). Re-declaring
+ * those tokens on the admin subtree re-skins every token-driven style at once.
+ * Hardcoded-hex holdouts in individual pages are patched during the per-page sweep.
+ *
+ * Preview modals that must show the real game skin Teleport to <body>, escaping
+ * this subtree so they inherit the original game tokens from :root.
+ */
+
+#game-app.is-admin {
+    /* ---- Scriptorium palette (remaps the game tokens for the admin subtree) ---- */
+    --bg-primary: #ffffff; /* input / field surfaces */
+    --bg-secondary: #ffffff; /* panels, rows, modals */
+    --bg-card: #fbf9f3; /* subtly raised card */
+    --accent-gold: #a8792c; /* brass — actions, active, accents */
+    --accent-gold-bright: #c89a4a;
+    --accent-red: #b23a2e;
+    --accent-green: #2e7d46;
+    --accent-green-dark: #24623a;
+    --accent-blue: #2f6fb0;
+    --text-primary: #23201a; /* ink */
+    --text-secondary: #7a7365; /* muted / captions */
+    --text-bright: #14110b;
+    --border-gold: #e3ddce; /* hairline */
+    --wood-light: #ffffff;
+    --wood-medium: #f4f0e6;
+    --wood-dark: #eae4d6;
+
+    /* Admin-only tokens */
+    --admin-bg: #f4f0e6; /* parchment page ground */
+    --admin-sidebar: #fbf9f3;
+    --admin-line: #e3ddce;
+    --admin-line-strong: #d2c7ac;
+    --admin-ink: #23201a;
+    --admin-mute: #7a7365;
+    --admin-brass: #a8792c;
+    --admin-brass-strong: #8a6320;
+    --admin-font: "Roboto", system-ui, -apple-system, "Segoe UI",
+        "Helvetica Neue", Arial, sans-serif;
+
+    background: var(--admin-bg);
+    color: var(--admin-ink);
+    font-family: var(--admin-font);
+}
+
+/* Roboto everywhere in admin. The id-scoped universal selector overrides every
+ * scoped `font-family: Cinzel` in individual pages without editing each one, and
+ * never reaches the game (or the Teleported-to-body preview modals). */
+#game-app.is-admin,
+#game-app.is-admin * {
+    font-family: var(--admin-font);
+}
+
+/* ---------------------------------------------------------------- Buttons
+ * The game's chunky wood button is a zero-specificity :where() rule, so these
+ * class-based admin rules win without !important. */
+#game-app.is-admin button:not(.nav-item):not(.mobile-menu-item) {
+    background: #ffffff;
+    color: var(--admin-ink);
+    border: 1px solid var(--admin-line-strong);
+    border-radius: 8px;
+    padding: 7px 13px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    letter-spacing: 0;
+    text-shadow: none;
+    box-shadow: none;
+    transition:
+        background 0.14s,
+        border-color 0.14s,
+        color 0.14s;
+}
+
+#game-app.is-admin
+    button:not(.nav-item):not(.mobile-menu-item):hover:not(:disabled) {
+    background: #f4f0e6;
+    border-color: var(--admin-line-strong);
+}
+
+#game-app.is-admin button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#game-app.is-admin .btn-primary {
+    background: var(--admin-brass);
+    color: #ffffff;
+    border-color: var(--admin-brass);
+    font-weight: 600;
+    text-shadow: none;
+}
+
+#game-app.is-admin .btn-primary:hover:not(:disabled) {
+    background: var(--admin-brass-strong);
+    border-color: var(--admin-brass-strong);
+    color: #ffffff;
+}
+
+#game-app.is-admin .btn-secondary {
+    background: #ffffff;
+    color: var(--admin-brass);
+    border-color: var(--admin-line-strong);
+    font-weight: 600;
+}
+
+#game-app.is-admin .btn-secondary:hover:not(:disabled) {
+    background: #f4f0e6;
+    border-color: var(--admin-brass);
+}
+
+#game-app.is-admin .btn-danger {
+    background: #ffffff;
+    color: var(--admin-red, #b23a2e);
+    border-color: rgba(178, 58, 46, 0.4);
+    font-weight: 600;
+}
+
+#game-app.is-admin .btn-danger:hover:not(:disabled) {
+    background: #b23a2e;
+    color: #ffffff;
+    border-color: #b23a2e;
+}
+
+#game-app.is-admin .btn-sm {
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    border-radius: 6px;
+}
+
+/* ---------------------------------------------------------------- Inputs */
+#game-app.is-admin input,
+#game-app.is-admin select,
+#game-app.is-admin textarea {
+    background: #ffffff;
+    border: 1px solid var(--admin-line-strong);
+    color: var(--admin-ink);
+    border-radius: 6px;
+    padding: 7px 10px;
+    font-size: 0.88rem;
+}
+
+#game-app.is-admin input:focus,
+#game-app.is-admin select:focus,
+#game-app.is-admin textarea:focus {
+    outline: none;
+    border-color: var(--admin-brass);
+    box-shadow: 0 0 0 3px rgba(168, 121, 44, 0.12);
+}
+
+#game-app.is-admin input::placeholder,
+#game-app.is-admin textarea::placeholder {
+    color: #b3ab9a;
+}
+
+/* ---------------------------------------------------------------- Page header */
+#game-app.is-admin .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 22px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--admin-line);
+}
+
+#game-app.is-admin .page-title {
+    color: var(--admin-ink);
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: normal;
+    text-transform: none;
+    text-align: left;
+}
+
+#game-app.is-admin .page-header-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ---------------------------------------------------------------- List rows */
+#game-app.is-admin .list-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+#game-app.is-admin .list-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    background: #ffffff;
+    border: 1px solid var(--admin-line);
+    border-radius: 9px;
+    padding: 12px 14px;
+    transition: border-color 0.14s;
+}
+
+#game-app.is-admin .list-row:hover {
+    border-color: var(--admin-line-strong);
+}
+
+#game-app.is-admin .list-info {
+    min-width: 0;
+}
+
+#game-app.is-admin .list-info strong {
+    color: var(--admin-ink);
+}
+
+#game-app.is-admin .list-top {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+#game-app.is-admin .list-desc,
+#game-app.is-admin .list-sub {
+    font-size: 0.82rem;
+    color: var(--admin-mute);
+    margin-top: 3px;
+    line-height: 1.45;
+}
+
+#game-app.is-admin .list-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------- Badges */
+#game-app.is-admin .status-badge {
+    font-size: 0.65rem;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+#game-app.is-admin .badge-active {
+    background: rgba(46, 125, 70, 0.12);
+    color: var(--accent-green);
+}
+
+#game-app.is-admin .badge-inactive {
+    background: rgba(122, 115, 101, 0.14);
+    color: var(--admin-mute);
+}
+
+/* Generic coloured meta badges used on a few pages. */
+#game-app.is-admin .date-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(47, 111, 176, 0.1);
+    color: var(--accent-blue);
+}
+
+#game-app.is-admin .manual-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(168, 121, 44, 0.14);
+    color: var(--admin-brass);
+}
+
+#game-app.is-admin .addon-badge {
+    font-size: 0.65rem;
+    padding: 2px 8px;
+    border-radius: 6px;
+    background: rgba(138, 58, 138, 0.12);
+    color: #8a3a8a;
+}
+
+/* ---------------------------------------------------------------- Forms */
+#game-app.is-admin .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+#game-app.is-admin .form-group.full {
+    grid-column: 1 / -1;
+}
+
+#game-app.is-admin .form-group label {
+    display: block;
+    color: var(--admin-mute);
+    font-size: 0.8rem;
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+#game-app.is-admin .form-error {
+    color: var(--accent-red);
+    font-size: 0.85rem;
+    margin: 10px 0 0;
+}
+
+/* ---------------------------------------------------------------- Modals */
+#game-app.is-admin .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(35, 32, 26, 0.45);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    padding: 20px;
+}
+
+#game-app.is-admin .modal-content {
+    background: #ffffff;
+    border: 1px solid var(--admin-line);
+    border-radius: 14px;
+    box-shadow: 0 16px 48px rgba(35, 26, 12, 0.22);
+    padding: 26px;
+    width: 100%;
+    max-width: 550px;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+#game-app.is-admin .modal-wide {
+    max-width: 720px;
+}
+
+#game-app.is-admin .modal-content h3 {
+    color: var(--admin-ink);
+    font-size: 1.25rem;
+    margin-bottom: 18px;
+}
+
+#game-app.is-admin .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+/* ---------------------------------------------------------------- Tables */
+#game-app.is-admin .admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #ffffff;
+    border: 1px solid var(--admin-line);
+    border-radius: 9px;
+    overflow: hidden;
+}
+
+#game-app.is-admin .admin-table th {
+    text-align: left;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    color: var(--admin-mute);
+    font-weight: 600;
+    padding: 10px 12px;
+    background: #faf7ef;
+    border-bottom: 1px solid var(--admin-line);
+}
+
+#game-app.is-admin .admin-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--admin-line);
+    color: var(--admin-ink);
+    font-size: 0.86rem;
+}
+
+#game-app.is-admin .admin-table tr:last-child td {
+    border-bottom: none;
+}
+
+#game-app.is-admin .admin-table tbody tr:hover {
+    background: #faf7ef;
+}
+
+/* ---------------------------------------------------------------- Misc */
+#game-app.is-admin .loading,
+#game-app.is-admin .empty {
+    color: var(--admin-mute);
+    text-align: center;
+    padding: 24px;
+    font-style: italic;
+}
+
+#game-app.is-admin .tab-bar {
+    border-bottom: 1px solid var(--admin-line);
+}
+
+#game-app.is-admin .tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    color: var(--admin-mute);
+    font-family: var(--admin-font);
+    font-weight: 600;
+    letter-spacing: 0;
+    padding: 8px 16px;
+}
+
+#game-app.is-admin .tab-btn.active {
+    color: var(--admin-brass);
+    border-bottom-color: var(--admin-brass);
+    background: transparent;
+}

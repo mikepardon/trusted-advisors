@@ -107,8 +107,8 @@ function onMediaSelect(item: MediaItem): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #1e160c;
-  border: 2px solid #8a6a2e;
+  background: #faf7ef;
+  border: 1px solid var(--admin-line-strong, #d2c7ac);
   border-radius: 8px;
   flex-shrink: 0;
 }
@@ -129,23 +129,23 @@ function onMediaSelect(item: MediaItem): void {
   padding: 4px 12px !important;
   font-size: 0.75rem !important;
   border-radius: 4px !important;
-  background: #2a1f14 !important;
-  border: 1px solid #555 !important;
-  color: #b8a07a !important;
+  background: #ffffff !important;
+  border: 1px solid var(--admin-line-strong, #d2c7ac) !important;
+  color: var(--admin-mute, #7a7365) !important;
   cursor: pointer;
 }
 .toggle-btn.active {
-  background: #463220 !important;
-  border-color: #c8952e !important;
-  color: #f0c050 !important;
+  background: rgba(168, 121, 44, 0.12) !important;
+  border-color: var(--admin-brass, #a8792c) !important;
+  color: var(--admin-brass, #a8792c) !important;
 }
 .emoji-input {
   width: 100%;
   padding: 6px 10px;
-  background: #1e160c;
-  border: 1px solid #555;
+  background: #ffffff;
+  border: 1px solid var(--admin-line-strong, #d2c7ac);
   border-radius: 4px;
-  color: #f0e0c8;
+  color: var(--admin-ink, #23201a);
   font-size: 1rem;
   margin-bottom: 8px;
 }
@@ -162,17 +162,17 @@ function onMediaSelect(item: MediaItem): void {
   align-items: center;
   justify-content: center;
   font-size: 1.1rem !important;
-  background: #2a1f14 !important;
+  background: #faf7ef !important;
   border: 1px solid transparent !important;
   border-radius: 4px !important;
   cursor: pointer;
 }
 .emoji-btn:hover {
-  border-color: #c8952e !important;
+  border-color: var(--admin-brass, #a8792c) !important;
 }
 .emoji-btn.selected {
-  border-color: #f0c050 !important;
-  background: #463220 !important;
+  border-color: var(--admin-brass, #a8792c) !important;
+  background: rgba(168, 121, 44, 0.12) !important;
 }
 .image-section .image-preview-row {
   display: flex;
@@ -184,7 +184,7 @@ function onMediaSelect(item: MediaItem): void {
   height: 40px;
   object-fit: contain;
   border-radius: 4px;
-  border: 1px solid #555;
+  border: 1px solid var(--admin-line-strong, #d2c7ac);
 }
 .btn-choose,
 .btn-change {

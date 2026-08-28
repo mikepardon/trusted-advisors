@@ -71,7 +71,7 @@
                       class="arrow-chip"
                       :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
                     >
-{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
+{{ formatStatName(arrow.stat) }}: {{ arrow.value > 0 ? "+" + arrow.value : arrow.value }}
                     </span>
                   </div>
                 </div>
@@ -85,7 +85,7 @@
                       class="arrow-chip"
                       :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
                     >
-{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
+{{ formatStatName(arrow.stat) }}: {{ arrow.value > 0 ? "+" + arrow.value : arrow.value }}
                     </span>
                   </div>
                 </div>
@@ -188,7 +188,7 @@
                 class="arrow-chip"
                 :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
               >
-{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
+{{ formatStatName(arrow.stat) }}: {{ arrow.value > 0 ? "+" + arrow.value : arrow.value }}
               </span>
             </div>
           </div>
@@ -202,7 +202,7 @@
                 class="arrow-chip"
                 :class="arrow.direction === 'up' ? 'arrow-up' : 'arrow-down'"
               >
-{{ formatStatName(arrow.stat) }}<template v-if="hasForesight">: {{ arrow.value > 0 ? '+' + arrow.value : arrow.value }}</template>
+{{ formatStatName(arrow.stat) }}: {{ arrow.value > 0 ? "+" + arrow.value : arrow.value }}
               </span>
             </div>
           </div>
@@ -360,8 +360,6 @@ const selectedPositive = ref<number | undefined>(undefined);
 const isMobile = ref(false);
 const mediaQuery = ref<MediaQueryList | undefined>(undefined);
 const resolvePhase = ref<"rolling" | "results" | undefined>(undefined);
-
-const hasForesight = computed(() => cards.some((item) => item.card.positive_effects?.reveal_stats));
 
 const selectedCard = computed<HandItem | undefined>(() => {
   if (selectedPositive.value === undefined) {

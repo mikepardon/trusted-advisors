@@ -7,12 +7,71 @@ use App\Models\DailyChallenge;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 
 class DailyChallengeController extends Controller
 {
+    /**
+     * Validation rules for the endless "race to a target" criteria shape. The run ends
+     * the instant the goal stat is reached (a win) or a stat collapses (a loss). Shared
+     * between store and update.
+     *
+     * @return array<string, mixed>
+     */
+    private function criteriaRules(): array
+    {
+        $stats = 'wealth,influence,security,religion,food,happiness';
+
+        return [
+            'criteria' => 'required|array',
+            'criteria.mode' => 'required|string|in:cooperative',
+            'criteria.rounds' => 'required|integer|min:1|max:120',
+            'criteria.start' => 'required|array',
+            'criteria.start.all' => 'required|integer|min:0|max:20',
+            'criteria.start.per_stat' => 'nullable|array',
+            'criteria.start.per_stat.*' => 'integer|min:0|max:20',
+
+            // Goal: a single stat target, a per-stat target map, or a floor under every stat.
+            'criteria.goal' => 'required|array',
+            'criteria.goal.type' => 'required|string|in:stat_threshold,stat_threshold_all,no_stat_below',
+            'criteria.goal.stat' => "required_if:criteria.goal.type,stat_threshold|string|in:{$stats}",
+            'criteria.goal.value' => 'required_if:criteria.goal.type,stat_threshold,no_stat_below|integer|min:1|max:20',
+            'criteria.goal.targets' => 'required_if:criteria.goal.type,stat_threshold_all|array',
+            'criteria.goal.targets.*' => 'integer|min:1|max:20',
+
+            'criteria.seed_character_id' => 'nullable|integer|exists:characters,id',
+            'criteria.seed_loadout' => 'nullable|array|max:3',
+            'criteria.seed_loadout.*' => 'integer|exists:items,id',
+
+            // House rules — all seed-safe for a solo daily: the deterministic three, plus
+            // random_starting_stats (seeded via rng) and draw_curse_per_round (draws from the
+            // seeded curse deck by position, single player), so every player's run matches.
+            'criteria.house_rules' => 'nullable|array',
+            'criteria.house_rules.no_negative_effects' => 'boolean',
+            'criteria.house_rules.double_positive_effects' => 'boolean',
+            'criteria.house_rules.hardcore_mode' => 'boolean',
+            'criteria.house_rules.random_starting_stats' => 'boolean',
+            'criteria.house_rules.draw_curse_per_round' => 'boolean',
+
+            // Content pools — restrict the deck for a themed run. Empty/absent = all content.
+            'criteria.card_pool' => 'nullable|array',
+            'criteria.card_pool.*' => 'integer|exists:cards,id',
+            'criteria.item_pool' => 'nullable|array',
+            'criteria.item_pool.*' => 'integer|exists:items,id',
+            'criteria.event_pool' => 'nullable|array',
+            'criteria.event_pool.*' => 'integer|exists:events,id',
+            'criteria.curse_pool' => 'nullable|array',
+            'criteria.curse_pool.*' => 'integer|exists:curses,id',
+
+            'criteria.reward_coins' => 'nullable|integer|min:0|max:100000',
+        ];
+    }
+
     public function index(): JsonResponse
     {
-        return response()->json(DailyChallenge::orderByDesc('date')->limit(60)->get());
+        return response()->json(
+            DailyChallenge::withCount('entries')->orderByDesc('date')->limit(60)->get(),
+        );
     }
 
     public function store(Request $request): JsonResponse
@@ -21,15 +80,14 @@ class DailyChallengeController extends Controller
             'date' => 'required|date|unique:daily_challenges,date',
             'title' => 'required|string|max:255',
             'description' => 'required|string',
-            'criteria' => 'required|array',
-            'criteria.type' => 'required|string',
             'reward_xp' => 'sometimes|integer|min:0',
-            'is_manual' => 'boolean',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            ...$this->criteriaRules(),
         ]);
 
         $validated['is_manual'] = true;
         $challenge = DailyChallenge::create($validated);
+
         return response()->json($challenge, 201);
     }
 
@@ -44,38 +102,28 @@ class DailyChallengeController extends Controller
             'date' => 'sometimes|date|unique:daily_challenges,date,' . $dailyChallenge->id,
             'title' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
-            'criteria' => 'sometimes|array',
-            'criteria.type' => 'required_with:criteria|string',
             'reward_xp' => 'sometimes|integer|min:0',
             'addon_id' => 'nullable|integer|exists:addons,id',
+            ...$this->criteriaRules(),
         ]);
 
+        // Editing a challenge always marks it manual so the scheduler treats it as hand-tuned.
         // An omitted nullable addon_id means "Base Game" was selected; null it explicitly.
         $dailyChallenge->update([
             ...$validated,
+            'is_manual' => true,
             'addon_id' => $validated['addon_id'] ?? null,
         ]);
+
         return response()->json($dailyChallenge);
     }
 
     public function destroy(DailyChallenge $dailyChallenge): JsonResponse
     {
         $dailyChallenge->delete();
+
         return response()->json(null, 204);
     }
-
-    private array $templates = [
-        ['title' => 'Play Any Game', 'description' => 'Complete any game today.', 'criteria' => ['type' => 'play_game', 'mode' => 'any'], 'reward_xp' => 75],
-        ['title' => 'Cooperative Victory', 'description' => 'Win a cooperative game.', 'criteria' => ['type' => 'win_game', 'mode' => 'any'], 'reward_xp' => 100],
-        ['title' => 'Wealthy Kingdom', 'description' => 'Finish a game with Wealth at 18 or higher.', 'criteria' => ['type' => 'stat_threshold', 'stat' => 'wealth', 'value' => 18], 'reward_xp' => 150],
-        ['title' => 'Influential Rule', 'description' => 'Finish a game with Influence at 18 or higher.', 'criteria' => ['type' => 'stat_threshold', 'stat' => 'influence', 'value' => 18], 'reward_xp' => 150],
-        ['title' => 'Fortress Kingdom', 'description' => 'Finish a game with Security at 18 or higher.', 'criteria' => ['type' => 'stat_threshold', 'stat' => 'security', 'value' => 18], 'reward_xp' => 150],
-        ['title' => 'Devout Realm', 'description' => 'Finish a game with Religion at 18 or higher.', 'criteria' => ['type' => 'stat_threshold', 'stat' => 'religion', 'value' => 18], 'reward_xp' => 150],
-        ['title' => 'Bountiful Harvest', 'description' => 'Finish a game with Food at 18 or higher.', 'criteria' => ['type' => 'stat_threshold', 'stat' => 'food', 'value' => 18], 'reward_xp' => 150],
-        ['title' => 'Joyful People', 'description' => 'Finish a game with Happiness at 18 or higher.', 'criteria' => ['type' => 'stat_threshold', 'stat' => 'happiness', 'value' => 18], 'reward_xp' => 150],
-        ['title' => 'Balanced Ruler', 'description' => 'Finish a game with no stat below 8.', 'criteria' => ['type' => 'no_stat_below', 'value' => 8], 'reward_xp' => 200],
-        ['title' => 'Online Warrior', 'description' => 'Complete an online game.', 'criteria' => ['type' => 'play_game', 'mode' => 'online'], 'reward_xp' => 125],
-    ];
 
     public function generateRange(Request $request): JsonResponse
     {
@@ -89,27 +137,21 @@ class DailyChallengeController extends Controller
         $created = 0;
         $skipped = 0;
 
+        // Reuse the endless-shape generator (app:generate-daily-challenge) per date so the
+        // admin range and the scheduled job produce identical, playable challenges.
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
             $dateStr = $date->toDateString();
 
-            if (DailyChallenge::where('date', $dateStr)->exists()) {
+            if (DailyChallenge::whereDate('date', $dateStr)->exists()) {
                 $skipped++;
                 continue;
             }
 
-            $index = $date->dayOfYear % count($this->templates);
-            $template = $this->templates[$index];
+            Artisan::call('app:generate-daily-challenge', ['--date' => $dateStr]);
 
-            DailyChallenge::create([
-                'date' => $dateStr,
-                'title' => $template['title'],
-                'description' => $template['description'],
-                'criteria' => $template['criteria'],
-                'reward_xp' => $template['reward_xp'],
-                'is_manual' => false,
-            ]);
-
-            $created++;
+            if (DailyChallenge::whereDate('date', $dateStr)->exists()) {
+                $created++;
+            }
         }
 
         return response()->json([

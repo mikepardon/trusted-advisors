@@ -107,7 +107,14 @@
                         +{{ myCoins }} Coins
                     </div>
                     <div v-if="myPassPoints" class="reward-item reward-pass">
-                        +{{ myPassPoints }} Season Pass &amp; League
+                        +{{ myPassPoints }} Season Pass
+                    </div>
+                    <div
+                        v-if="myLeagueDelta"
+                        class="reward-item reward-league"
+                        :class="{ 'reward-negative': myLeagueDelta < 0 }"
+                    >
+                        {{ myLeagueDelta > 0 ? "+" : "" }}{{ myLeagueDelta }} League
                     </div>
                     <div v-if="myLevelUp" class="reward-item reward-level">
                         Level Up! Lv.{{ myLevelUp }}
@@ -122,12 +129,22 @@
                     <div
                         v-if="completion.challenge_completed"
                         class="reward-item reward-challenge"
+                        :class="{
+                            'reward-challenge--failed':
+                                !completion.challenge_completed.won,
+                        }"
                     >
-                        Challenge Complete:
-                        {{ completion.challenge_completed.title }} (+{{
-                            completion.challenge_completed.reward_xp
-                        }}
-                        XP)
+                        <template v-if="completion.challenge_completed.won">
+                            Challenge Complete:
+                            {{ completion.challenge_completed.title }} (+{{
+                                completion.challenge_completed.reward_xp
+                            }}
+                            XP)
+                        </template>
+                        <template v-else>
+                            Challenge Failed:
+                            {{ completion.challenge_completed.title }}
+                        </template>
                     </div>
                 </div>
 
@@ -239,6 +256,32 @@
                 </h2>
                 <p class="end-flavor">{{ endFlavor }}</p>
 
+                <!-- Daily-challenge result: remind the player what the trial was and how it went -->
+                <div
+                    v-if="completion?.challenge_completed"
+                    class="challenge-result"
+                    :class="
+                        completion.challenge_completed.won
+                            ? 'challenge-result--won'
+                            : 'challenge-result--failed'
+                    "
+                >
+                    <span class="challenge-result-label">Daily Trial</span>
+                    <span class="challenge-result-title">{{
+                        completion.challenge_completed.title
+                    }}</span>
+                    <span
+                        v-if="completion.challenge_completed.description"
+                        class="challenge-result-goal"
+                        >{{ completion.challenge_completed.description }}</span
+                    >
+                    <span class="challenge-result-verdict">{{
+                        completion.challenge_completed.won
+                            ? `Succeeded — +${completion.challenge_completed.reward_xp} XP`
+                            : "Failed — try again tomorrow"
+                    }}</span>
+                </div>
+
                 <div class="final-stats">
                     <h3>Final Kingdom Status</h3>
                     <div class="stats-grid">
@@ -301,7 +344,7 @@
                             class="breakdown-row"
                         >
                             <span>Bonus Score</span>
-                            <span>+{{ scoreBreakdown.bonus_score }}</span>
+                            <span>{{ scoreBreakdown.bonus_score > 0 ? "+" : "" }}{{ scoreBreakdown.bonus_score }}</span>
                         </div>
                         <div
                             v-if="scoreBreakdown.score_modifier"
@@ -394,7 +437,14 @@
                         +{{ myCoins }} Coins
                     </div>
                     <div v-if="myPassPoints" class="reward-item reward-pass">
-                        +{{ myPassPoints }} Season Pass &amp; League
+                        +{{ myPassPoints }} Season Pass
+                    </div>
+                    <div
+                        v-if="myLeagueDelta"
+                        class="reward-item reward-league"
+                        :class="{ 'reward-negative': myLeagueDelta < 0 }"
+                    >
+                        {{ myLeagueDelta > 0 ? "+" : "" }}{{ myLeagueDelta }} League
                     </div>
                     <div v-if="myLevelUp" class="reward-item reward-level">
                         Level Up! Lv.{{ myLevelUp }}
@@ -409,12 +459,22 @@
                     <div
                         v-if="completion.challenge_completed"
                         class="reward-item reward-challenge"
+                        :class="{
+                            'reward-challenge--failed':
+                                !completion.challenge_completed.won,
+                        }"
                     >
-                        Challenge Complete:
-                        {{ completion.challenge_completed.title }} (+{{
-                            completion.challenge_completed.reward_xp
-                        }}
-                        XP)
+                        <template v-if="completion.challenge_completed.won">
+                            Challenge Complete:
+                            {{ completion.challenge_completed.title }} (+{{
+                                completion.challenge_completed.reward_xp
+                            }}
+                            XP)
+                        </template>
+                        <template v-else>
+                            Challenge Failed:
+                            {{ completion.challenge_completed.title }}
+                        </template>
                     </div>
                 </div>
 
@@ -682,11 +742,14 @@ interface CompletionData {
     coin_awards?: Record<string, CoinAward>;
     bonus_chests?: Record<string, BonusChest>;
     season_pass_points?: Record<string, number>;
+    league_delta?: Record<string, number>;
     character_xp_awards?: Record<string, CharacterXpAward>;
     new_unlocks?: Record<string, UnlockReward[]>;
     challenge_completed?: {
         title: string;
+        description?: string;
         reward_xp: number;
+        won: boolean;
     };
 }
 
@@ -1001,6 +1064,12 @@ const myPassPoints = computed<number | undefined>(() => {
     const userId = auth.state.user?.id;
     if (!userId || !completion.value?.season_pass_points) return undefined;
     return completion.value.season_pass_points[String(userId)];
+});
+
+const myLeagueDelta = computed<number | undefined>(() => {
+    const userId = auth.state.user?.id;
+    if (!userId || !completion.value?.league_delta) return undefined;
+    return completion.value.league_delta[String(userId)] || undefined;
 });
 
 function onChestOpen(tier: BonusChest["tier"]): void {
@@ -1527,6 +1596,18 @@ onMounted(async () => {
     border: 1px solid rgba(155, 114, 224, 0.4);
 }
 
+.reward-league {
+    background: rgba(77, 157, 224, 0.18);
+    color: #7fc4ff;
+    border: 1px solid rgba(77, 157, 224, 0.4);
+}
+
+.reward-league.reward-negative {
+    background: rgba(208, 64, 48, 0.18);
+    color: #f0a8a0;
+    border: 1px solid rgba(208, 64, 48, 0.4);
+}
+
 .reward-elo-up {
     background: rgba(67, 160, 212, 0.15);
     color: #60b8e0;
@@ -1549,6 +1630,68 @@ onMounted(async () => {
     background: rgba(74, 138, 58, 0.15);
     color: #6abf50;
     border: 1px solid rgba(74, 138, 58, 0.3);
+}
+
+.reward-challenge--failed {
+    background: rgba(138, 74, 58, 0.15);
+    color: #c98a7a;
+    border: 1px solid rgba(138, 74, 58, 0.3);
+}
+
+.challenge-result {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 4px;
+    margin: 0.75rem auto 0.25rem;
+    padding: 0.75rem 1rem;
+    border-radius: 10px;
+    max-width: 90%;
+}
+
+.challenge-result--won {
+    background: rgba(74, 138, 58, 0.12);
+    border: 1px solid rgba(74, 138, 58, 0.35);
+}
+
+.challenge-result--failed {
+    background: rgba(138, 74, 58, 0.12);
+    border: 1px solid rgba(138, 74, 58, 0.35);
+}
+
+.challenge-result-label {
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--accent-gold, #d4a843);
+    font-family: "Cinzel", serif;
+}
+
+.challenge-result-title {
+    font-family: "Cinzel", serif;
+    font-weight: 700;
+    font-size: 1.05rem;
+    color: var(--text-bright, #f3e9d2);
+}
+
+.challenge-result-goal {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+
+.challenge-result-verdict {
+    margin-top: 0.2rem;
+    font-weight: 700;
+    font-size: 0.9rem;
+}
+
+.challenge-result--won .challenge-result-verdict {
+    color: #6abf50;
+}
+
+.challenge-result--failed .challenge-result-verdict {
+    color: #c98a7a;
 }
 
 @keyframes rewardPop {

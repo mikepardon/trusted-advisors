@@ -632,6 +632,8 @@ async function startRolling(diceResult: DiceResult): Promise<void> {
         const diceSpecs = diceResult.rolls.map((roll, index) => ({
             theme: themes[index] || "dddice-standard",
             value: roll.value,
+            // Render the wild face as "W" rather than its numeric value.
+            ...((roll.face === "WILD") && { label: "W" }),
         }));
         await dddiceService.roll(diceSpecs);
 

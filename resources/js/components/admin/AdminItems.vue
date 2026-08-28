@@ -84,6 +84,7 @@
         <div class="item-header">
           <h4>{{ item.name }}</h4>
           <div class="item-actions">
+            <button @click="openPreview(item)">Preview</button>
             <button @click="openEdit(item)">Edit</button>
             <button class="btn-danger" @click="confirmDelete(item)">Delete</button>
           </div>
@@ -248,6 +249,15 @@
         </form>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewItem !== undefined"
+      :title="previewItem?.name"
+      @close="previewItem = undefined"
+    >
+      <ItemPreviewCard v-if="previewItem" :item="previewItem" />
+    </AdminPreviewModal>
   </div>
 </template>
 
@@ -255,7 +265,9 @@
 import { computed, onMounted, reactive, ref, useTemplateRef } from "vue";
 import axios, { isAxiosError } from "axios";
 import { useToast } from "../../stores/toast";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
 import AdminSearchInput from "./AdminSearchInput.vue";
+import ItemPreviewCard from "./ItemPreviewCard.vue";
 
 interface ItemEffect {
   bonus_type?: string;
@@ -356,6 +368,7 @@ const loading = ref(true);
 const searchQuery = ref("");
 const showModal = ref(false);
 const editing = ref<Item | undefined>(undefined);
+const previewItem = ref<Item | undefined>(undefined);
 const saving = ref(false);
 const formError = ref("");
 const importResult = ref<ImportResult | undefined>(undefined);
@@ -434,6 +447,10 @@ async function fetchAddons(): Promise<void> {
   } catch {
     // ignore
   }
+}
+
+function openPreview(item: Item): void {
+  previewItem.value = item;
 }
 
 function openCreate(): void {

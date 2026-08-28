@@ -35,26 +35,51 @@ class GameCompletionRewardsTest extends TestCase
         $this->assertSame(150, UserCharacter::query()->where('user_id', $user->id)->value('xp'));
         $this->assertGreaterThan(0, $user->fresh()->coins);
 
-        // Season Pass points (win = 150) and — because it's online — a league score of 150.
-        $this->assertSame(150, UserPassProgress::query()
+        // Season Pass points (win = 100) and — because it's online — a league gain of +100.
+        $this->assertSame(100, UserPassProgress::query()
             ->where('user_id', $user->id)->where('season_id', $season->id)->value('points'));
-        $this->assertSame(150, LeagueMember::query()->where('user_id', $user->id)->value('score'));
+        $this->assertSame(100, LeagueMember::query()->where('user_id', $user->id)->value('score'));
     }
 
-    public function test_offline_single_game_awards_season_points_but_no_league_score(): void
+    public function test_offline_win_awards_season_points_but_no_league(): void
     {
         $season = $this->makeActiveSeason();
         $user = User::factory()->create(['xp' => 0]);
 
-        $this->complete($user, ['mode' => 'single', 'type' => 'cooperative', 'win' => false]);
+        $this->complete($user, ['mode' => 'single', 'type' => 'cooperative', 'win' => true]);
 
-        // Offline loss: base 50 only, no win bonus, no online multiplier.
-        $this->assertSame(50, $user->fresh()->xp);
-        // Season Pass still accrues (loss = 100 points) for any non-custom game...
+        // Season Pass accrues on a win for any non-custom game...
         $this->assertSame(100, UserPassProgress::query()
             ->where('user_id', $user->id)->where('season_id', $season->id)->value('points'));
-        // ...but the competitive league does not, so the player is never even seated.
+        // ...but the competitive league is online-only, so the player is never seated.
         $this->assertFalse(LeagueMember::query()->where('user_id', $user->id)->exists());
+    }
+
+    public function test_a_loss_gives_no_season_points_and_drops_league(): void
+    {
+        $this->makeActiveSeason();
+        $user = User::factory()->create(['xp' => 0]);
+        // Seat the user with a starting league score so the loss has something to drop.
+        app(\App\Services\LeagueService::class)->addScore($user, 100);
+
+        $this->complete($user, ['mode' => 'online', 'type' => 'cooperative', 'win' => false]);
+
+        // A loss earns no Season Pass points (0, not negative) — no progress row is created.
+        $this->assertFalse(UserPassProgress::query()->where('user_id', $user->id)->exists());
+        // League drops by 50: 100 - 50 = 50.
+        $this->assertSame(50, LeagueMember::query()->where('user_id', $user->id)->value('score'));
+    }
+
+    public function test_league_score_is_floored_at_zero_on_a_loss(): void
+    {
+        $this->makeActiveSeason();
+        $user = User::factory()->create(['xp' => 0]);
+        app(\App\Services\LeagueService::class)->addScore($user, 30);
+
+        $this->complete($user, ['mode' => 'online', 'type' => 'cooperative', 'win' => false]);
+
+        // 30 - 50 would be negative; the unsigned score floors at 0.
+        $this->assertSame(0, LeagueMember::query()->where('user_id', $user->id)->value('score'));
     }
 
     public function test_pass_and_play_awards_season_points_but_no_league_score(): void
@@ -64,7 +89,7 @@ class GameCompletionRewardsTest extends TestCase
 
         $this->complete($user, ['mode' => 'pass_and_play', 'type' => 'cooperative', 'win' => true]);
 
-        $this->assertSame(150, UserPassProgress::query()
+        $this->assertSame(100, UserPassProgress::query()
             ->where('user_id', $user->id)->where('season_id', $season->id)->value('points'));
         $this->assertFalse(LeagueMember::query()->where('user_id', $user->id)->exists());
     }
@@ -83,8 +108,8 @@ class GameCompletionRewardsTest extends TestCase
 
         // XP was granted exactly once despite three completion calls.
         $this->assertSame(150, $user->fresh()->xp);
-        $this->assertSame(150, UserPassProgress::query()->where('user_id', $user->id)->value('points'));
-        $this->assertSame(150, LeagueMember::query()->where('user_id', $user->id)->value('score'));
+        $this->assertSame(100, UserPassProgress::query()->where('user_id', $user->id)->value('points'));
+        $this->assertSame(100, LeagueMember::query()->where('user_id', $user->id)->value('score'));
     }
 
     public function test_custom_games_award_nothing(): void

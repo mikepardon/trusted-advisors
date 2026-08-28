@@ -71,7 +71,6 @@
                         <RotatingEventBanner />
                         <AnnouncementsBanner />
                         <div class="daily-enhanced">
-                            <DailyChallengeBanner />
                             <WeeklyChallengeBanner />
                         </div>
                     </div>
@@ -94,6 +93,25 @@
                             <span class="crest-glyph">&#9876;</span>
                             <span class="crest-title">PLAY</span>
                             <span class="crest-sub">ONLINE DUEL</span>
+                        </button>
+
+                        <!-- Seat: Daily challenges (top-centre) — golden when not yet done today -->
+                        <button
+                            class="table-seat seat-tc hub-btn"
+                            :class="{ 'seat-tc-active': dailyNotDone }"
+                            title="Daily Challenges"
+                            @click="
+                                playSound('clickNav');
+                                $router.push('/challenges');
+                            "
+                        >
+                            <span class="seat-medallion">
+                                <span class="seat-glyph">&#9819;</span>
+                            </span>
+                            <span class="seat-label-box">
+                                <span class="seat-label">DAILY</span>
+                                <span class="seat-meta">Trials</span>
+                            </span>
                         </button>
 
                         <!-- Seat: Pass (top-left) -->
@@ -302,13 +320,16 @@
                             >
                         </div>
 
-                        <!-- Solo campaign CTA → single-player start path -->
+                        <!-- Solo campaign CTA → straight to advisor selection (skips the
+                             game-type + 5-year-plan intro screens for a one-tap start). -->
                         <button
                             class="ta-cta ta-cta--dark solo-cta"
                             @click="
                                 playSound('clickCard');
                                 gameMode = 'single';
-                                selectMode();
+                                gameType = 'cooperative';
+                                numberPlayers = 1;
+                                gatherAdvisors();
                             "
                         >
                             &#9819; SOLO CAMPAIGN
@@ -470,6 +491,17 @@
                                     </button>
                                 </div>
                             </div>
+
+                            <button
+                                class="loadout-launch-btn"
+                                type="button"
+                                @click="
+                                    playSound('clickToggle');
+                                    showLoadout = true;
+                                "
+                            >
+                                &#9876; Choose Loadout
+                            </button>
                         </template>
 
                         <!-- Duel mode info (hide all options for event games) -->
@@ -510,7 +542,6 @@
                                     </button>
                                 </div>
                             </div>
-
                         </template>
 
                         <!-- Online: friends picker (cooperative only) -->
@@ -859,16 +890,23 @@
                                 </div>
                             </div>
                             <span
-                                v-if="
-                                    !(
-                                        gameMode === 'single' &&
-                                        gameType === 'duel'
-                                    )
-                                "
+                                v-if="gameMode === 'pass_and_play'"
                                 class="ta-stat-pill"
                                 >PLAYER {{ currentPickingPlayer }}</span
                             >
                         </div>
+
+                        <button
+                            v-if="!allPlayersPicked"
+                            class="loadout-inline-btn"
+                            type="button"
+                            @click="
+                                playSound('clickToggle');
+                                showLoadout = true;
+                            "
+                        >
+                            &#9876; Choose Your Items (max 3)
+                        </button>
 
                         <div class="ta-page-body">
                             <!-- All players have picked: show summary -->
@@ -1185,6 +1223,8 @@
                 </div>
             </Transition>
         </template>
+
+        <LoadoutPicker :open="showLoadout" @close="showLoadout = false" />
     </div>
 </template>
 
@@ -1207,10 +1247,10 @@ import { useToast } from "../stores/toast";
 import { useFreeChest } from "../stores/free-chest";
 import { playSound } from "../sounds";
 import AnnouncementsBanner from "./AnnouncementsBanner.vue";
-import DailyChallengeBanner from "./DailyChallengeBanner.vue";
 import WeeklyChallengeBanner from "./WeeklyChallengeBanner.vue";
 import RotatingEventBanner from "./RotatingEventBanner.vue";
 import HomeHero from "./HomeHero.vue";
+import LoadoutPicker from "./LoadoutPicker.vue";
 import LoginRegister from "./LoginRegister.vue";
 import MatchmakingQueue from "./MatchmakingQueue.vue";
 import StoryIntro from "./StoryIntro.vue";
@@ -1344,6 +1384,9 @@ const homeStats = reactive({
 });
 const notifCount = ref(0);
 const showMobileMenu = ref(false);
+const showLoadout = ref(false);
+// Highlight the daily seat in gold until today's challenge is finished (won/lost).
+const dailyNotDone = ref(false);
 // Custom game
 const isCustomGame = ref(false);
 const customStartingStats = ref(8);
@@ -1409,6 +1452,7 @@ onMounted(async () => {
     subscribeToInvites();
     void fetchHomeStats();
     void freeChest.fetchStatus();
+    void fetchDailyStatus();
     // Check for rotating event query param
     const eventId = firstQueryValue(route.query.event_id);
     if (eventId !== undefined) {
@@ -1931,7 +1975,20 @@ function goBackFromCharacters(): void {
         return;
     }
     playerSelections.value = {};
-    step.value = gameMode.value === "single" ? "settings" : "story";
+    // Solo skips the game-type/5-year-plan screens, so its back goes straight home.
+    step.value = gameMode.value === "single" ? "mode" : "story";
+}
+
+async function fetchDailyStatus(): Promise<void> {
+    try {
+        const response = await axios.get<{ status?: string } | undefined>(
+            "/api/daily-challenge",
+        );
+        const status = response.data?.status;
+        dailyNotDone.value = status !== "won" && status !== "lost";
+    } catch {
+        dailyNotDone.value = false;
+    }
 }
 
 function resetToHome(): void {
@@ -2067,6 +2124,9 @@ async function startGame(): Promise<void> {
     min-height: 0;
     display: flex;
     flex-direction: column;
+    /* Breathing room below the profile header, and clearance for the top-centre
+       daily seat which sits above the war table. */
+    padding-top: 28px;
 }
 
 .hub-banners {
@@ -2196,6 +2256,10 @@ async function startGame(): Promise<void> {
     left: 86%;
     top: 72%;
 }
+.seat-tc {
+    left: 50%;
+    top: 3%;
+}
 
 .seat-medallion {
     position: relative;
@@ -2220,6 +2284,22 @@ async function startGame(): Promise<void> {
         transform 0.12s,
         box-shadow 0.12s,
         border-color 0.12s;
+}
+
+/* Daily seat, inverted to gold while today's challenge is still unfinished. */
+.seat-tc-active .seat-medallion {
+    background: linear-gradient(180deg, #ffe897, #f0c050 55%, #b8842a);
+    border-color: #fff0b0;
+    color: #241703;
+    box-shadow:
+        0 0 16px rgba(240, 192, 80, 0.6),
+        inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.seat-tc-active .seat-glyph {
+    color: #241703;
+}
+.seat-tc-active .seat-label {
+    color: var(--accent-gold-bright, #ffe897);
 }
 
 .table-seat:hover .seat-medallion {
@@ -2669,22 +2749,17 @@ async function startGame(): Promise<void> {
     padding: 12px 20px;
     cursor: pointer;
     letter-spacing: 0;
-    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.25);
 }
 
 .back-btn:hover {
     color: var(--text-bright);
     border-color: var(--border-gold);
     background: linear-gradient(180deg, #4a3a24, var(--wood-light));
-    box-shadow:
-        0 3px 0 rgba(0, 0, 0, 0.25),
-        0 0 8px rgba(240, 192, 80, 0.1);
     transform: translateY(-1px);
 }
 
 .back-btn:active {
     transform: translateY(2px);
-    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
 }
 
 .start-btn {
@@ -2700,6 +2775,9 @@ async function startGame(): Promise<void> {
 .advisors-page {
     max-width: 480px;
     margin: 0 auto;
+    /* The advisor swiper fans cards out sideways; clip so they never cause the
+       whole page to scroll horizontally / spill past the screen edge. */
+    overflow-x: hidden;
 }
 
 .picking-screen {
@@ -2727,7 +2805,7 @@ async function startGame(): Promise<void> {
     display: flex;
     flex-direction: column;
     width: 320px;
-    min-height: 480px;
+    min-height: 420px;
     padding: 14px;
     box-sizing: border-box;
     border-radius: 16px;
@@ -2810,9 +2888,15 @@ async function startGame(): Promise<void> {
 .advisor-desc {
     margin-top: 5px;
     color: #bcac8c;
-    font-size: 0.8rem;
-    line-height: 1.4;
+    font-size: 0.78rem;
+    line-height: 1.35;
     font-style: italic;
+    /* Clamp long advisor bios so they never push the dice / CTA out of the card. */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 /* Bonus + upgrade tags */
@@ -3217,7 +3301,7 @@ async function startGame(): Promise<void> {
 
     .advisor-card {
         width: 288px;
-        min-height: 440px;
+        min-height: 390px;
         padding: 12px;
     }
 
@@ -3259,5 +3343,26 @@ async function startGame(): Promise<void> {
         height: 52px;
         font-size: 1.2rem;
     }
+}
+
+.loadout-launch-btn,
+.loadout-inline-btn {
+    display: block;
+    margin: 12px auto;
+    padding: 10px 22px;
+    background: rgba(212, 168, 67, 0.12);
+    border: 1px solid var(--accent-gold, #d4a843);
+    border-radius: 8px;
+    color: var(--accent-gold, #d4a843);
+    font-family: "Cinzel", serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.loadout-launch-btn:hover,
+.loadout-inline-btn:hover {
+    background: rgba(212, 168, 67, 0.22);
 }
 </style>

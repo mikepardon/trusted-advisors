@@ -59,6 +59,8 @@ class CoinShopController extends Controller
                 'description' => $entity?->description ?? '',
                 'image_url' => $entity?->image_url ?? null,
                 'price' => $unlockable->unlock_method === 'coins' ? (int) $unlockable->unlock_value : null,
+                'gift_price' => $unlockable->unlock_method === 'coins' ? (int) $unlockable->unlock_value * 4 : null,
+                'rarity' => $unlockable->type === 'item' && $entity ? $entity->rarity : null,
                 'cash_price_cents' => $unlockable->cash_price_cents,
                 'stripe_price_id' => $unlockable->stripe_price_id,
                 'apple_product_id' => $unlockable->apple_product_id,
@@ -79,6 +81,10 @@ class CoinShopController extends Controller
                 $item['slug'] = $entity->slug;
                 $item['css_vars'] = $entity->css_vars;
                 $item['background_image_url'] = $entity->background_image_url;
+            } elseif ($unlockable->type === 'item' && $entity) {
+                $item['cadence'] = $entity->cadence;
+                $item['item_type'] = $entity->type;
+                $item['effect'] = $entity->effect;
             }
 
             return $item;
@@ -193,7 +199,8 @@ class CoinShopController extends Controller
             return response()->json(['error' => 'This item is not available for coin purchase.'], 422);
         }
 
-        $price = (int) $unlockable->unlock_value;
+        // Gifting costs 4x the normal price.
+        $price = (int) $unlockable->unlock_value * 4;
 
         $recipient = User::find($friendId);
         if (!$recipient) {

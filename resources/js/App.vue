@@ -214,10 +214,11 @@
 
         <main v-if="!auth.state.loading" :style="mainBgStyle">
             <div v-if="gameBgUrl && isGamePage" class="main-bg-overlay"></div>
+            <!-- No <transition> wrapper: several page components have multiple root
+                 nodes, which breaks router transitions (blank page with mode="out-in",
+                 or a "subTree" null crash without it). Plain swapping is robust. -->
             <router-view v-slot="{ Component }">
-                <transition name="page" mode="out-in">
-                    <component :is="Component" :key="$route.path" />
-                </transition>
+                <component :is="Component" :key="$route.path" />
             </router-view>
         </main>
 
@@ -1033,10 +1034,6 @@ button {
             var(--wood-light),
             var(--wood-medium)
         );
-        box-shadow:
-            0 4px 0 #1a1006,
-            0 0 15px rgba(240, 192, 80, 0.25),
-            inset 0 1px 0 rgba(255, 220, 140, 0.2);
         border-color: var(--accent-gold);
     }
 }
@@ -1046,10 +1043,7 @@ button {
             :disabled
         )
 ) {
-    transform: translateY(3px);
-    box-shadow:
-        0 1px 0 #1a1006,
-        inset 0 1px 0 rgba(255, 220, 140, 0.15);
+    transform: translateY(2px);
 }
 
 button:disabled {
@@ -1068,9 +1062,6 @@ button:disabled {
     font-weight: 700;
     border-color: var(--accent-gold);
     text-shadow: 0 1px 0 rgba(255, 255, 255, 0.15);
-    box-shadow:
-        0 4px 0 #7a5a14,
-        inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
 
 .btn-primary:hover:not(:disabled) {
@@ -1080,18 +1071,11 @@ button:disabled {
         var(--accent-gold-bright),
         var(--accent-gold)
     );
-    box-shadow:
-        0 4px 0 #7a5a14,
-        0 0 20px rgba(240, 192, 80, 0.45),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3);
     color: #444;
 }
 
 .btn-primary:active:not(:disabled) {
-    transform: translateY(3px);
-    box-shadow:
-        0 1px 0 #7a5a14,
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(2px);
 }
 
 .btn-danger {
@@ -1099,24 +1083,14 @@ button:disabled {
     color: #fff;
     border-color: #b03828;
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    box-shadow:
-        0 4px 0 #701810,
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .btn-danger:hover:not(:disabled) {
     background: linear-gradient(180deg, #f05848, #e04838, #b03828);
-    box-shadow:
-        0 4px 0 #701810,
-        0 0 15px rgba(208, 64, 48, 0.4),
-        inset 0 1px 0 rgba(255, 255, 255, 0.2);
 }
 
 .btn-danger:active:not(:disabled) {
-    transform: translateY(3px);
-    box-shadow:
-        0 1px 0 #701810,
-        inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    transform: translateY(2px);
 }
 
 .btn-success {

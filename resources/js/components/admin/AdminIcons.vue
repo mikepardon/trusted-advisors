@@ -119,14 +119,14 @@ onMounted(async () => {
 
 <style scoped>
 .admin-icons { max-width: 800px; }
-.desc { color: #b8a07a; margin-bottom: 24px; font-size: 0.9rem; }
-.loading { color: #b8a07a; padding: 20px; }
+.desc { color: var(--admin-mute, #7a7365); margin-bottom: 24px; font-size: 0.9rem; }
+.loading { color: var(--admin-mute, #7a7365); padding: 20px; }
 .icon-group { margin-bottom: 32px; }
 .group-title {
-  font-family: 'Cinzel', serif;
-  color: #f0c050;
+  color: var(--admin-ink, #23201a);
   font-size: 1.1rem;
-  border-bottom: 1px solid #463220;
+  font-weight: 700;
+  border-bottom: 1px solid var(--admin-line, #e3ddce);
   padding-bottom: 6px;
   margin-bottom: 12px;
 }
@@ -136,8 +136,8 @@ onMounted(async () => {
   align-items: flex-start;
   gap: 16px;
   padding: 12px;
-  background: #1e160c;
-  border: 1px solid #342618;
+  background: #ffffff;
+  border: 1px solid var(--admin-line, #e3ddce);
   border-radius: 8px;
 }
 .icon-meta {
@@ -147,8 +147,8 @@ onMounted(async () => {
   flex-direction: column;
   gap: 2px;
 }
-.icon-label { font-weight: 600; color: #f0e0c8; font-size: 0.9rem; }
-.icon-key { font-size: 0.7rem; color: #8a7a5a; font-family: monospace; }
+.icon-label { font-weight: 600; color: var(--admin-ink, #23201a); font-size: 0.9rem; }
+.icon-key { font-size: 0.7rem; color: var(--admin-mute, #7a7365); font-family: monospace; }
 .save-status {
   font-size: 0.75rem;
   padding: 4px 8px;
@@ -156,6 +156,6 @@ onMounted(async () => {
   white-space: nowrap;
   align-self: center;
 }
-.saving { color: #f0c050; }
-.saved { color: #5cb85c; }
+.saving { color: var(--admin-brass, #a8792c); }
+.saved { color: var(--accent-green, #2e7d46); }
 </style>

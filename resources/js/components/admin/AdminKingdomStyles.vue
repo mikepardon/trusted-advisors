@@ -28,7 +28,10 @@
           <div class="swatch-bar swatch-bar-safe" :style="{ background: style.css_vars?.bar_safe || '#27ae60' }"></div>
           <div class="swatch-bar swatch-bar-caution" :style="{ background: style.css_vars?.bar_caution || '#d4a843' }"></div>
         </div>
-        <button class="btn-edit" @click="openEdit(style)">Edit</button>
+        <div class="card-actions">
+          <button class="btn-edit" @click="openPreview(style)">Preview</button>
+          <button class="btn-edit" @click="openEdit(style)">Edit</button>
+        </div>
       </div>
     </div>
 
@@ -131,6 +134,20 @@
         </div>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewStyleTarget !== undefined"
+      :title="previewStyleTarget?.name"
+      @close="previewStyleTarget = undefined"
+    >
+      <KingdomStats
+        v-if="previewStyleTarget"
+        :game="previewGame"
+        :kingdom-style-slug="previewStyleTarget.slug"
+        :kingdom-style-data="{ css_vars: previewStyleTarget.css_vars, background_image_url: previewStyleTarget.background_image_url }"
+      />
+    </AdminPreviewModal>
   </div>
 </template>
 
@@ -138,6 +155,8 @@
 import { computed, onMounted, ref, useTemplateRef } from "vue";
 import type { CSSProperties } from "vue";
 import axios, { isAxiosError } from "axios";
+import KingdomStats from "../KingdomStats.vue";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
 import "../../styles/kingdom-styles.css";
 
 type CssVariables = Record<string, string>;
@@ -171,6 +190,13 @@ interface ColorVariable {
 const styles = ref<KingdomStyle[]>([]);
 const loading = ref(true);
 const editingStyle = ref<KingdomStyle | undefined>(undefined);
+// Renamed from `previewStyle` to avoid colliding with the existing live-preview
+// computed below (used by the edit modal's inline :style binding).
+const previewStyleTarget = ref<KingdomStyle | undefined>(undefined);
+
+// A mid-game kingdom so the stat bars render with meaningful fills in the preview.
+const previewGame = { wealth: 14, influence: 12, security: 15, religion: 10, food: 13, happiness: 16, current_round: 12, status: "active", game_type: "cooperative" };
+
 const editForm = ref<EditForm>({
   name: "",
   description: "",
@@ -251,6 +277,10 @@ function swatchStyle(style: KingdomStyle): CSSProperties {
     boxShadow: glow,
     backgroundColor: cssVariables.bg_tint || "transparent",
   };
+}
+
+function openPreview(style: KingdomStyle): void {
+  previewStyleTarget.value = style;
 }
 
 function openEdit(style: KingdomStyle): void {
@@ -512,6 +542,11 @@ onMounted(async () => {
   height: 6px;
   border-radius: 3px;
   flex: 1;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
 }
 
 .btn-edit {

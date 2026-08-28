@@ -30,6 +30,9 @@ use App\Http\Controllers\Admin\MediaLibraryController;
 use App\Http\Controllers\Admin\RetentionDashboardController;
 use App\Http\Controllers\Admin\RotatingEventController as AdminRotatingEventController;
 use App\Http\Controllers\Admin\SeasonController;
+use App\Http\Controllers\Admin\ScheduleController;
+use App\Http\Controllers\Admin\SeederController;
+use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\SoundAssetController;
 use App\Http\Controllers\Admin\UnlockableController;
 use App\Http\Controllers\Admin\WeeklyChallengeController;
@@ -48,6 +51,7 @@ use App\Http\Controllers\GameLobbyController;
 use App\Http\Controllers\KingdomStyleController;
 use App\Http\Controllers\LeaderboardController;
 use App\Http\Controllers\LeagueController;
+use App\Http\Controllers\LoadoutController;
 use App\Http\Controllers\MatchmakingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PaymentController;
@@ -167,7 +171,12 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/achievements', [GameController::class, 'achievements']);
     Route::post('/achievements/claim-all', [GameController::class, 'claimAllAchievements']);
     Route::post('/achievements/{achievement}/claim', [GameController::class, 'claimAchievement']);
+    Route::get('/challenges', [GameController::class, 'challenges']);
     Route::get('/daily-challenge', [GameController::class, 'dailyChallenge']);
+    Route::post('/daily-challenge/start', [GameController::class, 'startDailyRun']);
+    Route::get('/daily-challenges/history', [GameController::class, 'dailyChallengeHistory']);
+    Route::post('/daily-challenges/{dailyChallenge}/start', [GameController::class, 'startDailyChallenge']);
+    Route::post('/daily-challenges/{game}/quit', [GameController::class, 'quitDailyChallenge']);
     Route::get('/weekly-challenge', [GameController::class, 'weeklyChallenge']);
     Route::get('/seasons', [GameController::class, 'seasons']);
     Route::get('/seasons/{season}', [GameController::class, 'seasonDetail']);
@@ -211,6 +220,10 @@ Route::middleware('auth:web')->group(function () {
     // Free timed chest
     Route::get('/free-chest', [FreeChestController::class, 'status']);
     Route::post('/free-chest/claim', [FreeChestController::class, 'claim']);
+
+    // Item loadout (own / equip up to 3 to bring into a game)
+    Route::get('/loadout', [LoadoutController::class, 'index']);
+    Route::put('/loadout', [LoadoutController::class, 'update']);
 
     // Cosmetics (own / equip)
     Route::get('/cosmetics', [CosmeticController::class, 'index']);
@@ -300,6 +313,14 @@ Route::middleware('auth:web')->group(function () {
 Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('dashboard-stats', [DashboardController::class, 'stats']);
 
+    // Database seeders — see which content seeders still need running, and run them.
+    Route::get('seeders', [SeederController::class, 'index']);
+    Route::post('seeders/run', [SeederController::class, 'run']);
+
+    // Scheduled jobs — view the schedule and manually trigger a run.
+    Route::get('schedule', [ScheduleController::class, 'index']);
+    Route::post('schedule/run', [ScheduleController::class, 'run']);
+
     // CSV export/import (must be before apiResource to avoid {id} catch)
     Route::get('{type}/export-csv', [CsvController::class, 'export'])->where('type', 'characters|cards|events|items|curses');
     Route::post('{type}/import-csv', [CsvController::class, 'import'])->where('type', 'characters|cards|events|items|curses');
@@ -382,6 +403,11 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::put('kingdom-styles/{kingdomStyle}', [AdminKingdomStyleController::class, 'update']);
     Route::post('kingdom-styles/{kingdomStyle}/image', [AdminKingdomStyleController::class, 'uploadImage']);
     Route::delete('kingdom-styles/{kingdomStyle}/image', [AdminKingdomStyleController::class, 'removeImage']);
+
+    // Settings (AI keys and other admin-managed secrets)
+    Route::get('settings', [SettingsController::class, 'index']);
+    Route::put('settings/anthropic-key', [SettingsController::class, 'updateAnthropicKey']);
+    Route::delete('settings/anthropic-key', [SettingsController::class, 'clearAnthropicKey']);
 
     // AI content generation
     Route::post('ai/generate-character', [AiGeneratorController::class, 'generateCharacter']);

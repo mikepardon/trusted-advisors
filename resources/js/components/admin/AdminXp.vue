@@ -149,6 +149,30 @@
         </table>
       </div>
 
+      <!-- Season Pass & League Points -->
+      <div class="section-panel">
+        <h3 class="section-title">Season Pass &amp; League Points</h3>
+        <p class="section-desc">Points awarded per game. Season Pass counts every non-custom game (win only); League counts online games only and drops on a loss (floored at 0). Changes save automatically.</p>
+        <table class="admin-table">
+          <thead>
+            <tr><th>Reward</th><th>Win</th><th>Loss</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="name-col">Season Pass points</td>
+              <td><input v-model.number="pointsConfig.season_pass_win" type="number" class="xp-input" min="0" @change="savePointsConfig" /></td>
+              <td><input v-model.number="pointsConfig.season_pass_loss" type="number" class="xp-input" min="0" @change="savePointsConfig" /></td>
+            </tr>
+            <tr>
+              <td class="name-col">League points (online only)</td>
+              <td><input v-model.number="pointsConfig.league_win" type="number" class="xp-input" @change="savePointsConfig" /></td>
+              <td><input v-model.number="pointsConfig.league_loss" type="number" class="xp-input" @change="savePointsConfig" /></td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="pointsSaved" class="saved-msg">Saved!</p>
+      </div>
+
       <!-- Other XP Sources -->
       <div class="section-panel">
         <h3 class="section-title">Other XP Sources</h3>
@@ -262,6 +286,13 @@ interface AdvisorConfig {
   options_per_level_up: number;
 }
 
+interface PointsConfig {
+  season_pass_win: number;
+  season_pass_loss: number;
+  league_win: number;
+  league_loss: number;
+}
+
 interface LevelReward {
   id: number;
   type: string;
@@ -284,6 +315,7 @@ interface RulesResponse {
   xp_config?: Partial<XpConfig>;
   coin_config?: Partial<CoinConfig>;
   advisor_level_config?: Partial<AdvisorConfig>;
+  points_config?: Partial<PointsConfig>;
   default_total_rounds?: number;
 }
 
@@ -318,6 +350,13 @@ const coinConfig = reactive<CoinConfig>({
   duel_win_bonus: 25,
   online_multiplier: 1.5,
 });
+const pointsConfig = reactive<PointsConfig>({
+  season_pass_win: 100,
+  season_pass_loss: 0,
+  league_win: 100,
+  league_loss: -50,
+});
+const pointsSaved = ref(false);
 const levels = ref<LevelRow[]>([]);
 const characters = ref<Entity[]>([]);
 const items = ref<Entity[]>([]);
@@ -385,6 +424,27 @@ async function saveCoinConfig(): Promise<void> {
     await axios.put("/api/admin/rules/coin_config", { value: { ...coinConfig } });
     saved.value = true;
     setTimeout(() => { saved.value = false; }, 1500);
+  } catch {
+    // silently fail
+  }
+}
+
+async function loadPointsConfig(): Promise<void> {
+  try {
+    const response = await axios.get<RulesResponse>("/api/admin/rules");
+    if (response.data.points_config) {
+      Object.assign(pointsConfig, response.data.points_config);
+    }
+  } catch {
+    // use defaults
+  }
+}
+
+async function savePointsConfig(): Promise<void> {
+  try {
+    await axios.put("/api/admin/rules/points_config", { value: { ...pointsConfig } });
+    pointsSaved.value = true;
+    setTimeout(() => { pointsSaved.value = false; }, 1500);
   } catch {
     // silently fail
   }
@@ -498,7 +558,7 @@ async function removeUnlock(id: number): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([loadConfig(), loadCoinConfig(), loadAdvisorConfig(), loadLevels(), loadEntities(), loadDefaultRounds()]);
+  await Promise.all([loadConfig(), loadCoinConfig(), loadPointsConfig(), loadAdvisorConfig(), loadLevels(), loadEntities(), loadDefaultRounds()]);
   loading.value = false;
 });
 </script>

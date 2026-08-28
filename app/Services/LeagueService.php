@@ -97,13 +97,20 @@ class LeagueService
 
     public function addScore(User $user, int $points): void
     {
-        if ($points <= 0) {
+        if ($points === 0) {
             return;
         }
 
-        // Atomic increment (UPDATE ... SET score = score + ?) avoids a lost-update
-        // race between concurrent score awards for the same member.
-        $this->ensureMembership($user)->increment('score', $points);
+        $member = $this->ensureMembership($user);
+
+        // Losses subtract, so we can't use an atomic increment (it can't floor). Lock the
+        // member row, apply the delta floored at 0 (the score column is unsigned), and save —
+        // the lock still prevents a lost update between concurrent awards.
+        DB::transaction(function () use ($member, $points): void {
+            $locked = LeagueMember::query()->whereKey($member->id)->lockForUpdate()->first();
+            $locked->score = max(0, $locked->score + $points);
+            $locked->save();
+        });
     }
 
     /**

@@ -22,15 +22,14 @@
 
           <!-- Parchment card display -->
           <div class="parchment-card" :class="{ used: currentItem.is_used, cooldown: isOnCooldown(currentItem) }">
-            <div class="card-ornament">&#9876;</div>
+            <div class="card-ornament">{{ typeGlyph(currentItem.item) }}</div>
             <h3 class="parchment-title">{{ currentItem.item?.name || 'Unknown Item' }}</h3>
 
             <!-- Tags row -->
             <div class="tag-row">
               <span v-if="isOnCooldown(currentItem)" class="type-tag cooldown-tag">Used This Round</span>
               <span v-else-if="currentItem.is_used" class="type-tag used-tag">Consumed</span>
-              <span v-else-if="currentItem.item?.is_consumable" class="type-tag ongoing-tag">Consumable</span>
-              <span v-else class="type-tag reusable-tag">Reusable</span>
+              <span v-else-if="cadenceLabel(currentItem.item)" class="type-tag reusable-tag">{{ cadenceLabel(currentItem.item) }}</span>
               <span v-if="currentItem.item?.target === 'opponent'" class="type-tag opponent-tag">Targets Opponent</span>
             </div>
 
@@ -79,13 +78,10 @@ interface Item {
   is_consumable?: boolean;
   target?: string;
   effect_type?: string;
+  type?: string;
+  icon_key?: string;
+  cadence?: string;
   effect?: ItemEffect;
-}
-
-interface PlayerItem {
-  is_used?: boolean;
-  used_round?: number;
-  item?: Item;
 }
 
 const { items = [], showButton = true, currentRound = 0 } = defineProps<{
@@ -94,8 +90,45 @@ const { items = [], showButton = true, currentRound = 0 } = defineProps<{
   currentRound?: number;
 }>();
 
+// Emoji glyph per item type, used for the inventory card ornament.
+const TYPE_GLYPHS: Record<string, string> = {
+  weapon: "⚔️",
+  armour: "🛡️",
+  potion: "🧪",
+  scroll: "📜",
+  relic: "✨",
+  coin: "💰",
+  hex: "🔮",
+};
+
+const CADENCE_LABELS: Record<string, string> = {
+  passive: "Always Active",
+  per_round: "Reusable",
+  per_game: "Single Use",
+};
+
+function typeGlyph(item?: Item): string {
+  return (item?.type && TYPE_GLYPHS[item.type]) || "⚔";
+}
+
+function cadenceLabel(item?: Item): string | undefined {
+  return item?.cadence ? CADENCE_LABELS[item.cadence] : undefined;
+}
+
+interface PlayerItem {
+  is_used?: boolean;
+  used_round?: number;
+  item?: Item;
+}
+
 const open = ref(false);
 const currentIndex = ref(0);
+
+// Let the parent (GameBoard) open the inventory from its own header button.
+function openOverlay(): void {
+  open.value = true;
+}
+defineExpose({ openOverlay });
 
 const availableItems = computed(() => (items || []).filter((playerItem) => !playerItem.is_used));
 

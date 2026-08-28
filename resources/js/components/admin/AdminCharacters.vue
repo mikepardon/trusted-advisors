@@ -138,6 +138,7 @@
               <td class="dice-col">{{ c.dice[1]?.join(', ') }}</td>
               <td class="dice-col">{{ c.dice[2]?.join(', ') }}</td>
               <td class="actions-col">
+                <button @click="openPreview(c)">Preview</button>
                 <button @click="openEdit(c)">Edit</button>
                 <button class="btn-danger" @click="confirmDelete(c)">Delete</button>
               </td>
@@ -438,6 +439,16 @@
       @close="showMediaLibrary = false"
       @select="onMediaSelected"
     />
+
+    <!-- In-game preview (Teleported to body so it renders in the real game skin) -->
+    <Teleport to="body">
+      <CharacterInfoModal
+        v-if="previewCharacter"
+        :character="previewCharacter"
+        :active-dice="previewCharacter.dice?.length ?? 3"
+        @close="previewCharacter = undefined"
+      />
+    </Teleport>
   </div>
 </template>
 
@@ -448,6 +459,7 @@ import { useToast } from "../../stores/toast";
 import AdminSearchInput from "./AdminSearchInput.vue";
 import SortableHeader from "./SortableHeader.vue";
 import MediaLibraryModal from "./MediaLibraryModal.vue";
+import CharacterInfoModal from "../CharacterInfoModal.vue";
 
 type DieFace = number | "WILD";
 type Die = DieFace[];
@@ -635,6 +647,7 @@ const sortField = ref("id");
 const sortDirection = ref<"asc" | "desc">("asc");
 const showModal = ref(false);
 const editing = ref<Character | undefined>(undefined);
+const previewCharacter = ref<Character | undefined>(undefined);
 const saving = ref(false);
 const formError = ref("");
 const form = reactive<CharacterForm>(defaultForm());
@@ -836,6 +849,10 @@ function openCreate(): void {
   charLevelOptions.value = [];
   showLoForm.value = false;
   showModal.value = true;
+}
+
+function openPreview(character: Character): void {
+  previewCharacter.value = character;
 }
 
 function openEdit(character: Character): void {

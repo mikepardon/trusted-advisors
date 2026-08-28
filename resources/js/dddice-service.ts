@@ -9,6 +9,8 @@ const DEFAULT_THEME = 'dddice-standard';
 export interface DiceSpec {
   theme?: string;
   value: number;
+  // Optional custom face label (e.g. "W" for a wild face). Overrides the numeric display.
+  label?: string;
 }
 
 /**
@@ -173,14 +175,16 @@ class DddiceInstance {
       let theme = spec.theme || DEFAULT_THEME;
       if (!this.loadedThemes.has(theme)) theme = DEFAULT_THEME;
 
-      let valueToDisplay: number | string = spec.value;
-      try {
-        const options = this.instance.getThemeOptions(theme);
-        if (options?.values?.d6) {
-          valueToDisplay = options.values.d6[spec.value - 1] ?? spec.value;
+      let valueToDisplay: number | string = spec.label ?? spec.value;
+      if (spec.label === undefined) {
+        try {
+          const options = this.instance.getThemeOptions(theme);
+          if (options?.values?.d6) {
+            valueToDisplay = options.values.d6[spec.value - 1] ?? spec.value;
+          }
+        } catch {
+          // use raw value
         }
-      } catch {
-        // use raw value
       }
 
       return {

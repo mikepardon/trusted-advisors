@@ -27,6 +27,7 @@
           </div>
         </div>
         <div class="list-actions">
+          <button class="btn-sm" @click="openPreview(a)">Preview</button>
           <button class="btn-sm" @click="openEdit(a)">Edit</button>
           <button class="btn-sm btn-danger" @click="deleteAch(a)">Del</button>
         </div>
@@ -112,6 +113,15 @@
         </form>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewAchievement !== undefined"
+      :title="previewAchievement?.name"
+      @close="previewAchievement = undefined"
+    >
+      <AchievementPreviewCard v-if="previewAchievement" :achievement="previewAchievement" />
+    </AdminPreviewModal>
   </div>
 </template>
 
@@ -120,6 +130,8 @@ import { computed, onMounted, reactive, ref } from "vue";
 import axios, { isAxiosError } from "axios";
 import AdminSearchInput from "./AdminSearchInput.vue";
 import IconPicker from "./IconPicker.vue";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
+import AchievementPreviewCard from "./AchievementPreviewCard.vue";
 
 interface AchievementCriteria {
   type?: string;
@@ -169,6 +181,7 @@ function emptyForm(): AchievementForm {
 }
 
 const achievements = ref<Achievement[]>([]);
+const previewAchievement = ref<Achievement | undefined>(undefined);
 const searchQuery = ref("");
 const showModal = ref(false);
 const editing = ref<number | undefined>(undefined);
@@ -218,6 +231,10 @@ function onIconTypeChange(type: string): void {
 async function load(): Promise<void> {
   const response = await axios.get<Achievement[]>("/api/admin/achievements");
   achievements.value = response.data;
+}
+
+function openPreview(achievement: Achievement): void {
+  previewAchievement.value = achievement;
 }
 
 function openCreate(): void {

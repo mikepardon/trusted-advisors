@@ -41,6 +41,7 @@ use App\Models\UserCharacter;
 use App\Services\CharacterProgressionService;
 use App\Services\GameCompletionService;
 use App\Services\OneSignalService;
+use App\Services\SeededRng;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -462,13 +463,17 @@ class GameController extends Controller
             return response()->json(['error' => 'Must select exactly ' . $expectedChars . ' character(s)'], 422);
         }
 
-        // Enforce unlock restrictions for the logged-in user
+        // Seeded RNG for daily-challenge runs; null for a normal game.
+        $rng = $this->rng($game);
+
+        // Enforce unlock restrictions for the logged-in user. Daily runs may assign any
+        // character (even locked ones), so the unlock gate is skipped for them.
         $userId = $request->user()->id;
         $lockedUnlockables = Unlockable::where('type', 'character')
             ->whereIn('entity_id', $validated['characters'])
             ->get();
 
-        if ($lockedUnlockables->isNotEmpty()) {
+        if (! $game->is_daily && $lockedUnlockables->isNotEmpty()) {
             $userUnlockableIds = UserUnlockable::where('user_id', $userId)
                 ->pluck('unlockable_id')
                 ->toArray();
@@ -546,17 +551,37 @@ class GameController extends Controller
         $availCol = $game->isDuel() ? 'available_duel' : 'available_cooperative';
         $customRules = $game->custom_rules;
 
-        // Create shuffled deck (recycle cards if more needed than available)
+        // Create shuffled deck (recycle cards if more needed than available). Daily runs
+        // draw from a stable, id-ordered pool and shuffle deterministically via the seed.
         if (!empty($customRules['card_pool'])) {
-            $allCards = Card::whereIn('id', $customRules['card_pool'])->inRandomOrder()->get();
+            // Stable id order so the seeded shuffle below reproduces identically for every
+            // player on a daily run (never feed inRandomOrder() into a seeded shuffle).
+            $allCards = Card::whereIn('id', $customRules['card_pool'])->orderBy('id')->get();
         } elseif ($rotatingEvent && $rotatingEvent->card_pool) {
-            $allCards = Card::whereIn('id', $rotatingEvent->card_pool)->inRandomOrder()->get();
+            $allCards = Card::whereIn('id', $rotatingEvent->card_pool)->orderBy('id')->get();
+        } elseif ($rng) {
+            // Daily runs assign the character (and thus their dice), so the deck must only
+            // contain cards that character can actually beat — otherwise the goal is impossible.
+            $baseDice = GameRule::getValue('dice_per_player_count', [])[(string) $game->num_players] ?? 3;
+            $seedCharacterId = $game->dailyChallenge?->criteria['seed_character_id'] ?? null;
+            $seedCharacter = $seedCharacterId ? Character::find($seedCharacterId) : null;
+            $maxRoll = $seedCharacter ? $this->characterMaxRoll($seedCharacter, (int) $baseDice) : 99;
+
+            $allCards = Card::where($availCol, true)->where('difficulty', '<=', $maxRoll)->orderBy('id')->get();
+            if ($allCards->isEmpty()) {
+                $allCards = Card::where($availCol, true)->orderBy('id')->get();
+            }
         } else {
             $allCards = Card::where($availCol, true)->inRandomOrder()->get();
         }
         $cards = collect();
+        $pass = 0;
         while ($cards->count() < $totalCardsNeeded) {
-            $cards = $cards->concat($allCards->shuffle());
+            $shuffled = $rng
+                ? collect($rng->shuffle($allCards->all(), "cards:{$pass}"))
+                : $allCards->shuffle();
+            $cards = $cards->concat($shuffled);
+            $pass++;
         }
         $cards = $cards->take($totalCardsNeeded);
         $deckRows = [];
@@ -573,32 +598,8 @@ class GameController extends Controller
         }
         GameCardDeck::insert($deckRows);
 
-        // Create shuffled item deck (recycle items if needed)
-        if (!empty($customRules['item_pool'])) {
-            $allItems = Item::whereIn('id', $customRules['item_pool'])->inRandomOrder()->get();
-        } elseif ($rotatingEvent && $rotatingEvent->item_pool) {
-            $allItems = Item::whereIn('id', $rotatingEvent->item_pool)->inRandomOrder()->get();
-        } else {
-            $allItems = Item::where($availCol, true)->inRandomOrder()->get();
-        }
-        $itemsNeeded = $game->total_rounds * 2; // generous estimate
-        $itemPool = collect();
-        while ($itemPool->count() < $itemsNeeded) {
-            $itemPool = $itemPool->concat($allItems->shuffle());
-        }
-        $itemPool = $itemPool->take($itemsNeeded);
-        $itemRows = [];
-        foreach ($itemPool as $i => $item) {
-            $itemRows[] = [
-                'game_id' => $game->id,
-                'item_id' => $item->id,
-                'position' => $i,
-                'is_drawn' => false,
-                'created_at' => $now,
-                'updated_at' => $now,
-            ];
-        }
-        GameItemDeck::insert($itemRows);
+        // Items are no longer drawn from a per-game deck; each player brings a chosen
+        // loadout (see seedPlayerLoadouts below). Curses/omens still come from cards.
 
         // Initialize curse deck (both modes)
         $this->initCurseDeck($game);
@@ -608,9 +609,14 @@ class GameController extends Controller
             // Fixed event: repeat the same event for every round
             $eventOrder = array_fill(0, $game->total_rounds, $rotatingEvent->fixed_event_id);
         } elseif (!empty($customRules['event_pool'])) {
-            $eventOrder = collect($customRules['event_pool'])->shuffle()->values()->toArray();
+            // Seeded shuffle on a daily so the event order is identical for everyone;
+            // fall back to a random shuffle for normal (non-seeded) games.
+            $pool = collect($customRules['event_pool'])->map(fn ($id): int => (int) $id)->sort()->values()->all();
+            $eventOrder = $rng ? $rng->shuffle($pool, 'events') : collect($pool)->shuffle()->values()->toArray();
         } elseif ($rotatingEvent && $rotatingEvent->event_pool) {
             $eventOrder = collect($rotatingEvent->event_pool)->shuffle()->values()->toArray();
+        } elseif ($rng) {
+            $eventOrder = $rng->shuffle(Event::where($availCol, true)->orderBy('id')->pluck('id')->all(), 'events');
         } else {
             $eventOrder = Event::where($availCol, true)->pluck('id')->shuffle()->values()->toArray();
         }
@@ -638,7 +644,10 @@ class GameController extends Controller
                 ];
                 if ($randomStart) {
                     foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
-                        $kingdomData[$stat] = random_int(1, 15);
+                        // Seeded on a daily so every player's random start is identical.
+                        $kingdomData[$stat] = $rng
+                            ? $rng->int(1, 15, 'startstat', (string) $player->player_number, $stat)
+                            : random_int(1, 15);
                     }
                 } elseif ($startStats !== 8) {
                     foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
@@ -659,13 +668,26 @@ class GameController extends Controller
             ];
 
             // Custom starting stats for cooperative mode
+            $coopStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
             if (!empty($customRules['house_rules']['random_starting_stats'])) {
-                foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
-                    $coopUpdate[$stat] = random_int(1, 15);
+                foreach ($coopStats as $stat) {
+                    // Seeded on a daily so every player's random start is identical.
+                    $coopUpdate[$stat] = $rng ? $rng->int(1, 15, 'startstat', $stat) : random_int(1, 15);
                 }
-            } elseif (!empty($customRules['starting_stats']) && $customRules['starting_stats'] !== 8) {
-                foreach (['wealth', 'influence', 'security', 'religion', 'food', 'happiness'] as $stat) {
-                    $coopUpdate[$stat] = $customRules['starting_stats'];
+            } else {
+                $uniformStart = (int) ($customRules['starting_stats'] ?? 8);
+                if ($uniformStart !== 8) {
+                    foreach ($coopStats as $stat) {
+                        $coopUpdate[$stat] = $uniformStart;
+                    }
+                }
+                // Per-stat overrides (e.g. a deliberately weak stat the challenge is about).
+                if (!empty($customRules['starting_stats_map']) && is_array($customRules['starting_stats_map'])) {
+                    foreach ($customRules['starting_stats_map'] as $stat => $value) {
+                        if (in_array($stat, $coopStats, true)) {
+                            $coopUpdate[$stat] = max(0, min(20, (int) $value));
+                        }
+                    }
                 }
             }
 
@@ -693,18 +715,6 @@ class GameController extends Controller
             // Extra dice: set lost_dice to negative value to grant extra
             if (!empty($bonus['extra_dice'])) {
                 $player->update(['lost_dice' => -1 * (int) $bonus['extra_dice']]);
-            }
-
-            // Random item: draw from item deck
-            if (!empty($bonus['random_item'])) {
-                $drawnItem = $this->drawItemFromDeck($game);
-                if ($drawnItem) {
-                    GamePlayerItem::create([
-                        'game_player_id' => $player->id,
-                        'item_id' => $drawnItem->id,
-                        'acquired_round' => 0,
-                    ]);
-                }
             }
 
             // Stat boosts: apply to kingdom (duel) or game stats (cooperative)
@@ -766,19 +776,11 @@ class GameController extends Controller
             $player->passive_bonuses = !empty($passiveBonuses) ? $passiveBonuses : null;
             $player->save();
 
-            // Grant starting items
+            // Grant starting items from advisor perks. Only deterministic "specific"
+            // grants remain — random draws are retired along with the item deck.
             $startingItems = $userCharacter->getStartingItems();
             foreach ($startingItems as $si) {
-                if ($si['type'] === 'random') {
-                    $drawnItem = $this->drawItemFromDeck($game);
-                    if ($drawnItem) {
-                        GamePlayerItem::create([
-                            'game_player_id' => $player->id,
-                            'item_id' => $drawnItem->id,
-                            'acquired_round' => 0,
-                        ]);
-                    }
-                } elseif ($si['type'] === 'specific' && !empty($si['item_id'])) {
+                if ($si['type'] === 'specific' && !empty($si['item_id'])) {
                     GamePlayerItem::create([
                         'game_player_id' => $player->id,
                         'item_id' => $si['item_id'],
@@ -836,7 +838,175 @@ class GameController extends Controller
             }
         }
 
+        // Each player brings a chosen loadout (max 3) into the game.
+        $this->seedPlayerLoadouts($game);
+
         return $this->show($game->fresh());
+    }
+
+    /**
+     * The deterministic RNG for a daily-challenge run, or null for a normal game.
+     * Rebuilt from the stored seed on every request so results reproduce regardless
+     * of which request computes them.
+     */
+    private function rng(Game $game): ?SeededRng
+    {
+        return $game->is_daily && $game->daily_seed ? new SeededRng($game->daily_seed) : null;
+    }
+
+    /**
+     * Whether a daily challenge's target has been reached given the game's current stats.
+     * Endless runs end as a win the moment this is true.
+     */
+    private function dailyGoalMet(Game $game): bool
+    {
+        $goal = $game->dailyChallenge?->criteria['goal'] ?? [];
+        $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+
+        return match ($goal['type'] ?? null) {
+            'stat_threshold' => ($game->{$goal['stat'] ?? 'wealth'} ?? 0) >= (int) ($goal['value'] ?? 999),
+            'stat_threshold_all' => ! empty($goal['targets'])
+                && collect($goal['targets'])->every(fn ($value, $stat) => ($game->{$stat} ?? 0) >= (int) $value),
+            'no_stat_below' => collect($stats)->every(fn ($stat) => ($game->{$stat} ?? 0) >= (int) ($goal['value'] ?? 8)),
+            default => false,
+        };
+    }
+
+    /**
+     * The highest total this character can roll with its first $baseDice dice (treating
+     * WILD faces as the character's wild value). Used to keep a daily run solvable — the
+     * deck is filtered so no card demands a roll the assigned character cannot reach.
+     */
+    private function characterMaxRoll(Character $character, int $baseDice): int
+    {
+        $wildValue = (int) ($character->wild_value ?? 0);
+        $max = 0;
+
+        foreach (array_slice($character->dice ?? [], 0, max(1, $baseDice)) as $die) {
+            $faces = array_map(
+                fn ($face) => $face === 'WILD' ? $wildValue : (int) $face,
+                is_array($die) ? $die : [],
+            );
+            $max += $faces === [] ? 0 : max($faces);
+        }
+
+        return $max;
+    }
+
+    /**
+     * Copy each player's equipped loadout into their in-game inventory. Human players
+     * bring their own equipped items (filtered to those valid for this game mode);
+     * bots and local (pass-and-play) players receive a default starter set.
+     */
+    private function seedPlayerLoadouts(Game $game): void
+    {
+        $availCol = $game->isDuel() ? 'available_duel' : 'available_cooperative';
+        $defaultLoadout = Item::query()
+            ->where('is_starter', true)
+            ->where($availCol, true)
+            ->orderBy('id')
+            ->limit(3)
+            ->pluck('id')
+            ->all();
+
+        // Daily runs use a fixed loadout defined by the challenge so every player has
+        // the identical hand, regardless of what they personally own or have equipped.
+        if ($game->is_daily) {
+            $criteria = $game->dailyChallenge?->criteria ?? [];
+            $seedLoadout = ! empty($criteria['seed_loadout']) ? $criteria['seed_loadout'] : $defaultLoadout;
+
+            foreach ($game->players()->get() as $player) {
+                foreach ($seedLoadout as $itemId) {
+                    GamePlayerItem::firstOrCreate(
+                        ['game_player_id' => $player->id, 'item_id' => (int) $itemId],
+                        ['acquired_round' => 0],
+                    );
+                }
+                $this->applyPassiveItemStats($game, $player, array_map('intval', $seedLoadout));
+            }
+
+            return;
+        }
+
+        foreach ($game->players()->get() as $player) {
+            $itemIds = $defaultLoadout;
+
+            if ($player->user_id && ! $player->is_bot) {
+                $user = User::find($player->user_id);
+                $equipped = $user ? $user->equippedItemIds() : [];
+
+                if (! empty($equipped)) {
+                    // Only bring items usable in this mode; fall back to starters if none apply.
+                    $usable = Item::query()
+                        ->whereIn('id', $equipped)
+                        ->where($availCol, true)
+                        ->pluck('id')
+                        ->all();
+                    $itemIds = ! empty($usable) ? $usable : $defaultLoadout;
+                }
+            }
+
+            foreach ($itemIds as $itemId) {
+                GamePlayerItem::firstOrCreate(
+                    ['game_player_id' => $player->id, 'item_id' => $itemId],
+                    ['acquired_round' => 0],
+                );
+            }
+
+            $this->applyPassiveItemStats($game, $player, $itemIds);
+        }
+    }
+
+    /**
+     * Apply always-on (passive) item stat bonuses once at game start. Applying once
+     * — rather than every round — is what makes a "permanent +1 wealth" permanent
+     * without the effect stacking endlessly.
+     *
+     * @param  list<int>  $itemIds
+     */
+    private function applyPassiveItemStats(Game $game, GamePlayer $player, array $itemIds): void
+    {
+        if (empty($itemIds)) {
+            return;
+        }
+
+        $validStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+        $passiveItems = Item::query()
+            ->whereIn('id', $itemIds)
+            ->where('cadence', Item::CADENCE_PASSIVE)
+            ->get();
+
+        if ($passiveItems->isEmpty()) {
+            return;
+        }
+
+        $kingdom = $game->isDuel()
+            ? GamePlayerKingdom::where('game_player_id', $player->id)->first()
+            : null;
+
+        foreach ($passiveItems as $item) {
+            $effect = $game->isDuel() ? ($item->getDuelEffect() ?? []) : ($item->effect ?? []);
+            if (($effect['bonus_type'] ?? '') !== 'stat_boost') {
+                continue;
+            }
+
+            $stat = $effect['stat'] ?? null;
+            if (! in_array($stat, $validStats, true)) {
+                continue;
+            }
+
+            $amount = (int) ($effect['bonus_value'] ?? 0);
+
+            if ($game->isDuel()) {
+                if ($kingdom) {
+                    $kingdom->{$stat} = max(0, min(20, $kingdom->{$stat} + $amount));
+                    $kingdom->save();
+                }
+            } else {
+                $game->{$stat} = max(0, min(20, $game->{$stat} + $amount));
+                $game->save();
+            }
+        }
     }
 
     /**
@@ -1093,6 +1263,9 @@ class GameController extends Controller
 
         $players = $game->players()->with(['character', 'items.item', 'curses.curse'])->get();
 
+        // Seeded RNG for daily-challenge runs (deterministic dice); null for normal games.
+        $rng = $this->rng($game);
+
         // Get positive and negative role hands
         $positiveHands = $game->playerHands()
             ->where('round_number', $game->current_round)
@@ -1168,7 +1341,9 @@ class GameController extends Controller
             $playerRolls = [];
 
             foreach (array_slice($dice, 0, $activeDice) as $dieIndex => $die) {
-                $faceIndex = random_int(0, 5);
+                $faceIndex = $rng
+                    ? $rng->dieFace($game->current_round, $player->player_number, $dieIndex)
+                    : random_int(0, 5);
                 $face = $die[$faceIndex];
                 $playerRolls[] = [
                     'die' => $dieIndex + 1,
@@ -1247,7 +1422,7 @@ class GameController extends Controller
                 $effects = $hand->card->positive_effects ?? [];
                 foreach ($effects as $stat => $change) {
                     if ($stat === 'grant_item_id') {
-                        $itemGrants[] = ['item_id' => $change, 'player_id' => $hand->game_player_id];
+                        // Card-granted items retired: players bring a chosen loadout instead.
                         continue;
                     }
                     if ($stat === 'draw_item') {
@@ -1393,8 +1568,14 @@ class GameController extends Controller
         // On failed roll, ALL cards' negative effects apply (positive cards included)
         $handsForNegativePhase = !$positiveSuccess ? $negativeHands->merge($positiveHands) : $negativeHands;
 
+        // A player who used a shield item this round blocks all negative effects (coop).
+        $hasShield = $players->contains(fn ($player) => $player->items->contains(
+            fn ($playerItem) => $playerItem->used_round === $game->current_round
+                && (($playerItem->item->effect['bonus_type'] ?? '') === 'shield_negative')
+        ));
+
         $negativeEffects = [];
-        $skipNegatives = !empty($houseRules['no_negative_effects']);
+        $skipNegatives = !empty($houseRules['no_negative_effects']) || $hasShield;
         foreach ($handsForNegativePhase as $hand) {
             if ($skipNegatives) break;
             $effects = $hand->card->negative_effects ?? [];
@@ -1750,6 +1931,41 @@ class GameController extends Controller
                 'game_over' => true,
                 'win' => false,
                 'reason' => $gameOverReason,
+                'game' => $game->fresh(),
+                'completion' => $completionSummary,
+                'score_breakdown' => [
+                    'base_score' => $game->baseScore(),
+                    'year_multiplier' => $game->yearMultiplier(),
+                    'balance_bonus' => $game->balanceBonus(),
+                    'year_bonus' => $game->yearBonus(),
+                    'stacking_bonus' => $game->stackingBonus(),
+                    'bonus_score' => $game->bonus_score,
+                    'score_modifier' => $game->score_modifier,
+                    'final_score' => $game->final_score,
+                ],
+            ]);
+        }
+
+        // Endless daily challenge: reaching the target stat ends the run immediately as
+        // a win, recording the months taken. (Collapse above already ends it as a loss.)
+        if ($game->is_daily && $this->dailyGoalMet($game)) {
+            $game->update([
+                'status' => 'completed',
+                'round_phase' => 'complete',
+                'win' => true,
+            ]);
+
+            $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
+            $game->refresh();
+            $game->computeFinalScore();
+            $game->save();
+
+            return response()->json([
+                'game_over' => true,
+                'win' => true,
+                'reason' => 'Target reached in ' . $game->current_round . ' months!',
+                'rounds_taken' => $game->current_round,
                 'game' => $game->fresh(),
                 'completion' => $completionSummary,
                 'score_breakdown' => [
@@ -2503,31 +2719,7 @@ class GameController extends Controller
                         continue;
                     }
                     if ($stat === 'grant_item_id') {
-                        $item = Item::find($change);
-                        if ($item) {
-                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
-                                $duelSpecialEffects[] = [
-                                    'type' => 'item_blocked',
-                                    'player' => $character->name,
-                                    'item' => $item->name,
-                                    'description' => "{$character->name}'s inventory is full! {$item->name} was lost.",
-                                ];
-                            } else {
-                                GamePlayerItem::create([
-                                    'game_player_id' => $rollingPlayer->id,
-                                    'item_id' => $item->id,
-                                    'acquired_round' => $game->current_round,
-                                    'is_used' => false,
-                                ]);
-                                $duelSpecialEffects[] = [
-                                    'type' => 'draw_item',
-                                    'phase' => 'negative',
-                                    'player' => $character->name,
-                                    'item' => $item->name,
-                                    'description' => "{$character->name} received {$item->name}!",
-                                ];
-                            }
-                        }
+                        // Card-granted items retired: players bring a chosen loadout instead.
                         continue;
                     }
                     if (in_array($stat, $statKeys)) {
@@ -2576,31 +2768,7 @@ class GameController extends Controller
                         continue;
                     }
                     if ($stat === 'grant_item_id') {
-                        $item = Item::find($change);
-                        if ($item) {
-                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
-                                $duelSpecialEffects[] = [
-                                    'type' => 'item_blocked',
-                                    'player' => $character->name,
-                                    'item' => $item->name,
-                                    'description' => "{$character->name}'s inventory is full! {$item->name} was lost.",
-                                ];
-                            } else {
-                                GamePlayerItem::create([
-                                    'game_player_id' => $rollingPlayer->id,
-                                    'item_id' => $item->id,
-                                    'acquired_round' => $game->current_round,
-                                    'is_used' => false,
-                                ]);
-                                $duelSpecialEffects[] = [
-                                    'type' => 'draw_item',
-                                    'phase' => 'positive',
-                                    'player' => $character->name,
-                                    'item' => $item->name,
-                                    'description' => "{$character->name} received {$item->name}!",
-                                ];
-                            }
-                        }
+                        // Card-granted items retired: players bring a chosen loadout instead.
                         continue;
                     }
                     if (in_array($stat, $statKeys)) {
@@ -3484,18 +3652,9 @@ class GameController extends Controller
      */
     private function drawItemFromDeck(Game $game): ?Item
     {
-        $deckEntry = $game->itemDeck()
-            ->where('is_drawn', false)
-            ->orderBy('position')
-            ->first();
-
-        if (!$deckEntry) {
-            return null;
-        }
-
-        $deckEntry->update(['is_drawn' => true]);
-
-        return Item::find($deckEntry->item_id);
+        // Items are no longer acquired mid-game from a deck; players bring a chosen
+        // loadout at game start. This retires all card/event item draws (curses still apply).
+        return null;
     }
 
     /**
@@ -4058,13 +4217,296 @@ class GameController extends Controller
             ->where('daily_challenge_id', $challenge->id)
             ->first();
 
+        $criteria = $challenge->criteria ?? [];
+
+        // Briefing: show the player exactly what they are walking into before they commit.
+        $character = ($criteria['seed_character_id'] ?? null)
+            ? Character::find($criteria['seed_character_id'])
+            : null;
+
+        $loadout = Item::whereIn('id', $criteria['seed_loadout'] ?? [])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Item $item): array => [
+                'name' => $item->name,
+                'type' => $item->type,
+                'cadence' => $item->cadence,
+                'description' => $item->description,
+            ])
+            ->values();
+
         return response()->json([
             'id' => $challenge->id,
             'title' => $challenge->title,
             'description' => $challenge->description,
             'reward_xp' => $challenge->reward_xp,
+            'goal' => $criteria['goal'] ?? null,
+            'rounds' => $criteria['rounds'] ?? null,
+            'character' => $character ? [
+                'name' => $character->name,
+                'image_url' => $character->image_url,
+                'description' => $character->description,
+                'wild_ability_description' => $character->wild_ability_description,
+            ] : null,
+            'loadout' => $loadout,
+            'status' => $entry->status ?? DailyChallengeEntry::STATUS_PENDING,
+            'game_id' => $entry->game_id ?? null,
             'completed' => $entry && $entry->completed_at !== null,
         ]);
+    }
+
+    /**
+     * Start today's daily-challenge run. Wordle-style: one locked attempt per player.
+     * The run is fully seeded so everyone playing a given date gets the identical
+     * deck order, events, dice, character and loadout.
+     */
+    public function startDailyRun(Request $request): JsonResponse
+    {
+        $challenge = DailyChallenge::where('date', Carbon::today())->first();
+
+        if (!$challenge) {
+            return response()->json(['error' => 'No daily challenge is available today.'], 404);
+        }
+
+        return $this->runDailyChallenge($request, $challenge);
+    }
+
+    /**
+     * Start a specific (possibly historic) daily challenge. Replaying past challenges
+     * is a premium feature; today's challenge is free for everyone.
+     */
+    public function startDailyChallenge(Request $request, DailyChallenge $dailyChallenge): JsonResponse
+    {
+        $isToday = $dailyChallenge->date->isSameDay(Carbon::today());
+
+        if (! $isToday && ! $request->user()->isPremium()) {
+            return response()->json(['error' => 'Replaying past daily challenges is a premium feature.'], 403);
+        }
+
+        return $this->runDailyChallenge($request, $dailyChallenge);
+    }
+
+    private function runDailyChallenge(Request $request, DailyChallenge $challenge): JsonResponse
+    {
+        $user = $request->user();
+        $criteria = $challenge->criteria ?? [];
+
+        return DB::transaction(function () use ($request, $user, $challenge, $criteria): JsonResponse {
+            $entry = DailyChallengeEntry::where('user_id', $user->id)
+                ->where('daily_challenge_id', $challenge->id)
+                ->lockForUpdate()
+                ->first();
+
+            // One attempt per challenge: once started (or completed), it cannot be replayed.
+            if ($entry && ($entry->game_id !== null || $entry->status !== DailyChallengeEntry::STATUS_PENDING)) {
+                return response()->json([
+                    'error' => 'You have already played this challenge.',
+                    'game_id' => $entry->game_id,
+                    'status' => $entry->status,
+                ], 409);
+            }
+
+            $seedCharacterId = $criteria['seed_character_id']
+                ?? Character::orderBy('id')->value('id');
+            $gameType = ($criteria['mode'] ?? 'cooperative') === 'duel' ? 'duel' : 'cooperative';
+            $rounds = (int) ($criteria['rounds'] ?? 6);
+            $startStats = $criteria['start']['all'] ?? 8;
+
+            // Map the challenge's authored options into the game's custom_rules, which the
+            // shared setup/round logic already consumes. Every player runs the identical
+            // criteria, and all randomness downstream is seeded (see rng()), so the run is
+            // byte-identical for everyone on the day.
+            $customRules = ['starting_stats' => $startStats];
+
+            // Per-stat starting values (e.g. deliberately low wealth) override the uniform
+            // value for named stats. Fixed values, so identical for every player.
+            if (! empty($criteria['start']['per_stat']) && is_array($criteria['start']['per_stat'])) {
+                $customRules['starting_stats_map'] = $criteria['start']['per_stat'];
+            }
+
+            $houseRules = array_filter($criteria['house_rules'] ?? [], fn ($enabled): bool => (bool) $enabled);
+            if ($houseRules !== []) {
+                $customRules['house_rules'] = $houseRules;
+            }
+
+            foreach (['card_pool', 'item_pool', 'event_pool', 'curse_pool'] as $poolKey) {
+                if (! empty($criteria[$poolKey]) && is_array($criteria[$poolKey])) {
+                    $customRules[$poolKey] = array_values($criteria[$poolKey]);
+                }
+            }
+
+            $game = Game::create([
+                'num_players' => 1,
+                'total_rounds' => $rounds,
+                'status' => 'setup',
+                'game_mode' => 'single',
+                'game_type' => $gameType,
+                'user_id' => $user->id,
+                'is_daily' => true,
+                'daily_seed' => "daily:{$challenge->date->toDateString()}:{$challenge->id}",
+                'daily_challenge_id' => $challenge->id,
+                'custom_rules' => $customRules,
+            ]);
+
+            $entry = DailyChallengeEntry::updateOrCreate(
+                ['user_id' => $user->id, 'daily_challenge_id' => $challenge->id],
+                [
+                    'game_id' => $game->id,
+                    'status' => DailyChallengeEntry::STATUS_IN_PROGRESS,
+                    'started_at' => now(),
+                ],
+            );
+
+            // Reuse the normal setup path (seeded, since the game is flagged is_daily).
+            $request->merge(['characters' => [(int) $seedCharacterId]]);
+            $this->start($game, $request);
+
+            return response()->json([
+                'game_id' => $game->id,
+                'status' => $entry->status,
+            ]);
+        });
+    }
+
+    /**
+     * The archive of past daily challenges. Visible to everyone (so free players see
+     * what premium unlocks), but only premium players may actually start a past run.
+     */
+    public function dailyChallengeHistory(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $challenges = DailyChallenge::where('date', '<', Carbon::today())
+            ->orderByDesc('date')
+            ->limit(30)
+            ->get();
+
+        $entries = DailyChallengeEntry::where('user_id', $user->id)
+            ->whereIn('daily_challenge_id', $challenges->pluck('id'))
+            ->get()
+            ->keyBy('daily_challenge_id');
+
+        $items = $challenges->map(function (DailyChallenge $challenge) use ($entries): array {
+            $entry = $entries->get($challenge->id);
+            $criteria = $challenge->criteria ?? [];
+
+            return [
+                'id' => $challenge->id,
+                'date' => $challenge->date->toDateString(),
+                'title' => $challenge->title,
+                'description' => $challenge->description,
+                'reward_xp' => $challenge->reward_xp,
+                'goal' => $criteria['goal'] ?? null,
+                'status' => $entry->status ?? DailyChallengeEntry::STATUS_PENDING,
+                'game_id' => $entry->game_id ?? null,
+            ];
+        })->values();
+
+        return response()->json([
+            'challenges' => $items,
+            'is_premium' => $user->isPremium(),
+        ]);
+    }
+
+    /**
+     * The Challenges page: today's challenge (with briefing) + the past archive, each
+     * carrying the player's own result and the platform averages for comparison.
+     */
+    public function challenges(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $today = $this->challengePayload($user, DailyChallenge::where('date', Carbon::today())->first(), true);
+
+        $history = DailyChallenge::where('date', '<', Carbon::today())
+            ->orderByDesc('date')
+            ->limit(30)
+            ->get()
+            ->map(fn (DailyChallenge $challenge) => $this->challengePayload($user, $challenge, false))
+            ->filter()
+            ->values();
+
+        return response()->json([
+            'is_premium' => $user->isPremium(),
+            'today' => $today,
+            'history' => $history,
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function challengePayload(User $user, ?DailyChallenge $challenge, bool $includeBriefing): ?array
+    {
+        if (! $challenge) {
+            return null;
+        }
+
+        $criteria = $challenge->criteria ?? [];
+        $entry = DailyChallengeEntry::where('user_id', $user->id)
+            ->where('daily_challenge_id', $challenge->id)
+            ->first();
+        $stats = $this->challengeStats($challenge->id);
+
+        $payload = [
+            'id' => $challenge->id,
+            'date' => $challenge->date->toDateString(),
+            'title' => $challenge->title,
+            'description' => $challenge->description,
+            'goal' => $criteria['goal'] ?? null,
+            'reward_xp' => $challenge->reward_xp,
+            'status' => $entry->status ?? DailyChallengeEntry::STATUS_PENDING,
+            'game_id' => $entry->game_id ?? null,
+            'rounds_taken' => $entry->rounds_taken ?? null,
+            'avg_rounds' => $stats['avg_rounds'],
+            'success_rate' => $stats['success_rate'],
+            'plays' => $stats['plays'],
+        ];
+
+        if ($includeBriefing) {
+            $character = ($criteria['seed_character_id'] ?? null)
+                ? Character::find($criteria['seed_character_id'])
+                : null;
+            $payload['character'] = $character ? [
+                'name' => $character->name,
+                'image_url' => $character->image_url,
+                'description' => $character->description,
+                'wild_ability_description' => $character->wild_ability_description,
+            ] : null;
+            $payload['loadout'] = Item::whereIn('id', $criteria['seed_loadout'] ?? [])
+                ->orderBy('id')
+                ->get()
+                ->map(fn (Item $item): array => [
+                    'name' => $item->name,
+                    'type' => $item->type,
+                    'cadence' => $item->cadence,
+                    'description' => $item->description,
+                ])
+                ->values();
+        }
+
+        return $payload;
+    }
+
+    /**
+     * Platform averages for a challenge: months-to-win (winners only), success rate, plays.
+     *
+     * @return array{plays: int, avg_rounds: float|null, success_rate: int|null}
+     */
+    private function challengeStats(int $challengeId): array
+    {
+        $finished = DailyChallengeEntry::where('daily_challenge_id', $challengeId)
+            ->whereIn('status', [DailyChallengeEntry::STATUS_WON, DailyChallengeEntry::STATUS_LOST]);
+
+        $plays = (clone $finished)->count();
+        $winCount = (clone $finished)->where('status', DailyChallengeEntry::STATUS_WON)->count();
+        $avgRounds = (clone $finished)->where('status', DailyChallengeEntry::STATUS_WON)->avg('rounds_taken');
+
+        return [
+            'plays' => $plays,
+            'avg_rounds' => $avgRounds !== null ? round((float) $avgRounds, 1) : null,
+            'success_rate' => $plays > 0 ? (int) round(($winCount / $plays) * 100) : null,
+        ];
     }
 
     public function weeklyChallenge(Request $request): JsonResponse
@@ -4287,6 +4729,48 @@ class GameController extends Controller
     }
 
     /**
+     * Abandon an in-progress endless daily challenge run early. Finalises the game as a
+     * loss so the entry settles as `lost` (goal not met → no rounds_taken recorded).
+     */
+    public function quitDailyChallenge(Request $request, Game $game): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        if (! $game->is_daily) {
+            return response()->json(['error' => 'This is not a daily challenge game.'], 422);
+        }
+
+        $player = $game->players()->where('user_id', $userId)->first();
+        if (! $player) {
+            return response()->json(['error' => 'You are not part of this game.'], 403);
+        }
+
+        if ($game->status !== 'active') {
+            return response()->json(['error' => 'Game is not active.'], 422);
+        }
+
+        $game->update([
+            'status' => 'completed',
+            'round_phase' => 'complete',
+            'win' => false,
+        ]);
+
+        $completionSummary = app(GameCompletionService::class)->processCompletion($game);
+
+        $game->refresh();
+        $game->computeFinalScore();
+        $game->save();
+
+        return response()->json([
+            'game_over' => true,
+            'win' => false,
+            'reason' => 'You abandoned the trial.',
+            'game' => $game->fresh(),
+            'completion' => $completionSummary,
+        ]);
+    }
+
+    /**
      * Check which players have more than 2 active (non-used) items.
      */
     /**
@@ -4334,13 +4818,20 @@ class GameController extends Controller
     /**
      * Check if a player can receive a new item (not all slots cursed).
      */
+    private function itemSlotLimit(GamePlayer $player): int
+    {
+        // Players bring a loadout of up to 3 items, plus any extra slots from advisor perks.
+        return 3 + ($player->extra_item_slots ?? 0);
+    }
+
     private function canPlayerReceiveItem(GamePlayer $player): bool
     {
         $activeItems = GamePlayerItem::where('game_player_id', $player->id)
             ->where('is_used', false)
+            ->whereHas('item', fn ($q) => $q->where('cadence', '!=', Item::CADENCE_PASSIVE))
             ->count();
 
-        return $activeItems < 2 + ($player->extra_item_slots ?? 0);
+        return $activeItems < $this->itemSlotLimit($player);
     }
 
     private function getPlayersOverItemLimit(Game $game): array
@@ -4349,8 +4840,11 @@ class GameController extends Controller
         $overLimit = [];
 
         foreach ($players as $player) {
-            $activeItems = $player->items->where('is_used', false);
-            if ($activeItems->count() > 2 + ($player->extra_item_slots ?? 0)) {
+            // Passive items are always-on and do not occupy a usable slot.
+            $activeItems = $player->items
+                ->where('is_used', false)
+                ->filter(fn ($pi) => $pi->item && ! $pi->item->isPassive());
+            if ($activeItems->count() > $this->itemSlotLimit($player)) {
                 $overLimit[] = [
                     'player_number' => $player->player_number,
                     'character_name' => $player->character->name ?? 'Player ' . $player->player_number,
@@ -4407,6 +4901,10 @@ class GameController extends Controller
             return response()->json(['error' => 'Item is already used'], 422);
         }
 
+        if ($playerItem->item->isPassive()) {
+            return response()->json(['error' => 'This item is always active and cannot be used manually'], 422);
+        }
+
         $player = $playerItem->gamePlayer;
 
         // Verify the requesting user owns this player (online mode)
@@ -4425,12 +4923,17 @@ class GameController extends Controller
             return response()->json(['error' => 'Already used an item this round'], 422);
         }
 
-        // Mark item as used (only permanently consumed if consumable)
-        $isConsumable = $playerItem->item->is_consumable ?? false;
-        $playerItem->update([
-            'is_used' => $isConsumable,
+        // Consume per cadence: per_game items are spent permanently (is_used = true);
+        // per_round items free up again next round, tracked via used_round. Passive
+        // items never reach here (rejected above and applied automatically).
+        $update = [
             'used_round' => $game->current_round,
-        ]);
+            'uses_this_round' => ($playerItem->uses_this_round ?? 0) + 1,
+        ];
+        if ($playerItem->item->isPerGame()) {
+            $update['is_used'] = true;
+        }
+        $playerItem->update($update);
 
         // Apply immediate effects for stat_boost/heal_die/score_bonus/steal_stat
         $immediateDesc = null;
@@ -4757,9 +5260,20 @@ class GameController extends Controller
     private function initCurseDeck(Game $game): void
     {
         $rotatingEvent = $game->rotating_event_id ? $game->rotatingEvent : null;
+        $customRules = $game->custom_rules;
 
-        if ($rotatingEvent && $rotatingEvent->curse_pool) {
+        $rng = $this->rng($game);
+
+        if (! empty($customRules['curse_pool'])) {
+            // Daily curse pool: stable id order + seeded shuffle so every player's curse
+            // deck is identical; a normal game still gets a random shuffle.
+            $ordered = Curse::whereIn('id', $customRules['curse_pool'])->orderBy('id')->get();
+            $allCurses = $rng ? collect($rng->shuffle($ordered->all(), 'curses')) : $ordered->shuffle()->values();
+        } elseif ($rotatingEvent && $rotatingEvent->curse_pool) {
             $allCurses = Curse::whereIn('id', $rotatingEvent->curse_pool)->inRandomOrder()->get();
+        } elseif ($rng) {
+            $ordered = Curse::where('is_available', true)->orderBy('id')->get();
+            $allCurses = collect($rng->shuffle($ordered->all(), 'curses'));
         } else {
             $allCurses = Curse::where('is_available', true)->inRandomOrder()->get();
         }

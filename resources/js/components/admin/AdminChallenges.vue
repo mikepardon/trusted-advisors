@@ -17,24 +17,31 @@
     </div>
 
     <!-- List -->
-    <div class="list-panel">
-      <div v-for="c in challenges" :key="c.id" class="list-row">
-        <div class="list-info">
-          <div class="list-top">
-            <strong>{{ c.title }}</strong>
-            <span class="date-badge">{{ c.date }}</span>
-            <span v-if="c.is_manual" class="manual-badge">Manual</span>
-            <span v-if="c.addon_id" class="addon-badge">Addon</span>
-          </div>
-          <div class="list-sub">{{ c.description }} (+{{ c.reward_xp }} XP)</div>
-        </div>
-        <div class="list-actions">
-          <button class="btn-sm" @click="openEdit(c)">Edit</button>
-          <button class="btn-sm btn-danger" @click="deleteChallenge(c)">Del</button>
-        </div>
-      </div>
-      <div v-if="challenges.length === 0" class="empty">No challenges yet.</div>
-    </div>
+    <table class="admin-table challenge-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Name</th>
+          <th class="col-plays">Plays</th>
+          <th class="col-actions">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr v-for="c in challenges" :key="c.id">
+          <td>{{ formatDate(c.date) }}</td>
+          <td>{{ c.title }}</td>
+          <td class="col-plays">{{ c.entries_count ?? 0 }}</td>
+          <td class="col-actions">
+            <button class="btn-sm" @click="openPreview(c)">Preview</button>
+            <button class="btn-sm" @click="openEdit(c)">Edit</button>
+            <button class="btn-sm btn-danger" @click="deleteChallenge(c)">Del</button>
+          </td>
+        </tr>
+        <tr v-if="challenges.length === 0">
+          <td colspan="4" class="empty">No challenges yet.</td>
+        </tr>
+      </tbody>
+    </table>
 
     <!-- Modal -->
     <div v-if="showModal" class="modal-overlay" @click.self="showModal = false">
@@ -55,62 +62,82 @@
               <input v-model="form.description" required />
             </div>
             <div class="form-group">
-              <label>Criteria Type</label>
-              <select v-model="form.criteria_type">
-                <option value="play_game">Play Game</option>
-                <option value="win_game">Win Game</option>
-                <option value="stat_threshold">Stat Threshold</option>
-                <option value="use_character">Use Character</option>
-                <option value="no_stat_below">No Stat Below</option>
-                <option value="no_stat_above">No Stat Above</option>
-                <option value="all_stats_below">All Stats Below</option>
-                <option value="all_stats_above">All Stats Above</option>
-                <option value="total_score_above">Total Score Above</option>
-                <option value="total_score_below">Total Score Below</option>
-                <option value="login_streak">Login Streak</option>
-                <option value="online_plays">Online Plays</option>
-                <option value="total_friends">Total Friends</option>
-                <option value="duel_plays">Duel Plays</option>
-                <option value="wins_with_characters">Wins With Characters</option>
+              <label>Goal Type</label>
+              <select v-model="form.goal_type">
+                <option value="stat_threshold">Single stat target</option>
+                <option value="stat_threshold_all">All stats target</option>
+                <option value="no_stat_below">No stat below</option>
               </select>
             </div>
-            <div v-if="form.criteria_type === 'play_game' || form.criteria_type === 'win_game'" class="form-group">
-              <label>Mode</label>
-              <select v-model="form.criteria_mode">
-                <option value="any">Any</option>
-                <option value="single">Solo</option>
-                <option value="pass_and_play">Local</option>
-                <option value="online">Online</option>
+            <div class="form-group">
+              <label>Starting Stats (all)</label>
+              <input v-model.number="form.start_all" type="number" min="0" max="20" />
+            </div>
+            <template v-if="form.goal_type === 'stat_threshold'">
+              <div class="form-group">
+                <label>Target Stat</label>
+                <select v-model="form.goal_stat">
+                  <option v-for="stat in STATS" :key="stat" :value="stat">{{ statLabel(stat) }}</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Target Value (reach to win)</label>
+                <input v-model.number="form.goal_value" type="number" min="1" max="20" />
+              </div>
+            </template>
+            <div v-else-if="form.goal_type === 'no_stat_below'" class="form-group">
+              <label>Floor (keep every stat at or above)</label>
+              <input v-model.number="form.goal_value" type="number" min="1" max="20" />
+            </div>
+            <div v-else-if="form.goal_type === 'stat_threshold_all'" class="form-group full">
+              <label>Per-Stat Targets (leave 0 to ignore a stat)</label>
+              <div class="targets-grid">
+                <div v-for="stat in STATS" :key="stat" class="target-cell">
+                  <span class="target-label">{{ statLabel(stat) }}</span>
+                  <input v-model.number="form.goal_targets[stat]" type="number" min="0" max="20" />
+                </div>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Rounds Cap (safety limit)</label>
+              <input v-model.number="form.rounds" type="number" min="1" max="120" />
+            </div>
+            <div class="form-group">
+              <label>Assigned Advisor</label>
+              <select v-model="form.seed_character_id">
+                <option :value="null">Random (any)</option>
+                <option v-for="ch in characters" :key="ch.id" :value="ch.id">{{ ch.name }}</option>
               </select>
-            </div>
-            <div v-if="form.criteria_type === 'stat_threshold'" class="form-group">
-              <label>Stat</label>
-              <select v-model="form.criteria_stat">
-                <option value="wealth">Wealth</option>
-                <option value="influence">Influence</option>
-                <option value="security">Security</option>
-                <option value="religion">Religion</option>
-                <option value="food">Food</option>
-                <option value="happiness">Happiness</option>
-              </select>
-            </div>
-            <div v-if="['stat_threshold', 'no_stat_below', 'no_stat_above', 'all_stats_below', 'all_stats_above', 'total_score_above', 'total_score_below'].includes(form.criteria_type)" class="form-group">
-              <label>Value</label>
-              <input v-model.number="form.criteria_value" type="number" min="1" :max="['total_score_above', 'total_score_below'].includes(form.criteria_type) ? 120 : 20" />
-            </div>
-            <div v-if="['login_streak', 'online_plays', 'total_friends', 'duel_plays', 'wins_with_characters'].includes(form.criteria_type)" class="form-group">
-              <label>Count</label>
-              <input v-model.number="form.criteria_count" type="number" min="1" />
-            </div>
-            <div v-if="form.criteria_type === 'use_character'" class="form-group">
-              <label>Character ID</label>
-              <input v-model.number="form.criteria_character_id" type="number" min="1" />
             </div>
             <div class="form-group">
               <label>Reward XP</label>
               <input v-model.number="form.reward_xp" type="number" min="0" />
             </div>
             <div class="form-group">
+              <label>Reward Coins</label>
+              <input v-model.number="form.reward_coins" type="number" min="0" max="100000" />
+            </div>
+            <div class="form-group full">
+              <label>Seed Loadout (up to 3 items)</label>
+              <div class="loadout-picker">
+                <label
+                  v-for="it in items"
+                  :key="it.id"
+                  class="loadout-option"
+                  :class="{ selected: form.seed_loadout.includes(it.id) }"
+                >
+                  <input
+                    type="checkbox"
+                    :value="it.id"
+                    :checked="form.seed_loadout.includes(it.id)"
+                    :disabled="!form.seed_loadout.includes(it.id) && form.seed_loadout.length >= 3"
+                    @change="toggleLoadoutItem(it.id)"
+                  />
+                  {{ it.name }}
+                </label>
+              </div>
+            </div>
+            <div class="form-group full">
               <label>Addon</label>
               <select v-model="form.addon_id">
                 <option :value="null">Base Game</option>
@@ -118,6 +145,61 @@
               </select>
             </div>
           </div>
+
+          <!-- House Rules -->
+          <div class="form-section-title">House Rules</div>
+          <div class="house-rules-grid">
+            <div class="rule-item">
+              <label class="checkbox-label"><input v-model="form.house_rules.no_negative_effects" type="checkbox" /> No Negative Effects</label>
+              <span class="info-icon" title="Failed cards and events never apply their negative stat changes — only the positive outcomes land. A very forgiving reign.">&#9432;</span>
+            </div>
+            <div class="rule-item">
+              <label class="checkbox-label"><input v-model="form.house_rules.double_positive_effects" type="checkbox" /> Double Positive Effects</label>
+              <span class="info-icon" title="Every positive stat gain is doubled (e.g. +2 Wealth becomes +4). Makes targets easier to hit.">&#9432;</span>
+            </div>
+            <div class="rule-item">
+              <label class="checkbox-label"><input v-model="form.house_rules.hardcore_mode" type="checkbox" /> Hardcore Mode</label>
+              <span class="info-icon" title="The reign ends the moment any stat falls to 3 or below, instead of the usual 0. Much less room for error.">&#9432;</span>
+            </div>
+            <div class="rule-item">
+              <label class="checkbox-label"><input v-model="form.house_rules.random_starting_stats" type="checkbox" /> Random Starting Stats</label>
+              <span class="info-icon" title="Each of the six stats starts at a random value (1–15) instead of the set starting values. Seeded by the challenge, so it's the same for every player. Overrides the per-stat starting values above.">&#9432;</span>
+            </div>
+            <div class="rule-item">
+              <label class="checkbox-label"><input v-model="form.house_rules.draw_curse_per_round" type="checkbox" /> Draw Curse Each Round</label>
+              <span class="info-icon" title="A fresh curse is drawn every month, on top of any curse already on the land — steady, mounting pressure.">&#9432;</span>
+            </div>
+          </div>
+
+          <!-- Content Pools -->
+          <div class="form-section-title">Content Pools</div>
+          <div v-for="pool in POOLS" :key="pool.type" class="form-group">
+            <label>
+              {{ pool.label }}
+              <span v-if="poolCount(pool.key) > 0" class="pool-chip">{{ poolCount(pool.key) }} selected</span>
+              <span v-else class="pool-chip pool-all">All included</span>
+            </label>
+            <div class="pool-controls">
+              <button type="button" class="btn-sm" @click="togglePool(pool.type)">{{ showPool[pool.type] ? 'Hide' : 'Select' }}</button>
+              <button v-if="poolCount(pool.key) > 0" type="button" class="btn-sm" @click="form[pool.key] = undefined">Clear</button>
+              <button type="button" class="btn-sm" @click="selectAllPool(pool.type)">All</button>
+            </div>
+            <div v-if="showPool[pool.type]" class="pool-list">
+              <input v-model="poolSearch[pool.type]" placeholder="Search..." class="pool-search" />
+              <div class="pool-tile-grid">
+                <div
+                  v-for="entry in filteredPool(pool.type)"
+                  :key="entry.id"
+                  :class="['pool-tile', { 'pool-tile-selected': isInPool(pool.key, entry.id) }]"
+                  @click="togglePoolItem(pool.key, entry.id)"
+                >
+                  {{ entry.name }}
+                </div>
+                <div v-if="filteredPool(pool.type).length === 0" class="pool-empty">No matches.</div>
+              </div>
+            </div>
+          </div>
+
           <div v-if="formError" class="form-error">{{ formError }}</div>
           <div class="modal-actions">
             <button type="submit" class="btn-primary">{{ editing ? 'Update' : 'Create' }}</button>
@@ -152,6 +234,20 @@
         </form>
       </div>
     </div>
+
+    <!-- In-game preview -->
+    <AdminPreviewModal
+      :visible="previewChallenge !== undefined"
+      :title="previewChallenge?.title"
+      @close="previewChallenge = undefined"
+    >
+      <ChallengePreviewCard
+        v-if="previewChallenge"
+        :challenge="previewChallenge"
+        :characters="characters"
+        :items="items"
+      />
+    </AdminPreviewModal>
     </template>
 
     <!-- WEEKLY TAB -->
@@ -279,16 +375,110 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref } from "vue";
 import axios, { isAxiosError } from "axios";
+import AdminPreviewModal from "./AdminPreviewModal.vue";
+import ChallengePreviewCard from "./ChallengePreviewCard.vue";
+
+type Stat = "wealth" | "influence" | "security" | "religion" | "food" | "happiness";
+
+const STATS: Stat[] = ["wealth", "influence", "security", "religion", "food", "happiness"];
+
+const STAT_LABELS: Record<Stat, string> = {
+  wealth: "Wealth",
+  influence: "Influence",
+  security: "Security",
+  religion: "Religion",
+  food: "Food",
+  happiness: "Happiness",
+};
+
+function statLabel(stat: Stat): string {
+  return STAT_LABELS[stat];
+}
+
+type PoolType = "cards" | "items" | "events" | "curses";
+type PoolKey = "card_pool" | "item_pool" | "event_pool" | "curse_pool";
+
+interface PoolDescriptor {
+  type: PoolType;
+  key: PoolKey;
+  label: string;
+}
+
+const POOLS: PoolDescriptor[] = [
+  { type: "cards", key: "card_pool", label: "Cards" },
+  { type: "items", key: "item_pool", label: "Items" },
+  { type: "events", key: "event_pool", label: "Events" },
+  { type: "curses", key: "curse_pool", label: "Curses" },
+];
+
+const poolTypeToKey: Record<PoolType, PoolKey> = {
+  cards: "card_pool",
+  items: "item_pool",
+  events: "event_pool",
+  curses: "curse_pool",
+};
+
+interface HouseRules {
+  no_negative_effects: boolean;
+  double_positive_effects: boolean;
+  hardcore_mode: boolean;
+  random_starting_stats: boolean;
+  draw_curse_per_round: boolean;
+}
+
+/**
+A named entry for a pool tile. Cards/events expose `title`, items/curses expose `name`.
+*/
+interface PoolEntry {
+  id: number;
+  name: string;
+}
+
+interface RawPoolEntry {
+  id: number;
+  name?: string;
+  title?: string;
+}
+
+interface DailyGoal {
+  type: string;
+  stat?: string;
+  value?: number;
+  targets?: Record<string, number>;
+}
 
 interface Criteria {
-  type?: string;
+  // Endless daily shape.
   mode?: string;
+  rounds?: number;
+  start?: { all?: number };
+  goal?: DailyGoal;
+  seed_character_id?: number;
+  seed_loadout?: number[];
+  house_rules?: Partial<HouseRules>;
+  card_pool?: number[];
+  item_pool?: number[];
+  event_pool?: number[];
+  curse_pool?: number[];
+  reward_coins?: number;
+  // Weekly (and legacy) flat shape.
+  type?: string;
   stat?: string;
   value?: number;
   character_id?: number;
   count?: number;
+}
+
+interface Character {
+  id: number;
+  name: string;
+}
+
+interface Item {
+  id: number;
+  name: string;
 }
 
 interface Challenge {
@@ -300,6 +490,7 @@ interface Challenge {
   reward_xp: number;
   addon_id: number | undefined;
   is_manual: boolean;
+  entries_count?: number;
 }
 
 interface WeeklyChallenge {
@@ -323,14 +514,22 @@ interface ChallengeForm {
   date: string;
   title: string;
   description: string;
-  criteria_type: string;
-  criteria_mode: string;
-  criteria_stat: string;
-  criteria_value: number;
-  criteria_character_id: number;
-  criteria_count: number;
+  goal_type: string;
+  goal_stat: Stat;
+  goal_value: number;
+  goal_targets: Record<Stat, number>;
+  start_all: number;
+  rounds: number;
+  seed_character_id: number | undefined;
+  seed_loadout: number[];
   reward_xp: number;
+  reward_coins: number;
   addon_id: number | undefined;
+  house_rules: HouseRules;
+  card_pool: number[] | undefined;
+  item_pool: number[] | undefined;
+  event_pool: number[] | undefined;
+  curse_pool: number[] | undefined;
 }
 
 interface WeeklyForm {
@@ -351,13 +550,31 @@ interface GenerateForm {
   end_date: string;
 }
 
+function emptyHouseRules(): HouseRules {
+  return {
+    no_negative_effects: false,
+    double_positive_effects: false,
+    hardcore_mode: false,
+    random_starting_stats: false,
+    draw_curse_per_round: false,
+  };
+}
+
+function emptyTargets(): Record<Stat, number> {
+  return { wealth: 0, influence: 0, security: 0, religion: 0, food: 0, happiness: 0 };
+}
+
 function emptyForm(): ChallengeForm {
   return {
     date: "", title: "", description: "",
-    criteria_type: "play_game", criteria_mode: "any",
-    criteria_stat: "wealth", criteria_value: 15,
-    criteria_character_id: 1, criteria_count: 5,
-    reward_xp: 100, addon_id: undefined,
+    goal_type: "stat_threshold",
+    goal_stat: "wealth", goal_value: 14,
+    goal_targets: emptyTargets(),
+    start_all: 8, rounds: 120,
+    seed_character_id: undefined, seed_loadout: [],
+    reward_xp: 125, reward_coins: 0, addon_id: undefined,
+    house_rules: emptyHouseRules(),
+    card_pool: undefined, item_pool: undefined, event_pool: undefined, curse_pool: undefined,
   };
 }
 
@@ -373,10 +590,19 @@ function emptyWeeklyForm(): WeeklyForm {
 const activeTab = ref("daily");
 const challenges = ref<Challenge[]>([]);
 const addons = ref<Addon[]>([]);
+const characters = ref<Character[]>([]);
+const items = ref<Item[]>([]);
+const cardPool = ref<PoolEntry[]>([]);
+const itemPool = computed<PoolEntry[]>(() => items.value.map((it) => ({ id: it.id, name: it.name })));
+const eventPool = ref<PoolEntry[]>([]);
+const cursePool = ref<PoolEntry[]>([]);
+const showPool = reactive<Record<PoolType, boolean>>({ cards: false, items: false, events: false, curses: false });
+const poolSearch = reactive<Record<PoolType, string>>({ cards: "", items: "", events: "", curses: "" });
 const showModal = ref(false);
 const editing = ref<number | undefined>(undefined);
 const formError = ref("");
 const form = reactive<ChallengeForm>(emptyForm());
+const previewChallenge = ref<Challenge | undefined>(undefined);
 // Generate range
 const showGenerateModal = ref(false);
 const generating = ref(false);
@@ -400,6 +626,11 @@ async function load(): Promise<void> {
   challenges.value = response.data;
 }
 
+// The API serialises the date cast as an ISO string; show just the calendar date.
+function formatDate(value: string): string {
+  return value.slice(0, 10);
+}
+
 async function fetchAddons(): Promise<void> {
   try {
     const response = await axios.get<Addon[]>("/api/admin/addons");
@@ -407,32 +638,182 @@ async function fetchAddons(): Promise<void> {
   } catch { /* ignore */ }
 }
 
+async function fetchCharacters(): Promise<void> {
+  try {
+    const response = await axios.get<Character[]>("/api/admin/characters");
+    characters.value = response.data;
+  } catch { /* ignore */ }
+}
+
+async function fetchItems(): Promise<void> {
+  try {
+    const response = await axios.get<Item[]>("/api/admin/items");
+    items.value = response.data;
+  } catch { /* ignore */ }
+}
+
+/**
+Normalise a pool endpoint response (either a bare array or a `{ data }` envelope).
+*/
+function normalisePool(payload: RawPoolEntry[] | { data: RawPoolEntry[] }): PoolEntry[] {
+  const rows = Array.isArray(payload) ? payload : payload.data;
+  return rows.map((row) => ({ id: row.id, name: row.title ?? row.name ?? `#${row.id}` }));
+}
+
+async function fetchPoolData(): Promise<void> {
+  try {
+    const [cards, events, curses] = await Promise.all([
+      axios.get<RawPoolEntry[] | { data: RawPoolEntry[] }>("/api/admin/cards"),
+      axios.get<RawPoolEntry[] | { data: RawPoolEntry[] }>("/api/admin/events"),
+      axios.get<RawPoolEntry[] | { data: RawPoolEntry[] }>("/api/admin/curses"),
+    ]);
+    cardPool.value = normalisePool(cards.data);
+    eventPool.value = normalisePool(events.data);
+    cursePool.value = normalisePool(curses.data);
+  } catch { /* ignore */ }
+}
+
+function poolEntries(type: PoolType): PoolEntry[] {
+  return type === "cards" ? cardPool.value
+    : type === "items" ? itemPool.value
+    : type === "events" ? eventPool.value
+    : cursePool.value;
+}
+
+function filteredPool(type: PoolType): PoolEntry[] {
+  const query = poolSearch[type].toLowerCase();
+  const entries = poolEntries(type);
+  return query ? entries.filter((entry) => entry.name.toLowerCase().includes(query)) : entries;
+}
+
+function poolCount(key: PoolKey): number {
+  return form[key]?.length ?? 0;
+}
+
+function togglePool(type: PoolType): void {
+  const current = showPool[type];
+  showPool[type] = !current;
+}
+
+function isInPool(key: PoolKey, id: number): boolean {
+  const pool = form[key];
+  return pool !== undefined && pool.includes(id);
+}
+
+function togglePoolItem(key: PoolKey, id: number): void {
+  const pool = form[key];
+  if (!pool) {
+    form[key] = [id];
+    return;
+  }
+  if (pool.includes(id)) {
+    const next = pool.filter((existing) => existing !== id);
+    form[key] = next.length === 0 ? undefined : next;
+    return;
+  }
+  form[key] = [...pool, id];
+}
+
+function selectAllPool(type: PoolType): void {
+  const key = poolTypeToKey[type];
+  const allIds = poolEntries(type).map((entry) => entry.id);
+  const pool = form[key];
+  form[key] = pool && pool.length === allIds.length ? undefined : [...allIds];
+}
+
+function toggleLoadoutItem(itemId: number): void {
+  const index = form.seed_loadout.indexOf(itemId);
+  if (index === -1) {
+    if (form.seed_loadout.length >= 3) {
+      return;
+    }
+    form.seed_loadout.push(itemId);
+  } else {
+    form.seed_loadout.splice(index, 1);
+  }
+}
+
+function buildGoal(): DailyGoal {
+  if (form.goal_type === "stat_threshold_all") {
+    const targets: Record<string, number> = {};
+    for (const stat of STATS) {
+      const value = form.goal_targets[stat];
+      if (value > 0) {
+        targets[stat] = value;
+      }
+    }
+    return { type: "stat_threshold_all", targets };
+  }
+  if (form.goal_type === "no_stat_below") {
+    return { type: "no_stat_below", value: form.goal_value };
+  }
+  return { type: "stat_threshold", stat: form.goal_stat, value: form.goal_value };
+}
+
 function buildCriteria(): Criteria {
-  const type = form.criteria_type;
-  if (type === "play_game") {
-    return { type, mode: form.criteria_mode };
+  const criteria: Criteria = {
+    mode: "cooperative",
+    rounds: form.rounds,
+    start: { all: form.start_all },
+    goal: buildGoal(),
+    seed_character_id: form.seed_character_id,
+    seed_loadout: [...form.seed_loadout],
+    reward_coins: form.reward_coins,
+  };
+
+  const houseRules: Partial<HouseRules> = {};
+  if (form.house_rules.no_negative_effects) {
+    houseRules.no_negative_effects = true;
   }
-  if (type === "win_game") {
-    return { type, mode: form.criteria_mode };
+  if (form.house_rules.double_positive_effects) {
+    houseRules.double_positive_effects = true;
   }
-  if (type === "stat_threshold") {
-    return { type, stat: form.criteria_stat, value: form.criteria_value };
+  if (form.house_rules.hardcore_mode) {
+    houseRules.hardcore_mode = true;
   }
-  if (type === "use_character") {
-    return { type, character_id: form.criteria_character_id };
+  if (form.house_rules.random_starting_stats) {
+    houseRules.random_starting_stats = true;
   }
-  if (["no_stat_below", "no_stat_above", "all_stats_below", "all_stats_above", "total_score_above", "total_score_below"].includes(type)) {
-    return { type, value: form.criteria_value };
+  if (form.house_rules.draw_curse_per_round) {
+    houseRules.draw_curse_per_round = true;
   }
-  if (["login_streak", "online_plays", "total_friends", "duel_plays", "wins_with_characters"].includes(type)) {
-    return { type, count: form.criteria_count };
+  if (Object.keys(houseRules).length > 0) {
+    criteria.house_rules = houseRules;
   }
-  return { type };
+
+  if (form.card_pool && form.card_pool.length > 0) {
+    criteria.card_pool = [...form.card_pool];
+  }
+  if (form.item_pool && form.item_pool.length > 0) {
+    criteria.item_pool = [...form.item_pool];
+  }
+  if (form.event_pool && form.event_pool.length > 0) {
+    criteria.event_pool = [...form.event_pool];
+  }
+  if (form.curse_pool && form.curse_pool.length > 0) {
+    criteria.curse_pool = [...form.curse_pool];
+  }
+
+  return criteria;
+}
+
+function openPreview(challenge: Challenge): void {
+  previewChallenge.value = challenge;
+}
+
+function resetPoolUi(): void {
+  Object.assign(showPool, { cards: false, items: false, events: false, curses: false });
+  Object.assign(poolSearch, { cards: "", items: "", events: "", curses: "" });
+}
+
+function isStat(value: string): value is Stat {
+  return (STATS as string[]).includes(value);
 }
 
 function openCreate(): void {
   editing.value = undefined;
   Object.assign(form, emptyForm());
+  resetPoolUi();
   formError.value = "";
   showModal.value = true;
 }
@@ -440,19 +821,55 @@ function openCreate(): void {
 function openEdit(challenge: Challenge): void {
   editing.value = challenge.id;
   const criteria = challenge.criteria ?? {};
+  const empty = emptyForm();
+  const goal = criteria.goal;
+  const goalType = goal?.type ?? "stat_threshold";
+  const goalStat = goal?.stat !== undefined && isStat(goal.stat) ? goal.stat : empty.goal_stat;
+
+  // Hydrate the per-stat target grid from goal.targets (older challenges lack it).
+  const targets = emptyTargets();
+  const rawTargets = goal?.targets;
+  if (rawTargets) {
+    for (const stat of STATS) {
+      const value = rawTargets[stat];
+      if (typeof value === "number") {
+        targets[stat] = value;
+      }
+    }
+  }
+
+  const houseRules = emptyHouseRules();
+  const rawHouseRules = criteria.house_rules;
+  if (rawHouseRules) {
+    houseRules.no_negative_effects = rawHouseRules.no_negative_effects === true;
+    houseRules.double_positive_effects = rawHouseRules.double_positive_effects === true;
+    houseRules.hardcore_mode = rawHouseRules.hardcore_mode === true;
+    houseRules.random_starting_stats = rawHouseRules.random_starting_stats === true;
+    houseRules.draw_curse_per_round = rawHouseRules.draw_curse_per_round === true;
+  }
+
   Object.assign(form, {
-    date: challenge.date,
+    date: formatDate(challenge.date),
     title: challenge.title,
     description: challenge.description,
-    criteria_type: criteria.type || "play_game",
-    criteria_mode: criteria.mode || "any",
-    criteria_stat: criteria.stat || "wealth",
-    criteria_value: criteria.value || 15,
-    criteria_character_id: criteria.character_id || 1,
-    criteria_count: criteria.count || 5,
+    goal_type: goalType,
+    goal_stat: goalStat,
+    goal_value: goal?.value ?? empty.goal_value,
+    goal_targets: targets,
+    start_all: criteria.start?.all ?? empty.start_all,
+    rounds: criteria.rounds ?? empty.rounds,
+    seed_character_id: criteria.seed_character_id ?? undefined,
+    seed_loadout: [...(criteria.seed_loadout ?? [])],
     reward_xp: challenge.reward_xp,
+    reward_coins: criteria.reward_coins ?? empty.reward_coins,
     addon_id: challenge.addon_id ?? undefined,
+    house_rules: houseRules,
+    card_pool: criteria.card_pool && criteria.card_pool.length > 0 ? [...criteria.card_pool] : undefined,
+    item_pool: criteria.item_pool && criteria.item_pool.length > 0 ? [...criteria.item_pool] : undefined,
+    event_pool: criteria.event_pool && criteria.event_pool.length > 0 ? [...criteria.event_pool] : undefined,
+    curse_pool: criteria.curse_pool && criteria.curse_pool.length > 0 ? [...criteria.curse_pool] : undefined,
   });
+  resetPoolUi();
   formError.value = "";
   showModal.value = true;
 }
@@ -608,7 +1025,7 @@ async function generateWeeklyRange(): Promise<void> {
 }
 
 onMounted(async () => {
-  await Promise.all([load(), fetchAddons()]);
+  await Promise.all([load(), fetchAddons(), fetchCharacters(), fetchItems(), fetchPoolData()]);
 });
 </script>
 
@@ -646,7 +1063,40 @@ onMounted(async () => {
 .modal-actions { display: flex; gap: 10px; margin-top: 18px; }
 .page-header-actions { display: flex; gap: 8px; }
 .btn-secondary { background: rgba(138, 106, 46, 0.15); border: 1px solid rgba(138, 106, 46, 0.4); color: var(--accent-gold); padding: 6px 14px; border-radius: 6px; cursor: pointer; font-family: 'Cinzel', serif; font-size: 0.85rem; }
+.loadout-picker { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; padding: 8px; background: var(--bg-primary); border: 1px solid rgba(138, 106, 46, 0.3); border-radius: 4px; }
+.loadout-option { display: flex; align-items: center; gap: 5px; font-size: 0.78rem; color: var(--text-secondary); background: rgba(138, 106, 46, 0.08); border: 1px solid rgba(138, 106, 46, 0.25); border-radius: 4px; padding: 3px 8px; cursor: pointer; }
+.loadout-option.selected { color: var(--accent-gold); border-color: var(--accent-gold); background: rgba(212, 168, 67, 0.15); }
+.loadout-option input { width: auto; }
 .gen-desc { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 14px; }
+.challenge-table .col-plays { text-align: center; width: 80px; }
+.challenge-table .col-actions { width: 1%; white-space: nowrap; text-align: right; }
+.challenge-table .col-actions .btn-sm { margin-left: 4px; }
+.challenge-table .empty { text-align: center; font-style: italic; }
+.house-rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
+.rule-item { display: flex; align-items: center; gap: 6px; }
+.info-icon { cursor: help; color: var(--text-secondary); font-size: 1rem; line-height: 1; flex-shrink: 0; }
+.info-icon:hover { color: var(--accent-gold); }
+@media (max-width: 640px) { .house-rules-grid { grid-template-columns: 1fr; } }
 .gen-result { font-size: 0.9rem; color: #6abf50; margin: 10px 0; }
-@media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } }
+
+/* House rules & content pools */
+.form-section-title { font-family: 'Cinzel', serif; font-size: 0.9rem; color: var(--accent-gold); margin: 16px 0 8px; padding-top: 12px; border-top: 1px solid rgba(138, 106, 46, 0.15); }
+.house-rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+.checkbox-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.82rem; color: var(--text-secondary); }
+.checkbox-label input[type="checkbox"] { width: auto; margin: 0; }
+.targets-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 8px; background: var(--bg-primary); border: 1px solid rgba(138, 106, 46, 0.3); border-radius: 4px; }
+.target-cell { display: flex; flex-direction: column; gap: 2px; }
+.target-label { font-size: 0.72rem; color: var(--text-secondary); }
+.pool-chip { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.7rem; font-weight: 600; margin-left: 6px; background: rgba(212, 168, 67, 0.15); color: var(--accent-gold); }
+.pool-chip.pool-all { background: rgba(74, 138, 58, 0.15); color: #6abf50; }
+.pool-controls { display: flex; gap: 6px; margin-bottom: 6px; }
+.pool-list { background: var(--bg-primary); border: 1px solid rgba(138, 106, 46, 0.15); border-radius: 6px; padding: 8px; margin-top: 4px; }
+.pool-search { margin-bottom: 8px; }
+.pool-tile-grid { display: flex; flex-wrap: wrap; gap: 6px; max-height: 200px; overflow-y: auto; padding: 2px; }
+.pool-tile { padding: 4px 10px; border-radius: 4px; font-size: 0.76rem; color: var(--text-secondary); background: rgba(138, 106, 46, 0.08); border: 1px solid rgba(138, 106, 46, 0.25); cursor: pointer; user-select: none; }
+.pool-tile:hover { border-color: rgba(212, 168, 67, 0.5); }
+.pool-tile-selected { border-color: var(--accent-gold); color: var(--accent-gold); background: rgba(212, 168, 67, 0.15); }
+.pool-empty { font-size: 0.78rem; color: var(--text-secondary); font-style: italic; padding: 4px; }
+
+@media (max-width: 768px) { .form-grid { grid-template-columns: 1fr; } .house-rules-grid { grid-template-columns: 1fr; } .targets-grid { grid-template-columns: 1fr 1fr; } }
 </style>
