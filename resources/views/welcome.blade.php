@@ -4,6 +4,10 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- Sentry is configured once, from the backend .env; the frontend reads these. --}}
+    <meta name="sentry-dsn" content="{{ config('sentry.dsn') }}">
+    <meta name="sentry-environment" content="{{ config('sentry.environment') ?? config('app.env') }}">
+    <meta name="sentry-traces-sample-rate" content="{{ config('sentry.traces_sample_rate') ?? 0 }}">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <title>{{ config('app.name', 'Trusted Advisors') }}</title>

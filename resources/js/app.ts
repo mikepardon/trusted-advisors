@@ -231,17 +231,31 @@ useIcons().fetchIcons();
 
 const app = createApp(App);
 
-Sentry.init({
-    app,
-    dsn: "https://f3c11bce67d48dd95f896b7abc09b667@o4510966117826560.ingest.de.sentry.io/4510966121627728",
-    integrations: [
-        Sentry.browserTracingIntegration({ router }),
-        Sentry.replayIntegration(),
-    ],
-    tracesSampleRate: 1,
-    replaysSessionSampleRate: 0,
-    replaysOnErrorSampleRate: 1,
-});
+// Sentry config is server-rendered from the backend .env (one env-driven system for
+// front and back), not hard-coded and not read from import.meta.env.
+function metaContent(name: string): string | undefined {
+    return (
+        document.querySelector(`meta[name="${CSS.escape(name)}"]`)?.getAttribute("content") ??
+        undefined
+    );
+}
+
+const sentryDsn = metaContent("sentry-dsn");
+if (sentryDsn !== undefined && sentryDsn !== "") {
+    const tracesRate = Number(metaContent("sentry-traces-sample-rate") ?? "0");
+    Sentry.init({
+        app,
+        dsn: sentryDsn,
+        environment: metaContent("sentry-environment"),
+        integrations: [
+            Sentry.browserTracingIntegration({ router }),
+            Sentry.replayIntegration(),
+        ],
+        tracesSampleRate: Number.isFinite(tracesRate) ? tracesRate : 0,
+        replaysSessionSampleRate: 0,
+        replaysOnErrorSampleRate: 1,
+    });
+}
 
 app.use(router);
 app.mount("#app");

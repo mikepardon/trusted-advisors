@@ -24,10 +24,12 @@ class ScheduleController extends Controller
             [
                 'key' => 'generate-daily-challenge',
                 'command' => 'app:generate-daily-challenge',
-                'arguments' => ['--ahead' => '6'],
+                // --no-ai here so the manual "Run now" (an HTTP request) can't time out on
+                // synchronous AI calls; the real overnight cron omits it and writes AI blurbs.
+                'arguments' => ['--ahead' => '6', '--no-ai' => true],
                 'label' => 'Generate Daily Challenges',
                 'schedule' => 'Daily at 00:12',
-                'description' => 'Ensures today plus the next 6 days each have a daily challenge (rolling window).',
+                'description' => 'Ensures today plus the next 6 days each have a daily challenge (rolling window). Uses fast templated briefings; the overnight schedule writes AI briefings.',
             ],
             [
                 'key' => 'generate-weekly-challenge',

@@ -136,9 +136,13 @@ class DailyChallengeController extends Controller
         $end = Carbon::parse($validated['end_date']);
         $created = 0;
         $skipped = 0;
+        $failed = [];
 
         // Reuse the endless-shape generator (app:generate-daily-challenge) per date so the
-        // admin range and the scheduled job produce identical, playable challenges.
+        // admin range and the scheduled job produce identical, playable challenges. Runs with
+        // --no-ai: this is an HTTP request, and a synchronous per-day Anthropic call across a
+        // range would blow the web timeout. The blurbs use the templated briefing here; the
+        // overnight scheduler regenerates them with the AI writer.
         for ($date = $start->copy(); $date->lte($end); $date->addDay()) {
             $dateStr = $date->toDateString();
 
@@ -147,17 +151,29 @@ class DailyChallengeController extends Controller
                 continue;
             }
 
-            Artisan::call('app:generate-daily-challenge', ['--date' => $dateStr]);
+            try {
+                Artisan::call('app:generate-daily-challenge', ['--date' => $dateStr, '--no-ai' => true]);
+            } catch (\Throwable $exception) {
+                report($exception);
+                $failed[] = $dateStr;
+                continue;
+            }
 
             if (DailyChallenge::whereDate('date', $dateStr)->exists()) {
                 $created++;
             }
         }
 
+        $message = "Generated {$created} challenges, skipped {$skipped} existing.";
+        if ($failed !== []) {
+            $message .= ' Failed for: ' . implode(', ', $failed) . '.';
+        }
+
         return response()->json([
             'created' => $created,
             'skipped' => $skipped,
-            'message' => "Generated {$created} challenges, skipped {$skipped} existing.",
+            'failed' => $failed,
+            'message' => $message,
         ]);
     }
 }

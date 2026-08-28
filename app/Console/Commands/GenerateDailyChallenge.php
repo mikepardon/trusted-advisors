@@ -17,7 +17,8 @@ class GenerateDailyChallenge extends Command
     protected $signature = 'app:generate-daily-challenge
         {--date= : Specific date (YYYY-MM-DD), defaults to today}
         {--ahead= : Also ensure this many future days are generated (rolling window)}
-        {--force : Overwrite an existing challenge for the date(s) instead of skipping}';
+        {--force : Overwrite an existing challenge for the date(s) instead of skipping}
+        {--no-ai : Use the templated briefing instead of calling the AI (fast — for bulk/HTTP generation)}';
 
     protected $description = 'Generate a richly-customised daily challenge if none exists for the date';
 
@@ -52,12 +53,13 @@ class GenerateDailyChallenge extends Command
     public function handle(ChallengeBlurbGenerator $blurbGenerator): void
     {
         $force = (bool) $this->option('force');
+        $noAi = (bool) $this->option('no-ai');
 
         // Rolling window: ensure today + the next N days all have a challenge.
         if ($this->option('ahead') !== null) {
             $ahead = (int) $this->option('ahead');
             for ($offset = 0; $offset <= $ahead; $offset++) {
-                $this->generateFor(Carbon::today()->addDays($offset), $blurbGenerator, $force);
+                $this->generateFor(Carbon::today()->addDays($offset), $blurbGenerator, $force, $noAi);
             }
 
             return;
@@ -67,10 +69,10 @@ class GenerateDailyChallenge extends Command
             ? Carbon::parse($this->option('date'))
             : Carbon::today();
 
-        $this->generateFor($date, $blurbGenerator, $force);
+        $this->generateFor($date, $blurbGenerator, $force, $noAi);
     }
 
-    private function generateFor(Carbon $date, ChallengeBlurbGenerator $blurbGenerator, bool $force): void
+    private function generateFor(Carbon $date, ChallengeBlurbGenerator $blurbGenerator, bool $force, bool $noAi = false): void
     {
         $dateStr = $date->toDateString();
         $existing = DailyChallenge::whereDate('date', $dateStr)->first();
@@ -121,7 +123,7 @@ class GenerateDailyChallenge extends Command
             'reward_coins' => $rewardCoins,
         ];
 
-        $description = $blurbGenerator->generate([
+        $blurbContext = [
             'character_name' => $characterName,
             'goal_text' => $goalText,
             'weak_stats' => $overrides['weak'],
@@ -130,7 +132,13 @@ class GenerateDailyChallenge extends Command
             'house_rules' => array_values(array_map(fn (string $key): string => $this->houseRuleLabels[$key] ?? $key, array_keys($houseRules))),
             'items' => $loadoutNames,
             'rounds' => 120,
-        ]);
+        ];
+
+        // --no-ai keeps HTTP-triggered bulk generation fast (no per-day Anthropic call,
+        // which would blow the web request timeout across a range of dates).
+        $description = $noAi
+            ? $blurbGenerator->templatedFallback($blurbContext)
+            : $blurbGenerator->generate($blurbContext);
 
         $data = [
             'title' => $title,
