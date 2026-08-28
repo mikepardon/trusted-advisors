@@ -11,6 +11,7 @@ class DailyChallengeEntry extends Model
     public const STATUS_IN_PROGRESS = 'in_progress';
     public const STATUS_WON = 'won';
     public const STATUS_LOST = 'lost';
+    public const STATUS_QUIT = 'quit';
 
     protected $fillable = ['user_id', 'daily_challenge_id', 'game_id', 'completed_at', 'status', 'started_at', 'rounds_taken'];
 

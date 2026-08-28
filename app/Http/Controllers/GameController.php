@@ -4761,6 +4761,12 @@ class GameController extends Controller
         $game->computeFinalScore();
         $game->save();
 
+        // processCompletion settles the entry as `lost`; mark it `quit` so the admin plays
+        // view can tell a deliberate abandonment from a stat-collapse loss.
+        DailyChallengeEntry::where('user_id', $userId)
+            ->where('daily_challenge_id', $game->daily_challenge_id)
+            ->update(['status' => DailyChallengeEntry::STATUS_QUIT]);
+
         return response()->json([
             'game_over' => true,
             'win' => false,

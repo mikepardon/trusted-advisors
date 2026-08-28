@@ -344,6 +344,8 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::put('cosmetics/{cosmetic}', [AdminCosmeticController::class, 'update']);
     Route::delete('cosmetics/{cosmetic}', [AdminCosmeticController::class, 'destroy']);
     Route::post('daily-challenges/generate', [DailyChallengeController::class, 'generateRange']);
+    Route::get('daily-challenges/{dailyChallenge}/entries', [DailyChallengeController::class, 'entries']);
+    Route::delete('daily-challenge-entries/{entry}', [DailyChallengeController::class, 'destroyEntry']);
     Route::apiResource('daily-challenges', DailyChallengeController::class);
     Route::apiResource('addons', AddonController::class);
     Route::get('rules', [GameRuleController::class, 'index']);

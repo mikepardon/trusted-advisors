@@ -30,7 +30,19 @@
         <tr v-for="c in challenges" :key="c.id">
           <td>{{ formatDate(c.date) }}</td>
           <td>{{ c.title }}</td>
-          <td class="col-plays">{{ c.entries_count ?? 0 }}</td>
+          <td class="col-plays">
+            <span
+              v-if="(c.entries_count ?? 0) > 0"
+              class="plays-link"
+              role="button"
+              tabindex="0"
+              @click="openPlays(c)"
+              @keydown.enter="openPlays(c)"
+            >
+              {{ c.entries_count }}
+            </span>
+            <span v-else>0</span>
+          </td>
           <td class="col-actions">
             <button class="btn-sm" @click="openPreview(c)">Preview</button>
             <button class="btn-sm" @click="openEdit(c)">Edit</button>
@@ -248,6 +260,47 @@
         :items="items"
       />
     </AdminPreviewModal>
+
+    <!-- Plays / entries -->
+    <div v-if="playsChallenge" class="modal-overlay" @click.self="playsChallenge = undefined">
+      <div class="modal-content modal-wide">
+        <h3>Plays — {{ playsChallenge.title }}</h3>
+        <p class="gen-desc">{{ formatDate(playsChallenge.date) }} · {{ playsEntries.length }} player{{ playsEntries.length === 1 ? '' : 's' }}. Deleting a play lets that player attempt the daily again.</p>
+
+        <div v-if="playsLoading" class="loading">Loading…</div>
+        <table v-else class="admin-table">
+          <thead>
+            <tr>
+              <th>Player</th>
+              <th>Result</th>
+              <th>Month</th>
+              <th>Score</th>
+              <th>Completed</th>
+              <th class="col-actions">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="play in playsEntries" :key="play.id">
+              <td>{{ play.player }}</td>
+              <td><span class="status-badge" :class="resultClass(play.status)">{{ resultLabel(play.status) }}</span></td>
+              <td>{{ play.months_reached ?? '—' }}</td>
+              <td>{{ play.score ?? '—' }}</td>
+              <td>{{ play.completed_at ? formatDateTime(play.completed_at) : '—' }}</td>
+              <td class="col-actions">
+                <button class="btn-sm btn-danger" @click="deleteEntry(play)">Delete</button>
+              </td>
+            </tr>
+            <tr v-if="playsEntries.length === 0">
+              <td colspan="6" class="empty">No plays yet.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="modal-actions">
+          <button type="button" @click="playsChallenge = undefined">Close</button>
+        </div>
+      </div>
+    </div>
     </template>
 
     <!-- WEEKLY TAB -->
@@ -493,6 +546,16 @@ interface Challenge {
   entries_count?: number;
 }
 
+interface PlayEntry {
+  id: number;
+  player: string;
+  status: string;
+  months_reached: number | undefined;
+  score: number | undefined;
+  started_at: string | undefined;
+  completed_at: string | undefined;
+}
+
 interface WeeklyChallenge {
   id: number;
   week_start: string;
@@ -603,6 +666,10 @@ const editing = ref<number | undefined>(undefined);
 const formError = ref("");
 const form = reactive<ChallengeForm>(emptyForm());
 const previewChallenge = ref<Challenge | undefined>(undefined);
+// Plays / entries drill-down
+const playsChallenge = ref<Challenge | undefined>(undefined);
+const playsEntries = ref<PlayEntry[]>([]);
+const playsLoading = ref(false);
 // Generate range
 const showGenerateModal = ref(false);
 const generating = ref(false);
@@ -629,6 +696,54 @@ async function load(): Promise<void> {
 // The API serialises the date cast as an ISO string; show just the calendar date.
 function formatDate(value: string): string {
   return value.slice(0, 10);
+}
+
+function formatDateTime(value: string): string {
+  return `${value.slice(0, 10)} ${value.slice(11, 16)}`;
+}
+
+function resultLabel(status: string): string {
+  const labels: Record<string, string> = {
+    won: "Won",
+    lost: "Lost",
+    quit: "Quit",
+    in_progress: "Playing",
+    pending: "Pending",
+  };
+  return labels[status] ?? status;
+}
+
+function resultClass(status: string): string {
+  if (status === "won") {
+    return "badge-active";
+  }
+  if (status === "in_progress" || status === "pending") {
+    return "badge-inactive";
+  }
+  return "badge-danger";
+}
+
+async function openPlays(challenge: Challenge): Promise<void> {
+  playsChallenge.value = challenge;
+  playsEntries.value = [];
+  playsLoading.value = true;
+  try {
+    const { data } = await axios.get<{ entries: PlayEntry[] }>(
+      `/api/admin/daily-challenges/${challenge.id}/entries`,
+    );
+    playsEntries.value = data.entries;
+  } finally {
+    playsLoading.value = false;
+  }
+}
+
+async function deleteEntry(entry: PlayEntry): Promise<void> {
+  if (!confirm(`Delete ${entry.player}'s play? They will be able to attempt this daily again.`)) {
+    return;
+  }
+  await axios.delete(`/api/admin/daily-challenge-entries/${entry.id}`);
+  playsEntries.value = playsEntries.value.filter((row) => row.id !== entry.id);
+  await load(); // refresh the plays count in the table
 }
 
 async function fetchAddons(): Promise<void> {
@@ -1072,6 +1187,9 @@ onMounted(async () => {
 .challenge-table .col-actions { width: 1%; white-space: nowrap; text-align: right; }
 .challenge-table .col-actions .btn-sm { margin-left: 4px; }
 .challenge-table .empty { text-align: center; font-style: italic; }
+.plays-link { color: var(--accent-gold); cursor: pointer; font-weight: 600; text-decoration: underline; }
+.plays-link:hover { color: var(--accent-gold-bright); }
+.badge-danger { background: rgba(178, 58, 46, 0.12); color: #b23a2e; }
 .house-rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .rule-item { display: flex; align-items: center; gap: 6px; }
 .info-icon { cursor: help; color: var(--text-secondary); font-size: 1rem; line-height: 1; flex-shrink: 0; }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\DailyChallenge;
+use App\Models\DailyChallengeEntry;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -121,6 +122,41 @@ class DailyChallengeController extends Controller
     public function destroy(DailyChallenge $dailyChallenge): JsonResponse
     {
         $dailyChallenge->delete();
+
+        return response()->json(null, 204);
+    }
+
+    /**
+     * The people who have played a given daily challenge — status, score, and timing.
+     */
+    public function entries(DailyChallenge $dailyChallenge): JsonResponse
+    {
+        $entries = $dailyChallenge->entries()
+            ->with(['user:id,name', 'game:id,final_score,current_round,status'])
+            ->orderByDesc('completed_at')
+            ->orderByDesc('started_at')
+            ->get()
+            ->map(fn (DailyChallengeEntry $entry): array => [
+                'id' => $entry->id,
+                'player' => $entry->user?->name ?? 'Unknown',
+                'status' => $entry->status,
+                // Wins record the exact month reached; otherwise use where the game got to.
+                'months_reached' => $entry->rounds_taken ?? $entry->game?->current_round,
+                'score' => $entry->game?->final_score,
+                'started_at' => $entry->started_at?->toIso8601String(),
+                'completed_at' => $entry->completed_at?->toIso8601String(),
+            ])
+            ->values();
+
+        return response()->json(['entries' => $entries]);
+    }
+
+    /**
+     * Remove a single play so the player may attempt the daily again.
+     */
+    public function destroyEntry(DailyChallengeEntry $entry): JsonResponse
+    {
+        $entry->delete();
 
         return response()->json(null, 204);
     }

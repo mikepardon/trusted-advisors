@@ -408,7 +408,7 @@ class DailyChallengeRunTest extends TestCase
         ])->assertStatus(422);
     }
 
-    public function test_quitting_an_in_progress_daily_marks_the_entry_lost(): void
+    public function test_quitting_an_in_progress_daily_marks_the_entry_quit(): void
     {
         $data = $this->seedContent();
         $user = User::factory()->create();
@@ -428,10 +428,46 @@ class DailyChallengeRunTest extends TestCase
             ->assertJsonPath('win', false);
 
         $entry = DailyChallengeEntry::where('user_id', $user->id)->first();
-        $this->assertSame('lost', $entry->status);
+        // Recorded as a deliberate quit (distinct from a stat-collapse loss).
+        $this->assertSame('quit', $entry->status);
         $this->assertNotNull($entry->completed_at);
         $this->assertNull($entry->rounds_taken);
         $this->assertSame('completed', $game->fresh()->status);
+    }
+
+    public function test_admin_can_list_and_delete_plays_so_a_player_can_replay(): void
+    {
+        $data = $this->seedContent();
+        $challenge = $data['challenge'];
+        $admin = User::factory()->create(['is_admin' => true]);
+        $player = User::factory()->create(['name' => 'Sir Playsalot']);
+
+        $game = Game::create([
+            'num_players' => 1, 'total_rounds' => 3, 'status' => 'completed',
+            'game_mode' => 'single', 'game_type' => 'cooperative', 'user_id' => $player->id,
+            'is_daily' => true, 'daily_challenge_id' => $challenge->id,
+            'current_round' => 7, 'final_score' => 240,
+        ]);
+        $entry = DailyChallengeEntry::create([
+            'user_id' => $player->id, 'daily_challenge_id' => $challenge->id, 'game_id' => $game->id,
+            'status' => 'won', 'rounds_taken' => 6, 'completed_at' => now(),
+        ]);
+
+        // The plays list shows the player, result, month reached and score.
+        $this->actingAs($admin, 'web')
+            ->getJson("/api/admin/daily-challenges/{$challenge->id}/entries")
+            ->assertOk()
+            ->assertJsonPath('entries.0.player', 'Sir Playsalot')
+            ->assertJsonPath('entries.0.status', 'won')
+            ->assertJsonPath('entries.0.months_reached', 6)
+            ->assertJsonPath('entries.0.score', 240);
+
+        // Deleting the play removes it and frees the player to attempt the daily again.
+        $this->actingAs($admin, 'web')
+            ->deleteJson("/api/admin/daily-challenge-entries/{$entry->id}")
+            ->assertNoContent();
+
+        $this->assertDatabaseMissing('daily_challenge_entries', ['id' => $entry->id]);
     }
 
     public function test_cannot_quit_another_players_daily_game(): void
