@@ -54,6 +54,7 @@ use App\Http\Controllers\LeagueController;
 use App\Http\Controllers\LoadoutController;
 use App\Http\Controllers\MatchmakingController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OnboardingController;
 use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\ReferralController;
 use App\Http\Controllers\ReplayController;
@@ -117,6 +118,7 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/auth/stats', [AuthController::class, 'stats']);
 
     Route::get('/games/history', [GameController::class, 'history']);
+    Route::get('/duels/active', [GameController::class, 'activeDuels']);
     Route::get('/games/timeline', [GameController::class, 'timeline']);
     Route::post('/games', [GameController::class, 'store']);
     Route::get('/games/{game}', [GameController::class, 'show']);
@@ -171,11 +173,16 @@ Route::middleware('auth:web')->group(function () {
     Route::get('/achievements', [GameController::class, 'achievements']);
     Route::post('/achievements/claim-all', [GameController::class, 'claimAllAchievements']);
     Route::post('/achievements/{achievement}/claim', [GameController::class, 'claimAchievement']);
+    // New-player "Getting Started" journey
+    Route::get('/onboarding', [OnboardingController::class, 'index']);
+    Route::post('/onboarding/{step}/claim', [OnboardingController::class, 'claim']);
+
     Route::get('/challenges', [GameController::class, 'challenges']);
     Route::get('/daily-challenge', [GameController::class, 'dailyChallenge']);
     Route::post('/daily-challenge/start', [GameController::class, 'startDailyRun']);
     Route::get('/daily-challenges/history', [GameController::class, 'dailyChallengeHistory']);
     Route::post('/daily-challenges/{dailyChallenge}/start', [GameController::class, 'startDailyChallenge']);
+    Route::get('/daily-challenges/{dailyChallenge}/leaderboard', [GameController::class, 'challengeLeaderboard']);
     Route::post('/daily-challenges/{game}/quit', [GameController::class, 'quitDailyChallenge']);
     Route::get('/weekly-challenge', [GameController::class, 'weeklyChallenge']);
     Route::get('/seasons', [GameController::class, 'seasons']);

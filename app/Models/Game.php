@@ -134,6 +134,28 @@ class Game extends Model
     }
 
     /**
+     * The player number whose action the duel is waiting on, or null when the game is
+     * resolving or both players roll simultaneously. Drives the async "Your Turn" inbox.
+     */
+    public function currentActorPlayerNumber(): ?int
+    {
+        if (! $this->isDuel()) {
+            return null;
+        }
+
+        $offerer = $this->offerer_player_number ?? 1;
+        $chooser = $offerer === 1 ? 2 : 1;
+
+        return match ($this->duel_phase) {
+            'offering' => $offerer,
+            'choosing' => $chooser,
+            'rolling_offerer' => $offerer,
+            'rolling_chooser' => $chooser,
+            default => null, // 'rolling' (simultaneous) or 'resolving' — either/neither
+        };
+    }
+
+    /**
      * Check if any stat in a duel kingdom has hit bounds.
      * Returns null if safe, or a string describing the condition.
      */

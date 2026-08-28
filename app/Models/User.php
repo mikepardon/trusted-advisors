@@ -117,6 +117,7 @@ class User extends Authenticatable
             'banned_at' => 'datetime',
             'username_chosen' => 'boolean',
             'notification_preferences' => 'array',
+            'onboarding_claims' => 'array',
             'is_premium' => 'boolean',
             'premium_expires_at' => 'datetime',
             'app_review_prompted_at' => 'datetime',

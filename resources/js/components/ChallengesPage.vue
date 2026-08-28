@@ -86,6 +86,13 @@
                             >
                                 Attempted
                             </span>
+
+                            <button
+                                class="cp-leaderboard"
+                                @click="openLeaderboard(today.id, today.title)"
+                            >
+                                🏆 Leaderboard
+                            </button>
                         </div>
 
                         <p v-if="today.plays > 0" class="cp-stats">
@@ -137,6 +144,13 @@
                             </div>
 
                             <div class="cp-history-action">
+                                <button
+                                    class="cp-leaderboard cp-leaderboard--icon"
+                                    aria-label="Leaderboard"
+                                    @click="openLeaderboard(challenge.id, challenge.title)"
+                                >
+                                    🏆
+                                </button>
                                 <span
                                     v-if="challenge.status === 'won'"
                                     class="cp-badge cp-badge--won"
@@ -181,6 +195,13 @@
                     </div>
                 </section>
             </template>
+
+            <DailyLeaderboard
+                v-if="leaderboard"
+                :challenge-id="leaderboard.id"
+                :title="leaderboard.title"
+                @close="leaderboard = undefined"
+            />
         </div>
     </TaSubPage>
 </template>
@@ -191,6 +212,7 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { useToast } from "../stores/toast";
 import TaSubPage from "./TaSubPage.vue";
+import DailyLeaderboard from "./DailyLeaderboard.vue";
 
 type ChallengeStatus = "pending" | "in_progress" | "won" | "lost";
 
@@ -285,6 +307,11 @@ const today = ref<TodayChallenge | undefined>(undefined);
 const history = ref<HistoryChallenge[]>([]);
 const startingToday = ref(false);
 const startingId = ref<number | undefined>(undefined);
+const leaderboard = ref<{ id: number; title: string } | undefined>(undefined);
+
+function openLeaderboard(id: number, title: string): void {
+    leaderboard.value = { id, title };
+}
 
 function resume(gameId: number | undefined): void {
     if (gameId != undefined) {
@@ -583,6 +610,26 @@ onMounted(async () => {
     cursor: pointer;
     opacity: 0.8;
     padding: 0.2rem;
+}
+
+.cp-leaderboard {
+    margin-left: 0.6rem;
+    background: transparent;
+    color: #e8c667;
+    border: 1px solid #c9a24b;
+    border-radius: 6px;
+    padding: 0.4rem 0.75rem;
+    font-family: "Cinzel", serif;
+    font-size: 0.76rem;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.cp-leaderboard--icon {
+    margin-left: 0;
+    margin-right: 0.4rem;
+    padding: 0.3rem 0.5rem;
+    font-size: 0.95rem;
 }
 
 .cp-badge {

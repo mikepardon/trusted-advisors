@@ -68,6 +68,8 @@
                 <div v-if="step === 'mode'" key="mode" class="home-hub">
                     <!-- Top banners (rotating events / announcements / challenges) sit above the table -->
                     <div class="hub-banners">
+                        <DuelInbox />
+                        <OnboardingJourney />
                         <RotatingEventBanner />
                         <AnnouncementsBanner />
                         <div class="daily-enhanced">
@@ -1249,6 +1251,8 @@ import { playSound } from "../sounds";
 import AnnouncementsBanner from "./AnnouncementsBanner.vue";
 import WeeklyChallengeBanner from "./WeeklyChallengeBanner.vue";
 import RotatingEventBanner from "./RotatingEventBanner.vue";
+import OnboardingJourney from "./OnboardingJourney.vue";
+import DuelInbox from "./DuelInbox.vue";
 import HomeHero from "./HomeHero.vue";
 import LoadoutPicker from "./LoadoutPicker.vue";
 import LoginRegister from "./LoginRegister.vue";

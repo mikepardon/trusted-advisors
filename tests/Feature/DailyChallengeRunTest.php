@@ -435,6 +435,94 @@ class DailyChallengeRunTest extends TestCase
         $this->assertSame('completed', $game->fresh()->status);
     }
 
+    public function test_winning_faster_than_a_friend_notifies_the_beaten_friend(): void
+    {
+        $data = $this->seedContent();
+        $challenge = $data['challenge']; // goal: all stats >= 12
+
+        $winner = User::factory()->create(['name' => 'Speedy']);
+        $friend = User::factory()->create(['name' => 'Slowpoke', 'onesignal_player_id' => 'tok']);
+        $stranger = User::factory()->create(['name' => 'Nobody']);
+        \App\Models\Friendship::create(['sender_id' => $winner->id, 'receiver_id' => $friend->id, 'status' => 'accepted']);
+
+        // The friend already won, but slowly (8 months).
+        $friendGame = Game::create([
+            'num_players' => 1, 'total_rounds' => 3, 'status' => 'completed', 'game_mode' => 'single',
+            'game_type' => 'cooperative', 'user_id' => $friend->id, 'is_daily' => true,
+            'daily_challenge_id' => $challenge->id, 'wealth' => 14,
+        ]);
+        DailyChallengeEntry::create(['user_id' => $friend->id, 'daily_challenge_id' => $challenge->id, 'game_id' => $friendGame->id, 'status' => 'won', 'rounds_taken' => 8, 'completed_at' => now()]);
+        // A non-friend winner who is also slower — must NOT be notified.
+        DailyChallengeEntry::create(['user_id' => $stranger->id, 'daily_challenge_id' => $challenge->id, 'status' => 'won', 'rounds_taken' => 9, 'completed_at' => now()]);
+
+        // The winner now finishes in 4 months — faster than the friend.
+        $game = Game::create([
+            'num_players' => 1, 'total_rounds' => 3, 'status' => 'completed', 'game_mode' => 'single',
+            'game_type' => 'cooperative', 'user_id' => $winner->id, 'is_daily' => true,
+            'daily_challenge_id' => $challenge->id, 'wealth' => 14, 'current_round' => 4,
+        ]);
+        GamePlayer::create(['game_id' => $game->id, 'user_id' => $winner->id, 'character_id' => $data['character']->id, 'player_number' => 1]);
+        DailyChallengeEntry::create(['user_id' => $winner->id, 'daily_challenge_id' => $challenge->id, 'game_id' => $game->id, 'status' => 'in_progress', 'started_at' => now()]);
+
+        $spy = $this->spy(\App\Services\OneSignalService::class);
+
+        app(GameCompletionService::class)->processCompletion($game->fresh());
+
+        // The beaten friend is notified (social); the non-friend stranger is not.
+        $spy->shouldHaveReceived('notifyUser')
+            ->withArgs(fn (User $user, string $category): bool => $user->id === $friend->id && $category === 'social')
+            ->once();
+        $spy->shouldNotHaveReceived('notifyUser', [
+            \Mockery::on(fn (User $user): bool => $user->id === $stranger->id),
+            \Mockery::any(), \Mockery::any(), \Mockery::any(), \Mockery::any(),
+        ]);
+    }
+
+    public function test_leaderboard_ranks_winners_fastest_first_and_filters_friends(): void
+    {
+        $data = $this->seedContent();
+        $challenge = $data['challenge'];
+
+        $makeWin = function (string $name, int $months, int $score) use ($challenge): User {
+            $user = User::factory()->create(['name' => $name]);
+            $game = Game::create([
+                'num_players' => 1, 'total_rounds' => 3, 'status' => 'completed',
+                'game_mode' => 'single', 'game_type' => 'cooperative', 'user_id' => $user->id,
+                'is_daily' => true, 'daily_challenge_id' => $challenge->id, 'final_score' => $score,
+            ]);
+            DailyChallengeEntry::create([
+                'user_id' => $user->id, 'daily_challenge_id' => $challenge->id, 'game_id' => $game->id,
+                'status' => 'won', 'rounds_taken' => $months, 'completed_at' => now(),
+            ]);
+
+            return $user;
+        };
+
+        $fast = $makeWin('Fast', 4, 100);
+        $makeWin('Slow', 8, 300);
+        $loser = User::factory()->create(['name' => 'Loser']);
+        DailyChallengeEntry::create(['user_id' => $loser->id, 'daily_challenge_id' => $challenge->id, 'status' => 'lost', 'completed_at' => now()]);
+
+        $me = User::factory()->create(['name' => 'Me']);
+        // Me is friends with Fast only.
+        \App\Models\Friendship::create(['sender_id' => $me->id, 'receiver_id' => $fast->id, 'status' => 'accepted']);
+
+        $response = $this->actingAs($me)
+            ->getJson("/api/daily-challenges/{$challenge->id}/leaderboard")
+            ->assertOk();
+
+        // Winners ranked fastest-first; the loser is excluded.
+        $response->assertJsonCount(2, 'global')
+            ->assertJsonPath('global.0.player', 'Fast')
+            ->assertJsonPath('global.0.rank', 1)
+            ->assertJsonPath('global.0.months', 4)
+            ->assertJsonPath('global.1.player', 'Slow');
+
+        // Friends board only shows accepted friends (Fast), not Slow.
+        $response->assertJsonCount(1, 'friends')
+            ->assertJsonPath('friends.0.player', 'Fast');
+    }
+
     public function test_admin_can_list_and_delete_plays_so_a_player_can_replay(): void
     {
         $data = $this->seedContent();

@@ -32,6 +32,14 @@ class ScheduleController extends Controller
                 'description' => 'Ensures today plus the next 6 days each have a daily challenge (rolling window). Uses fast templated briefings; the overnight schedule writes AI briefings.',
             ],
             [
+                'key' => 'notify-daily-challenge',
+                'command' => 'app:notify-daily-challenge',
+                'arguments' => [],
+                'label' => 'Notify: Daily Challenge Live',
+                'schedule' => 'Daily at 08:00',
+                'description' => "Pushes a 'today's trial is live' notification to subscribed players.",
+            ],
+            [
                 'key' => 'generate-weekly-challenge',
                 'command' => 'app:generate-weekly-challenge',
                 'arguments' => [],

@@ -83,12 +83,26 @@
             </p>
         </template>
 
-        <!-- Searching -->
+        <!-- Searching (live speed duel) -->
         <template v-else-if="phase === 'searching'">
             <div class="search-spinner"></div>
             <p class="search-text">Searching for a worthy opponent…</p>
             <div class="elapsed-time">{{ formattedElapsed }}</div>
             <button class="btn-cancel" @click="cancelSearch">Cancel</button>
+        </template>
+
+        <!-- Queued (correspondence / daily duel) -->
+        <template v-else-if="phase === 'queued'">
+            <div class="queued-glyph">◷</div>
+            <p class="search-text">You're in the queue for a daily duel.</p>
+            <p class="queued-note">
+                No need to wait around — we'll notify you the moment we find you a
+                worthy opponent. Leave whenever you like.
+            </p>
+            <button class="find-btn queued-hub" @click="emit('cancelled')">
+                Back to Hub
+            </button>
+            <button class="btn-cancel" @click="cancelSearch">Leave queue</button>
         </template>
 
         <!-- Matched -->
@@ -135,7 +149,7 @@ const WIN_POINTS = 150;
 const auth = useAuth();
 const league = useLeague();
 
-const phase = ref<"setup" | "searching" | "matched">("setup");
+const phase = ref<"setup" | "searching" | "queued" | "matched">("setup");
 const speedMode = ref<"speed" | "daily">("speed");
 const entry = ref<MatchmakingEntry | undefined>(undefined);
 const opponentName = ref("");
@@ -184,12 +198,18 @@ const opponentTitle = computed(() => {
     if (phase.value === "matched") {
         return opponentName.value;
     }
-    return phase.value === "searching" ? "Searching…" : "A rival";
+    if (phase.value === "searching") {
+        return "Searching…";
+    }
+    return phase.value === "queued" ? "Queued…" : "A rival";
 });
 
 const opponentDetail = computed(() => {
     if (phase.value === "searching") {
         return formattedElapsed.value;
+    }
+    if (phase.value === "queued") {
+        return "We'll notify you";
     }
     return "Similar rank";
 });
@@ -272,7 +292,10 @@ function onMatchFound(
 }
 
 async function startSearch(): Promise<void> {
-    phase.value = "searching";
+    const isDaily = speedMode.value === "daily";
+    // Correspondence duels queue in the background ("we'll notify you"); speed duels
+    // search live in one sitting.
+    phase.value = isDaily ? "queued" : "searching";
     elapsed.value = 0;
 
     try {
@@ -293,10 +316,12 @@ async function startSearch(): Promise<void> {
             return;
         }
 
-        elapsedTimer.value = setInterval(() => {
-            elapsed.value++;
-        }, 1000);
-        pollTimer.value = setInterval(() => void pollStatus(), 3000);
+        if (!isDaily) {
+            elapsedTimer.value = setInterval(() => {
+                elapsed.value++;
+            }, 1000);
+        }
+        pollTimer.value = setInterval(() => void pollStatus(), isDaily ? 5000 : 3000);
         subscribeEcho();
     } catch {
         phase.value = "setup";
@@ -311,6 +336,8 @@ function cancelSearch(): void {
 }
 
 function back(): void {
+    // Live search cancels on leave; a queued correspondence search keeps running so we
+    // can notify the player when they're matched.
     if (phase.value === "searching") {
         cancelSearch();
         return;
@@ -327,6 +354,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
     clearTimers();
     unsubscribeEcho();
+    // Only cancel a live "speed" search on leave. A queued correspondence search stays in
+    // the queue so the player can be matched and notified after they've left.
     if (entry.value && phase.value === "searching") {
         void leaveQueue();
     }
@@ -696,6 +725,27 @@ onBeforeUnmount(() => {
 .btn-cancel:hover {
     background: rgba(160, 48, 32, 0.35);
     border-color: rgba(160, 48, 32, 0.6);
+}
+
+/* Queued (correspondence) */
+.queued-glyph {
+    text-align: center;
+    font-size: 3rem;
+    color: var(--accent-gold);
+    margin: 20px 0 8px;
+}
+
+.queued-note {
+    margin: 8px auto 4px;
+    max-width: 320px;
+    text-align: center;
+    font-size: 0.8rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+}
+
+.queued-hub {
+    margin-top: 18px;
 }
 
 /* Matched */

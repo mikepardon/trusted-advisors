@@ -7,6 +7,7 @@ use App\Models\Game;
 use App\Models\GamePlayer;
 use App\Models\MatchmakingEntry;
 use App\Models\User;
+use App\Services\OneSignalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -127,7 +128,27 @@ class MatchmakingController extends Controller
         return response()->json($data);
     }
 
-    private function findMatch(MatchmakingEntry $entry): ?MatchmakingEntry
+    /**
+     * Push a "match found" notification so a player who queued and left (correspondence
+     * mode) learns their duel is ready. Bots resolve to no push (no device token).
+     */
+    private function notifyMatched(int $userId, int $gameId, string $opponentName): void
+    {
+        $user = User::find($userId);
+        if ($user === null) {
+            return;
+        }
+
+        app(OneSignalService::class)->notifyUser(
+            $user,
+            'social',
+            'Opponent found!',
+            "Your duel against {$opponentName} is ready — make your move.",
+            ['type' => 'match_found', 'game_id' => $gameId],
+        );
+    }
+
+    public function findMatch(MatchmakingEntry $entry): ?MatchmakingEntry
     {
         return MatchmakingEntry::where('status', 'searching')
             ->where('id', '!=', $entry->id)
@@ -146,7 +167,7 @@ class MatchmakingController extends Controller
             ->first();
     }
 
-    private function createBotMatch(MatchmakingEntry $entry): void
+    public function createBotMatch(MatchmakingEntry $entry): void
     {
         // Pick a bot user near the player's ELO
         $bot = User::where('is_bot', true)
@@ -195,9 +216,11 @@ class MatchmakingController extends Controller
         } catch (\Throwable) {
             // Non-critical — the matchmaking status poll will still surface the match.
         }
+
+        $this->notifyMatched($entry->user_id, $game->id, $bot->name);
     }
 
-    private function createMatch(MatchmakingEntry $entry1, MatchmakingEntry $entry2): Game
+    public function createMatch(MatchmakingEntry $entry1, MatchmakingEntry $entry2): Game
     {
         /** @var array{0: Game, 1: User, 2: User} $result */
         $result = DB::transaction(function () use ($entry1, $entry2): array {
@@ -241,6 +264,9 @@ class MatchmakingController extends Controller
         } catch (\Throwable) {
             // Non-critical — the matchmaking status poll will still surface the match.
         }
+
+        $this->notifyMatched($entry1->user_id, $game->id, $user2->name);
+        $this->notifyMatched($entry2->user_id, $game->id, $user1->name);
 
         return $game;
     }

@@ -1194,6 +1194,51 @@ class GameCompletionService
      *
      * @return array{challenge_id: int, title: string, reward_xp: int, won: bool}|null
      */
+    /**
+     * When a player wins a daily faster than any of their friends did, tell those friends
+     * they've been overtaken — a social nudge to come back and reclaim the top spot.
+     */
+    private function notifyFriendsBeatenOnDaily(User $winner, DailyChallenge $challenge, int $roundsTaken): void
+    {
+        $friendIds = Friendship::where('status', 'accepted')
+            ->where(fn ($query) => $query->where('sender_id', $winner->id)->orWhere('receiver_id', $winner->id))
+            ->get()
+            ->map(fn (Friendship $friendship): int => $friendship->sender_id === $winner->id
+                ? $friendship->receiver_id
+                : $friendship->sender_id)
+            ->all();
+
+        if ($friendIds === []) {
+            return;
+        }
+
+        $beaten = DailyChallengeEntry::whereIn('user_id', $friendIds)
+            ->where('daily_challenge_id', $challenge->id)
+            ->where('status', DailyChallengeEntry::STATUS_WON)
+            ->where('rounds_taken', '>', $roundsTaken)
+            ->with('user')
+            ->get();
+
+        if ($beaten->isEmpty()) {
+            return;
+        }
+
+        $oneSignal = app(OneSignalService::class);
+        foreach ($beaten as $entry) {
+            if (! $entry->user) {
+                continue;
+            }
+
+            $oneSignal->notifyUser(
+                $entry->user,
+                'social',
+                'Your daily record was beaten!',
+                "{$winner->name} finished \"{$challenge->title}\" in {$roundsTaken} months — faster than your {$entry->rounds_taken}. Reclaim the top spot!",
+                ['type' => 'daily_beaten', 'challenge_id' => $challenge->id],
+            );
+        }
+    }
+
     private function checkDailyChallenge(User $user, Game $game): ?array
     {
         if (! $game->is_daily || ! $game->daily_challenge_id) {
@@ -1242,6 +1287,8 @@ class GameCompletionService
                 $user->recordCoinTransaction($rewardCoins, 'earn', 'daily_challenge', $game->id, 'Daily challenge reward');
             }
             $user->save();
+
+            $this->notifyFriendsBeatenOnDaily($user, $challenge, (int) $roundsTaken);
         }
 
         return [

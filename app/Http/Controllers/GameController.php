@@ -27,6 +27,7 @@ use App\Models\GameRule;
 use App\Models\Achievement;
 use App\Models\DailyChallenge;
 use App\Models\DailyChallengeEntry;
+use App\Models\Friendship;
 use App\Models\Item;
 use App\Models\Season;
 use App\Models\Unlockable;
@@ -3475,6 +3476,46 @@ class GameController extends Controller
         ]);
     }
 
+    /**
+     * The player's in-progress online duels — the "Your Turn" inbox for correspondence
+     * (24-hour-per-move) play, so they can leave a game and come back to resume it.
+     */
+    public function activeDuels(Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+        $gameIds = GamePlayer::where('user_id', $userId)->pluck('game_id');
+
+        $duels = Game::with(['players.user'])
+            ->whereIn('id', $gameIds)
+            ->where('game_type', 'duel')
+            ->where('game_mode', 'online')
+            ->where('status', 'active')
+            ->orderByDesc('updated_at')
+            ->get()
+            ->map(function (Game $game) use ($userId): array {
+                $me = $game->players->firstWhere('user_id', $userId);
+                $opponent = $game->players->first(fn (GamePlayer $player): bool => $player->user_id !== $userId);
+                $actor = $game->currentActorPlayerNumber();
+
+                return [
+                    'id' => $game->id,
+                    'opponent' => $opponent?->user?->name ?? ($opponent?->is_bot ? 'Bot' : 'Opponent'),
+                    'round' => $game->current_round,
+                    'total_rounds' => $game->total_rounds,
+                    'is_my_turn' => $actor !== null && $me !== null && $actor === $me->player_number,
+                    // Correspondence games give a day per move; blitz games use a short timer.
+                    'is_correspondence' => (int) $game->turn_time_limit >= 3600,
+                    'time_remaining' => $game->turnTimeRemaining(),
+                ];
+            })
+            ->values();
+
+        return response()->json([
+            'duels' => $duels,
+            'your_turn_count' => $duels->where('is_my_turn', true)->count(),
+        ]);
+    }
+
     public function timeline(Request $request): JsonResponse
     {
         $userId = $request->user()->id;
@@ -4507,6 +4548,77 @@ class GameController extends Controller
             'avg_rounds' => $avgRounds !== null ? round((float) $avgRounds, 1) : null,
             'success_rate' => $plays > 0 ? (int) round(($winCount / $plays) * 100) : null,
         ];
+    }
+
+    /**
+     * The leaderboard for a daily challenge: winners ranked fastest-first (fewest months),
+     * tiebroken by highest final score. Returns a global board, a friends-only board, and
+     * the requesting player's own standing (even if they haven't won).
+     */
+    public function challengeLeaderboard(Request $request, DailyChallenge $dailyChallenge): JsonResponse
+    {
+        $user = $request->user();
+
+        $winners = DailyChallengeEntry::where('daily_challenge_id', $dailyChallenge->id)
+            ->where('status', DailyChallengeEntry::STATUS_WON)
+            ->with(['user:id,name', 'game:id,final_score'])
+            ->get()
+            ->sort(function (DailyChallengeEntry $a, DailyChallengeEntry $b): int {
+                $byMonths = ($a->rounds_taken ?? PHP_INT_MAX) <=> ($b->rounds_taken ?? PHP_INT_MAX);
+
+                return $byMonths !== 0
+                    ? $byMonths
+                    : ($b->game?->final_score ?? 0) <=> ($a->game?->final_score ?? 0);
+            })
+            ->values();
+
+        $rows = $winners->map(fn (DailyChallengeEntry $entry, int $index): array => [
+            'rank' => $index + 1,
+            'user_id' => $entry->user_id,
+            'player' => $entry->user?->name ?? 'Unknown',
+            'months' => $entry->rounds_taken,
+            'score' => $entry->game?->final_score,
+            'is_you' => $entry->user_id === $user->id,
+        ]);
+
+        // Accepted friends (either direction), plus the player, for the friends board.
+        $friendIds = Friendship::where('status', 'accepted')
+            ->where(fn ($query) => $query->where('sender_id', $user->id)->orWhere('receiver_id', $user->id))
+            ->get()
+            ->map(fn (Friendship $friendship): int => $friendship->sender_id === $user->id
+                ? $friendship->receiver_id
+                : $friendship->sender_id)
+            ->push($user->id)
+            ->all();
+
+        $you = $rows->firstWhere('is_you', true);
+        if ($you === null) {
+            $entry = DailyChallengeEntry::where('daily_challenge_id', $dailyChallenge->id)
+                ->where('user_id', $user->id)
+                ->with('game:id,final_score')
+                ->first();
+
+            $you = $entry ? [
+                'rank' => null,
+                'user_id' => $user->id,
+                'player' => $user->name,
+                'months' => null,
+                'score' => $entry->game?->final_score,
+                'status' => $entry->status,
+                'is_you' => true,
+            ] : null;
+        }
+
+        return response()->json([
+            'challenge' => [
+                'id' => $dailyChallenge->id,
+                'date' => $dailyChallenge->date->toDateString(),
+                'title' => $dailyChallenge->title,
+            ],
+            'global' => $rows->take(50)->values(),
+            'friends' => $rows->whereIn('user_id', $friendIds)->take(50)->values(),
+            'you' => $you,
+        ]);
     }
 
     public function weeklyChallenge(Request $request): JsonResponse
