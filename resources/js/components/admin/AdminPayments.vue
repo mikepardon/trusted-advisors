@@ -56,13 +56,66 @@
 
       <div class="card-panel">
         <h3 class="sub-title">Stripe Config</h3>
-        <p class="config-hint">Configured via .env: STRIPE_KEY, STRIPE_SECRET, STRIPE_WEBHOOK_SECRET, STRIPE_PREMIUM_PRICE_ID</p>
-        <p v-if="settings.premium_price_id" class="config-value">
-          Premium Price ID: <code>{{ settings.premium_price_id }}</code>
+        <p class="config-hint">
+          Set your Stripe keys here to override the server .env. Secrets are stored encrypted
+          and never shown again — leave a secret field blank to keep the current value.
         </p>
-        <p v-else class="config-value">
-          Premium Price ID: <em>Not configured</em>
-        </p>
+
+        <div class="field">
+          <label>Publishable Key</label>
+          <input v-model="stripeForm.key" placeholder="pk_live_… / pk_test_…" />
+        </div>
+
+        <div class="field">
+          <label>
+            Secret Key
+            <span v-if="stripe.secret_set" class="field-set">· {{ stripe.secret_masked }}</span>
+          </label>
+          <input
+            v-model="stripeForm.secret"
+            type="password"
+            autocomplete="off"
+            :placeholder="stripe.secret_set ? 'Leave blank to keep current' : 'sk_live_… / sk_test_…'"
+          />
+        </div>
+
+        <div class="field">
+          <label>
+            Webhook Secret
+            <span v-if="stripe.webhook_secret_set" class="field-set">· {{ stripe.webhook_secret_masked }}</span>
+          </label>
+          <input
+            v-model="stripeForm.webhook_secret"
+            type="password"
+            autocomplete="off"
+            :placeholder="stripe.webhook_secret_set ? 'Leave blank to keep current' : 'whsec_…'"
+          />
+        </div>
+
+        <div class="field">
+          <label>Premium Subscription Plan</label>
+          <div class="plan-row">
+            <select v-model="stripeForm.premium_price_id">
+              <option value="">— None —</option>
+              <option v-for="plan in plans" :key="plan.id" :value="plan.id">{{ plan.label }}</option>
+              <option v-if="unknownPriceSelected" :value="stripeForm.premium_price_id">
+                {{ stripeForm.premium_price_id }} (current)
+              </option>
+            </select>
+            <button type="button" class="btn-sm" :disabled="loadingPlans" @click="loadStripePlans">
+              {{ loadingPlans ? "…" : "Load plans" }}
+            </button>
+          </div>
+          <p class="config-hint">
+            Pick a recurring plan from your Stripe account (save the secret key first), or paste a price ID.
+          </p>
+          <input v-model="stripeForm.premium_price_id" placeholder="price_…" />
+        </div>
+
+        <button type="button" class="btn-primary" :disabled="savingStripe" @click="saveStripe">
+          {{ savingStripe ? "Saving…" : "Save Stripe Config" }}
+        </button>
+        <span v-if="stripeSaveMessage" class="save-msg">{{ stripeSaveMessage }}</span>
       </div>
     </div>
 
@@ -113,7 +166,7 @@
 
 <script setup lang="ts">
 import axios, { isAxiosError } from "axios";
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import { useToast } from "../../stores/toast";
 
 interface AppReviewTrigger {
@@ -121,11 +174,26 @@ interface AppReviewTrigger {
   value: number;
 }
 
+interface StripeStatus {
+  key: string | null;
+  secret_set: boolean;
+  secret_masked: string;
+  webhook_secret_set: boolean;
+  webhook_secret_masked: string;
+  premium_price_id: string | null;
+}
+
+interface StripePlan {
+  id: string;
+  label: string;
+}
+
 interface PaymentSettings {
   payments_enabled: boolean;
   premium_price_id: string;
   app_review_enabled: boolean;
   app_review_trigger: AppReviewTrigger;
+  stripe?: StripeStatus;
 }
 
 interface Subscriber {
@@ -164,6 +232,33 @@ const settings = reactive<PaymentSettings>({
 });
 const saving = ref(false);
 const saveMessage = ref("");
+
+// Stripe config (admin override of .env)
+const stripe = reactive<StripeStatus>({
+  key: "",
+  secret_set: false,
+  secret_masked: "",
+  webhook_secret_set: false,
+  webhook_secret_masked: "",
+  premium_price_id: "",
+});
+const stripeForm = reactive({
+  key: "",
+  secret: "",
+  webhook_secret: "",
+  premium_price_id: "",
+});
+const plans = ref<StripePlan[]>([]);
+const loadingPlans = ref(false);
+const savingStripe = ref(false);
+const stripeSaveMessage = ref("");
+
+const unknownPriceSelected = computed<boolean>(
+  () =>
+    stripeForm.premium_price_id !== "" &&
+    plans.value.every((plan) => plan.id !== stripeForm.premium_price_id),
+);
+
 const subscribers = ref<Subscriber[]>([]);
 const loadingSubs = ref(false);
 const purchases = ref<Purchase[]>([]);
@@ -176,8 +271,61 @@ async function loadSettings(): Promise<void> {
     settings.premium_price_id = response.data.premium_price_id || "";
     settings.app_review_enabled = response.data.app_review_enabled || false;
     settings.app_review_trigger = response.data.app_review_trigger || { type: "games_completed", value: 3 };
+
+    if (response.data.stripe) {
+      Object.assign(stripe, response.data.stripe);
+      // Prefill the non-secret fields; secret inputs always start blank.
+      stripeForm.key = response.data.stripe.key ?? "";
+      stripeForm.premium_price_id = response.data.stripe.premium_price_id ?? "";
+      stripeForm.secret = "";
+      stripeForm.webhook_secret = "";
+    }
   } catch {
     // ignore load errors
+  }
+}
+
+async function loadStripePlans(): Promise<void> {
+  loadingPlans.value = true;
+  try {
+    const { data } = await axios.get<{ prices: StripePlan[] }>("/api/admin/stripe-prices");
+    plans.value = data.prices;
+    if (data.prices.length === 0) {
+      toast.error("No recurring plans found in your Stripe account.");
+    }
+  } catch (error) {
+    const message = isAxiosError<{ error?: string }>(error) ? error.response?.data?.error : undefined;
+    toast.error(message || "Could not load plans from Stripe.");
+  } finally {
+    loadingPlans.value = false;
+  }
+}
+
+async function saveStripe(): Promise<void> {
+  savingStripe.value = true;
+  stripeSaveMessage.value = "";
+  try {
+    // key + price id always sent (blank clears the override); secrets only when entered.
+    const payload: Record<string, string> = {
+      stripe_key: stripeForm.key,
+      stripe_premium_price_id: stripeForm.premium_price_id,
+    };
+    if (stripeForm.secret.trim() !== "") {
+      payload.stripe_secret = stripeForm.secret.trim();
+    }
+    if (stripeForm.webhook_secret.trim() !== "") {
+      payload.stripe_webhook_secret = stripeForm.webhook_secret.trim();
+    }
+    await axios.put("/api/admin/payment-settings", payload);
+    await loadSettings(); // refresh masks + clear secret inputs
+    stripeSaveMessage.value = "Saved!";
+    setTimeout(() => {
+      stripeSaveMessage.value = "";
+    }, 2000);
+  } catch {
+    stripeSaveMessage.value = "Error: failed to save.";
+  } finally {
+    savingStripe.value = false;
   }
 }
 
@@ -292,6 +440,13 @@ onMounted(() => {
 .config-value code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 3px; font-size: 0.82rem; }
 
 .save-msg { margin-left: 12px; font-size: 0.85rem; color: #6abf50; }
+.field { margin-bottom: 12px; max-width: 540px; }
+.field label { display: block; font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 4px; }
+.field input, .field select { width: 100%; }
+.field-set { color: var(--accent-green); font-weight: 400; font-size: 0.72rem; }
+.plan-row { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+.plan-row select { flex: 1; }
+.plan-row .btn-sm { flex: none; }
 
 .loading, .empty { text-align: center; color: var(--text-secondary); font-style: italic; padding: 20px; }
 .list-panel { display: flex; flex-direction: column; gap: 6px; }

@@ -175,7 +175,9 @@ class DailyChallengeRunTest extends TestCase
         $this->seedContent(); // seeds a character + starter items (and today's challenge)
         $date = Carbon::today()->addDays(30)->toDateString();
 
-        $this->artisan('app:generate-daily-challenge', ['--date' => $date])->assertSuccessful();
+        // --no-verify: this test asserts the goal is deterministic by date (a property of the
+        // generator itself); winnability tuning is exercised separately in ChallengeBalancerTest.
+        $this->artisan('app:generate-daily-challenge', ['--date' => $date, '--no-verify' => true])->assertSuccessful();
 
         $challenge = DailyChallenge::whereDate('date', $date)->first();
         $this->assertNotNull($challenge);
@@ -187,7 +189,7 @@ class DailyChallengeRunTest extends TestCase
 
         // Regenerating the same date reproduces the identical goal (deterministic by date).
         $goal = $challenge->criteria['goal'];
-        $this->artisan('app:generate-daily-challenge', ['--date' => $date, '--force' => true])->assertSuccessful();
+        $this->artisan('app:generate-daily-challenge', ['--date' => $date, '--force' => true, '--no-verify' => true])->assertSuccessful();
         $this->assertSame($goal, DailyChallenge::whereDate('date', $date)->first()->criteria['goal']);
     }
 

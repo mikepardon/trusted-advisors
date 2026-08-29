@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Models\Character;
 use App\Models\DailyChallenge;
 use App\Models\Item;
+use App\Services\ChallengeBalancer;
 use App\Services\ChallengeBlurbGenerator;
 use App\Services\SeededRng;
 use Carbon\Carbon;
@@ -18,11 +19,19 @@ class GenerateDailyChallenge extends Command
         {--date= : Specific date (YYYY-MM-DD), defaults to today}
         {--ahead= : Also ensure this many future days are generated (rolling window)}
         {--force : Overwrite an existing challenge for the date(s) instead of skipping}
-        {--no-ai : Use the templated briefing instead of calling the AI (fast — for bulk/HTTP generation)}';
+        {--no-ai : Use the templated briefing instead of calling the AI (fast — for bulk/HTTP generation)}
+        {--no-verify : Skip the winnability simulation/tuning (fast — for HTTP generation; verify later)}';
 
     protected $description = 'Generate a richly-customised daily challenge if none exists for the date';
 
     private const STATS = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
+
+    /**
+     * The month cap for an endless-race daily. A run ends the moment the goal is met or a stat
+     * collapses; this is only the safety limit (also a survival win). Kept modest so a real run
+     * resolves in a sensible span and the winnability simulation stays cheap.
+     */
+    private const ROUND_CAP = 40;
 
     /**
      * Human-readable title per goal stat, used for the challenge title on single-stat runs.
@@ -50,16 +59,17 @@ class GenerateDailyChallenge extends Command
         'draw_curse_per_round' => 'a fresh curse is drawn every month',
     ];
 
-    public function handle(ChallengeBlurbGenerator $blurbGenerator): void
+    public function handle(ChallengeBlurbGenerator $blurbGenerator, ChallengeBalancer $balancer): void
     {
         $force = (bool) $this->option('force');
         $noAi = (bool) $this->option('no-ai');
+        $noVerify = (bool) $this->option('no-verify');
 
         // Rolling window: ensure today + the next N days all have a challenge.
         if ($this->option('ahead') !== null) {
             $ahead = (int) $this->option('ahead');
             for ($offset = 0; $offset <= $ahead; $offset++) {
-                $this->generateFor(Carbon::today()->addDays($offset), $blurbGenerator, $force, $noAi);
+                $this->generateFor(Carbon::today()->addDays($offset), $blurbGenerator, $balancer, $force, $noAi, $noVerify);
             }
 
             return;
@@ -69,10 +79,10 @@ class GenerateDailyChallenge extends Command
             ? Carbon::parse($this->option('date'))
             : Carbon::today();
 
-        $this->generateFor($date, $blurbGenerator, $force, $noAi);
+        $this->generateFor($date, $blurbGenerator, $balancer, $force, $noAi, $noVerify);
     }
 
-    private function generateFor(Carbon $date, ChallengeBlurbGenerator $blurbGenerator, bool $force, bool $noAi = false): void
+    private function generateFor(Carbon $date, ChallengeBlurbGenerator $blurbGenerator, ChallengeBalancer $balancer, bool $force, bool $noAi = false, bool $noVerify = false): void
     {
         $dateStr = $date->toDateString();
         $existing = DailyChallenge::whereDate('date', $dateStr)->first();
@@ -114,7 +124,7 @@ class GenerateDailyChallenge extends Command
 
         $criteria = [
             'mode' => 'cooperative',
-            'rounds' => 120,
+            'rounds' => self::ROUND_CAP,
             'start' => ['all' => 8, 'per_stat' => $perStat],
             'goal' => $goal,
             'seed_character_id' => $seedCharacterId,
@@ -131,7 +141,7 @@ class GenerateDailyChallenge extends Command
             'has_curse' => $hasCurse,
             'house_rules' => array_values(array_map(fn (string $key): string => $this->houseRuleLabels[$key] ?? $key, array_keys($houseRules))),
             'items' => $loadoutNames,
-            'rounds' => 120,
+            'rounds' => self::ROUND_CAP,
         ];
 
         // --no-ai keeps HTTP-triggered bulk generation fast (no per-day Anthropic call,
@@ -150,13 +160,30 @@ class GenerateDailyChallenge extends Command
 
         if ($existing) {
             $existing->update($data);
-            $this->info("Regenerated daily challenge for {$dateStr}: {$title}");
+            $this->verifyWinnable($existing, $balancer, $noVerify, $dateStr, $title, 'Regenerated');
 
             return;
         }
 
-        DailyChallenge::create([...$data, 'date' => $date]);
-        $this->info("Generated daily challenge for {$dateStr}: {$title}");
+        $challenge = DailyChallenge::create([...$data, 'date' => $date]);
+        $this->verifyWinnable($challenge, $balancer, $noVerify, $dateStr, $title, 'Generated');
+    }
+
+    /**
+     * Tune the freshly-built challenge until a bot can actually win it (unless verification is
+     * skipped for a fast HTTP run, in which case a later job/schedule verifies it).
+     */
+    private function verifyWinnable(DailyChallenge $challenge, ChallengeBalancer $balancer, bool $noVerify, string $dateStr, string $title, string $verb): void
+    {
+        if ($noVerify) {
+            $this->info("{$verb} daily challenge for {$dateStr}: {$title} (winnability not yet verified).");
+
+            return;
+        }
+
+        $result = $balancer->balance($challenge);
+        $eased = $result['steps'] > 0 ? " after {$result['steps']} easing step(s)" : '';
+        $this->info("{$verb} daily challenge for {$dateStr}: {$title} — {$result['success_rate']}% bot win rate{$eased}.");
     }
 
     /**
@@ -174,7 +201,9 @@ class GenerateDailyChallenge extends Command
 
         return match ($type) {
             'stat_threshold_all' => (function () use ($rng): array {
-                $value = $rng->int(11, 13, 'allval');
+                // Raising every stat at once is the hardest goal shape, so it targets a lower
+                // band than a single-stat race. The balancer still verifies each run is winnable.
+                $value = $rng->int(11, 12, 'allval');
                 $targets = collect(self::STATS)->mapWithKeys(fn (string $stat): array => [$stat => $value])->all();
 
                 return [
@@ -184,7 +213,7 @@ class GenerateDailyChallenge extends Command
                 ];
             })(),
             'no_stat_below' => (function () use ($rng): array {
-                $value = $rng->int(9, 11, 'floorval');
+                $value = $rng->int(8, 10, 'floorval');
 
                 return [
                     ['type' => 'no_stat_below', 'value' => $value],
@@ -194,11 +223,11 @@ class GenerateDailyChallenge extends Command
             })(),
             default => (function () use ($rng): array {
                 $stat = $rng->pick(self::STATS, 'goalstat');
-                $value = $rng->int(13, 17, 'goalval');
+                $value = $rng->int(13, 16, 'goalval');
 
                 return [
                     ['type' => 'stat_threshold', 'stat' => $stat, 'value' => $value],
-                    "reach {$value} " . ucfirst($stat),
+                    "reach {$value} ".ucfirst($stat),
                     $this->statTitles[$stat] ?? 'A Daily Trial',
                 ];
             })(),
@@ -227,7 +256,8 @@ class GenerateDailyChallenge extends Command
         $weakCount = $rng->int(1, 2, 'numweak');
         for (; $index < $weakCount && $index < count($ordered); $index++) {
             $stat = $ordered[$index];
-            $weak[$stat] = $rng->int(3, 5, 'weakval', $stat);
+            // A pressure point, not a death sentence — a weak stat starts low but recoverable.
+            $weak[$stat] = $rng->int(5, 7, 'weakval', $stat);
         }
 
         $strong = [];

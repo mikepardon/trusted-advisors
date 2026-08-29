@@ -14,6 +14,7 @@ use Illuminate\Http\Request;
 class AdminPaymentController extends Controller
 {
     use AuditsAdminActions;
+
     public function subscribers(): JsonResponse
     {
         $subscribers = User::where('is_premium', true)
@@ -27,6 +28,7 @@ class AdminPaymentController extends Controller
                 $sub = $user->subscriptions->first();
                 $user->platform = $sub?->platform ?? 'unknown';
                 unset($user->subscriptions);
+
                 return $user;
             });
 
@@ -45,11 +47,14 @@ class AdminPaymentController extends Controller
 
     public function settings(): JsonResponse
     {
+        // config() has already been overridden with any admin-set Stripe values at boot,
+        // so these are the effective (resolved) values. Secrets are only ever returned masked.
         return response()->json([
             'payments_enabled' => GameRule::getValue('payments_enabled', true),
             'premium_price_id' => config('services.stripe.premium_price_id'),
             'app_review_enabled' => GameRule::getValue('app_review_enabled', false),
             'app_review_trigger' => GameRule::getValue('app_review_trigger', ['type' => 'games_completed', 'value' => 3]),
+            'stripe' => $this->stripeStatus(),
         ]);
     }
 
@@ -61,6 +66,10 @@ class AdminPaymentController extends Controller
             'app_review_trigger' => 'sometimes|array',
             'app_review_trigger.type' => 'sometimes|string|in:games_completed,level',
             'app_review_trigger.value' => 'sometimes|integer|min:1',
+            'stripe_key' => 'sometimes|nullable|string|max:255',
+            'stripe_secret' => 'sometimes|nullable|string|max:255',
+            'stripe_webhook_secret' => 'sometimes|nullable|string|max:255',
+            'stripe_premium_price_id' => 'sometimes|nullable|string|max:255',
         ]);
 
         if ($request->has('payments_enabled')) {
@@ -84,7 +93,134 @@ class AdminPaymentController extends Controller
             );
         }
 
+        // Stripe config: a blank value clears the override (reverts to .env); secrets stored
+        // encrypted at rest.
+        $this->storeStripeSetting($request, 'stripe_key', 'stripe_key', false);
+        $this->storeStripeSetting($request, 'stripe_premium_price_id', 'stripe_premium_price_id', false);
+        $this->storeStripeSetting($request, 'stripe_secret', 'stripe_secret_enc', true);
+        $this->storeStripeSetting($request, 'stripe_webhook_secret', 'stripe_webhook_secret_enc', true);
+
         return response()->json(['message' => 'Settings updated.']);
+    }
+
+    /**
+     * The active recurring Stripe prices, so an admin can pick which plan is "premium".
+     */
+    public function stripePrices(): JsonResponse
+    {
+        $secret = $this->resolvedStripe('stripe_secret_enc', 'secret', true);
+        if (blank($secret)) {
+            return response()->json(['error' => 'Add your Stripe secret key and save before loading plans.'], 422);
+        }
+
+        try {
+            $stripe = new \Stripe\StripeClient($secret);
+            $prices = $stripe->prices->all([
+                'active' => true,
+                'type' => 'recurring',
+                'limit' => 100,
+                'expand' => ['data.product'],
+            ]);
+        } catch (\Throwable $exception) {
+            return response()->json(['error' => 'Could not load plans from Stripe: '.$exception->getMessage()], 502);
+        }
+
+        $plans = collect($prices->data)->map(function ($price): array {
+            $product = is_object($price->product) ? ($price->product->name ?? 'Product') : (string) $price->product;
+            $currency = strtoupper((string) $price->currency);
+            $count = (int) ($price->recurring->interval_count ?? 1);
+            $interval = (string) ($price->recurring->interval ?? '');
+            $every = $count > 1 ? "{$count} {$interval}s" : $interval;
+
+            // Minor units → major, via brick/math (no float) — assumes 2-decimal currencies.
+            $amount = \Brick\Math\BigDecimal::of((int) $price->unit_amount)
+                ->dividedBy(100, 2, \Brick\Math\RoundingMode::HALF_UP);
+
+            $label = trim("{$product} — {$amount} {$currency} / {$every}");
+            if (filled($price->nickname)) {
+                $label = "{$product} ({$price->nickname}) — {$amount} {$currency} / {$every}";
+            }
+
+            return [
+                'id' => $price->id,
+                'label' => $label,
+            ];
+        })->values();
+
+        return response()->json(['prices' => $plans]);
+    }
+
+    /**
+     * Store a Stripe setting override in GameRule, or delete it when blank (revert to env).
+     */
+    private function storeStripeSetting(Request $request, string $field, string $ruleKey, bool $encrypt): void
+    {
+        if (! $request->has($field)) {
+            return;
+        }
+
+        $value = $request->input($field);
+
+        if (blank($value)) {
+            GameRule::where('key', $ruleKey)->delete();
+
+            return;
+        }
+
+        GameRule::updateOrCreate(
+            ['key' => $ruleKey],
+            ['value' => $encrypt ? encrypt(trim($value)) : trim($value)],
+        );
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function stripeStatus(): array
+    {
+        $secret = $this->resolvedStripe('stripe_secret_enc', 'secret', true);
+        $webhook = $this->resolvedStripe('stripe_webhook_secret_enc', 'webhook_secret', true);
+
+        return [
+            // Publishable key (pk_...) is public and used client-side — safe to return in full.
+            'key' => $this->resolvedStripe('stripe_key', 'key', false),
+            'secret_set' => filled($secret),
+            'secret_masked' => $this->mask($secret),
+            'webhook_secret_set' => filled($webhook),
+            'webhook_secret_masked' => $this->mask($webhook),
+            'premium_price_id' => $this->resolvedStripe('stripe_premium_price_id', 'premium_price_id', false),
+        ];
+    }
+
+    /**
+     * Resolve a Stripe value admin-first (GameRule, decrypting when needed), then .env.
+     */
+    private function resolvedStripe(string $ruleKey, string $configKey, bool $encrypted): ?string
+    {
+        $stored = GameRule::getValue($ruleKey);
+        if (filled($stored)) {
+            if (! $encrypted) {
+                return $stored;
+            }
+            try {
+                return decrypt($stored);
+            } catch (\Throwable) {
+                // Undecryptable — fall through to env.
+            }
+        }
+
+        return config("services.stripe.{$configKey}");
+    }
+
+    private function mask(?string $secret): string
+    {
+        if (blank($secret)) {
+            return '';
+        }
+
+        $visible = mb_substr($secret, -4);
+
+        return str_repeat('•', min(mb_strlen($secret) - 4, 8)).$visible;
     }
 
     public function grantPremium(Request $request, User $user): JsonResponse

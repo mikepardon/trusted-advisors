@@ -351,6 +351,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::put('cosmetics/{cosmetic}', [AdminCosmeticController::class, 'update']);
     Route::delete('cosmetics/{cosmetic}', [AdminCosmeticController::class, 'destroy']);
     Route::post('daily-challenges/generate', [DailyChallengeController::class, 'generateRange']);
+    Route::post('daily-challenges/{dailyChallenge}/simulate', [DailyChallengeController::class, 'simulate']);
     Route::get('daily-challenges/{dailyChallenge}/entries', [DailyChallengeController::class, 'entries']);
     Route::delete('daily-challenge-entries/{entry}', [DailyChallengeController::class, 'destroyEntry']);
     Route::apiResource('daily-challenges', DailyChallengeController::class);
@@ -428,6 +429,7 @@ Route::prefix('admin')->middleware(['auth:web', 'admin'])->group(function () {
     Route::get('purchases', [AdminPaymentController::class, 'purchases']);
     Route::get('payment-settings', [AdminPaymentController::class, 'settings']);
     Route::put('payment-settings', [AdminPaymentController::class, 'updateSettings']);
+    Route::get('stripe-prices', [AdminPaymentController::class, 'stripePrices']);
     Route::post('users/{user}/grant-premium', [AdminPaymentController::class, 'grantPremium']);
     Route::post('users/{user}/revoke-premium', [AdminPaymentController::class, 'revokePremium']);
 

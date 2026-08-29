@@ -9,37 +9,35 @@ use App\Events\GameStarted;
 use App\Events\NextRoundStarted;
 use App\Events\PlayerAssignedCards;
 use App\Events\RoundResolved;
+use App\Jobs\ForfeitExpiredTurn;
+use App\Jobs\ProcessBotTurn;
+use App\Models\Achievement;
 use App\Models\Card;
 use App\Models\Character;
+use App\Models\Curse;
+use App\Models\DailyChallenge;
+use App\Models\DailyChallengeEntry;
 use App\Models\Event;
+use App\Models\Friendship;
 use App\Models\Game;
 use App\Models\GameCardDeck;
 use App\Models\GameCurseDeck;
-use App\Models\GameItemDeck;
 use App\Models\GamePlayer;
 use App\Models\GamePlayerCurse;
 use App\Models\GamePlayerHand;
 use App\Models\GamePlayerItem;
-use App\Models\Curse;
 use App\Models\GamePlayerKingdom;
 use App\Models\GameRoundResult;
 use App\Models\GameRule;
-use App\Models\Achievement;
-use App\Models\DailyChallenge;
-use App\Models\DailyChallengeEntry;
-use App\Models\Friendship;
 use App\Models\Item;
 use App\Models\Season;
 use App\Models\Unlockable;
-use App\Models\UserAchievement;
 use App\Models\User;
+use App\Models\UserAchievement;
+use App\Models\UserCharacter;
 use App\Models\UserUnlockable;
-use App\Jobs\ForfeitExpiredTurn;
-use App\Jobs\ProcessBotTurn;
 use App\Services\BotService;
 use App\Services\DuelForfeitService;
-use App\Models\UserCharacter;
-use App\Services\CharacterProgressionService;
 use App\Services\GameCompletionService;
 use App\Services\OneSignalService;
 use App\Services\SeededRng;
@@ -56,7 +54,7 @@ class GameController extends Controller
      */
     private function dispatchTurnTimerJobs(Game $game): void
     {
-        if (!$game->isOnline() || !$game->turn_time_limit || !$game->turn_started_at) {
+        if (! $game->isOnline() || ! $game->turn_time_limit || ! $game->turn_started_at) {
             return;
         }
 
@@ -104,17 +102,17 @@ class GameController extends Controller
 
             if ($unlockable) {
                 $isUnlocked = in_array($unlockable->id, $userUnlockableIds);
-                $data['is_locked_for_user'] = !$isUnlocked;
-                if (!$isUnlocked) {
+                $data['is_locked_for_user'] = ! $isUnlocked;
+                if (! $isUnlocked) {
                     $data['unlock_requirement'] = $unlockable->unlock_method === 'level'
                         ? "Reach level {$unlockable->unlock_value}"
-                        : "Earn required achievement";
+                        : 'Earn required achievement';
                 }
             }
 
             // Lock characters the user doesn't own
             $uc = $userCharacters[$c->id] ?? null;
-            if ($userCharacters->isNotEmpty() && !$uc) {
+            if ($userCharacters->isNotEmpty() && ! $uc) {
                 $data['is_locked_for_user'] = true;
                 $data['unlock_requirement'] = 'You must own this advisor';
             }
@@ -152,11 +150,15 @@ class GameController extends Controller
 
         $result = $characters->filter(function ($c) use ($charUnlockables, $userUnlockables) {
             // Hide unavailable characters unless user owns them
-            if (!$c->is_available) {
+            if (! $c->is_available) {
                 $unlockable = $charUnlockables[$c->id] ?? null;
-                if (!$unlockable) return true; // default unlocked chars always visible
+                if (! $unlockable) {
+                    return true;
+                } // default unlocked chars always visible
+
                 return isset($userUnlockables[$unlockable->id]);
             }
+
             return true;
         })->map(function ($c) use ($charUnlockables, $userUnlockables, $userCharacters) {
             $uc = $userCharacters[$c->id] ?? null;
@@ -178,7 +180,7 @@ class GameController extends Controller
             ];
 
             $unlockable = $charUnlockables[$c->id] ?? null;
-            if (!$unlockable) {
+            if (! $unlockable) {
                 $data['is_unlocked'] = true;
                 $data['unlock_requirement'] = null;
                 $data['unlock_method'] = null;
@@ -189,12 +191,12 @@ class GameController extends Controller
                 $data['is_unlocked'] = $isUnlocked;
                 $data['unlock_method'] = $unlockable->unlock_method;
                 $data['unlocked_at'] = $isUnlocked ? $userUnlockable->unlocked_at?->toDateString() : null;
-                $data['unlock_requirement'] = !$isUnlocked
+                $data['unlock_requirement'] = ! $isUnlocked
                     ? ($unlockable->unlock_method === 'level'
                         ? "Reach level {$unlockable->unlock_value}"
                         : ($unlockable->unlock_method === 'shop'
                             ? "Purchase from shop ({$unlockable->unlock_value} coins)"
-                            : "Earn required achievement"))
+                            : 'Earn required achievement'))
                     : null;
             }
 
@@ -252,7 +254,7 @@ class GameController extends Controller
         $rotatingEventId = $validated['rotating_event_id'] ?? null;
         if ($rotatingEventId) {
             $rotatingEvent = \App\Models\RotatingEvent::currentlyActive()->find($rotatingEventId);
-            if (!$rotatingEvent) {
+            if (! $rotatingEvent) {
                 return response()->json(['error' => 'Event is not currently active'], 422);
             }
             // Override total rounds if the event specifies it
@@ -272,7 +274,7 @@ class GameController extends Controller
 
         // Assign active season if applicable (skip for event games)
         $seasonId = null;
-        if (!$rotatingEventId) {
+        if (! $rotatingEventId) {
             $activeSeason = Season::active()->first();
             if ($activeSeason && now()->between($activeSeason->starts_at, $activeSeason->ends_at)) {
                 $seasonId = $activeSeason->id;
@@ -280,13 +282,13 @@ class GameController extends Controller
         }
 
         // Premium-gated custom/private game features
-        $isCustom = !empty($validated['is_custom']);
-        $isPrivate = !empty($validated['is_private']);
+        $isCustom = ! empty($validated['is_custom']);
+        $isPrivate = ! empty($validated['is_private']);
         $customRules = null;
 
         if ($isCustom || $isPrivate) {
             $user = $request->user();
-            if (!$user || !$user->isPremium()) {
+            if (! $user || ! $user->isPremium()) {
                 return response()->json(['error' => 'Premium subscription required for custom and private games.'], 403);
             }
         }
@@ -313,11 +315,11 @@ class GameController extends Controller
         // Apply rotating event modifiers (starting stats, house rules) to custom_rules
         if ($rotatingEventId && isset($rotatingEvent) && $rotatingEvent->modifiers) {
             $mods = $rotatingEvent->modifiers;
-            if (!empty($mods['starting_stats'])) {
+            if (! empty($mods['starting_stats'])) {
                 $customRules = $customRules ?? [];
                 $customRules['starting_stats'] = $mods['starting_stats'];
             }
-            if (!empty($mods['house_rules'])) {
+            if (! empty($mods['house_rules'])) {
                 $customRules = $customRules ?? [];
                 $customRules['house_rules'] = $mods['house_rules'];
             }
@@ -393,7 +395,7 @@ class GameController extends Controller
         $data['current_event'] = $event;
 
         // Include pending curses and active curses
-        if (!empty($game->pending_curses)) {
+        if (! empty($game->pending_curses)) {
             $data['pending_curses'] = $game->pending_curses;
         }
         $data['player_curses'] = $game->players->mapWithKeys(fn ($p) => [
@@ -423,7 +425,7 @@ class GameController extends Controller
                     'player_number' => $player->player_number,
                     'character_name' => $player->character->name,
                     'has_assigned' => $assignedCount >= $cardsPerPlayer,
-                    'item_decided' => $player->item_decided || !$hasItems,
+                    'item_decided' => $player->item_decided || ! $hasItems,
                     'has_items' => $hasItems,
                 ];
             }
@@ -461,7 +463,7 @@ class GameController extends Controller
         // Single-player duel: only 1 character needed (bot gets assigned in player creation below)
         $expectedChars = ($game->game_mode === 'single' && $game->isDuel()) ? 1 : $game->num_players;
         if (count($validated['characters']) !== $expectedChars) {
-            return response()->json(['error' => 'Must select exactly ' . $expectedChars . ' character(s)'], 422);
+            return response()->json(['error' => 'Must select exactly '.$expectedChars.' character(s)'], 422);
         }
 
         // Seeded RNG for daily-challenge runs; null for a normal game.
@@ -480,9 +482,10 @@ class GameController extends Controller
                 ->toArray();
 
             foreach ($lockedUnlockables as $unlockable) {
-                if (!in_array($unlockable->id, $userUnlockableIds)) {
+                if (! in_array($unlockable->id, $userUnlockableIds)) {
                     $character = Character::find($unlockable->entity_id);
                     $name = $character?->name ?? "Character #{$unlockable->entity_id}";
+
                     return response()->json(['error' => "{$name} is locked. Reach the required level or achievement to unlock it."], 422);
                 }
             }
@@ -492,7 +495,7 @@ class GameController extends Controller
         $rotatingEvent = $game->rotating_event_id ? $game->rotatingEvent : null;
         if ($rotatingEvent && $rotatingEvent->character_pool) {
             $invalidChars = array_diff($validated['characters'], $rotatingEvent->character_pool);
-            if (!empty($invalidChars)) {
+            if (! empty($invalidChars)) {
                 return response()->json(['error' => 'One or more selected characters are not allowed in this event'], 422);
             }
         }
@@ -554,7 +557,7 @@ class GameController extends Controller
 
         // Create shuffled deck (recycle cards if more needed than available). Daily runs
         // draw from a stable, id-ordered pool and shuffle deterministically via the seed.
-        if (!empty($customRules['card_pool'])) {
+        if (! empty($customRules['card_pool'])) {
             // Stable id order so the seeded shuffle below reproduces identically for every
             // player on a daily run (never feed inRandomOrder() into a seeded shuffle).
             $allCards = Card::whereIn('id', $customRules['card_pool'])->orderBy('id')->get();
@@ -609,7 +612,7 @@ class GameController extends Controller
         if ($rotatingEvent && $rotatingEvent->fixed_event_id) {
             // Fixed event: repeat the same event for every round
             $eventOrder = array_fill(0, $game->total_rounds, $rotatingEvent->fixed_event_id);
-        } elseif (!empty($customRules['event_pool'])) {
+        } elseif (! empty($customRules['event_pool'])) {
             // Seeded shuffle on a daily so the event order is identical for everyone;
             // fall back to a random shuffle for normal (non-seeded) games.
             $pool = collect($customRules['event_pool'])->map(fn ($id): int => (int) $id)->sort()->values()->all();
@@ -637,7 +640,7 @@ class GameController extends Controller
 
             // Create per-player kingdoms (with custom starting stats if set)
             $startStats = $customRules['starting_stats'] ?? 8;
-            $randomStart = !empty($customRules['house_rules']['random_starting_stats']);
+            $randomStart = ! empty($customRules['house_rules']['random_starting_stats']);
             foreach ($game->players as $player) {
                 $kingdomData = [
                     'game_id' => $game->id,
@@ -670,7 +673,7 @@ class GameController extends Controller
 
             // Custom starting stats for cooperative mode
             $coopStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
-            if (!empty($customRules['house_rules']['random_starting_stats'])) {
+            if (! empty($customRules['house_rules']['random_starting_stats'])) {
                 foreach ($coopStats as $stat) {
                     // Seeded on a daily so every player's random start is identical.
                     $coopUpdate[$stat] = $rng ? $rng->int(1, 15, 'startstat', $stat) : random_int(1, 15);
@@ -683,7 +686,7 @@ class GameController extends Controller
                     }
                 }
                 // Per-stat overrides (e.g. a deliberately weak stat the challenge is about).
-                if (!empty($customRules['starting_stats_map']) && is_array($customRules['starting_stats_map'])) {
+                if (! empty($customRules['starting_stats_map']) && is_array($customRules['starting_stats_map'])) {
                     foreach ($customRules['starting_stats_map'] as $stat => $value) {
                         if (in_array($stat, $coopStats, true)) {
                             $coopUpdate[$stat] = max(0, min(20, (int) $value));
@@ -711,15 +714,17 @@ class GameController extends Controller
         $game->load('players.character');
         foreach ($game->players as $player) {
             $bonus = $player->character->starting_bonus ?? [];
-            if (empty($bonus)) continue;
+            if (empty($bonus)) {
+                continue;
+            }
 
             // Extra dice: set lost_dice to negative value to grant extra
-            if (!empty($bonus['extra_dice'])) {
+            if (! empty($bonus['extra_dice'])) {
                 $player->update(['lost_dice' => -1 * (int) $bonus['extra_dice']]);
             }
 
             // Stat boosts: apply to kingdom (duel) or game stats (cooperative)
-            if (!empty($bonus['stat_boosts'])) {
+            if (! empty($bonus['stat_boosts'])) {
                 $validStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
                 if ($game->isDuel()) {
                     $kingdom = GamePlayerKingdom::where('game_player_id', $player->id)->first();
@@ -730,7 +735,7 @@ class GameController extends Controller
                                 $updates[$stat] = max(0, min(20, $kingdom->$stat + (int) $amount));
                             }
                         }
-                        if (!empty($updates)) {
+                        if (! empty($updates)) {
                             $kingdom->update($updates);
                         }
                     }
@@ -741,7 +746,7 @@ class GameController extends Controller
                             $updates[$stat] = max(0, min(20, $game->$stat + (int) $amount));
                         }
                     }
-                    if (!empty($updates)) {
+                    if (! empty($updates)) {
                         $game->update($updates);
                     }
                 }
@@ -750,13 +755,17 @@ class GameController extends Controller
 
         // Apply advisor leveling upgrades
         foreach ($game->players as $player) {
-            if (!$player->user_id || !$player->character_id || $player->is_bot) continue;
+            if (! $player->user_id || ! $player->character_id || $player->is_bot) {
+                continue;
+            }
 
             $userCharacter = UserCharacter::where('user_id', $player->user_id)
                 ->where('character_id', $player->character_id)
                 ->first();
 
-            if (!$userCharacter) continue;
+            if (! $userCharacter) {
+                continue;
+            }
 
             $isDuel = $game->isDuel();
 
@@ -774,14 +783,14 @@ class GameController extends Controller
 
             // Passive stat bonuses
             $passiveBonuses = $userCharacter->getPassiveBonuses();
-            $player->passive_bonuses = !empty($passiveBonuses) ? $passiveBonuses : null;
+            $player->passive_bonuses = ! empty($passiveBonuses) ? $passiveBonuses : null;
             $player->save();
 
             // Grant starting items from advisor perks. Only deterministic "specific"
             // grants remain — random draws are retired along with the item deck.
             $startingItems = $userCharacter->getStartingItems();
             foreach ($startingItems as $si) {
-                if ($si['type'] === 'specific' && !empty($si['item_id'])) {
+                if ($si['type'] === 'specific' && ! empty($si['item_id'])) {
                     GamePlayerItem::create([
                         'game_player_id' => $player->id,
                         'item_id' => $si['item_id'],
@@ -797,7 +806,7 @@ class GameController extends Controller
                 if ($sc['type'] === 'random') {
                     $curse = \App\Models\Curse::where('is_available', true)->inRandomOrder()->first();
                     $curseId = $curse?->id;
-                } elseif ($sc['type'] === 'specific' && !empty($sc['curse_id'])) {
+                } elseif ($sc['type'] === 'specific' && ! empty($sc['curse_id'])) {
                     $curseId = $sc['curse_id'];
                 }
                 if ($curseId) {
@@ -810,7 +819,7 @@ class GameController extends Controller
             }
 
             // Apply passive stat bonuses to kingdom (duel) or game stats (coop)
-            if (!empty($passiveBonuses)) {
+            if (! empty($passiveBonuses)) {
                 $validStats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
                 if ($isDuel) {
                     $kingdom = GamePlayerKingdom::where('game_player_id', $player->id)->first();
@@ -821,7 +830,7 @@ class GameController extends Controller
                                 $updates[$stat] = max(0, min(20, $kingdom->$stat + (int) $amount));
                             }
                         }
-                        if (!empty($updates)) {
+                        if (! empty($updates)) {
                             $kingdom->update($updates);
                         }
                     }
@@ -832,7 +841,7 @@ class GameController extends Controller
                             $updates[$stat] = max(0, min(20, $game->$stat + (int) $amount));
                         }
                     }
-                    if (!empty($updates)) {
+                    if (! empty($updates)) {
                         $game->update($updates);
                     }
                 }
@@ -1020,13 +1029,13 @@ class GameController extends Controller
         }
 
         $player = $game->players()->with('character')->where('player_number', $playerNumber)->first();
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'Invalid player number'], 422);
         }
 
         // Online mode: verify authenticated user owns this player slot
         if ($game->isOnline()) {
-            if (!$request->user() || $request->user()->id !== $player->user_id) {
+            if (! $request->user() || $request->user()->id !== $player->user_id) {
                 return response()->json(['error' => 'You cannot view another player\'s hand'], 403);
             }
         }
@@ -1095,6 +1104,7 @@ class GameController extends Controller
         $playerCurses = GamePlayerCurse::where('game_player_id', $player->id)->with('curse')->get();
         $showPreviews = $playerCurses->contains(function ($pc) {
             $effect = $pc->curse?->positive_effect ?? [];
+
             return ($effect['type'] ?? null) === 'reveal_previews';
         });
 
@@ -1112,6 +1122,7 @@ class GameController extends Controller
                     $cardData['difficulty'] = $h->card->difficulty + $scaling;
                 }
                 $target = $cardData['difficulty'] + $totalDiffMod;
+
                 return [
                     'hand_id' => $h->id,
                     'card' => $cardData,
@@ -1157,7 +1168,7 @@ class GameController extends Controller
         // Online mode: verify authenticated user owns these hand cards
         if ($game->isOnline()) {
             $player = GamePlayer::find($positiveHand->game_player_id);
-            if (!$player || $player->user_id !== $request->user()->id) {
+            if (! $player || $player->user_id !== $request->user()->id) {
                 return response()->json(['error' => 'You can only assign your own cards'], 403);
             }
         }
@@ -1258,7 +1269,7 @@ class GameController extends Controller
 
         $event = $this->getCurrentEvent($game);
 
-        if (!$this->allPlayersAssigned($game, $event)) {
+        if (! $this->allPlayersAssigned($game, $event)) {
             return response()->json(['error' => 'Not all players have assigned roles'], 422);
         }
 
@@ -1433,7 +1444,7 @@ class GameController extends Controller
                             $playerObj = $players->firstWhere('id', $hand->game_player_id);
                             $playerChar = $hand->player->character->name;
 
-                            if ($playerObj && !$this->canPlayerReceiveItem($playerObj)) {
+                            if ($playerObj && ! $this->canPlayerReceiveItem($playerObj)) {
                                 $specialEffects[] = [
                                     'type' => 'item_blocked',
                                     'player' => $playerChar,
@@ -1457,6 +1468,7 @@ class GameController extends Controller
                                 ];
                             }
                         }
+
                         continue;
                     }
                     if ($stat === 'remove_curse') {
@@ -1495,6 +1507,7 @@ class GameController extends Controller
                                 ];
                             }
                         }
+
                         continue;
                     }
                     if ($stat === 'draw_curse') {
@@ -1503,6 +1516,7 @@ class GameController extends Controller
                             $pendingCurses[] = $curseResult['pending'];
                             $specialEffects[] = $curseResult['effect'];
                         }
+
                         continue;
                     }
                     if ($stat === 'recover_die') {
@@ -1525,6 +1539,7 @@ class GameController extends Controller
                                 'description' => 'No advisors had lost dice to recover.',
                             ];
                         }
+
                         continue;
                     }
                     if ($stat === 'bonus_score') {
@@ -1535,6 +1550,7 @@ class GameController extends Controller
                             'value' => (int) $change,
                             'description' => "Kingdom renown increased by +{$change}!",
                         ];
+
                         continue;
                     }
                     if ($stat === 'end_game_modifier') {
@@ -1545,6 +1561,7 @@ class GameController extends Controller
                             'value' => (float) $change,
                             'description' => "Final score modifier increased by +{$change}%!",
                         ];
+
                         continue;
                     }
                     if ($stat === 'reveal_stats') {
@@ -1557,7 +1574,7 @@ class GameController extends Controller
 
         // Double positive effects if house rule is active
         $houseRules = $game->custom_rules['house_rules'] ?? [];
-        if (!empty($houseRules['double_positive_effects'])) {
+        if (! empty($houseRules['double_positive_effects'])) {
             foreach ($positiveEffects as $stat => $change) {
                 if ($change > 0) {
                     $positiveEffects[$stat] = $change * 2;
@@ -1567,7 +1584,7 @@ class GameController extends Controller
 
         // === NEGATIVE PHASE ===
         // On failed roll, ALL cards' negative effects apply (positive cards included)
-        $handsForNegativePhase = !$positiveSuccess ? $negativeHands->merge($positiveHands) : $negativeHands;
+        $handsForNegativePhase = ! $positiveSuccess ? $negativeHands->merge($positiveHands) : $negativeHands;
 
         // A player who used a shield item this round blocks all negative effects (coop).
         $hasShield = $players->contains(fn ($player) => $player->items->contains(
@@ -1576,9 +1593,11 @@ class GameController extends Controller
         ));
 
         $negativeEffects = [];
-        $skipNegatives = !empty($houseRules['no_negative_effects']) || $hasShield;
+        $skipNegatives = ! empty($houseRules['no_negative_effects']) || $hasShield;
         foreach ($handsForNegativePhase as $hand) {
-            if ($skipNegatives) break;
+            if ($skipNegatives) {
+                break;
+            }
             $effects = $hand->card->negative_effects ?? [];
             foreach ($effects as $stat => $change) {
                 if ($stat === 'lose_die') {
@@ -1594,6 +1613,7 @@ class GameController extends Controller
                             'description' => "{$charName} lost a die from exhaustion!",
                         ];
                     }
+
                     continue;
                 }
                 if ($stat === 'draw_item') {
@@ -1603,7 +1623,7 @@ class GameController extends Controller
                         $target = $players->random();
                         $charName = $target->character->name;
 
-                        if (!$this->canPlayerReceiveItem($target)) {
+                        if (! $this->canPlayerReceiveItem($target)) {
                             $specialEffects[] = [
                                 'type' => 'item_blocked',
                                 'player' => $charName,
@@ -1627,6 +1647,7 @@ class GameController extends Controller
                             ];
                         }
                     }
+
                     continue;
                 }
                 if ($stat === 'draw_curse') {
@@ -1635,6 +1656,7 @@ class GameController extends Controller
                         $pendingCurses[] = $curseResult['pending'];
                         $specialEffects[] = $curseResult['effect'];
                     }
+
                     continue;
                 }
                 if ($stat === 'discard_item') {
@@ -1656,6 +1678,7 @@ class GameController extends Controller
                             'description' => "{$charName} lost {$itemName}!",
                         ];
                     }
+
                     continue;
                 }
                 if ($stat === 'bonus_score') {
@@ -1666,6 +1689,7 @@ class GameController extends Controller
                         'value' => (int) $change,
                         'description' => "Kingdom renown decreased by {$change}!",
                     ];
+
                     continue;
                 }
                 if ($stat === 'end_game_modifier') {
@@ -1676,6 +1700,7 @@ class GameController extends Controller
                         'value' => (float) $change,
                         'description' => "Final score modifier decreased by {$change}%!",
                     ];
+
                     continue;
                 }
                 $negativeEffects[$stat] = ($negativeEffects[$stat] ?? 0) + $change;
@@ -1699,7 +1724,7 @@ class GameController extends Controller
         $specialEffects = array_merge($specialEffects, $cursePerRoundEffects['effects']);
 
         // House rule: draw_curse_per_round — trigger curse draw for a random player each round
-        if (!empty($houseRules['draw_curse_per_round'])) {
+        if (! empty($houseRules['draw_curse_per_round'])) {
             $target = $players->random();
             $charName = $target->character->name;
             $curseResult = $this->drawCursesFromDeck($game, $target->id, $charName);
@@ -1739,7 +1764,7 @@ class GameController extends Controller
             if ($item) {
                 $grantPlayer = $players->firstWhere('id', $grant['player_id']);
 
-                if ($grantPlayer && !$this->canPlayerReceiveItem($grantPlayer)) {
+                if ($grantPlayer && ! $this->canPlayerReceiveItem($grantPlayer)) {
                     $playerChar = $grantPlayer->character->name;
                     $specialEffects[] = [
                         'type' => 'item_blocked',
@@ -1747,6 +1772,7 @@ class GameController extends Controller
                         'item' => $item->name,
                         'description' => "{$playerChar}'s inventory is full! {$item->name} was lost.",
                     ];
+
                     continue;
                 }
 
@@ -1782,7 +1808,7 @@ class GameController extends Controller
         }
 
         // Score event mechanic: add/subtract bonus_score each round (cooperative only)
-        if (!$game->isDuel() && $event && $event->mechanic === 'score_event') {
+        if (! $game->isDuel() && $event && $event->mechanic === 'score_event') {
             $scorePerRound = (int) ($event->mechanic_data['score_per_round'] ?? 0);
             if ($scorePerRound !== 0) {
                 $game->bonus_score = ($game->bonus_score ?? 0) + $scorePerRound;
@@ -1803,7 +1829,7 @@ class GameController extends Controller
         $game->round_phase = 'resolving';
 
         // Save pending curses if any
-        if (!empty($pendingCurses)) {
+        if (! empty($pendingCurses)) {
             $game->pending_curses = $pendingCurses;
         }
 
@@ -1874,7 +1900,7 @@ class GameController extends Controller
                 $p->player_number => $p->items,
             ]),
             'items_over_limit' => $this->getPlayersOverItemLimit($game),
-            'pending_curses' => !empty($pendingCurses) ? $pendingCurses : null,
+            'pending_curses' => ! empty($pendingCurses) ? $pendingCurses : null,
             'player_curses' => $game->players()->with('curses.curse')->get()->mapWithKeys(fn ($p) => [
                 $p->player_number => $p->curses->map(fn ($c) => [
                     'id' => $c->id,
@@ -1892,17 +1918,17 @@ class GameController extends Controller
     {
         $inResolving = $game->round_phase === 'resolving'
             || ($game->isDuel() && $game->duel_phase === 'resolving');
-        if ($game->status !== 'active' || !$inResolving) {
+        if ($game->status !== 'active' || ! $inResolving) {
             return response()->json(['error' => 'Not in resolving phase'], 422);
         }
 
         // Online cooperative: only host can advance. Duel: either player can advance.
-        if ($game->isOnline() && !$game->isDuel() && $request->user()->id !== $game->user_id) {
+        if ($game->isOnline() && ! $game->isDuel() && $request->user()->id !== $game->user_id) {
             return response()->json(['error' => 'Only the host can advance the round'], 403);
         }
 
         // Block advancement until all pending curses are chosen
-        if (!empty($game->pending_curses)) {
+        if (! empty($game->pending_curses)) {
             return response()->json(['error' => 'Pending curse choices must be resolved first'], 422);
         }
 
@@ -1965,7 +1991,7 @@ class GameController extends Controller
             return response()->json([
                 'game_over' => true,
                 'win' => true,
-                'reason' => 'Target reached in ' . $game->current_round . ' months!',
+                'reason' => 'Target reached in '.$game->current_round.' months!',
                 'rounds_taken' => $game->current_round,
                 'game' => $game->fresh(),
                 'completion' => $completionSummary,
@@ -2000,7 +2026,7 @@ class GameController extends Controller
             return response()->json([
                 'game_over' => true,
                 'win' => true,
-                'reason' => 'You survived all ' . $game->total_rounds . ' rounds!',
+                'reason' => 'You survived all '.$game->total_rounds.' rounds!',
                 'game' => $game->fresh(),
                 'completion' => $completionSummary,
                 'score_breakdown' => [
@@ -2016,7 +2042,28 @@ class GameController extends Controller
             ]);
         }
 
-        // Advance to next round
+        // Advance to next round (shared with the challenge simulator so both take the
+        // identical path into the next round).
+        $this->advanceCooperativeRound($game);
+
+        $showResponse = $this->show($game->fresh());
+
+        if ($game->isOnline()) {
+            $showData = json_decode($showResponse->getContent(), true);
+            $this->broadcastSafely(new NextRoundStarted($game->id, $showData));
+            $this->notifyTurn($game, 'Round '.$game->current_round.' has started — pick your cards!');
+        }
+
+        return $showResponse;
+    }
+
+    /**
+     * Advance a cooperative game into its next round: bump the round, reset per-round flags,
+     * grant any event items, and deal the new hand. Shared by nextRound() (the live HTTP
+     * path) and the challenge simulator so both progress identically.
+     */
+    private function advanceCooperativeRound(Game $game): void
+    {
         $game->current_round++;
         $game->round_phase = 'selecting';
         $game->save();
@@ -2029,7 +2076,7 @@ class GameController extends Controller
         if ($event && $event->mechanic === 'grant_items') {
             $players = $game->players()->get();
             foreach ($players as $player) {
-                if (!$this->canPlayerReceiveItem($player)) {
+                if (! $this->canPlayerReceiveItem($player)) {
                     continue;
                 }
                 $drawnItem = $this->drawItemFromDeck($game);
@@ -2047,16 +2094,233 @@ class GameController extends Controller
 
         // Deal cards for next round
         $this->dealCardsForRound($game);
+    }
 
-        $showResponse = $this->show($game->fresh());
+    /**
+     * Map a daily challenge's authored criteria into a game's custom_rules. Shared by the
+     * live run (runDailyChallenge) and the simulator so a simulated run is configured
+     * byte-identically to what a human plays.
+     *
+     * @param  array<string, mixed>  $criteria
+     * @return array<string, mixed>
+     */
+    private function dailyCustomRules(array $criteria): array
+    {
+        $customRules = ['starting_stats' => $criteria['start']['all'] ?? 8];
 
-        if ($game->isOnline()) {
-            $showData = json_decode($showResponse->getContent(), true);
-            $this->broadcastSafely(new NextRoundStarted($game->id, $showData));
-            $this->notifyTurn($game, 'Round ' . $game->current_round . ' has started — pick your cards!');
+        if (! empty($criteria['start']['per_stat']) && is_array($criteria['start']['per_stat'])) {
+            $customRules['starting_stats_map'] = $criteria['start']['per_stat'];
         }
 
-        return $showResponse;
+        $houseRules = array_filter($criteria['house_rules'] ?? [], fn ($enabled): bool => (bool) $enabled);
+        if ($houseRules !== []) {
+            $customRules['house_rules'] = $houseRules;
+        }
+
+        foreach (['card_pool', 'item_pool', 'event_pool', 'curse_pool'] as $poolKey) {
+            if (! empty($criteria[$poolKey]) && is_array($criteria[$poolKey])) {
+                $customRules[$poolKey] = array_values($criteria[$poolKey]);
+            }
+        }
+
+        return $customRules;
+    }
+
+    /**
+     * Create and start a cooperative daily-challenge game for the given user, applying the
+     * challenge's seeded criteria. Returns the started game (status active, round 1 dealt).
+     * Used both for a real player's run and, with a throwaway user, for balancing simulations.
+     */
+    public function setupDailyGame(DailyChallenge $challenge, User $user): Game
+    {
+        $criteria = $challenge->criteria ?? [];
+        $seedCharacterId = $criteria['seed_character_id'] ?? Character::orderBy('id')->value('id');
+        $gameType = ($criteria['mode'] ?? 'cooperative') === 'duel' ? 'duel' : 'cooperative';
+
+        $game = Game::create([
+            'num_players' => 1,
+            'total_rounds' => (int) ($criteria['rounds'] ?? 6),
+            'status' => 'setup',
+            'game_mode' => 'single',
+            'game_type' => $gameType,
+            'user_id' => $user->id,
+            'is_daily' => true,
+            'daily_seed' => "daily:{$challenge->date->toDateString()}:{$challenge->id}",
+            'daily_challenge_id' => $challenge->id,
+            'custom_rules' => $this->dailyCustomRules($criteria),
+        ]);
+
+        $startRequest = Request::create('', 'POST', ['characters' => [(int) $seedCharacterId]]);
+        $startRequest->setUserResolver(fn (): User => $user);
+        $this->start($game, $startRequest);
+
+        return $game->fresh();
+    }
+
+    /**
+     * Play a single already-started daily game to completion using bot decisions, and report
+     * the outcome. Reuses the exact live resolution path (resolveRound / chooseCurse / item
+     * use / advance) so the result is faithful to a real play-through; only the decisions are
+     * made by the bot. Dice, deck order and events are seeded, so variance across repeated
+     * runs comes purely from the bot's (weighted-random) choices — mirroring the spread of a
+     * reasonable human tackling the identical scenario.
+     *
+     * @return array{result: 'win'|'loss', rounds: int}
+     */
+    public function simulateDailyRun(Game $game, BotService $bot, callable $random): array
+    {
+        $game->refresh();
+        $player = $game->players()->with('character')->first();
+
+        // Hard cap well above any real round count, so a logic bug can never spin forever.
+        $safetyLimit = max(1, (int) $game->total_rounds) + 60;
+
+        for ($iteration = 0; $iteration < $safetyLimit; $iteration++) {
+            $event = $this->getCurrentEvent($game);
+            $hands = $game->playerHands()
+                ->where('round_number', $game->current_round)
+                ->with('card')
+                ->get();
+
+            $positiveHandId = $bot->pickCooperativePositiveHandId($hands, $game, $random);
+
+            // A reasonable player spends a consumable when the attempt looks likely to fail.
+            $this->maybeUseSimItem($game, $player, $hands, $positiveHandId, $event);
+
+            // Assign roles directly — identical to the non-online branch of assignRoles().
+            foreach ($hands as $hand) {
+                $hand->update(['role' => $hand->id === $positiveHandId ? 'positive' : 'negative']);
+            }
+
+            $this->resolveRound($game);
+            $game->refresh();
+
+            // Resolve any curses the round drew before advancing (as the live flow requires).
+            $this->resolveSimPendingCurses($game, $random);
+            $game->refresh();
+
+            if ($game->checkStatBounds() !== null) {
+                return ['result' => 'loss', 'rounds' => $game->current_round];
+            }
+
+            if ($game->is_daily && $this->dailyGoalMet($game)) {
+                return ['result' => 'win', 'rounds' => $game->current_round];
+            }
+
+            if ($game->current_round >= $game->total_rounds) {
+                return ['result' => 'win', 'rounds' => $game->current_round];
+            }
+
+            $this->advanceCooperativeRound($game);
+            $game->refresh();
+        }
+
+        // Should never happen; treat an over-long run as a survival win.
+        return ['result' => 'win', 'rounds' => $game->current_round];
+    }
+
+    /**
+     * Resolve all pending curse choices for a simulated run by picking one option per player,
+     * reusing the live chooseCurse() endpoint so the curse is applied exactly as in real play.
+     */
+    private function resolveSimPendingCurses(Game $game, callable $random): void
+    {
+        $guard = 0;
+        while (! empty($game->pending_curses) && $guard++ < 20) {
+            $entry = $game->pending_curses[0];
+            $player = $game->players()->find($entry['player_id'] ?? null);
+            $options = array_values(array_map('intval', $entry['curse_options'] ?? []));
+
+            if (! $player || $options === []) {
+                // Malformed entry — drop it rather than loop forever.
+                $pending = $game->pending_curses;
+                array_shift($pending);
+                $game->pending_curses = $pending === [] ? null : array_values($pending);
+                $game->save();
+
+                continue;
+            }
+
+            $chosenCurseId = $options[(int) floor($random() * count($options))] ?? $options[0];
+            $curseRequest = Request::create('', 'POST', [
+                'curse_id' => $chosenCurseId,
+                'player_number' => $player->player_number,
+            ]);
+            $this->chooseCurse($game, $curseRequest);
+            $game->refresh();
+        }
+    }
+
+    /**
+     * Decide whether the simulated player should spend a consumable this round, and use the
+     * strongest helpful one if the attempt looks likely to fail. Kept deliberately simple: a
+     * single difficulty-reduction or roll-bonus item, used only when the estimated roll falls
+     * short of the attempted card's difficulty.
+     *
+     * @param  \Illuminate\Support\Collection<int, GamePlayerHand>  $hands
+     */
+    private function maybeUseSimItem(Game $game, GamePlayer $player, $hands, int $positiveHandId, ?Event $event): void
+    {
+        $player->load('items.item', 'character');
+
+        if ($player->items->firstWhere('used_round', $game->current_round)) {
+            return; // Already used an item this round.
+        }
+
+        $usable = $player->items->filter(function (GamePlayerItem $playerItem): bool {
+            $item = $playerItem->item;
+            if ($playerItem->is_used || ! $item || $item->isPassive()) {
+                return false;
+            }
+
+            return in_array($item->effect['bonus_type'] ?? '', ['difficulty_reduction', 'roll_bonus'], true);
+        });
+
+        if ($usable->isEmpty()) {
+            return;
+        }
+
+        $positiveHand = $hands->firstWhere('id', $positiveHandId);
+        $difficulty = (int) ($positiveHand?->card->difficulty ?? 5) + $this->getDifficultyScaling($game);
+
+        if ($this->estimateExpectedRoll($game, $player, $event) >= $difficulty) {
+            return; // Likely to succeed unaided — save the item.
+        }
+
+        $best = $usable->sortByDesc(fn (GamePlayerItem $playerItem): int => abs((int) ($playerItem->item->effect['bonus_value'] ?? 0)))->first();
+
+        $useRequest = Request::create('', 'POST', [
+            'game_player_item_id' => $best->id,
+            'player_number' => $player->player_number,
+        ]);
+        $this->useItem($game, $useRequest);
+    }
+
+    /**
+     * Estimate the player's expected dice total this round (mean face value across active
+     * dice), used only to guide the simulator's item-use heuristic.
+     */
+    private function estimateExpectedRoll(Game $game, GamePlayer $player, ?Event $event): float
+    {
+        $diceRules = GameRule::getValue('dice_per_player_count', []);
+        $baseDice = $diceRules[(string) $game->players()->count()] ?? 3;
+
+        $tempReduction = ($event && $event->mechanic === 'reduce_dice') ? ($event->mechanic_data['amount'] ?? 0) : 0;
+        $activeDice = max(1, $baseDice - $player->lost_dice - $tempReduction);
+
+        $dice = $player->dice_overrides ?? $player->character->dice;
+        $wildValue = (int) ($player->character->wild_value ?? 0);
+
+        $expected = 0.0;
+        foreach (array_slice($dice, 0, $activeDice) as $die) {
+            $faceValues = array_map(
+                fn ($face): int => $face === 'WILD' ? $wildValue : (int) $face,
+                $die,
+            );
+            $expected += count($faceValues) > 0 ? array_sum($faceValues) / count($faceValues) : 0.0;
+        }
+
+        return $expected;
     }
 
     /**
@@ -2090,7 +2354,7 @@ class GameController extends Controller
                 $gameOverData = [
                     'game_over' => true,
                     'winner_player_number' => $kingdom->player->player_number,
-                    'reason' => 'Player ' . $kingdom->player->player_number . ' achieved 3 stats at maximum!',
+                    'reason' => 'Player '.$kingdom->player->player_number.' achieved 3 stats at maximum!',
                     'game' => $game->fresh(),
                     'player_kingdoms' => $kingdoms,
                     'completion' => $completionSummary,
@@ -2100,6 +2364,7 @@ class GameController extends Controller
                     // reads `completion`/`timed_out_player_number` and refetches the rest.
                     $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
                 }
+
                 return response()->json($gameOverData);
             }
             if ($result === 'loss') {
@@ -2113,7 +2378,7 @@ class GameController extends Controller
                 $gameOverData = [
                     'game_over' => true,
                     'winner_player_number' => $winnerNumber,
-                    'reason' => 'Player ' . $kingdom->player->player_number . '\'s kingdom collapsed!',
+                    'reason' => 'Player '.$kingdom->player->player_number.'\'s kingdom collapsed!',
                     'game' => $game->fresh(),
                     'player_kingdoms' => $kingdoms,
                     'completion' => $completionSummary,
@@ -2123,6 +2388,7 @@ class GameController extends Controller
                     // reads `completion`/`timed_out_player_number` and refetches the rest.
                     $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
                 }
+
                 return response()->json($gameOverData);
             }
         }
@@ -2156,6 +2422,7 @@ class GameController extends Controller
                 // reads `completion`/`timed_out_player_number` and refetches the rest.
                 $this->broadcastSafely(new DuelGameOver($game->id, Arr::except($gameOverData, ['game', 'player_kingdoms'])));
             }
+
             return response()->json($gameOverData);
         }
 
@@ -2184,8 +2451,8 @@ class GameController extends Controller
         if ($game->isOnline()) {
             $showData = json_decode($showResponse->getContent(), true);
             $this->broadcastSafely(new NextRoundStarted($game->id, $showData));
-            $this->notifyPlayer($game, 1, 'Round ' . $game->current_round . ' — choose your card!');
-            $this->notifyPlayer($game, 2, 'Round ' . $game->current_round . ' — choose your card!');
+            $this->notifyPlayer($game, 1, 'Round '.$game->current_round.' — choose your card!');
+            $this->notifyPlayer($game, 2, 'Round '.$game->current_round.' — choose your card!');
         }
 
         return $showResponse;
@@ -2200,18 +2467,18 @@ class GameController extends Controller
      */
     public function duelHand(Game $game, int $playerNumber, Request $request): JsonResponse
     {
-        if (!$game->isDuel() || $game->status !== 'active') {
+        if (! $game->isDuel() || $game->status !== 'active') {
             return response()->json(['error' => 'Not an active duel game'], 422);
         }
 
         $player = $game->players()->where('player_number', $playerNumber)->first();
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'Invalid player number'], 422);
         }
 
         // Online mode: verify authenticated user owns this player slot
         if ($game->isOnline()) {
-            if (!$request->user() || $request->user()->id !== $player->user_id) {
+            if (! $request->user() || $request->user()->id !== $player->user_id) {
                 return response()->json(['error' => 'You cannot view another player\'s hand'], 403);
             }
         }
@@ -2304,6 +2571,7 @@ class GameController extends Controller
                 $c['card'] = $cardData;
                 $c['success_odds'] = $this->calculateSuccessOdds($allDiceFaces, $totalRollMod, $target);
             }
+
             return $c;
         }, $cards);
 
@@ -2327,7 +2595,7 @@ class GameController extends Controller
      */
     public function duelSelect(Game $game, Request $request): JsonResponse
     {
-        if (!$game->isDuel() || $game->duel_phase !== 'choosing') {
+        if (! $game->isDuel() || $game->duel_phase !== 'choosing') {
             return response()->json(['error' => 'Not in choosing phase'], 422);
         }
 
@@ -2342,7 +2610,7 @@ class GameController extends Controller
 
         if ($game->isOnline()) {
             $submittingPlayer = $players->firstWhere('user_id', $user?->id);
-            if (!$submittingPlayer) {
+            if (! $submittingPlayer) {
                 return response()->json(['error' => 'You are not in this game'], 403);
             }
         } else {
@@ -2353,7 +2621,7 @@ class GameController extends Controller
             }
         }
 
-        if (!$submittingPlayer) {
+        if (! $submittingPlayer) {
             return response()->json(['error' => 'Could not determine player'], 422);
         }
 
@@ -2366,7 +2634,7 @@ class GameController extends Controller
             ->get();
 
         $keptHand = $myHands->firstWhere('id', $validated['kept_hand_id']);
-        if (!$keptHand) {
+        if (! $keptHand) {
             return response()->json(['error' => 'Invalid hand selection — not your card'], 422);
         }
 
@@ -2394,7 +2662,7 @@ class GameController extends Controller
             // If online game with a bot opponent, trigger the bot to select
             if ($game->isOnline() && $opponent->is_bot) {
                 $botDelay = rand(3, 6);
-                ProcessBotTurn::dispatch($game->id, 'choosing_round_' . $game->current_round)
+                ProcessBotTurn::dispatch($game->id, 'choosing_round_'.$game->current_round)
                     ->delay(now()->addSeconds($botDelay));
             }
 
@@ -2462,11 +2730,11 @@ class GameController extends Controller
      */
     public function duelRoll(Game $game, Request $request): JsonResponse
     {
-        if (!$game->isDuel()) {
+        if (! $game->isDuel()) {
             return response()->json(['error' => 'Not a duel game'], 422);
         }
 
-        if (!in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'rolling'])) {
+        if (! in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'rolling'])) {
             return response()->json(['error' => 'Not in a rolling phase'], 422);
         }
 
@@ -2508,7 +2776,7 @@ class GameController extends Controller
 
             // Online mode: verify authenticated user matches the rolling player
             if ($game->isOnline()) {
-                if (!$request->user() || $request->user()->id !== $rollingPlayer->user_id) {
+                if (! $request->user() || $request->user()->id !== $rollingPlayer->user_id) {
                     return response()->json(['error' => 'It is not your turn to roll'], 403);
                 }
             }
@@ -2680,7 +2948,7 @@ class GameController extends Controller
 
             $cardEffects = [];
             // Negative effects apply on failure (unless shielded or no_negative_effects house rule)
-            if (!$success && !$hasShield && empty($duelHouseRules['no_negative_effects'])) {
+            if (! $success && ! $hasShield && empty($duelHouseRules['no_negative_effects'])) {
                 foreach (($card->getDuelNegativeEffects() ?? []) as $stat => $change) {
                     if ($stat === 'draw_curse') {
                         $curseResult = $this->drawCursesFromDeck($game, $rollingPlayer->id, $character->name);
@@ -2688,12 +2956,13 @@ class GameController extends Controller
                             $duelPendingCurses[] = $curseResult['pending'];
                             $duelSpecialEffects[] = $curseResult['effect'];
                         }
+
                         continue;
                     }
                     if ($stat === 'draw_item') {
                         $drawnItem = $this->drawItemFromDeck($game);
                         if ($drawnItem) {
-                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
+                            if (! $this->canPlayerReceiveItem($rollingPlayer)) {
                                 $duelSpecialEffects[] = [
                                     'type' => 'item_blocked',
                                     'player' => $character->name,
@@ -2717,6 +2986,7 @@ class GameController extends Controller
                                 ];
                             }
                         }
+
                         continue;
                     }
                     if ($stat === 'grant_item_id') {
@@ -2737,12 +3007,13 @@ class GameController extends Controller
                             $duelPendingCurses[] = $curseResult['pending'];
                             $duelSpecialEffects[] = $curseResult['effect'];
                         }
+
                         continue;
                     }
                     if ($stat === 'draw_item') {
                         $drawnItem = $this->drawItemFromDeck($game);
                         if ($drawnItem) {
-                            if (!$this->canPlayerReceiveItem($rollingPlayer)) {
+                            if (! $this->canPlayerReceiveItem($rollingPlayer)) {
                                 $duelSpecialEffects[] = [
                                     'type' => 'item_blocked',
                                     'player' => $character->name,
@@ -2766,6 +3037,7 @@ class GameController extends Controller
                                 ];
                             }
                         }
+
                         continue;
                     }
                     if ($stat === 'grant_item_id') {
@@ -2773,7 +3045,7 @@ class GameController extends Controller
                         continue;
                     }
                     if (in_array($stat, $statKeys)) {
-                        $val = !empty($duelHouseRules['double_positive_effects']) && $change > 0 ? $change * 2 : $change;
+                        $val = ! empty($duelHouseRules['double_positive_effects']) && $change > 0 ? $change * 2 : $change;
                         $cardEffects[$stat] = ($cardEffects[$stat] ?? 0) + $val;
                     }
                 }
@@ -2793,8 +3065,7 @@ class GameController extends Controller
         }
 
         // Apply double_negative curse for duel: double negative stat effects
-        $hasDoubleNeg = $rollingPlayer->curses->contains(fn ($pc) =>
-            ($pc->curse->getDuelNegativeEffect()['type'] ?? '') === 'double_negative'
+        $hasDoubleNeg = $rollingPlayer->curses->contains(fn ($pc) => ($pc->curse->getDuelNegativeEffect()['type'] ?? '') === 'double_negative'
         );
         if ($hasDoubleNeg) {
             foreach ($combinedEffects as $stat => $change) {
@@ -2823,7 +3094,7 @@ class GameController extends Controller
 
         // House rule: draw_curse_per_round — trigger curse draw for the rolling player each roll
         $duelHouseRulesForCurse = $game->custom_rules['house_rules'] ?? [];
-        if (!empty($duelHouseRulesForCurse['draw_curse_per_round'])) {
+        if (! empty($duelHouseRulesForCurse['draw_curse_per_round'])) {
             $curseResult = $this->drawCursesFromDeck($game, $rollingPlayer->id, $character->name);
             if ($curseResult) {
                 $duelPendingCurses[] = $curseResult['pending'];
@@ -2848,7 +3119,7 @@ class GameController extends Controller
             ->where('game_player_id', $rollingPlayer->id)
             ->first();
 
-        if ($kingdom && !empty($combinedEffects)) {
+        if ($kingdom && ! empty($combinedEffects)) {
             $kingdom->applyEffects($combinedEffects);
         }
 
@@ -2877,7 +3148,7 @@ class GameController extends Controller
         ]);
 
         // Save pending curses if any
-        if (!empty($duelPendingCurses)) {
+        if (! empty($duelPendingCurses)) {
             $existing = $game->pending_curses ?? [];
             $game->pending_curses = array_merge($existing, $duelPendingCurses);
             $game->save();
@@ -2927,7 +3198,7 @@ class GameController extends Controller
             'kingdom' => $kingdom->fresh(),
             'duel_result' => $duelResult,
             'special_effects' => $duelSpecialEffects,
-            'pending_curses' => !empty($duelPendingCurses) ? $duelPendingCurses : null,
+            'pending_curses' => ! empty($duelPendingCurses) ? $duelPendingCurses : null,
             'player_curses' => GamePlayerCurse::where('game_player_id', $rollingPlayer->id)->with('curse')->get(),
             'player_items' => GamePlayerItem::where('game_player_id', $rollingPlayer->id)->with('item')->get(),
         ];
@@ -2954,7 +3225,7 @@ class GameController extends Controller
      */
     public function duelReroll(Game $game, Request $request): JsonResponse
     {
-        if (!$game->isDuel()) {
+        if (! $game->isDuel()) {
             return response()->json(['error' => 'Not a duel game'], 422);
         }
 
@@ -2967,12 +3238,12 @@ class GameController extends Controller
         $chooser = $game->getChooser();
         $rollingPlayer = $game->players()->where('player_number', $validated['player_number'])->with(['character', 'items.item'])->first();
 
-        if (!$rollingPlayer) {
+        if (! $rollingPlayer) {
             return response()->json(['error' => 'Invalid player'], 422);
         }
 
         $ability = $rollingPlayer->character->wild_ability;
-        if (!in_array($ability, ['rally', 'gamble'])) {
+        if (! in_array($ability, ['rally', 'gamble'])) {
             return response()->json(['error' => 'Character does not have a reroll ability'], 422);
         }
 
@@ -2990,7 +3261,7 @@ class GameController extends Controller
             ->where('game_player_id', $rollingPlayer->id)
             ->first();
 
-        if (!$roundResult) {
+        if (! $roundResult) {
             return response()->json(['error' => 'No roll found to reroll'], 422);
         }
 
@@ -3000,7 +3271,7 @@ class GameController extends Controller
             ->first();
 
         $oldEffects = $roundResult->effects_applied ?? [];
-        if ($kingdom && !empty($oldEffects)) {
+        if ($kingdom && ! empty($oldEffects)) {
             $reversed = [];
             foreach ($oldEffects as $stat => $val) {
                 $reversed[$stat] = -$val;
@@ -3205,7 +3476,7 @@ class GameController extends Controller
         }
 
         // Apply new effects to kingdom
-        if ($kingdom && !empty($combinedEffects)) {
+        if ($kingdom && ! empty($combinedEffects)) {
             $kingdom->applyEffects($combinedEffects);
         }
 
@@ -3266,7 +3537,7 @@ class GameController extends Controller
         ]);
 
         $player = $game->players()->where('player_number', $validated['player_number'])->with('character')->first();
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'Invalid player'], 422);
         }
 
@@ -3285,7 +3556,7 @@ class GameController extends Controller
             $isSimultaneous = $game->duel_phase === 'rolling';
             $isOffererRolling = $game->duel_phase === 'rolling_offerer' && $player->id === $offerer->id;
             $isChooserRolling = $game->duel_phase === 'rolling_chooser' && $player->id === $chooser->id;
-            if (!$isSimultaneous && !$isOffererRolling && !$isChooserRolling) {
+            if (! $isSimultaneous && ! $isOffererRolling && ! $isChooserRolling) {
                 return response()->json(['error' => 'Not your rolling phase'], 422);
             }
         } else {
@@ -3342,13 +3613,13 @@ class GameController extends Controller
      */
     public function opponentTurn(Game $game, Request $request): JsonResponse
     {
-        if (!$game->isDuel()) {
+        if (! $game->isDuel()) {
             return response()->json(['error' => 'Not a duel game'], 422);
         }
 
         // Find the bot player
         $bot = $game->players()->where('is_bot', true)->first();
-        if (!$bot) {
+        if (! $bot) {
             return response()->json(['error' => 'No bot player in this game'], 422);
         }
 
@@ -3372,6 +3643,7 @@ class GameController extends Controller
 
             $fakeRequest = Request::create('', 'POST', ['kept_hand_id' => $handId]);
             $fakeRequest->setUserResolver(fn () => $botUser);
+
             return $this->duelSelect($game->fresh(), $fakeRequest);
         }
 
@@ -3386,7 +3658,7 @@ class GameController extends Controller
                     ->where('round_number', $game->current_round)
                     ->where('game_player_id', $bot->id)
                     ->exists();
-                $shouldRoll = !$alreadyRolled;
+                $shouldRoll = ! $alreadyRolled;
             } elseif ($phase === 'rolling_offerer') {
                 $shouldRoll = $game->offerer_player_number === $bot->player_number;
             } else {
@@ -3397,6 +3669,7 @@ class GameController extends Controller
             if ($shouldRoll) {
                 $fakeRequest = Request::create('', 'POST', ['player_number' => $bot->player_number]);
                 $fakeRequest->setUserResolver(fn () => $botUser);
+
                 return $this->duelRoll($game->fresh(), $fakeRequest);
             }
         }
@@ -3539,7 +3812,7 @@ class GameController extends Controller
             $query->where('updated_at', '>=', $request->input('date_from'));
         }
         if ($request->filled('date_to')) {
-            $query->where('updated_at', '<=', $request->input('date_to') . ' 23:59:59');
+            $query->where('updated_at', '<=', $request->input('date_to').' 23:59:59');
         }
 
         $paginated = $query->paginate(10);
@@ -3560,7 +3833,7 @@ class GameController extends Controller
             if ($game->status === 'cancelled') {
                 $outcome = 'cancelled';
             } elseif ($game->isDuel()) {
-                if (!$game->winner_player_number) {
+                if (! $game->winner_player_number) {
                     $outcome = 'draw';
                 } elseif ($game->winner_player_number === $myPlayerNumber) {
                     $outcome = 'win';
@@ -3617,7 +3890,7 @@ class GameController extends Controller
         $eventOrder = $game->event_order;
 
         // Use shuffled event order if available, otherwise fall back to ID order
-        if (!empty($eventOrder) && isset($eventOrder[$eventIndex])) {
+        if (! empty($eventOrder) && isset($eventOrder[$eventIndex])) {
             return Event::find($eventOrder[$eventIndex]);
         }
 
@@ -3629,8 +3902,10 @@ class GameController extends Controller
         if ($event && $event->mechanic === 'altered_deal') {
             $positive = $event->mechanic_data['positive_cards'] ?? 1;
             $negative = $event->mechanic_data['negative_cards'] ?? 1;
+
             return $positive + $negative;
         }
+
         return 2;
     }
 
@@ -3711,7 +3986,7 @@ class GameController extends Controller
             $stat = $effect['stat'] ?? null;
             $stats = ['wealth', 'influence', 'security', 'religion', 'food', 'happiness'];
             // If no specific stat, pick a random one
-            if (!$stat || !in_array($stat, $stats)) {
+            if (! $stat || ! in_array($stat, $stats)) {
                 $stat = $stats[array_rand($stats)];
             }
             if ($stat && in_array($stat, $stats)) {
@@ -3728,6 +4003,7 @@ class GameController extends Controller
                     $game->save();
                 }
                 $sign = $bonusValue > 0 ? '+' : '';
+
                 return "{$sign}{$bonusValue} {$stat}";
             }
         }
@@ -3735,15 +4011,18 @@ class GameController extends Controller
         if ($bonusType === 'heal_die') {
             if ($player->lost_dice > 0) {
                 $player->decrement('lost_dice');
-                return "Recovered a lost die!";
+
+                return 'Recovered a lost die!';
             }
-            return "No lost dice to recover.";
+
+            return 'No lost dice to recover.';
         }
 
         if ($bonusType === 'score_bonus') {
             $game->bonus_score = ($game->bonus_score ?? 0) + $bonusValue;
             $game->save();
             $sign = $bonusValue > 0 ? '+' : '';
+
             return "{$sign}{$bonusValue} renown";
         }
 
@@ -3751,6 +4030,7 @@ class GameController extends Controller
             $game->score_modifier = ($game->score_modifier ?? 0) + $bonusValue;
             $game->save();
             $sign = $bonusValue > 0 ? '+' : '';
+
             return "{$sign}{$bonusValue}% final score modifier";
         }
 
@@ -3976,7 +4256,7 @@ class GameController extends Controller
      */
     private function notifyTurn(Game $game, string $message = "It's your turn!"): void
     {
-        if (!$game->isOnline()) {
+        if (! $game->isOnline()) {
             return;
         }
 
@@ -3985,7 +4265,9 @@ class GameController extends Controller
             $players = $game->players()->with('user')->get();
 
             foreach ($players as $player) {
-                if ($player->is_bot) continue;
+                if ($player->is_bot) {
+                    continue;
+                }
                 if ($player->user) {
                     $onesignal->sendToUser(
                         $player->user,
@@ -4005,7 +4287,7 @@ class GameController extends Controller
      */
     private function notifyPlayer(Game $game, int $playerNumber, string $message): void
     {
-        if (!$game->isOnline()) {
+        if (! $game->isOnline()) {
             return;
         }
 
@@ -4075,7 +4357,7 @@ class GameController extends Controller
                 $isClaimed = $ua && $ua->claimed_at !== null;
                 if ($isClaimed) {
                     $visible->push($a);
-                } elseif (!$foundUnclaimed) {
+                } elseif (! $foundUnclaimed) {
                     $visible->push($a);
                     $foundUnclaimed = true;
                 }
@@ -4101,7 +4383,7 @@ class GameController extends Controller
                 'progress' => null,
             ];
 
-            if (!$isEarned) {
+            if (! $isEarned) {
                 $progress = $completionService->getProgress($user, $a->criteria);
                 $data['progress'] = $progress;
 
@@ -4131,7 +4413,7 @@ class GameController extends Controller
             ->where('achievement_id', $achievement->id)
             ->first();
 
-        if (!$ua) {
+        if (! $ua) {
             return response()->json(['error' => 'Achievement not earned.'], 403);
         }
 
@@ -4250,7 +4532,7 @@ class GameController extends Controller
         $today = Carbon::today();
         $challenge = DailyChallenge::where('date', $today)->first();
 
-        if (!$challenge) {
+        if (! $challenge) {
             return response()->json(null);
         }
 
@@ -4305,7 +4587,7 @@ class GameController extends Controller
     {
         $challenge = DailyChallenge::where('date', Carbon::today())->first();
 
-        if (!$challenge) {
+        if (! $challenge) {
             return response()->json(['error' => 'No daily challenge is available today.'], 404);
         }
 
@@ -4332,7 +4614,7 @@ class GameController extends Controller
         $user = $request->user();
         $criteria = $challenge->criteria ?? [];
 
-        return DB::transaction(function () use ($request, $user, $challenge, $criteria): JsonResponse {
+        return DB::transaction(function () use ($user, $challenge): JsonResponse {
             $entry = DailyChallengeEntry::where('user_id', $user->id)
                 ->where('daily_challenge_id', $challenge->id)
                 ->lockForUpdate()
@@ -4347,47 +4629,9 @@ class GameController extends Controller
                 ], 409);
             }
 
-            $seedCharacterId = $criteria['seed_character_id']
-                ?? Character::orderBy('id')->value('id');
-            $gameType = ($criteria['mode'] ?? 'cooperative') === 'duel' ? 'duel' : 'cooperative';
-            $rounds = (int) ($criteria['rounds'] ?? 6);
-            $startStats = $criteria['start']['all'] ?? 8;
-
-            // Map the challenge's authored options into the game's custom_rules, which the
-            // shared setup/round logic already consumes. Every player runs the identical
-            // criteria, and all randomness downstream is seeded (see rng()), so the run is
-            // byte-identical for everyone on the day.
-            $customRules = ['starting_stats' => $startStats];
-
-            // Per-stat starting values (e.g. deliberately low wealth) override the uniform
-            // value for named stats. Fixed values, so identical for every player.
-            if (! empty($criteria['start']['per_stat']) && is_array($criteria['start']['per_stat'])) {
-                $customRules['starting_stats_map'] = $criteria['start']['per_stat'];
-            }
-
-            $houseRules = array_filter($criteria['house_rules'] ?? [], fn ($enabled): bool => (bool) $enabled);
-            if ($houseRules !== []) {
-                $customRules['house_rules'] = $houseRules;
-            }
-
-            foreach (['card_pool', 'item_pool', 'event_pool', 'curse_pool'] as $poolKey) {
-                if (! empty($criteria[$poolKey]) && is_array($criteria[$poolKey])) {
-                    $customRules[$poolKey] = array_values($criteria[$poolKey]);
-                }
-            }
-
-            $game = Game::create([
-                'num_players' => 1,
-                'total_rounds' => $rounds,
-                'status' => 'setup',
-                'game_mode' => 'single',
-                'game_type' => $gameType,
-                'user_id' => $user->id,
-                'is_daily' => true,
-                'daily_seed' => "daily:{$challenge->date->toDateString()}:{$challenge->id}",
-                'daily_challenge_id' => $challenge->id,
-                'custom_rules' => $customRules,
-            ]);
+            // Create and start the seeded game via the shared setup path (identical to what
+            // the balancing simulator runs), then record the player's in-progress entry.
+            $game = $this->setupDailyGame($challenge, $user);
 
             $entry = DailyChallengeEntry::updateOrCreate(
                 ['user_id' => $user->id, 'daily_challenge_id' => $challenge->id],
@@ -4397,10 +4641,6 @@ class GameController extends Controller
                     'started_at' => now(),
                 ],
             );
-
-            // Reuse the normal setup path (seeded, since the game is flagged is_daily).
-            $request->merge(['characters' => [(int) $seedCharacterId]]);
-            $this->start($game, $request);
 
             return response()->json([
                 'game_id' => $game->id,
@@ -4629,7 +4869,7 @@ class GameController extends Controller
             ->where('week_end', '>=', $today)
             ->first();
 
-        if (!$challenge) {
+        if (! $challenge) {
             return response()->json(null);
         }
 
@@ -4670,7 +4910,7 @@ class GameController extends Controller
             ->whereNotNull('game_players.user_id')
             ->select(
                 'game_players.user_id',
-                DB::raw("COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) as wins"),
+                DB::raw('COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) as wins'),
                 DB::raw('COUNT(*) as games_played')
             )
             ->groupBy('game_players.user_id')
@@ -4683,6 +4923,7 @@ class GameController extends Controller
 
         $leaderboardData = $leaderboard->values()->map(function ($row, $index) use ($users) {
             $user = $users[$row->user_id] ?? null;
+
             return [
                 'rank' => $index + 1,
                 'user_id' => $row->user_id,
@@ -4704,7 +4945,7 @@ class GameController extends Controller
                 ->where('game_players.user_id', $userId)
                 ->where(function ($q) {
                     $q->where('games.win', true)
-                       ->orWhereColumn('game_players.player_number', 'games.winner_player_number');
+                        ->orWhereColumn('game_players.player_number', 'games.winner_player_number');
                 })
                 ->count();
 
@@ -4713,9 +4954,9 @@ class GameController extends Controller
                 ->where('games.season_id', $season->id)
                 ->where('games.status', 'completed')
                 ->whereNotNull('game_players.user_id')
-                ->select('game_players.user_id', DB::raw("COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) as wins"))
+                ->select('game_players.user_id', DB::raw('COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) as wins'))
                 ->groupBy('game_players.user_id')
-                ->havingRaw("COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) > ?", [$userWins])
+                ->havingRaw('COUNT(CASE WHEN games.win = TRUE OR game_players.player_number = games.winner_player_number THEN 1 END) > ?', [$userWins])
                 ->count();
 
             $userRank = $rank + 1;
@@ -4746,7 +4987,7 @@ class GameController extends Controller
         $userId = $request->user()->id;
 
         $isParticipant = $game->players()->where('user_id', $userId)->exists();
-        if (!$isParticipant) {
+        if (! $isParticipant) {
             return response()->json(['error' => 'You are not part of this game.'], 403);
         }
 
@@ -4754,7 +4995,7 @@ class GameController extends Controller
             return response()->json(['processed' => false, 'status' => $game->status]);
         }
 
-        if (!$game->turn_time_limit || !$game->turn_started_at) {
+        if (! $game->turn_time_limit || ! $game->turn_started_at) {
             return response()->json(['processed' => false, 'status' => 'no_timer']);
         }
 
@@ -4775,7 +5016,7 @@ class GameController extends Controller
         $isHost = $game->user_id === $userId;
         $isParticipant = $game->players()->where('user_id', $userId)->exists();
 
-        if (!$isHost && !$isParticipant) {
+        if (! $isHost && ! $isParticipant) {
             return response()->json(['error' => 'You are not part of this game.'], 403);
         }
 
@@ -4799,7 +5040,7 @@ class GameController extends Controller
         $userId = $request->user()->id;
 
         $player = $game->players()->where('user_id', $userId)->first();
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'You are not part of this game.'], 403);
         }
 
@@ -4807,7 +5048,7 @@ class GameController extends Controller
             return response()->json(['error' => 'Game is not active.'], 422);
         }
 
-        if ($game->game_type !== 'duel' || !$game->isOnline()) {
+        if ($game->game_type !== 'duel' || ! $game->isOnline()) {
             return response()->json(['error' => 'Forfeit is only available for online duel games.'], 422);
         }
 
@@ -4829,7 +5070,7 @@ class GameController extends Controller
             'game_over' => true,
             'winner_player_number' => $winnerNumber,
             'timed_out_player_number' => $quitterNumber,
-            'reason' => 'Player ' . $quitterNumber . ' forfeited. Player ' . $winnerNumber . ' wins!',
+            'reason' => 'Player '.$quitterNumber.' forfeited. Player '.$winnerNumber.' wins!',
             'game' => $game->fresh(),
             'player_kingdoms' => $kingdoms,
             'completion' => $completionSummary,
@@ -4898,7 +5139,10 @@ class GameController extends Controller
     private function getDifficultyScaling(Game $game): int
     {
         $year = (int) floor(($game->current_round - 1) / 6); // 0-indexed year
-        if ($year <= 0) return 0;
+        if ($year <= 0) {
+            return 0;
+        }
+
         return $year + 1; // year 1 => +2, year 2 => +3, year 3 => +4, year 4 => +5
     }
 
@@ -4965,7 +5209,7 @@ class GameController extends Controller
             if ($activeItems->count() > $this->itemSlotLimit($player)) {
                 $overLimit[] = [
                     'player_number' => $player->player_number,
-                    'character_name' => $player->character->name ?? 'Player ' . $player->player_number,
+                    'character_name' => $player->character->name ?? 'Player '.$player->player_number,
                     'items' => $activeItems->map(fn ($pi) => [
                         'id' => $pi->id,
                         'item_name' => $pi->item->name,
@@ -4997,7 +5241,7 @@ class GameController extends Controller
         // Determine the correct phase check
         $isDuel = $game->isDuel();
         if ($isDuel) {
-            if (!in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'rolling'])) {
+            if (! in_array($game->duel_phase, ['rolling_offerer', 'rolling_chooser', 'rolling'])) {
                 return response()->json(['error' => 'Not in a rolling phase'], 422);
             }
         } else {
@@ -5011,7 +5255,7 @@ class GameController extends Controller
             ->with(['item', 'gamePlayer'])
             ->first();
 
-        if (!$playerItem) {
+        if (! $playerItem) {
             return response()->json(['error' => 'Item not found in this game'], 404);
         }
 
@@ -5119,7 +5363,7 @@ class GameController extends Controller
         ]);
 
         $player = $game->players()->where('player_number', $validated['player_number'])->first();
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'Invalid player number'], 422);
         }
 
@@ -5163,7 +5407,7 @@ class GameController extends Controller
             if ($usable->isEmpty()) {
                 continue;
             }
-            if (!$player->item_decided) {
+            if (! $player->item_decided) {
                 return false;
             }
         }
@@ -5189,7 +5433,7 @@ class GameController extends Controller
             ->with('item')
             ->first();
 
-        if (!$playerItem) {
+        if (! $playerItem) {
             return response()->json(['error' => 'Item not found in this game'], 404);
         }
 
@@ -5221,7 +5465,7 @@ class GameController extends Controller
         $user = $request->user();
         $player = $game->players()->where('user_id', $user->id)->first();
 
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'You are not in this game'], 403);
         }
 
@@ -5238,7 +5482,7 @@ class GameController extends Controller
             ->where('round_number', $game->current_round)
             ->first();
 
-        if (!$hand) {
+        if (! $hand) {
             return response()->json(['error' => 'Hand entry not found'], 404);
         }
 
@@ -5250,7 +5494,7 @@ class GameController extends Controller
             ->inRandomOrder()
             ->first();
 
-        if (!$newDeckCard) {
+        if (! $newDeckCard) {
             return response()->json(['error' => 'No cards remaining in deck'], 422);
         }
 
@@ -5308,7 +5552,7 @@ class GameController extends Controller
 
         // Find the pending entry for this player
         $player = $game->players()->where('player_number', $validated['player_number'])->first();
-        if (!$player) {
+        if (! $player) {
             return response()->json(['error' => 'Invalid player number'], 422);
         }
 
@@ -5333,12 +5577,12 @@ class GameController extends Controller
 
         $entry = $pending[$entryIndex];
         $allowedIds = array_map('intval', $entry['curse_options']);
-        if (!in_array((int) $validated['curse_id'], $allowedIds)) {
+        if (! in_array((int) $validated['curse_id'], $allowedIds)) {
             return response()->json(['error' => 'Invalid curse choice'], 422);
         }
 
         $curse = Curse::find($validated['curse_id']);
-        if (!$curse) {
+        if (! $curse) {
             return response()->json(['error' => 'Curse not found'], 404);
         }
 
@@ -5467,6 +5711,7 @@ class GameController extends Controller
                 }
             }
         }
+
         return $mod;
     }
 
@@ -5483,6 +5728,7 @@ class GameController extends Controller
                 }
             }
         }
+
         return false;
     }
 

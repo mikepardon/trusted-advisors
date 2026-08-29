@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\BalanceDailyChallengeJob;
+use App\Jobs\SimulateDailyChallengeJob;
 use App\Models\DailyChallenge;
 use App\Models\DailyChallengeEntry;
+use App\Services\ChallengeSimulator;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -75,6 +78,27 @@ class DailyChallengeController extends Controller
         );
     }
 
+    /**
+     * Queue a balancing simulation: a bot plays this challenge many times through the real
+     * engine to estimate its win rate and typical months-to-win. Runs in the background
+     * because 150 full playthroughs are too slow for a request cycle; the cached result lands
+     * on the challenge row for the table to show once the job completes.
+     */
+    public function simulate(Request $request, DailyChallenge $dailyChallenge): JsonResponse
+    {
+        $validated = $request->validate([
+            'runs' => 'sometimes|integer|min:1|max:1000',
+        ]);
+
+        $runs = (int) ($validated['runs'] ?? ChallengeSimulator::DEFAULT_RUNS);
+
+        dispatch(new SimulateDailyChallengeJob($dailyChallenge, $runs));
+
+        return response()->json([
+            'message' => "Simulation queued ({$runs} runs). Refresh in a moment to see the result.",
+        ], 202);
+    }
+
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -100,7 +124,7 @@ class DailyChallengeController extends Controller
     public function update(Request $request, DailyChallenge $dailyChallenge): JsonResponse
     {
         $validated = $request->validate([
-            'date' => 'sometimes|date|unique:daily_challenges,date,' . $dailyChallenge->id,
+            'date' => 'sometimes|date|unique:daily_challenges,date,'.$dailyChallenge->id,
             'title' => 'sometimes|string|max:255',
             'description' => 'sometimes|string',
             'reward_xp' => 'sometimes|integer|min:0',
@@ -184,25 +208,34 @@ class DailyChallengeController extends Controller
 
             if (DailyChallenge::whereDate('date', $dateStr)->exists()) {
                 $skipped++;
+
                 continue;
             }
 
             try {
-                Artisan::call('app:generate-daily-challenge', ['--date' => $dateStr, '--no-ai' => true]);
+                // --no-verify keeps this HTTP request fast; winnability is tuned by the queued
+                // BalanceDailyChallengeJob below (150 simulated games would blow the request).
+                Artisan::call('app:generate-daily-challenge', ['--date' => $dateStr, '--no-ai' => true, '--no-verify' => true]);
             } catch (\Throwable $exception) {
                 report($exception);
                 $failed[] = $dateStr;
+
                 continue;
             }
 
-            if (DailyChallenge::whereDate('date', $dateStr)->exists()) {
+            $challenge = DailyChallenge::whereDate('date', $dateStr)->first();
+            if ($challenge !== null) {
                 $created++;
+                dispatch(new BalanceDailyChallengeJob($challenge));
             }
         }
 
         $message = "Generated {$created} challenges, skipped {$skipped} existing.";
+        if ($created > 0) {
+            $message .= ' Verifying winnability in the background.';
+        }
         if ($failed !== []) {
-            $message .= ' Failed for: ' . implode(', ', $failed) . '.';
+            $message .= ' Failed for: '.implode(', ', $failed).'.';
         }
 
         return response()->json([

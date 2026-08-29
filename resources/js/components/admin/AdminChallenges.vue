@@ -23,6 +23,8 @@
           <th>Date</th>
           <th>Name</th>
           <th class="col-plays">Plays</th>
+          <th class="col-sim" title="Estimated win rate from 150 bot playthroughs of the identical seeded scenario a player faces. Low = brutal, high = forgiving.">Success</th>
+          <th class="col-sim" title="Average months (rounds) a winning bot run takes to reach the goal.">Avg mo.</th>
           <th class="col-actions">Actions</th>
         </tr>
       </thead>
@@ -43,14 +45,29 @@
             </span>
             <span v-else>0</span>
           </td>
+          <td class="col-sim">
+            <span v-if="simulating.includes(c.id)" class="sim-pending">running…</span>
+            <span
+              v-else-if="c.sim_success_rate !== null && c.sim_success_rate !== undefined"
+              class="sim-rate"
+              :class="simRateClass(c.sim_success_rate)"
+              :title="`${c.sim_success_rate}% of ${c.sim_runs ?? 150} bot runs won`"
+            >{{ c.sim_success_rate }}%</span>
+            <span v-else class="sim-none">—</span>
+          </td>
+          <td class="col-sim">
+            <span v-if="c.sim_avg_months !== null && c.sim_avg_months !== undefined">{{ c.sim_avg_months }}</span>
+            <span v-else class="sim-none">—</span>
+          </td>
           <td class="col-actions">
+            <button class="btn-sm" :disabled="simulating.includes(c.id)" @click="simulate(c)">{{ simulating.includes(c.id) ? '…' : 'Sim' }}</button>
             <button class="btn-sm" @click="openPreview(c)">Preview</button>
             <button class="btn-sm" @click="openEdit(c)">Edit</button>
             <button class="btn-sm btn-danger" @click="deleteChallenge(c)">Del</button>
           </td>
         </tr>
         <tr v-if="challenges.length === 0">
-          <td colspan="4" class="empty">No challenges yet.</td>
+          <td colspan="6" class="empty">No challenges yet.</td>
         </tr>
       </tbody>
     </table>
@@ -544,6 +561,11 @@ interface Challenge {
   addon_id: number | undefined;
   is_manual: boolean;
   entries_count?: number;
+  // Cached balancing-simulation results (null until the sim has been run).
+  sim_runs?: number | null;
+  sim_success_rate?: number | null;
+  sim_avg_months?: number | null;
+  sim_computed_at?: string | null;
 }
 
 interface PlayEntry {
@@ -666,6 +688,8 @@ const editing = ref<number | undefined>(undefined);
 const formError = ref("");
 const form = reactive<ChallengeForm>(emptyForm());
 const previewChallenge = ref<Challenge | undefined>(undefined);
+// Challenge ids with a balancing simulation currently running.
+const simulating = ref<number[]>([]);
 // Plays / entries drill-down
 const playsChallenge = ref<Challenge | undefined>(undefined);
 const playsEntries = ref<PlayEntry[]>([]);
@@ -1022,6 +1046,43 @@ async function deleteChallenge(challenge: Challenge): Promise<void> {
   load();
 }
 
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+function simRateClass(rate: number): string {
+  if (rate >= 60) {
+    return "sim-high";
+  }
+  if (rate >= 25) {
+    return "sim-mid";
+  }
+  return "sim-low";
+}
+
+/**
+Queue a balancing simulation for a challenge, then poll until the background job writes its
+result back onto the row (or give up after ~30s if no queue worker picks it up).
+*/
+async function simulate(challenge: Challenge): Promise<void> {
+  if (simulating.value.includes(challenge.id)) {
+    return;
+  }
+  simulating.value = [...simulating.value, challenge.id];
+  const computedBefore = challenge.sim_computed_at ?? "";
+  try {
+    await axios.post(`/api/admin/daily-challenges/${challenge.id}/simulate`);
+    for (let attempt = 0; attempt < 12; attempt++) {
+      await sleep(2500);
+      await load();
+      const updated = challenges.value.find((row) => row.id === challenge.id);
+      if (updated && (updated.sim_computed_at ?? "") !== computedBefore) {
+        break;
+      }
+    }
+  } finally {
+    simulating.value = simulating.value.filter((id) => id !== challenge.id);
+  }
+}
+
 async function generateRange(): Promise<void> {
   generating.value = true;
   genResult.value = "";
@@ -1189,6 +1250,13 @@ onMounted(async () => {
 .challenge-table .empty { text-align: center; font-style: italic; }
 .plays-link { color: var(--accent-gold); cursor: pointer; font-weight: 600; text-decoration: underline; }
 .plays-link:hover { color: var(--accent-gold-bright); }
+.challenge-table .col-sim { text-align: center; width: 72px; white-space: nowrap; }
+.sim-rate { font-weight: 700; }
+.sim-high { color: #6abf50; }
+.sim-mid { color: var(--accent-gold); }
+.sim-low { color: #d05040; }
+.sim-none { color: var(--text-secondary); }
+.sim-pending { color: var(--text-secondary); font-style: italic; font-size: 0.75rem; }
 .badge-danger { background: rgba(178, 58, 46, 0.12); color: #b23a2e; }
 .house-rules-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; }
 .rule-item { display: flex; align-items: center; gap: 6px; }
